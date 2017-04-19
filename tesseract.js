@@ -36,25 +36,23 @@ var UUID = (function() {
 // clock v item -> old, next, future
 // item  v item -> burried, [ conflicted, superseeded ], replace
 
-function can_apply(clock, item) {
-  for (let i in item) {
-    if (i == item.by && clock[i] + 1 != item.clock[i]) return false;
-    if (i != item.by && clock[i] > item.clock[i]) return false;
-  }
-  return true
-}
 
-function can_superseed(old, item) {
-  for (let i in item) {
-    if (i == item.by && clock[i] + 1 != item.clock[i]) return false;
-    if (i != item.by && clock[i] != item[i]) return false;
-  }
-  return true
-}
+/*
+   c44d2f08-76c5-43ef-9020-fabd041059c5 
+   { 
+     'c44d2f08-76c5-43ef-9020-fabd041059c5': 11,
+     '4e61065a-5678-4ae7-a9ff-0565c79c1917': 4,
+     '98987743-2397-4b99-81e1-a138b3b849b3': 2 }
+
+     'c44d2f08-76c5-43ef-9020-fabd041059c5': 10,
+     '4e61065a-5678-4ae7-a9ff-0565c79c1917': 5,
+     '98987743-2397-4b99-81e1-a138b3b849b3': 2 }
+*/
 
 let MapHandler = {
   get: (target,key) => {
     if (key == "_direct") return target
+    if (key == "_conflicts") return target._conflicts
     return target[key]
   },
   set: (target,key,value) => {
@@ -79,14 +77,16 @@ let MapHandler = {
 }
 
 function Map(store, id, map) {
-    map.__proto__ = { _store: store, _id: id, _actions: {} }
+    map.__proto__ = { _store: store, _id: id, _actions: {}, _conflicts: store.conflicts[id] }
     return new Proxy(map, MapHandler)
 }
 
-function Store() {
+function Store(uuid) {
   let root_id = '00000000-0000-0000-0000-000000000000'
-  this._id = UUID.generate();
+  let _uuid = uuid || UUID.generate()
+  this._id = _uuid
   this.actions = { [this._id]: [] }
+  this.conflicts = { [root_id]: {} }
   this.root = new Map(this, root_id, {})
   this.objects = { [this.root._id]: this.root }
   this.links = { [this.root._id]: {} }
@@ -146,6 +146,28 @@ function Store() {
     this.try_apply()
   }
 
+
+  this.can_superseed = (old_action, action) => {
+    if (old_action == undefined) return true 
+    //console.log("Testing...", action)
+    for (let i in action.clock) {
+      //console.log( action.by, i == action.by,  old_action.clock[i], action.clock[i])
+      console.log("CAN SUPER", "me:", this._id, "val:", action.value, "by:", action.by, "key:",i , i == action.by, old_action.clock[i] , action.clock[i] )
+      if (i == action.by && old_action.clock[i] + 1 != action.clock[i]) return false;
+      if (i != action.by && old_action.clock[i] != action.clock[i]) return false;
+    }
+    return true
+  }
+
+  this.can_apply = (clock, action) => {
+    for (let i in action.clock) {
+//      console.log("CAN APPLY", "me:", this._id, "by:", action.by, "key:",i , i == action.by, clock[i] , action.clock[i] )
+      if (i == action.by && clock[i] + 1 != action.clock[i]) return false;
+      if (i != action.by && clock[i] < action.clock[i]) return false;
+    }
+    return true
+  }
+
   this.try_apply = () => {
     var actions_applied
     do {
@@ -159,9 +181,12 @@ function Store() {
           //console.log("ACTIONS",actions)
           let next_action = actions[action_no]
           //console.log("NEXT ACTION",next_action)
-          if (can_apply(next_action)) {
+          if (this.can_apply(this.clock, next_action)) {
             this.do_apply(next_action)
             actions_applied += 1
+          } else {
+//            console.log("can apply failed:",this._id, next_action)
+//            throw "x"
           }
         }
       }
@@ -184,19 +209,38 @@ function Store() {
 
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
+    //console.log("updating clock for",this._id,"at",a.by,this.clock[a.by],a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
     switch (a.action) {
       case "set":
-        this.objects[a.target]._direct[a.key] = a.value
-        this.objects[a.target]._direct._actions[a.key] = a
+        if (this.can_superseed( this.objects[a.target]._direct._actions[a.key] , a )) {
+          this.objects[a.target]._direct[a.key] = a.value
+          this.objects[a.target]._direct._actions[a.key] = a
+          //console.log(a)
+          //console.log(this.conflicts[a.target])
+          this.conflicts[a.target][a.key] = []
+        }
+        else 
+        {
+          //console.log("CONFLICT")
+          if (this.objects[a.target]._direct._actions[a.key].by > a.by) {
+            this.conflicts[a.target][a.key].push(a.value)
+          } else {
+            this.conflicts[a.target][a.key].push(this.objects[a.target][a.key])
+            this.objects[a.target]._direct[a.key] = a.value
+            this.objects[a.target]._direct._actions[a.key] = a
+          }
+        }
         break;
       case "del":
         delete this.objects[a.target]._direct[a.key]
         delete this.links[a.target][a.key]
+        delete this.conflicts[a.target][a.key]
         this.objects[a.target]._direct._actions[a.key] = a
         break;
       case "create":
         // cant have collisions here b/c guid is unique :p
+        this.conflicts[a.target] = {}
         this.objects[a.target] = new Map(this, a.target, a.value)
         this.links[a.target] = {}
         break;

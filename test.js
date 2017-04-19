@@ -24,7 +24,7 @@ let deep_equals = (a,b) => {
   }
 }
 
-let store1 = new Store()
+let store1 = new Store("store1")
 store1.root.foo = "foo"
 store1.root.bar = store1.root.foo + "bar"
 store1.root.dang = 12345
@@ -42,7 +42,7 @@ let mark1 = {
 console.log("Test - 1 - local set / nest / link")
 console.assert(deep_equals(store1.root,mark1))
 
-let store2 = new Store()
+let store2 = new Store("store2")
 store2.root["xxx"] = "yyy"
 store2.sync(store1)
 store2.root.obj3 = store2.root.obj
@@ -62,7 +62,7 @@ console.log("Test - 2 - sync both ways")
 console.assert(deep_equals(store1.root,store2.root))
 console.assert(deep_equals(store1.root, mark2))
 
-let store3 = new Store()
+let store3 = new Store("store3")
 
 store1.link(store2)
 
@@ -115,9 +115,37 @@ store2.root.conflict_test = "222"
 store3.root.conflict_test = "333"
 store2.unpause()
 
-console.assert(store3.root.conflict_test == "111")
+//console.log(store2.conflicts)
+
+console.assert(store3.root.conflict_test == "333")
 console.assert(store2.root.conflict_test == "333")
 console.assert(store1.root.conflict_test == "333")
+
+console.assert(deep_equals(store1.root._conflicts.conflict_test.sort(),['111','222']))
+console.assert(deep_equals(store2.root._conflicts.conflict_test.sort(),['111','222']))
+console.assert(deep_equals(store3.root._conflicts.conflict_test.sort(),['111','222']))
+
+console.log("-----")
+
+store1.root.conflict_test = "new1"
+console.log(store3.root.conflict_test)
+console.log(store3.root._conflicts.conflict_test)
+/*
+store3.root.conflict_test = "new3"
+console.assert(store1.root.conflict_test == "new3")
+store2.root.conflict_test = "new2"
+console.assert(store1.root.conflict_test == "new2")
+console.assert(store3.root.conflict_test == "new2")
+store1.root.conflict_test = "new1"
+console.assert(store3.root.conflict_test == "new1")
+*/
+
+
+/*
+console.assert(deep_equals(store1.root._conflicts.conflict_test.sort(),[]))
+console.assert(deep_equals(store2.root._conflicts.conflict_test.sort(),[]))
+console.assert(deep_equals(store3.root._conflicts.conflict_test.sort(),[]))
+*/
 
 console.log("All tests passed")
 
