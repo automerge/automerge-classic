@@ -1,6 +1,9 @@
 
-let Store = require('./tesseract').Store
+// -------------------------------------------- //
+//         Tesseract Integration Tests 
+// -------------------------------------------- //
 
+let Store = require('./tesseract').Store
 
 let deep_equals = (a,b) => {
   if ((typeof a == 'object' && a != null) &&
@@ -21,8 +24,6 @@ let deep_equals = (a,b) => {
   }
 }
 
-
-
 let store1 = new Store()
 store1.root.foo = "foo"
 store1.root.bar = store1.root.foo + "bar"
@@ -38,6 +39,7 @@ let mark1 = {
   obj2: { hello: 'world' }
 }
 
+console.log("Test - 1 - local set / nest / link")
 console.assert(deep_equals(store1.root,mark1))
 
 let store2 = new Store()
@@ -56,10 +58,21 @@ let mark2 = {
   xxx: 'yyy'
 }
 
-console.log(store1.root)
+console.log("Test - 2 - sync both ways")
 console.assert(deep_equals(store1.root,store2.root))
 console.assert(deep_equals(store1.root, mark2))
 
 let store3 = new Store()
 
 store1.link(store2)
+
+store1.root.linktest1 = "123"
+store2.root.linktest2 = "abc"
+
+console.log("Test - 3 - linked stores")
+console.assert(deep_equals(store1.root,store2.root))
+console.assert(store2.root.linktest1 == "123")
+console.assert(store1.root.linktest2 == "abc")
+
+console.log("All tests passed")
+

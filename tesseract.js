@@ -84,25 +84,31 @@ function Map(store, id, map) {
 }
 
 function Store() {
+  let root_id = '00000000-0000-0000-0000-000000000000'
   this._id = UUID.generate();
   this.actions = { [this._id]: [] }
-  let root_id = '00000000-0000-0000-0000-000000000000'
   this.root = new Map(this, root_id, {})
   this.objects = { [this.root._id]: this.root }
   this.links = { [this.root._id]: {} }
   this.clock = { [this._id]: 0 }
+  this.peers = {}
+  this.syncing = true
+
   this.merge = (peer) => {
     for (let id in peer.actions) {
       let idx = (id in this.actions) ? this.actions[id].length : 0
       for (let i = idx; i < peer.actions[id].length; i++) { // in peer.actions[id].slice(idx)) {
-        this.apply(peer.actions[id][i])
+        this.push_action(peer.actions[id][i])
       }
     }
+    this.try_apply()
   }
+
   this.sync = (peer) => {
     this.merge(peer)
     peer.merge(this)
   }
+
   this.export = () => {
     return {
       actions: Object.assign({}, this.actions ),
@@ -113,31 +119,57 @@ function Store() {
   }
 
   this.link = (store) => {
-    this.peers.push(store)
+    this.peers[store._id] = store
+    store.peers[this._id] = this
+    this.sync(store)
+  }
+
+  this.pause = () => {
+    this.syncing = false
+  }
+
+  this.unpause = () => {
+    this.syncing = true
+  }
+
+  this.push_action = (a) => {
+    if (!(a.by in this.actions)) {
+      this.clock[a.by] = 0
+      this.actions[a.by] = []
+    }
+    this.actions[a.by].push(a);
   }
 
   this.apply = (a) => {
-    console.log("bbb",this.to_apply)
-    this.to_apply.unshift(a)
+    this.push_action(a)
     this.try_apply()
+    if (a.by == this._id) { // of this is mine - try and merge (optional)
+      for (let id in this.peers) {
+        this.sync(this.peers[id])
+      }
+    }
   }
 
-  this.peers = []
-  this.to_apply = []
-
   this.try_apply = () => {
-    var again;
+    var actions_applied
     do {
-      again = false
-      this.to_apply = this.to_apply.filter((a) => {
-        if (can_apply(this.clock, a)) {
-          this.do_apply(a)
-          again = true
-          return false
+      actions_applied = 0
+      for (var id in this.actions) {
+        let actions = this.actions[id]
+        let action_no = this.clock[id]
+        if (action_no < actions.length) {
+          //console.log("ACTION NO",action_no)
+          //console.log("ACTIONS.LENGTH",actions.length)
+          //console.log("ACTIONS",actions)
+          let next_action = actions[action_no]
+          //console.log("NEXT ACTION",next_action)
+          if (can_apply(next_action)) {
+            this.do_apply(next_action)
+            actions_applied += 1
+          }
         }
-        return true
-      })
-    } while (again)
+      }
+    } while (actions_applied > 0)
   }
 
   this.tick = () => {
@@ -147,8 +179,7 @@ function Store() {
   }
 
   this.do_apply = (a) => {
-    if (!(a.by in this.actions)) { this.actions[a.by] = [] }
-    this.actions[a.by].push(a);
+    console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
     switch (a.action) {
       case "set":
@@ -166,7 +197,6 @@ function Store() {
         this.links[a.target] = {}
         break;
       case "link":
-        console.log(a)
         this.objects[a.target]._direct[a.key] = this.objects[a.value]
         this.objects[a.target]._direct._actions[a.key] = a
         this.links[a.target][a.key] = a.value
@@ -174,8 +204,6 @@ function Store() {
     }
   }
 }
-
-
 
 module.exports = {
   Store: Store
