@@ -130,6 +130,7 @@ function Store() {
 
   this.unpause = () => {
     this.syncing = true
+    this.try_sync_with_peers()
   }
 
   this.push_action = (a) => {
@@ -143,11 +144,6 @@ function Store() {
   this.apply = (a) => {
     this.push_action(a)
     this.try_apply()
-    if (a.by == this._id) { // of this is mine - try and merge (optional)
-      for (let id in this.peers) {
-        this.sync(this.peers[id])
-      }
-    }
   }
 
   this.try_apply = () => {
@@ -178,6 +174,14 @@ function Store() {
     return t
   }
 
+  this.try_sync_with_peers = () => {
+    for (let id in this.peers) {
+      if (this.syncing && this.peers[id].syncing) {
+        this.sync(this.peers[id])
+      }
+    }
+  }
+
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
@@ -202,6 +206,7 @@ function Store() {
         this.links[a.target][a.key] = a.value
         break;
     }
+    this.try_sync_with_peers()
   }
 }
 

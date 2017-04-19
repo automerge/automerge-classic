@@ -74,5 +74,50 @@ console.assert(deep_equals(store1.root,store2.root))
 console.assert(store2.root.linktest1 == "123")
 console.assert(store1.root.linktest2 == "abc")
 
+console.log("Test - 4 - linked w two nodes who cant talk")
+store3.link(store2)
+store3.root.linktest3 = "zzz"
+store1.root.linktest1 = "aaa"
+console.assert(store3.root.linktest3 == "zzz")
+console.assert(store2.root.linktest3 == "zzz")
+console.assert(store1.root.linktest3 == "zzz")
+console.assert(store3.root.linktest1 == "aaa")
+console.assert(store2.root.linktest1 == "aaa")
+console.assert(store1.root.linktest1 == "aaa")
+
+console.log("Test - 5 - pause syncing")
+
+store2.pause()
+store3.root.linktest3 = "vvv"
+store1.root.linktest1 = "bbb"
+console.assert(store3.root.linktest3 == "vvv")
+console.assert(store2.root.linktest3 == "zzz")
+console.assert(store1.root.linktest3 == "zzz")
+console.assert(store3.root.linktest1 == "aaa")
+console.assert(store2.root.linktest1 == "aaa")
+console.assert(store1.root.linktest1 == "bbb")
+
+console.log("Test - 6 - unpause syncing")
+
+store2.unpause()
+console.assert(store3.root.linktest3 == "vvv")
+console.assert(store2.root.linktest3 == "vvv")
+console.assert(store1.root.linktest3 == "vvv")
+console.assert(store3.root.linktest1 == "bbb")
+console.assert(store2.root.linktest1 == "bbb")
+console.assert(store1.root.linktest1 == "bbb")
+
+console.log("Test - 7 - conflicts [todo]")
+
+store2.pause()
+store1.root.conflict_test = "111"
+store2.root.conflict_test = "222"
+store3.root.conflict_test = "333"
+store2.unpause()
+
+console.assert(store3.root.conflict_test == "111")
+console.assert(store2.root.conflict_test == "333")
+console.assert(store1.root.conflict_test == "333")
+
 console.log("All tests passed")
 
