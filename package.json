@@ -1,0 +1,11 @@
+{
+  "name": "tesseract",
+  "version": "0.0.1",
+  "description": "js crdt",
+  "main": "tesseract.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "",
+  "license": "ISC"
+}
