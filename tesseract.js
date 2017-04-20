@@ -1,4 +1,13 @@
 
+function pp(o) {
+  let keys = Object.keys(o).sort();
+  let o2 = {}
+  for (let i in keys) {
+    o2[keys[i]] = o[keys[i]]
+  }
+  return o2;
+}
+
 var UUID = (function() {
   var self = {};
   var lut = []; for (var i=0; i<256; i++) { lut[i] = (i<16?'0':'')+(i).toString(16); }
@@ -14,40 +23,6 @@ var UUID = (function() {
   }
   return self;
 })();
-
-
-// { a: 1 } vs { b: 1 } -> current 
-// { b: 1 } vs { a: 1 } -> conflict 
-// { a: 1 , b: 2 } vs { a: 1, b: 1 } -> next 
-// { a: 1 , b: 1 } vs { a: 1, b: 2 } -> anchient 
-
-// a1:b1:c1
-
-// a2:b1:c1 
-// a3:b1:c1
-// a4:b1:c1
-// --------
-// a1:b2:c1
-// a1:b3:c1
-// a1:b4:c1
-
-// a5:b4:c1
-
-// clock v item -> old, next, future
-// item  v item -> burried, [ conflicted, superseeded ], replace
-
-
-/*
-   c44d2f08-76c5-43ef-9020-fabd041059c5 
-   { 
-     'c44d2f08-76c5-43ef-9020-fabd041059c5': 11,
-     '4e61065a-5678-4ae7-a9ff-0565c79c1917': 4,
-     '98987743-2397-4b99-81e1-a138b3b849b3': 2 }
-
-     'c44d2f08-76c5-43ef-9020-fabd041059c5': 10,
-     '4e61065a-5678-4ae7-a9ff-0565c79c1917': 5,
-     '98987743-2397-4b99-81e1-a138b3b849b3': 2 }
-*/
 
 let MapHandler = {
   get: (target,key) => {
@@ -147,21 +122,15 @@ function Store(uuid) {
   }
 
 
-  this.can_superseed = (old_action, action) => {
-    if (old_action == undefined) return true 
-    //console.log("Testing...", action)
+  this.can_superseed = (clock, action) => {
     for (let i in action.clock) {
-      //console.log( action.by, i == action.by,  old_action.clock[i], action.clock[i])
-      console.log("CAN SUPER", "me:", this._id, "val:", action.value, "by:", action.by, "key:",i , i == action.by, old_action.clock[i] , action.clock[i] )
-      if (i == action.by && old_action.clock[i] + 1 != action.clock[i]) return false;
-      if (i != action.by && old_action.clock[i] != action.clock[i]) return false;
+      if (clock[i] != action.clock[i]) return false;
     }
     return true
   }
 
   this.can_apply = (clock, action) => {
     for (let i in action.clock) {
-//      console.log("CAN APPLY", "me:", this._id, "by:", action.by, "key:",i , i == action.by, clock[i] , action.clock[i] )
       if (i == action.by && clock[i] + 1 != action.clock[i]) return false;
       if (i != action.by && clock[i] < action.clock[i]) return false;
     }
@@ -176,11 +145,7 @@ function Store(uuid) {
         let actions = this.actions[id]
         let action_no = this.clock[id]
         if (action_no < actions.length) {
-          //console.log("ACTION NO",action_no)
-          //console.log("ACTIONS.LENGTH",actions.length)
-          //console.log("ACTIONS",actions)
           let next_action = actions[action_no]
-          //console.log("NEXT ACTION",next_action)
           if (this.can_apply(this.clock, next_action)) {
             this.do_apply(next_action)
             actions_applied += 1
@@ -209,20 +174,21 @@ function Store(uuid) {
 
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
-    //console.log("updating clock for",this._id,"at",a.by,this.clock[a.by],a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
     switch (a.action) {
       case "set":
-        if (this.can_superseed( this.objects[a.target]._direct._actions[a.key] , a )) {
+        //console.log("can superseed", this._id, this.objects[a.target][a.key], "vs", a.value)
+        //console.log("clock ",pp(this.clock) )
+        //console.log("action",pp(a.clock))
+        if (this.can_superseed( this.clock , a )) {
+          //console.log("NO CONFLICT", this.objects[a.target][a.key], "vs", a.value)
           this.objects[a.target]._direct[a.key] = a.value
           this.objects[a.target]._direct._actions[a.key] = a
-          //console.log(a)
-          //console.log(this.conflicts[a.target])
           this.conflicts[a.target][a.key] = []
         }
         else 
         {
-          //console.log("CONFLICT")
+          //console.log("CONFLICT", this.objects[a.target][a.key], "vs", a.value)
           if (this.objects[a.target]._direct._actions[a.key].by > a.by) {
             this.conflicts[a.target][a.key].push(a.value)
           } else {

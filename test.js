@@ -24,6 +24,15 @@ let deep_equals = (a,b) => {
   }
 }
 
+function pp(o) {
+  let keys = Object.keys(o).sort();
+  let o2 = {}
+  for (let i in keys) {
+    o2[keys[i]] = o[keys[i]]
+  }
+  return o2;
+}
+
 let store1 = new Store("store1")
 store1.root.foo = "foo"
 store1.root.bar = store1.root.foo + "bar"
@@ -107,7 +116,7 @@ console.assert(store3.root.linktest1 == "bbb")
 console.assert(store2.root.linktest1 == "bbb")
 console.assert(store1.root.linktest1 == "bbb")
 
-console.log("Test - 7 - conflicts [todo]")
+console.log("Test - 7 - conflicts")
 
 store2.pause()
 store1.root.conflict_test = "111"
@@ -115,7 +124,13 @@ store2.root.conflict_test = "222"
 store3.root.conflict_test = "333"
 store2.unpause()
 
-//console.log(store2.conflicts)
+/*
+console.log("-----------------------------")
+console.log("store1",pp(store1.clock), store1.root.conflict_test, store1.root._conflicts.conflict_test.sort())
+console.log("store2",pp(store2.clock), store2.root.conflict_test, store2.root._conflicts.conflict_test.sort())
+console.log("store3",pp(store3.clock), store3.root.conflict_test, store3.root._conflicts.conflict_test.sort())
+console.log("-----------------------------")
+*/
 
 console.assert(store3.root.conflict_test == "333")
 console.assert(store2.root.conflict_test == "333")
@@ -125,27 +140,7 @@ console.assert(deep_equals(store1.root._conflicts.conflict_test.sort(),['111','2
 console.assert(deep_equals(store2.root._conflicts.conflict_test.sort(),['111','222']))
 console.assert(deep_equals(store3.root._conflicts.conflict_test.sort(),['111','222']))
 
-console.log("-----")
-
 store1.root.conflict_test = "new1"
-console.log(store3.root.conflict_test)
-console.log(store3.root._conflicts.conflict_test)
-/*
-store3.root.conflict_test = "new3"
-console.assert(store1.root.conflict_test == "new3")
-store2.root.conflict_test = "new2"
-console.assert(store1.root.conflict_test == "new2")
-console.assert(store3.root.conflict_test == "new2")
-store1.root.conflict_test = "new1"
-console.assert(store3.root.conflict_test == "new1")
-*/
-
-
-/*
-console.assert(deep_equals(store1.root._conflicts.conflict_test.sort(),[]))
-console.assert(deep_equals(store2.root._conflicts.conflict_test.sort(),[]))
-console.assert(deep_equals(store3.root._conflicts.conflict_test.sort(),[]))
-*/
 
 console.log("All tests passed")
 
