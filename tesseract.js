@@ -27,6 +27,7 @@ var UUID = (function() {
 let MapHandler = {
   get: (target,key) => {
     if (key == "_direct") return target
+    if (key == "_set") return (key,val) => { target[key] = val }
     if (key == "_conflicts") return target._conflicts
     return target[key]
   },
@@ -52,7 +53,7 @@ let MapHandler = {
 }
 
 function Map(store, id, map) {
-    map.__proto__ = { _store: store, _id: id, _actions: {}, _conflicts: store.conflicts[id] }
+    map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id] }
     return new Proxy(map, MapHandler)
 }
 
@@ -62,6 +63,7 @@ function Store(uuid) {
   this._id = _uuid
   this.actions = { [this._id]: [] }
   this.conflicts = { [root_id]: {} }
+  this.actions = { [root_id]: {} }
   this.root = new Map(this, root_id, {})
   this.objects = { [this.root._id]: this.root }
   this.links = { [this.root._id]: {} }
@@ -181,38 +183,33 @@ function Store(uuid) {
         //console.log("clock ",pp(this.clock) )
         //console.log("action",pp(a.clock))
         if (this.can_superseed( this.clock , a )) {
-          //console.log("NO CONFLICT", this.objects[a.target][a.key], "vs", a.value)
-          this.objects[a.target]._direct[a.key] = a.value
-          this.objects[a.target]._direct._actions[a.key] = a
-          this.conflicts[a.target][a.key] = []
-        }
-        else 
-        {
-          //console.log("CONFLICT", this.objects[a.target][a.key], "vs", a.value)
-          if (this.objects[a.target]._direct._actions[a.key].by > a.by) {
-            this.conflicts[a.target][a.key].push(a.value)
-          } else {
-            this.conflicts[a.target][a.key].push(this.objects[a.target][a.key])
-            this.objects[a.target]._direct[a.key] = a.value
-            this.objects[a.target]._direct._actions[a.key] = a
-          }
+          this.objects[a.target]._set(a.key, a.value)
+          this.actions[a.target][a.key] = a
+          this.conflicts[a.target][a.key] = {}
+        } else if (this.actions[a.target][a.key].by > a.by) {
+          this.conflicts[a.target][a.key][a.by] = a.value
+        } else {
+          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          this.objects[a.target]._set(a.key, a.value)
+          this.actions[a.target][a.key] = a
         }
         break;
       case "del":
         delete this.objects[a.target]._direct[a.key]
         delete this.links[a.target][a.key]
         delete this.conflicts[a.target][a.key]
-        this.objects[a.target]._direct._actions[a.key] = a
+        this.actions[a.target][a.key] = a
         break;
       case "create":
         // cant have collisions here b/c guid is unique :p
         this.conflicts[a.target] = {}
+        this.actions[a.target] = {}
         this.objects[a.target] = new Map(this, a.target, a.value)
         this.links[a.target] = {}
         break;
       case "link":
-        this.objects[a.target]._direct[a.key] = this.objects[a.value]
-        this.objects[a.target]._direct._actions[a.key] = a
+        this.objects[a.target]._set(a.key, this.objects[a.value])
+        this.actions[a.target][a.key] = a
         this.links[a.target][a.key] = a.value
         break;
     }

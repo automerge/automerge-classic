@@ -136,9 +136,9 @@ console.assert(store3.root.conflict_test == "333")
 console.assert(store2.root.conflict_test == "333")
 console.assert(store1.root.conflict_test == "333")
 
-console.assert(deep_equals(store1.root._conflicts.conflict_test.sort(),['111','222']))
-console.assert(deep_equals(store2.root._conflicts.conflict_test.sort(),['111','222']))
-console.assert(deep_equals(store3.root._conflicts.conflict_test.sort(),['111','222']))
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{store1:'111',store2:'222'}))
+console.assert(deep_equals(store2.root._conflicts.conflict_test,{store1:'111',store2:'222'}))
+console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:'111',store2:'222'}))
 
 store1.root.conflict_test = "new1"
 
