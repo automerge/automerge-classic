@@ -124,9 +124,9 @@ function Store(uuid) {
   }
 
 
-  this.can_superseed = (clock, action) => {
+  this.superseeds = (action) => {
     for (let i in action.clock) {
-      if (clock[i] != action.clock[i]) return false;
+      if (this.clock[i] != action.clock[i]) return false;
     }
     return true
   }
@@ -174,6 +174,10 @@ function Store(uuid) {
     }
   }
 
+  this.will_conflict = (a) => {
+    return this.actions[a.target][a.key].by > a.by
+  }
+
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
@@ -182,23 +186,34 @@ function Store(uuid) {
         //console.log("can superseed", this._id, this.objects[a.target][a.key], "vs", a.value)
         //console.log("clock ",pp(this.clock) )
         //console.log("action",pp(a.clock))
-        if (this.can_superseed( this.clock , a )) {
+        if (this.superseeds( a )) {
           this.objects[a.target]._set(a.key, a.value)
           this.actions[a.target][a.key] = a
           this.conflicts[a.target][a.key] = {}
-        } else if (this.actions[a.target][a.key].by > a.by) {
+        } else if (this.will_conflict(a)) {
           this.conflicts[a.target][a.key][a.by] = a.value
         } else {
           this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
           this.objects[a.target]._set(a.key, a.value)
           this.actions[a.target][a.key] = a
+          delete this.conflicts[a.target][a.key][a.by]
         }
         break;
       case "del":
-        delete this.objects[a.target]._direct[a.key]
-        delete this.links[a.target][a.key]
-        delete this.conflicts[a.target][a.key]
-        this.actions[a.target][a.key] = a
+        if (this.superseeds( a )) {
+          delete this.objects[a.target]._direct[a.key]
+          delete this.links[a.target][a.key]
+          this.conflicts[a.target][a.key] = {}
+          this.actions[a.target][a.key] = a
+        } else if (this.will_conflict(a)) {
+          this.conflicts[a.target][a.key][a.by] = undefined
+        } else {
+          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          delete this.objects[a.target]._direct[a.key]
+          delete this.links[a.target][a.key]
+          this.actions[a.target][a.key] = a
+          delete this.conflicts[a.target][a.key][a.by]
+        }
         break;
       case "create":
         // cant have collisions here b/c guid is unique :p

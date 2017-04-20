@@ -142,5 +142,59 @@ console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:'111',st
 
 store1.root.conflict_test = "new1"
 
+console.assert(store3.root.conflict_test == "new1")
+console.assert(store2.root.conflict_test == "new1")
+console.assert(store1.root.conflict_test == "new1")
+
+console.log("Test - 8 - conflict delete")
+
+store2.pause()
+store1.root.conflict_test = "xxx"
+delete store3.root.conflict_test
+store2.unpause()
+
+console.assert(store1.root.conflict_test === undefined)
+console.assert(store2.root.conflict_test === undefined)
+console.assert(store3.root.conflict_test === undefined)
+
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{store1:'xxx'}))
+console.assert(deep_equals(store2.root._conflicts.conflict_test,{store1:'xxx'}))
+console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:'xxx'}))
+
+store2.pause()
+delete store1.root.conflict_test
+store3.root.conflict_test = "yyy"
+store2.unpause()
+
+console.assert(store1.root.conflict_test === "yyy")
+console.assert(store2.root.conflict_test === "yyy")
+console.assert(store3.root.conflict_test === "yyy")
+
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{store1:undefined}))
+console.assert(deep_equals(store2.root._conflicts.conflict_test,{store1:undefined}))
+console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:undefined}))
+
+console.log("Test - 9 - many conflicts")
+
+store2.pause()
+store1.root.conflict_test = "s1a"
+store1.root.conflict_test = "s1b"
+store1.root.conflict_test = "s1c"
+store1.root.conflict_test = "s1d"
+store2.root.conflict_test = "s2a"
+store2.root.conflict_test = "s2b"
+store3.root.conflict_test = "s3a"
+store3.root.conflict_test = "s3b"
+store3.root.conflict_test = "s3c"
+store2.unpause()
+
+console.assert(store1.root.conflict_test === "s3c")
+console.assert(store2.root.conflict_test === "s3c")
+console.assert(store3.root.conflict_test === "s3c")
+
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
+console.assert(deep_equals(store2.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
+console.assert(deep_equals(store3.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
+
 console.log("All tests passed")
 
