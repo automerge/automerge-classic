@@ -223,9 +223,20 @@ function Store(uuid) {
         this.links[a.target] = {}
         break;
       case "link":
-        this.objects[a.target]._set(a.key, this.objects[a.value])
-        this.actions[a.target][a.key] = a
-        this.links[a.target][a.key] = a.value
+        if (this.superseeds( a )) {
+          this.objects[a.target]._set(a.key, this.objects[a.value])
+          this.actions[a.target][a.key] = a
+          this.links[a.target][a.key] = a.value
+          this.conflicts[a.target][a.key] = {}
+        } else if (this.will_conflict(a)) {
+          this.conflicts[a.target][a.key][a.by] = this.objects[a.value]
+        } else {
+          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          this.objects[a.target]._set(a.key, this.objects[a.value])
+          this.actions[a.target][a.key] = a
+          this.links[a.target][a.key] = a.value
+          delete this.conflicts[a.target][a.key][a.by]
+        }
         break;
     }
     this.try_sync_with_peers()

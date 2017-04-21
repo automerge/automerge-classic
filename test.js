@@ -48,7 +48,7 @@ let mark1 = {
   obj2: { hello: 'world' }
 }
 
-console.log("Test - 1 - local set / nest / link")
+console.log("Test - 01 - local set / nest / link")
 console.assert(deep_equals(store1.root,mark1))
 
 let store2 = new Store("store2")
@@ -67,7 +67,7 @@ let mark2 = {
   xxx: 'yyy'
 }
 
-console.log("Test - 2 - sync both ways")
+console.log("Test - 02 - sync both ways")
 console.assert(deep_equals(store1.root,store2.root))
 console.assert(deep_equals(store1.root, mark2))
 
@@ -78,12 +78,12 @@ store1.link(store2)
 store1.root.linktest1 = "123"
 store2.root.linktest2 = "abc"
 
-console.log("Test - 3 - linked stores")
+console.log("Test - 03 - linked stores")
 console.assert(deep_equals(store1.root,store2.root))
 console.assert(store2.root.linktest1 == "123")
 console.assert(store1.root.linktest2 == "abc")
 
-console.log("Test - 4 - linked w two nodes who cant talk")
+console.log("Test - 04 - linked w two nodes who cant talk")
 store3.link(store2)
 store3.root.linktest3 = "zzz"
 store1.root.linktest1 = "aaa"
@@ -94,7 +94,7 @@ console.assert(store3.root.linktest1 == "aaa")
 console.assert(store2.root.linktest1 == "aaa")
 console.assert(store1.root.linktest1 == "aaa")
 
-console.log("Test - 5 - pause syncing")
+console.log("Test - 05 - pause syncing")
 
 store2.pause()
 store3.root.linktest3 = "vvv"
@@ -106,7 +106,7 @@ console.assert(store3.root.linktest1 == "aaa")
 console.assert(store2.root.linktest1 == "aaa")
 console.assert(store1.root.linktest1 == "bbb")
 
-console.log("Test - 6 - unpause syncing")
+console.log("Test - 06 - unpause syncing")
 
 store2.unpause()
 console.assert(store3.root.linktest3 == "vvv")
@@ -116,21 +116,13 @@ console.assert(store3.root.linktest1 == "bbb")
 console.assert(store2.root.linktest1 == "bbb")
 console.assert(store1.root.linktest1 == "bbb")
 
-console.log("Test - 7 - conflicts")
+console.log("Test - 07 - conflicts")
 
 store2.pause()
 store1.root.conflict_test = "111"
 store2.root.conflict_test = "222"
 store3.root.conflict_test = "333"
 store2.unpause()
-
-/*
-console.log("-----------------------------")
-console.log("store1",pp(store1.clock), store1.root.conflict_test, store1.root._conflicts.conflict_test.sort())
-console.log("store2",pp(store2.clock), store2.root.conflict_test, store2.root._conflicts.conflict_test.sort())
-console.log("store3",pp(store3.clock), store3.root.conflict_test, store3.root._conflicts.conflict_test.sort())
-console.log("-----------------------------")
-*/
 
 console.assert(store3.root.conflict_test == "333")
 console.assert(store2.root.conflict_test == "333")
@@ -146,7 +138,7 @@ console.assert(store3.root.conflict_test == "new1")
 console.assert(store2.root.conflict_test == "new1")
 console.assert(store1.root.conflict_test == "new1")
 
-console.log("Test - 8 - conflict delete")
+console.log("Test - 08 - conflict delete")
 
 store2.pause()
 store1.root.conflict_test = "xxx"
@@ -174,7 +166,7 @@ console.assert(deep_equals(store1.root._conflicts.conflict_test,{store1:undefine
 console.assert(deep_equals(store2.root._conflicts.conflict_test,{store1:undefined}))
 console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:undefined}))
 
-console.log("Test - 9 - many conflicts")
+console.log("Test - 09 - many conflicts")
 
 store2.pause()
 store1.root.conflict_test = "s1a"
@@ -195,6 +187,29 @@ console.assert(store3.root.conflict_test === "s3c")
 console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
 console.assert(deep_equals(store2.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
 console.assert(deep_equals(store3.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
+
+console.log("Test - 10 - link conflicts")
+
+store2.pause()
+store1.root.conflict_test = "111"
+store2.root.conflict_test = "222"
+store3.root.conflict_test = store3.root.obj2
+store2.unpause()
+
+store2.root.x = 1;
+
+console.assert(deep_equals(store1.root.conflict_test,{ hello: "world" }))
+console.assert(deep_equals(store3.root.conflict_test,{ hello: "world" }))
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: '111', store2: '222'}))
+
+store2.pause()
+store1.root.conflict_test = store3.root.obj2
+store3.root.conflict_test = "111"
+store2.unpause()
+
+console.assert(store1.root.conflict_test === "111")
+console.assert(store3.root.conflict_test === "111")
+console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: {hello: 'world' }}))
 
 console.log("All tests passed")
 
