@@ -229,5 +229,20 @@ store4.unpause()
 console.assert(store4.root.new_test === "444")
 console.assert(store5.root.new_test === "444")
 
+console.log("Test - 12 - messy network")
+
+store4.link(store3)
+store5.link(store2)
+store5.link(store1)
+
+store1.root.complex_test = "complex1"
+store5.root.complex_test = "complex5"
+
+console.assert(store1.root.complex_test === "complex5")
+console.assert(store2.root.complex_test === "complex5")
+console.assert(store3.root.complex_test === "complex5")
+console.assert(store4.root.complex_test === "complex5")
+console.assert(store5.root.complex_test === "complex5")
+
 console.log("All tests passed")
 
