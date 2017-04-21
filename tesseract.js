@@ -24,6 +24,36 @@ var UUID = (function() {
   return self;
 })();
 
+/*
+let ArrayHandler = {
+  get: (target,key) => {
+    if (key == "_direct") return target
+    if (key == "_set") return (key,val) => { target[key] = val }
+    if (key == "_conflicts") return target._conflicts
+    return target[key]
+  },
+  set: (target,key,value) => {
+    if (key.startsWith("_")) { throw "Invalid Key" }
+    let store = target._store;
+    if (typeof value == 'object') {
+      if (!('_id' in value)) {
+        store.apply({ action: "create", target: UUID.generate(), value: value, by: target._store._id, clock: target._store.tick() })
+      }
+      store.apply({ action: "link", target: target._id, key: key, value: value._id, by: target._store._id, clock: target._store.tick() })
+    } else {
+      store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
+    }
+  },
+  deleteProperty: (target,key) => {
+    if (key.startsWith("_")) { throw "Invalid Key" }
+    let store = target._store;
+    // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
+    let action = { action: "del", target: target._id, key: key, by: target._store._id, clock: target._store.tick() }
+    store.apply(action);
+  }
+}
+*/
+
 let MapHandler = {
   get: (target,key) => {
     if (key == "_direct") return target
@@ -56,6 +86,13 @@ function Map(store, id, map) {
     map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id] }
     return new Proxy(map, MapHandler)
 }
+
+/*
+function Array(store, id, map) {
+    map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id] }
+    return new Proxy(map, ArrayHandler)
+}
+*/
 
 function Store(uuid) {
   let root_id = '00000000-0000-0000-0000-000000000000'
@@ -96,6 +133,9 @@ function Store(uuid) {
   }
 
   this.link = (store) => {
+    if (store.clock[this._id] === undefined) store.clock[this._id] = 0
+    if (this.clock[store._id] === undefined) this.clock[store._id] = 0
+
     this.peers[store._id] = store
     store.peers[this._id] = this
     this.sync(store)

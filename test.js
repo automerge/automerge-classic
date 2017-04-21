@@ -211,5 +211,23 @@ console.assert(store1.root.conflict_test === "111")
 console.assert(store3.root.conflict_test === "111")
 console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: {hello: 'world' }}))
 
+console.log("Test - 11 - linking to a virgin store")
+
+let store4 = new Store("store4")
+let store5 = new Store("store5")
+
+store4.root.new_test = "123"
+store4.link(store5)
+
+console.assert(store5.root.new_test === "123")
+
+store4.pause()
+store4.root.new_test = "333"
+store5.root.new_test = "444"
+store4.unpause()
+
+console.assert(store4.root.new_test === "444")
+console.assert(store5.root.new_test === "444")
+
 console.log("All tests passed")
 
