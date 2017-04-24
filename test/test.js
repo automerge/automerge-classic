@@ -36,6 +36,7 @@ function pp(o) {
 }
 
 let store1 = new Store("store1")
+//store1.on('change',(c) => console.log("UPDATE",c))
 store1.root.foo = "foo"
 store1.root.bar = store1.root.foo + "bar"
 store1.root.dang = 12345
@@ -50,7 +51,7 @@ let mark1 = {
   obj2: { hello: 'world' }
 }
 
-console.log("Test - 01 - local set / nest / link")
+console.log("Test - 01 - map: local set / nest / link")
 console.assert(deep_equals(store1.root,mark1))
 
 let store2 = new Store("store2")
@@ -118,7 +119,7 @@ console.assert(store3.root.linktest1 == "bbb")
 console.assert(store2.root.linktest1 == "bbb")
 console.assert(store1.root.linktest1 == "bbb")
 
-console.log("Test - 07 - conflicts")
+console.log("Test - 07 - map: conflicts")
 
 store2.pause()
 store1.root.conflict_test = "111"
@@ -140,7 +141,7 @@ console.assert(store3.root.conflict_test == "new1")
 console.assert(store2.root.conflict_test == "new1")
 console.assert(store1.root.conflict_test == "new1")
 
-console.log("Test - 08 - conflict delete")
+console.log("Test - 08 - map: conflict delete")
 
 store2.pause()
 store1.root.conflict_test = "xxx"
@@ -168,7 +169,7 @@ console.assert(deep_equals(store1.root._conflicts.conflict_test,{store1:undefine
 console.assert(deep_equals(store2.root._conflicts.conflict_test,{store1:undefined}))
 console.assert(deep_equals(store3.root._conflicts.conflict_test,{store1:undefined}))
 
-console.log("Test - 09 - many conflicts")
+console.log("Test - 09 - map: many conflicts")
 
 store2.pause()
 store1.root.conflict_test = "s1a"
@@ -190,7 +191,7 @@ console.assert(deep_equals(store1.root._conflicts.conflict_test,{ store1: 's1d',
 console.assert(deep_equals(store2.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
 console.assert(deep_equals(store3.root._conflicts.conflict_test,{ store1: 's1d', store2: 's2b'}))
 
-console.log("Test - 10 - link conflicts")
+console.log("Test - 10 - map: link conflicts")
 
 store2.pause()
 store1.root.conflict_test = "111"
@@ -246,32 +247,32 @@ console.assert(store3.root.complex_test === "complex5")
 console.assert(store4.root.complex_test === "complex5")
 console.assert(store5.root.complex_test === "complex5")
 
-console.log("Test - 13 - list (set)")
+console.log("Test - 13 - list: (set)")
 
 let store6 = new Store("store6")
 store6.root.lists = []
 store6.root.lists[0] = 111
 console.assert(deep_equals(store6.root.lists,[111]))
 
-console.log("Test - 14 - list (push)")
+console.log("Test - 14 - list: (push)")
 
 store6.root.lists.push(222)
 store6.root.lists.push(333)
 console.assert(deep_equals(store6.root.lists,[111,222,333]))
 
-console.log("Test - 15 - list (pop)")
+console.log("Test - 15 - list: (pop)")
 
 let l1 = store6.root.lists.pop()
 console.assert(l1 === 333)
 console.assert(deep_equals(store6.root.lists,[111,222]))
 
-console.log("Test - 16 - list (shift)")
+console.log("Test - 16 - list: (shift)")
 
 let l2 = store6.root.lists.shift()
 console.assert(l2 === 111)
 console.assert(deep_equals(store6.root.lists,[222]))
 
-console.log("Test - 17 - list (unshift)")
+console.log("Test - 17 - list: (unshift)")
 
 let l3 = store6.root.lists.unshift(444)
 let l4 = store6.root.lists.unshift(555)
@@ -279,12 +280,33 @@ console.assert(l3 === 2)
 console.assert(l4 === 3)
 console.assert(deep_equals(store6.root.lists,[555,444,222]))
 
-console.log("Test - 18 - list (fill) [TODO]")
-console.log("Test - 19 - list (copyWithin) [TODO]")
-console.log("Test - 20 - list (splice) [TODO]")
-console.log("Test - 21 - lists with objects [TODO]")
-console.log("Test - 22 - list deletes [TODO]")
-console.log("Test - 23 - list merge conflicts [TODO]")
+console.log("Test - 18 - list: (fill)")
+
+store6.root.lists.fill(10)
+console.assert(deep_equals(store6.root.lists,[10,10,10]))
+store6.root.lists.fill(11,1)
+console.assert(deep_equals(store6.root.lists,[10,11,11]))
+store6.root.lists.fill(12,0,2)
+console.assert(deep_equals(store6.root.lists,[12,12,11]))
+
+console.log("Test - 19 - list: deletes")
+
+store6.root.lists[0] = undefined
+delete store6.root.lists[1]
+
+let skipList = [undefined]
+skipList[2] = 11
+
+console.assert(deep_equals(store6.root.lists,skipList))
+
+console.log("Test - 20 - list: (copyWithin) [TODO]")
+
+console.log("Test - 21 - list: (splice)")
+
+// all above work uses splice internally
+
+console.log("Test - 22 - list: merge conflicts [TODO]")
+console.log("Test - 23 - list of maps [TODO]")
 
 //tesseract.debug(true)
 

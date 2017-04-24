@@ -290,7 +290,7 @@ function Store(uuid) {
   }
 
 
-  this.superseeds = (action) => {
+  this.supersedes = (action) => {
     for (let i in action.clock) {
       if (this.clock[i] != action.clock[i]) return false;
     }
@@ -352,7 +352,7 @@ function Store(uuid) {
         //console.log("can superseed", this._id, this.objects[a.target][a.key], "vs", a.value)
         //console.log("clock ",pp(this.clock) )
         //console.log("action",pp(a.clock))
-        if (this.superseeds( a )) {
+        if (this.supersedes( a )) {
           this.objects[a.target]._set(a.key, a.value)
           this.actions[a.target][a.key] = a
           this.conflicts[a.target][a.key] = {}
@@ -366,7 +366,7 @@ function Store(uuid) {
         }
         break;
       case "del":
-        if (this.superseeds( a )) {
+        if (this.supersedes( a )) {
           delete this.objects[a.target]._direct[a.key]
           delete this.links[a.target][a.key]
           this.conflicts[a.target][a.key] = {}
@@ -393,7 +393,7 @@ function Store(uuid) {
         this.links[a.target] = {}
         break;
       case "link":
-        if (this.superseeds( a )) {
+        if (this.supersedes( a )) {
           this.objects[a.target]._set(a.key, this.objects[a.value])
           this.actions[a.target][a.key] = a
           this.links[a.target][a.key] = a.value
