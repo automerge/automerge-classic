@@ -24,15 +24,67 @@ var UUID = (function() {
   return self;
 })();
 
+// [x]=y --- set/link [x]=y
+// push,pop,shift,unshift --- insert after, insert before
+// 
+
 /*
-let ArrayHandler = {
+READ ONLY 
+
+Array.prototype.map()
+Array.prototype.forEach()
+Array.prototype.filter()
+Array.prototype.keys()
+Array.prototype.concat()
+Array.prototype.entries()
+Array.prototype.every()
+Array.prototype.findIndex()
+Array.prototype.find()
+Array.prototype.includes()
+Array.prototype.toString()
+Array.prototype.join()
+Array.prototype.indexOf()
+Array.prototype.lastIndexOf()
+Array.prototype.reduce()
+Array.prototype.reduceRight()
+Array.prototype.toLocaleString()
+Array.prototype.toSource()
+Array.prototype.values()
+Array.prototype.some()
+Array.prototype.slice()
+
+TODO
+
+Array.prototype.splice()
+
+DONE
+
+Array.prototype.sort() // new array?
+Array.prototype.reverse() // new array?
+Array.prototype.pop()
+Array.prototype.push()
+Array.prototype.shift()
+Array.prototype.unshift()
+Array.prototype.copyWithin()
+Array.prototype.fill()
+
+
+
+----
+
+*/
+
+let ListHandler = {
   get: (target,key) => {
+    console.log("GET",key);
     if (key == "_direct") return target
     if (key == "_set") return (key,val) => { target[key] = val }
     if (key == "_conflicts") return target._conflicts
     return target[key]
   },
+//  push: (target,v) => { target.push(v) },
   set: (target,key,value) => {
+    console.log("SET",key,"[",value,"]");
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     if (typeof value == 'object') {
@@ -43,16 +95,23 @@ let ArrayHandler = {
     } else {
       store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
     }
+    return true
   },
   deleteProperty: (target,key) => {
+    console.log("DELETE",key);
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
-    let action = { action: "del", target: target._id, key: key, by: target._store._id, clock: target._store.tick() }
+    let action = {
+      action: "del",
+      target: target._id,
+      key: key,
+      by: target._store._id,
+      clock: target._store.tick()
+    }
     store.apply(action);
   }
 }
-*/
 
 let MapHandler = {
   get: (target,key) => {
@@ -83,16 +142,78 @@ let MapHandler = {
 }
 
 function Map(store, id, map) {
-    map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id] }
+    map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id], __proto__: map.__proto__ }
     return new Proxy(map, MapHandler)
 }
 
-/*
-function Array(store, id, map) {
-    map.__proto__ = { _store: store, _id: id, _conflicts: store.conflicts[id] }
-    return new Proxy(map, ArrayHandler)
+function List(store, id, list) {
+    console.log("LIST CONSTRUCTOR")
+    let _splice = function() {
+      let args = Array.from(arguments)
+      let start = args.unshift()
+      let run = args.unshift()
+      let cut = this.slice(start,run)
+      store.apply({ action: "splice", target: this._id, cut: [start,start + run], add: args, by: store._id, clock: store.tick() })
+      return cut
+    }
+    let _push = function() {
+      let args = Array.from(arguments)
+      this.splice(this.length,0,...args)
+      return args[args.length - 1]
+    }
+    let _pop = function() {
+      let val = this[this.length - 1]
+      return this.splice(this.length - 1, 1)[0]
+    }
+    let _shift = function() {
+      let args = Array.from(arguments)
+      return this.splice(0,0,...args)
+    }
+    let _unshift = function() {
+      return this.splice(0,1)[0]
+    }
+    let _fill = function() {
+      let args = Array.from(arguments)
+      let val = args.unshift()
+      let start = args.unshift() || 0 
+      let end = args.unshift() || this.length
+      let n = this.slice(start,end).fill(val)
+      this.splice(start,n.length,...n)
+      return this
+    }
+    let _copyWithin = function(target) {
+      // TODO - handle overcopy scenario :/
+      let start = arguments[1] || 0
+      let end   = arguments[2] || this.length
+      let n = this.slice(start,end)
+      this.splice(target,n.length,...n)
+      return this
+    }
+    let _sort = function() {
+      return Array.from(this).sort()
+    }
+    let _reverse = function() {
+      return Array.from(this).reverse()
+    }
+    let _old_splice = list.splice
+    list.__proto__ = {
+      __proto__:  list.__proto__,
+      _id:        id,
+      _store:     store,
+      _conflicts: store.conflicts[id],
+      _splice:    _old_splice,
+      splice:     _splice,
+      shift:      _shift,
+      unshift:    _unshift,
+      push:       _push,
+      pop:        _pop,
+      fill:       _fill,
+      copyWithin: _copyWithin,
+      sort:       _sort,
+      reverse:    _reverse
+    }
+    return new Proxy(list, ListHandler)
 }
-*/
 
 function Store(uuid) {
   let root_id = '00000000-0000-0000-0000-000000000000'
@@ -259,7 +380,11 @@ function Store(uuid) {
         // cant have collisions here b/c guid is unique :p
         this.conflicts[a.target] = {}
         this.actions[a.target] = {}
-        this.objects[a.target] = new Map(this, a.target, a.value)
+        if (Array.isArray(a.value)) {
+          this.objects[a.target] = new List(this, a.target, a.value)
+        } else {
+          this.objects[a.target] = new Map(this, a.target, a.value)
+        }
         this.links[a.target] = {}
         break;
       case "link":
@@ -278,6 +403,12 @@ function Store(uuid) {
           delete this.conflicts[a.target][a.key][a.by]
         }
         break;
+      case "splice":
+        this.objects[a.target]._splice(a.cut[0],a.cut[1],...a.add)
+        console.log("splice",this._id,a)
+        break;
+      default:
+        console.log("unknown-action:", a.action)
     }
     this.try_sync_with_peers()
   }

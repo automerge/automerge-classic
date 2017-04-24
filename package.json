@@ -4,8 +4,13 @@
   "description": "js crdt",
   "main": "tesseract.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "mocha"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "mocha": "^3.2.0"
+  }
 }

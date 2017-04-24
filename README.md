@@ -1,0 +1,8 @@
+
+## Tesseract
+
+### Testing
+
+```
+  $ npm test
+```

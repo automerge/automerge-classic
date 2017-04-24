@@ -3,7 +3,8 @@
 //         Tesseract Integration Tests 
 // -------------------------------------------- //
 
-let Store = require('./tesseract').Store
+var assert = require('assert');
+let Store = require('../tesseract').Store
 
 let deep_equals = (a,b) => {
   if ((typeof a == 'object' && a != null) &&
@@ -24,6 +25,7 @@ let deep_equals = (a,b) => {
   }
 }
 
+/*
 function pp(o) {
   let keys = Object.keys(o).sort();
   let o2 = {}
@@ -32,6 +34,7 @@ function pp(o) {
   }
   return o2;
 }
+*/
 
 let store1 = new Store("store1")
 store1.root.foo = "foo"
@@ -243,6 +246,17 @@ console.assert(store2.root.complex_test === "complex5")
 console.assert(store3.root.complex_test === "complex5")
 console.assert(store4.root.complex_test === "complex5")
 console.assert(store5.root.complex_test === "complex5")
+
+/*
+console.log("Test - 13 - list")
+console.log("-------------------------------------------------")
+store1.root.lists = []
+console.log(store1.root.lists)
+console.log(store2.root.lists)
+store1.root.lists.push(111)
+console.log(store1.root.lists)
+console.log(store2.root.lists)
+*/
 
 console.log("All tests passed")
 
