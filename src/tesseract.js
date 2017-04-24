@@ -1,4 +1,6 @@
 
+let Debug = false
+
 function pp(o) {
   let keys = Object.keys(o).sort();
   let o2 = {}
@@ -76,15 +78,17 @@ Array.prototype.fill()
 
 let ListHandler = {
   get: (target,key) => {
-    console.log("GET",key);
+    if (Debug) { console.log("GET",key) }
     if (key == "_direct") return target
     if (key == "_set") return (key,val) => { target[key] = val }
     if (key == "_conflicts") return target._conflicts
+    if (key == "splice") return function() { return target.splice(...arguments) }
+    if (key == "_splice") return function() { return target._splice(...arguments) }
     return target[key]
   },
 //  push: (target,v) => { target.push(v) },
   set: (target,key,value) => {
-    console.log("SET",key,"[",value,"]");
+    if (Debug) { console.log("SET",key,"[",value,"]") }
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     if (typeof value == 'object') {
@@ -98,7 +102,7 @@ let ListHandler = {
     return true
   },
   deleteProperty: (target,key) => {
-    console.log("DELETE",key);
+    if (Debug) { console.log("DELETE",key) }
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
@@ -147,11 +151,10 @@ function Map(store, id, map) {
 }
 
 function List(store, id, list) {
-    console.log("LIST CONSTRUCTOR")
     let _splice = function() {
       let args = Array.from(arguments)
-      let start = args.unshift()
-      let run = args.unshift()
+      let start = args.shift()
+      let run = args.shift()
       let cut = this.slice(start,run)
       store.apply({ action: "splice", target: this._id, cut: [start,start + run], add: args, by: store._id, clock: store.tick() })
       return cut
@@ -163,20 +166,22 @@ function List(store, id, list) {
     }
     let _pop = function() {
       let val = this[this.length - 1]
-      return this.splice(this.length - 1, 1)[0]
-    }
-    let _shift = function() {
-      let args = Array.from(arguments)
-      return this.splice(0,0,...args)
+      this.splice(this.length - 1, 1)
+      return val
     }
     let _unshift = function() {
+      let args = Array.from(arguments)
+      this.splice(0,0,...args)
+      return this.length
+    }
+    let _shift = function() {
       return this.splice(0,1)[0]
     }
     let _fill = function() {
       let args = Array.from(arguments)
-      let val = args.unshift()
-      let start = args.unshift() || 0 
-      let end = args.unshift() || this.length
+      let val = args.shift()
+      let start = args.shift() || 0 
+      let end = args.shift() || this.length
       let n = this.slice(start,end).fill(val)
       this.splice(start,n.length,...n)
       return this
@@ -405,7 +410,7 @@ function Store(uuid) {
         break;
       case "splice":
         this.objects[a.target]._splice(a.cut[0],a.cut[1],...a.add)
-        console.log("splice",this._id,a)
+        //console.log("splice",this._id,a)
         break;
       default:
         console.log("unknown-action:", a.action)
@@ -415,6 +420,7 @@ function Store(uuid) {
 }
 
 module.exports = {
-  Store: Store
+  Store: Store,
+  debug: (bool) => { Debug = bool }
 }
 

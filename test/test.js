@@ -4,7 +4,8 @@
 // -------------------------------------------- //
 
 var assert = require('assert');
-let Store = require('../tesseract').Store
+let tesseract = require('../src/tesseract')
+let Store = tesseract.Store
 
 let deep_equals = (a,b) => {
   if ((typeof a == 'object' && a != null) &&
@@ -25,7 +26,6 @@ let deep_equals = (a,b) => {
   }
 }
 
-/*
 function pp(o) {
   let keys = Object.keys(o).sort();
   let o2 = {}
@@ -34,7 +34,6 @@ function pp(o) {
   }
   return o2;
 }
-*/
 
 let store1 = new Store("store1")
 store1.root.foo = "foo"
@@ -247,16 +246,47 @@ console.assert(store3.root.complex_test === "complex5")
 console.assert(store4.root.complex_test === "complex5")
 console.assert(store5.root.complex_test === "complex5")
 
-/*
-console.log("Test - 13 - list")
-console.log("-------------------------------------------------")
-store1.root.lists = []
-console.log(store1.root.lists)
-console.log(store2.root.lists)
-store1.root.lists.push(111)
-console.log(store1.root.lists)
-console.log(store2.root.lists)
-*/
+console.log("Test - 13 - list (set)")
+
+let store6 = new Store("store6")
+store6.root.lists = []
+store6.root.lists[0] = 111
+console.assert(deep_equals(store6.root.lists,[111]))
+
+console.log("Test - 14 - list (push)")
+
+store6.root.lists.push(222)
+store6.root.lists.push(333)
+console.assert(deep_equals(store6.root.lists,[111,222,333]))
+
+console.log("Test - 15 - list (pop)")
+
+let l1 = store6.root.lists.pop()
+console.assert(l1 === 333)
+console.assert(deep_equals(store6.root.lists,[111,222]))
+
+console.log("Test - 16 - list (shift)")
+
+let l2 = store6.root.lists.shift()
+console.assert(l2 === 111)
+console.assert(deep_equals(store6.root.lists,[222]))
+
+console.log("Test - 17 - list (unshift)")
+
+let l3 = store6.root.lists.unshift(444)
+let l4 = store6.root.lists.unshift(555)
+console.assert(l3 === 2)
+console.assert(l4 === 3)
+console.assert(deep_equals(store6.root.lists,[555,444,222]))
+
+console.log("Test - 18 - list (fill) [TODO]")
+console.log("Test - 19 - list (copyWithin) [TODO]")
+console.log("Test - 20 - list (splice) [TODO]")
+console.log("Test - 21 - lists with objects [TODO]")
+console.log("Test - 22 - list deletes [TODO]")
+console.log("Test - 23 - list merge conflicts [TODO]")
+
+//tesseract.debug(true)
 
 console.log("All tests passed")
 
