@@ -97,7 +97,9 @@ let ListHandler = {
       }
       store.apply({ action: "link", target: target._id, key: key, value: value._id, by: target._store._id, clock: target._store.tick() })
     } else {
-      store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
+      //store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
+      let k = parseInt(key)
+      store.apply({ action: "splice", target: target._id, cut: [k,k+1], add: [value], by: store._id, clock: store.tick() })
     }
     return true
   },
@@ -225,6 +227,9 @@ function Store(uuid) {
   let _uuid = uuid || UUID.generate()
   this._id = _uuid
   this.actions = { [this._id]: [] }
+  this.list_index = { }
+  this.list_sequence = { }
+  this.list_tombstones = { }
   this.conflicts = { [root_id]: {} }
   this.actions = { [root_id]: {} }
   this.root = new Map(this, root_id, {})
@@ -386,7 +391,17 @@ function Store(uuid) {
         this.conflicts[a.target] = {}
         this.actions[a.target] = {}
         if (Array.isArray(a.value)) {
-          this.objects[a.target] = new List(this, a.target, a.value)
+          this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
+          this.list_index[a.target] = this.objects[a.target].map((val,i) => i)  // list_index[k] = [0,1,2]
+          this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
+          this.list_tombstones[a.target] = this.objects[a.target].map(() => []).concat([[]]) // list_tombstones = [[],[],[],[]]
+/*
+          console.log("--- create ----------------------------")
+          console.log("--- object", this.objects[a.target])
+          console.log("--- list_squence", this.list_sequence[a.target])
+          console.log("--- list_index", this.list_index[a.target])
+          console.log("--- list_tombstone", this.list_tombstones[a.target])
+*/
         } else {
           this.objects[a.target] = new Map(this, a.target, a.value)
         }
@@ -409,8 +424,34 @@ function Store(uuid) {
         }
         break;
       case "splice":
+/*
+        console.log("splice - before", a)
+        console.log("--- object", this.objects[a.target])
+        console.log("--- list_squence", this.list_sequence[a.target])
+        console.log("--- list_index", this.list_index[a.target])
+        console.log("--- list_tombstone", this.list_tombstones[a.target])
+*/
+        let indexes = a.add.map((n,i) => this.list_sequence[a.target] + i)
+        let tombs = a.add.map((n,i) => [])
+        this.list_sequence[a.target] += a.add.length
         this.objects[a.target]._splice(a.cut[0],a.cut[1],...a.add)
-        //console.log("splice",this._id,a)
+        let new_tombstones = this.list_index[a.target].splice(a.cut[0],a.cut[1],...indexes)
+        let moved_tombs = this.list_tombstones[a.target].splice(a.cut[0],a.cut[1],...tombs)
+        moved_tombs.push(new_tombstones)
+        if (this.list_tombstones[a.target][a.cut[0]] == undefined) {
+          this.list_tombstones[a.target][a.cut[0]] =  []
+        }
+        this.list_tombstones[a.target][a.cut[0]] = this.list_tombstones[a.target][a.cut[0]].concat(...moved_tombs)
+/*
+        console.log("splice - after ---------------")
+        console.log("--- tombs.splice()", a.cut[0],a.cut[1],tombs)
+        console.log("--- a.cut[0]", a.cut[0])
+        console.log("--- moved-tombs", moved_tombs)
+        console.log("--- object", this.objects[a.target])
+        console.log("--- list_squence", this.list_sequence[a.target])
+        console.log("--- list_index", this.list_index[a.target])
+        console.log("--- list_tombstone", this.list_tombstones[a.target])
+*/
         break;
       default:
         console.log("unknown-action:", a.action)
@@ -424,3 +465,27 @@ module.exports = {
   debug: (bool) => { Debug = bool }
 }
 
+
+/*
+[  1,  2,  3 ] // length = 3
+[ [], [], [], [] ]
+
+[  1,   2  ] //  length = 2
+[ [],  [], [3] ]
+[  1,   3  ] //  length = 2
+[ [],  [2], [] ]
+[  2,   3  ] //  length = 2
+[ [1],  [], [] ]
+
+[  1  ] // length = 1
+[ [], [2,3], ]
+[  2  ] // length = 1
+[ [1], [3], ]
+[  3  ] // length = 1
+[ [1,2], [], ]
+
+[  ] //  length = 0
+[ [1, 2, 3] ]
+
+
+*/

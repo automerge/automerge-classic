@@ -253,6 +253,8 @@ let store6 = new Store("store6")
 store6.root.lists = []
 store6.root.lists[0] = 111
 console.assert(deep_equals(store6.root.lists,[111]))
+//console.log(store6.list_tombstones[store6.root.lists._id],[[],[]])
+//console.assert(deep_equals(store6.list_tombstones[store6.root.lists._id],[[],[]]))
 
 console.log("Test - 14 - list: (push)")
 
