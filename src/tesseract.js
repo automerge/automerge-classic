@@ -93,29 +93,21 @@ let ListHandler = {
     let store = target._store;
     if (typeof value == 'object') {
       if (!('_id' in value)) {
-        store.apply({ action: "create", target: UUID.generate(), value: value, by: target._store._id, clock: target._store.tick() })
+        store.apply({ action: "create", target: UUID.generate(), value: value })
       }
-      store.apply({ action: "link", target: target._id, key: key, value: value._id, by: target._store._id, clock: target._store.tick() })
+      store.apply({ action: "link", target: target._id, key: key, value: value._id })
     } else {
-      //store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
+      //store.apply({ action: "set", target: target._id, key: key, value: value })
       let k = parseInt(key)
-      store.apply({ action: "splice", target: target._id, cut: [k,k+1], add: [value], by: store._id, clock: store.tick() })
+      store.apply({ action: "splice", target: target._id, cut: [k,k+1], add: [value] })
     }
     return true
   },
   deleteProperty: (target,key) => {
     if (Debug) { console.log("DELETE",key) }
     if (key.startsWith("_")) { throw "Invalid Key" }
-    let store = target._store;
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
-    let action = {
-      action: "del",
-      target: target._id,
-      key: key,
-      by: target._store._id,
-      clock: target._store.tick()
-    }
-    store.apply(action);
+    target._store.apply({ action: "del", target: target._id, key: key })
   }
 }
 
@@ -131,19 +123,17 @@ let MapHandler = {
     let store = target._store;
     if (typeof value == 'object') {
       if (!('_id' in value)) {
-        store.apply({ action: "create", target: UUID.generate(), value: value, by: target._store._id, clock: target._store.tick() })
+        store.apply({ action: "create", target: UUID.generate(), value: value })
       }
-      store.apply({ action: "link", target: target._id, key: key, value: value._id, by: target._store._id, clock: target._store.tick() })
+      store.apply({ action: "link", target: target._id, key: key, value: value._id })
     } else {
-      store.apply({ action: "set", target: target._id, key: key, value: value, by: target._store._id, clock: target._store.tick() })
+      store.apply({ action: "set", target: target._id, key: key, value: value })
     }
   },
   deleteProperty: (target,key) => {
     if (key.startsWith("_")) { throw "Invalid Key" }
-    let store = target._store;
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
-    let action = { action: "del", target: target._id, key: key, by: target._store._id, clock: target._store.tick() }
-    store.apply(action);
+    target._store.apply({ action: "del", target: target._id, key: key })
   }
 }
 
@@ -158,7 +148,7 @@ function List(store, id, list) {
       let start = args.shift()
       let run = args.shift()
       let cut = this.slice(start,run)
-      store.apply({ action: "splice", target: this._id, cut: [start,start + run], add: args, by: store._id, clock: store.tick() })
+      store.apply({ action: "splice", target: this._id, cut: [start,start + run], add: args })
       return cut
     }
     let _push = function() {
@@ -289,7 +279,8 @@ function Store(uuid) {
     this.actions[a.by].push(a);
   }
 
-  this.apply = (a) => {
+  this.apply = (action) => {
+    let a = Object.assign({ by: this._id, clock: this.tick() }, action)
     this.push_action(a)
     this.try_apply()
   }
