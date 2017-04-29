@@ -216,12 +216,12 @@ function Store(uuid) {
   let root_id = '00000000-0000-0000-0000-000000000000'
   let _uuid = uuid || UUID.generate()
   this._id = _uuid
-  this.actions = { [this._id]: [] }
   this.list_index = { }
   this.list_sequence = { }
   this.list_tombstones = { }
   this.conflicts = { [root_id]: {} }
-  this.actions = { [root_id]: {} }
+  this.peer_actions = { [this._id]: [] }
+  this.obj_actions = { [root_id]: {} }
   this.root = new Map(this, root_id, {})
   this.objects = { [this.root._id]: this.root }
   this.links = { [this.root._id]: {} }
@@ -230,10 +230,10 @@ function Store(uuid) {
   this.syncing = true
 
   this.merge = (peer) => {
-    for (let id in peer.actions) {
-      let idx = (id in this.actions) ? this.actions[id].length : 0
-      for (let i = idx; i < peer.actions[id].length; i++) { // in peer.actions[id].slice(idx)) {
-        this.push_action(peer.actions[id][i])
+    for (let id in peer.peer_actions) {
+      let idx = (id in this.peer_actions) ? this.peer_actions[id].length : 0
+      for (let i = idx; i < peer.peer_actions[id].length; i++) {
+        this.push_action(peer.peer_actions[id][i])
       }
     }
     this.try_apply()
@@ -246,7 +246,7 @@ function Store(uuid) {
 
   this.export = () => {
     return {
-      actions: Object.assign({}, this.actions ),
+      peer_actions: Object.assign({}, this.peer_actions ),
       clock:   Object.assign({}, this.clock ),
       objects: Object.assign({}, this.objects ),
       links:   Object.assign({}, this.links )
@@ -272,11 +272,11 @@ function Store(uuid) {
   }
 
   this.push_action = (a) => {
-    if (!(a.by in this.actions)) {
+    if (!(a.by in this.peer_actions)) {
       this.clock[a.by] = 0
-      this.actions[a.by] = []
+      this.peer_actions[a.by] = []
     }
-    this.actions[a.by].push(a);
+    this.peer_actions[a.by].push(a);
   }
 
   this.apply = (action) => {
@@ -305,8 +305,8 @@ function Store(uuid) {
     var actions_applied
     do {
       actions_applied = 0
-      for (var id in this.actions) {
-        let actions = this.actions[id]
+      for (var id in this.peer_actions) {
+        let actions = this.peer_actions[id]
         let action_no = this.clock[id]
         if (action_no < actions.length) {
           let next_action = actions[action_no]
@@ -337,7 +337,7 @@ function Store(uuid) {
   }
 
   this.will_conflict = (a) => {
-    return this.actions[a.target][a.key].by > a.by
+    return this.obj_actions[a.target][a.key].by > a.by
   }
 
   this.do_apply = (a) => {
@@ -350,14 +350,14 @@ function Store(uuid) {
         //console.log("action",pp(a.clock))
         if (this.supersedes( a )) {
           this.objects[a.target]._set(a.key, a.value)
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
           this.conflicts[a.target][a.key] = {}
         } else if (this.will_conflict(a)) {
           this.conflicts[a.target][a.key][a.by] = a.value
         } else {
-          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
           this.objects[a.target]._set(a.key, a.value)
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
           delete this.conflicts[a.target][a.key][a.by]
         }
         break;
@@ -366,21 +366,21 @@ function Store(uuid) {
           delete this.objects[a.target]._direct[a.key]
           delete this.links[a.target][a.key]
           this.conflicts[a.target][a.key] = {}
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
         } else if (this.will_conflict(a)) {
           this.conflicts[a.target][a.key][a.by] = undefined
         } else {
-          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
           delete this.objects[a.target]._direct[a.key]
           delete this.links[a.target][a.key]
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
           delete this.conflicts[a.target][a.key][a.by]
         }
         break;
       case "create":
         // cant have collisions here b/c guid is unique :p
         this.conflicts[a.target] = {}
-        this.actions[a.target] = {}
+        this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
           this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
           this.list_index[a.target] = this.objects[a.target].map((val,i) => i)  // list_index[k] = [0,1,2]
@@ -401,15 +401,15 @@ function Store(uuid) {
       case "link":
         if (this.supersedes( a )) {
           this.objects[a.target]._set(a.key, this.objects[a.value])
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
           this.links[a.target][a.key] = a.value
           this.conflicts[a.target][a.key] = {}
         } else if (this.will_conflict(a)) {
           this.conflicts[a.target][a.key][a.by] = this.objects[a.value]
         } else {
-          this.conflicts[a.target][a.key][this.actions[a.target][a.key].by] = this.objects[a.target][a.key]
+          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
           this.objects[a.target]._set(a.key, this.objects[a.value])
-          this.actions[a.target][a.key] = a
+          this.obj_actions[a.target][a.key] = a
           this.links[a.target][a.key] = a.value
           delete this.conflicts[a.target][a.key][a.by]
         }
