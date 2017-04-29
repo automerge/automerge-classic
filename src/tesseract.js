@@ -92,10 +92,11 @@ let ListHandler = {
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     if (typeof value == 'object') {
+      let value_id = value._id || UUID.generate()
       if (!('_id' in value)) {
-        store.apply({ action: "create", target: UUID.generate(), value: value })
+        store.apply({ action: "create", target: value_id, value: value })
       }
-      store.apply({ action: "link", target: target._id, key: key, value: value._id })
+      store.apply({ action: "link", target: target._id, key: key, value: value_id })
     } else {
       //store.apply({ action: "set", target: target._id, key: key, value: value })
       let k = parseInt(key)
@@ -122,10 +123,11 @@ let MapHandler = {
     if (key.startsWith("_")) { throw "Invalid Key" }
     let store = target._store;
     if (typeof value == 'object') {
+      let value_id = value._id || UUID.generate()
       if (!('_id' in value)) {
-        store.apply({ action: "create", target: UUID.generate(), value: value })
+        store.apply({ action: "create", target: value_id, value: value })
       }
-      store.apply({ action: "link", target: target._id, key: key, value: value._id })
+      store.apply({ action: "link", target: target._id, key: key, value: value_id })
     } else {
       store.apply({ action: "set", target: target._id, key: key, value: value })
     }
@@ -254,9 +256,6 @@ function Store(uuid) {
   }
 
   this.link = (store) => {
-    if (store.clock[this._id] === undefined) store.clock[this._id] = 0
-    if (this.clock[store._id] === undefined) this.clock[store._id] = 0
-
     this.peers[store._id] = store
     store.peers[this._id] = this
     this.sync(store)
@@ -285,18 +284,26 @@ function Store(uuid) {
     this.try_apply()
   }
 
-
-  this.supersedes = (action) => {
-    for (let i in action.clock) {
-      if (this.clock[i] != action.clock[i]) return false;
+  // Returns true if the two actions are concurrent, that is, they happened without being aware of
+  // each other (neither happened before the other). Returns false if one supercedes the other.
+  this.is_concurrent = (action1, action2) => {
+    let keys = Object.keys(action1.clock).concat(Object.keys(action2.clock))
+    let oneFirst = false, twoFirst = false
+    for (let i = 0; i < keys.length; i++) {
+      let one = action1.clock[keys[i]] || 0
+      let two = action2.clock[keys[i]] || 0
+      if (one < two) oneFirst = true
+      if (two < one) twoFirst = true
     }
-    return true
+
+    return oneFirst && twoFirst
   }
 
-  this.can_apply = (clock, action) => {
+  this.can_apply = (action) => {
     for (let i in action.clock) {
-      if (i == action.by && clock[i] + 1 != action.clock[i]) return false;
-      if (i != action.by && clock[i] < action.clock[i]) return false;
+      let local_clock = this.clock[i] || 0;
+      if (i == action.by && local_clock + 1 != action.clock[i]) return false;
+      if (i != action.by && local_clock < action.clock[i]) return false;
     }
     return true
   }
@@ -310,7 +317,7 @@ function Store(uuid) {
         let action_no = this.clock[id]
         if (action_no < actions.length) {
           let next_action = actions[action_no]
-          if (this.can_apply(this.clock, next_action)) {
+          if (this.can_apply(next_action)) {
             this.do_apply(next_action)
             actions_applied += 1
           } else {
@@ -336,47 +343,44 @@ function Store(uuid) {
     }
   }
 
-  this.will_conflict = (a) => {
-    return this.obj_actions[a.target][a.key].by > a.by
-  }
-
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
     switch (a.action) {
       case "set":
-        //console.log("can superseed", this._id, this.objects[a.target][a.key], "vs", a.value)
-        //console.log("clock ",pp(this.clock) )
-        //console.log("action",pp(a.clock))
-        if (this.supersedes( a )) {
-          this.objects[a.target]._set(a.key, a.value)
-          this.obj_actions[a.target][a.key] = a
-          this.conflicts[a.target][a.key] = {}
-        } else if (this.will_conflict(a)) {
-          this.conflicts[a.target][a.key][a.by] = a.value
-        } else {
-          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
-          this.objects[a.target]._set(a.key, a.value)
-          this.obj_actions[a.target][a.key] = a
-          delete this.conflicts[a.target][a.key][a.by]
-        }
-        break;
       case "del":
-        if (this.supersedes( a )) {
+      case "link":
+        if (!(a.key in this.obj_actions[a.target])) this.obj_actions[a.target][a.key] = {}
+        let actions = this.obj_actions[a.target][a.key]
+        for (var source in actions) {
+          if (!this.is_concurrent(a, actions[source])) {
+            delete actions[source]
+            delete this.conflicts[a.target][a.key][source]
+          }
+        }
+        actions[a.by] = a
+
+        let sources = Object.keys(actions).sort().reverse()
+        let winner = actions[sources[0]]
+        if (winner.action == "set") {
+          this.objects[a.target]._set(a.key, winner.value)
+        } else if (winner.action == "del") {
           delete this.objects[a.target]._direct[a.key]
           delete this.links[a.target][a.key]
-          this.conflicts[a.target][a.key] = {}
-          this.obj_actions[a.target][a.key] = a
-        } else if (this.will_conflict(a)) {
-          this.conflicts[a.target][a.key][a.by] = undefined
-        } else {
-          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
-          delete this.objects[a.target]._direct[a.key]
-          delete this.links[a.target][a.key]
-          this.obj_actions[a.target][a.key] = a
-          delete this.conflicts[a.target][a.key][a.by]
+        } else if (winner.action == "link") {
+          this.objects[a.target]._set(a.key, this.objects[winner.value])
+          this.links[a.target][a.key] = winner.value
+          if (a.target == root_id && a.key == "root") this.root = this.objects[winner.value]
+        }
+
+        this.conflicts[a.target][a.key] = {}
+        for (let i = 1; i < sources.length; i++) {
+          let conflict = actions[sources[i]]
+          this.conflicts[a.target][a.key][sources[i]] =
+            (conflict.action == "link" ? this.objects[conflict.value] : conflict.value)
         }
         break;
+
       case "create":
         // cant have collisions here b/c guid is unique :p
         this.conflicts[a.target] = {}
@@ -394,25 +398,9 @@ function Store(uuid) {
           console.log("--- list_tombstone", this.list_tombstones[a.target])
 */
         } else {
-          this.objects[a.target] = new Map(this, a.target, a.value)
+          this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
         }
         this.links[a.target] = {}
-        break;
-      case "link":
-        if (this.supersedes( a )) {
-          this.objects[a.target]._set(a.key, this.objects[a.value])
-          this.obj_actions[a.target][a.key] = a
-          this.links[a.target][a.key] = a.value
-          this.conflicts[a.target][a.key] = {}
-        } else if (this.will_conflict(a)) {
-          this.conflicts[a.target][a.key][a.by] = this.objects[a.value]
-        } else {
-          this.conflicts[a.target][a.key][this.obj_actions[a.target][a.key].by] = this.objects[a.target][a.key]
-          this.objects[a.target]._set(a.key, this.objects[a.value])
-          this.obj_actions[a.target][a.key] = a
-          this.links[a.target][a.key] = a.value
-          delete this.conflicts[a.target][a.key][a.by]
-        }
         break;
       case "splice":
 /*
