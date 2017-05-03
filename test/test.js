@@ -36,7 +36,7 @@ function pp(o) {
 }
 
 let store1 = new Store("store1")
-//store1.on('change',(c) => console.log("UPDATE",c))
+//store1.on('change',() => console.log("UPDATE",store1.root))
 store1.root.foo = "foo"
 store1.root.bar = store1.root.foo + "bar"
 store1.root.dang = 12345

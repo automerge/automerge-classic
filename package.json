@@ -1,6 +1,6 @@
 {
   "name": "tesseract",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "js crdt",
   "main": "src/tesseract.js",
   "scripts": {

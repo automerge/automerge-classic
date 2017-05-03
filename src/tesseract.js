@@ -211,6 +211,17 @@ function Store(uuid) {
   this.peers = {}
   this.syncing = true
 
+  this.handlers = {change:[]}
+  this.on = (event,handler) => {
+    if (this.handlers[event]) {
+      this.handlers[event].push(handler)
+    }
+  }
+
+  this.did_apply = () => {
+    this.handlers.change.forEach((h) => { h() })
+  }
+
   this.merge = (peer) => {
     for (let id in peer.peer_actions) {
       let idx = (id in this.peer_actions) ? this.peer_actions[id].length : 0
@@ -334,6 +345,7 @@ function Store(uuid) {
 
   this.try_apply = () => {
     var actions_applied
+    var total_actions = 0
     do {
       actions_applied = 0
       for (var id in this.peer_actions) {
@@ -344,6 +356,7 @@ function Store(uuid) {
           if (this.can_apply(next_action)) {
             this.do_apply(next_action)
             actions_applied += 1
+            total_actions += 1
           } else {
 //            console.log("can apply failed:",this._id, next_action)
 //            throw "x"
@@ -351,6 +364,9 @@ function Store(uuid) {
         }
       }
     } while (actions_applied > 0)
+    if (total_actions > 0) {
+      this.did_apply()
+    }
   }
 
   this.tick = () => {
