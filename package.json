@@ -1,8 +1,8 @@
 {
   "name": "tesseract",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "js crdt",
-  "main": "tesseract.js",
+  "main": "src/tesseract.js",
   "scripts": {
     "test": "mocha"
   },
