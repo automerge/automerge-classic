@@ -204,9 +204,9 @@ function Store(uuid) {
   this.conflicts = { [root_id]: {} }
   this.peer_actions = { [this._id]: [] }
   this.obj_actions = { [root_id]: {} }
-  this.root = new Map(this, root_id, {})
-  this.objects = { [this.root._id]: this.root }
-  this.links = { [this.root._id]: {} }
+  this.root = new Map(this, UUID.generate(), {})
+  this.objects = { [root_id]: new Map(this, root_id, {}) }
+  this.links = { [root_id]: {} }
   this.clock = { [this._id]: 0 }
   this.peers = {}
   this.syncing = true
@@ -271,6 +271,11 @@ function Store(uuid) {
   }
 
   this.apply = (action) => {
+    if (action.action != "create" && action.target == this.root._id && this.objects[this.root._id] === undefined) {
+      this.apply({ action: "create", target: this.root._id, value: {} })
+      this.apply({ action: "link", target: root_id, key: "root", value: action.target })
+    }
+
     let a = Object.assign({ by: this._id, clock: this.tick() }, action)
     this.push_action(a)
     this.try_apply()
