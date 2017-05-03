@@ -55,7 +55,6 @@ console.log("Test - 01 - map: local set / nest / link")
 console.assert(deep_equals(store1.root,mark1))
 
 let store2 = new Store("store2")
-store2.root["xxx"] = "yyy"
 store2.sync(store1)
 store2.root.obj3 = store2.root.obj
 delete store2.root.obj
@@ -66,8 +65,7 @@ let mark2 = {
   foo: 'foo',
   bar: 'foobar',
   obj2: { hello: 'world' },
-  obj3: { hello: 'world' },
-  xxx: 'yyy'
+  obj3: { hello: 'world' }
 }
 
 console.log("Test - 02 - sync both ways")
@@ -255,6 +253,8 @@ console.assert(store5.root.new_test === "444")
 
 console.log("Test - 12 - messy network")
 
+store4 = new Store("store4")
+store5 = new Store("store5")
 store4.link(store3)
 store5.link(store2)
 store5.link(store1)
