@@ -141,6 +141,27 @@ console.assert(store3.root.conflict_test == "new1")
 console.assert(store2.root.conflict_test == "new1")
 console.assert(store1.root.conflict_test == "new1")
 
+const s1 = new Store("store1")
+const s2 = new Store("store2")
+s1.root.one = "one"
+s2.root.two = "two"
+s1.link(s2)
+console.assert(deep_equals(s1.root, s2.root))
+
+const s3 = new Store("store3")
+const s4 = new Store("store4")
+const s5 = new Store("store5")
+s3.link(s4)
+s4.link(s5)
+s3.root.a = "a"
+s4.pause()
+s3.root.a = "aa"
+s3.root.b = "bb"
+s5.root.a = "aaa"
+s5.root.b = "bbb"
+s4.unpause()
+console.assert(deep_equals(s3.root, s5.root))
+
 console.log("Test - 08 - map: conflict delete")
 
 store2.pause()
