@@ -90,18 +90,7 @@ let ListHandler = {
   set: (target,key,value) => {
     if (Debug) { console.log("SET",key,"[",value,"]") }
     if (key.startsWith("_")) { throw "Invalid Key" }
-    let store = target._store;
-    if (typeof value == 'object') {
-      let value_id = value._id || UUID.generate()
-      if (!('_id' in value)) {
-        store.apply({ action: "create", target: value_id, value: value })
-      }
-      store.apply({ action: "link", target: target._id, key: key, value: value_id })
-    } else {
-      //store.apply({ action: "set", target: target._id, key: key, value: value })
-      let k = parseInt(key)
-      store.apply({ action: "splice", target: target._id, cut: [k,k+1], add: [value] })
-    }
+    target._store.setListValue(target._id, parseInt(key), value)
     return true
   },
   deleteProperty: (target,key) => {
@@ -121,16 +110,7 @@ let MapHandler = {
   },
   set: (target,key,value) => {
     if (key.startsWith("_")) { throw "Invalid Key" }
-    let store = target._store;
-    if (typeof value == 'object') {
-      let value_id = value._id || UUID.generate()
-      if (!('_id' in value)) {
-        store.apply({ action: "create", target: value_id, value: value })
-      }
-      store.apply({ action: "link", target: target._id, key: key, value: value_id })
-    } else {
-      store.apply({ action: "set", target: target._id, key: key, value: value })
-    }
+    target._store.setMapValue(target._id, key, value)
   },
   deleteProperty: (target,key) => {
     if (key.startsWith("_")) { throw "Invalid Key" }
@@ -270,7 +250,8 @@ function Store(uuid) {
     this.try_sync_with_peers()
   }
 
-  this.push_action = (a) => {
+  this.push_action = (action) => {
+    const a = JSON.parse(JSON.stringify(action)) // avoid inadvertently sharing pointers between stores
     if (!(a.by in this.peer_actions)) {
       this.clock[a.by] = 0
       this.peer_actions[a.by] = []
@@ -282,6 +263,49 @@ function Store(uuid) {
     let a = Object.assign({ by: this._id, clock: this.tick() }, action)
     this.push_action(a)
     this.try_apply()
+  }
+
+  this.objectID = (value) => {
+    if ('_id' in value) return value._id
+    if (Array.isArray(value)) {
+      // TODO what is the right way of handling arrays containing nested objects?
+      let new_id = UUID.generate()
+      this.apply({ action: "create", target: new_id, value: value })
+      return new_id
+    }
+
+    let obj = Object.assign({}, value)
+    let links = {}
+
+    for (let key in obj) {
+      if (typeof obj[key] == 'object' && value !== null) {
+        links[key] = this.objectID(obj[key])
+        delete obj[key]
+      }
+    }
+
+    let new_id = UUID.generate()
+    this.apply({ action: "create", target: new_id, value: obj })
+    for (let key in links) {
+      this.apply({ action: "link", target: new_id, key: key, value: links[key] })
+    }
+    return new_id
+  }
+
+  this.setMapValue = (target, key, value) => {
+    if (typeof value == 'object' && value !== null) {
+      this.apply({ action: "link", target: target, key: key, value: this.objectID(value) })
+    } else {
+      this.apply({ action: "set", target: target, key: key, value: value })
+    }
+  }
+
+  this.setListValue = (target, key, value) => {
+    if (typeof value == 'object' && value !== null) {
+      this.apply({ action: "link", target: target, key: key, value: this.objectID(value) })
+    } else {
+      this.apply({ action: "splice", target: target, cut: [key, key + 1], add: [value] })
+    }
   }
 
   // Returns true if the two actions are concurrent, that is, they happened without being aware of

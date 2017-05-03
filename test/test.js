@@ -86,6 +86,10 @@ console.assert(deep_equals(store1.root,store2.root))
 console.assert(store2.root.linktest1 == "123")
 console.assert(store1.root.linktest2 == "abc")
 
+store1.root.a = {b: {c: "d"}}
+store2.root.a.b.c = "ddd"
+console.assert(store1.root.a.b.c == "ddd")
+
 console.log("Test - 04 - linked w two nodes who cant talk")
 store3.link(store2)
 store3.root.linktest3 = "zzz"
@@ -109,6 +113,11 @@ console.assert(store3.root.linktest1 == "aaa")
 console.assert(store2.root.linktest1 == "aaa")
 console.assert(store1.root.linktest1 == "bbb")
 
+store3.root.a.b.c = "xyz"
+console.assert(store3.root.a.b.c == "xyz")
+console.assert(store2.root.a.b.c == "ddd")
+console.assert(store1.root.a.b.c == "ddd")
+
 console.log("Test - 06 - unpause syncing")
 
 store2.unpause()
@@ -118,6 +127,9 @@ console.assert(store1.root.linktest3 == "vvv")
 console.assert(store3.root.linktest1 == "bbb")
 console.assert(store2.root.linktest1 == "bbb")
 console.assert(store1.root.linktest1 == "bbb")
+console.assert(store3.root.a.b.c == "xyz")
+console.assert(store2.root.a.b.c == "xyz")
+console.assert(store1.root.a.b.c == "xyz")
 
 console.log("Test - 07 - map: conflicts")
 
@@ -314,10 +326,10 @@ console.assert(deep_equals(store6.root.lists,[12,12,11]))
 
 console.log("Test - 19 - list: deletes")
 
-store6.root.lists[0] = undefined
+store6.root.lists[0] = null
 delete store6.root.lists[1]
 
-let skipList = [undefined]
+let skipList = [null]
 skipList[2] = 11
 
 console.assert(deep_equals(store6.root.lists,skipList))
