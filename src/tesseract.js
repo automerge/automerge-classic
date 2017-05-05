@@ -80,7 +80,10 @@ let ListHandler = {
   get: (target,key) => {
     if (Debug) { console.log("GET",key) }
     if (key == "_direct") return target
-    if (key == "_set") return (key,val) => { target[key] = val }
+    if (key == "_set") return (key,val) => {
+      console.log("list._set(",key,val,")")
+    target[key] = val
+    }
     if (key == "_conflicts") return target._conflicts
     if (key == "splice") return function() { return target.splice(...arguments) }
     if (key == "_splice") return function() { return target._splice(...arguments) }
@@ -90,7 +93,14 @@ let ListHandler = {
   set: (target,key,value) => {
     if (Debug) { console.log("SET",key,"[",value,"]") }
     if (key.startsWith("_")) { throw "Invalid Key" }
-    target._store.setListValue(target._id, parseInt(key), value)
+    let n = parseInt(key)
+    if (n >= target.length) {
+      let padding = (new Array(n - target.length)).fill(null)
+      padding.push(value)
+      target.push(...padding)
+    } else {
+      target._store.setListValue(target._id, n, value)
+    }
     return true
   },
   deleteProperty: (target,key) => {
@@ -315,7 +325,7 @@ function Store(uuid) {
     if (typeof value == 'object' && value !== null) {
       this.apply({ action: "link", target: target, key: key, value: this.objectID(value) })
     } else {
-      this.apply({ action: "splice", target: target, cut: [key, key + 1], add: [value] })
+      this.apply({ action: "list_set", target: target, key:key, value: value })
     }
   }
 
@@ -390,6 +400,7 @@ function Store(uuid) {
       case "set":
       case "del":
       case "link":
+      case "list_set":
         if (!(a.key in this.obj_actions[a.target])) this.obj_actions[a.target][a.key] = {}
         let actions = this.obj_actions[a.target][a.key]
         for (var source in actions) {
@@ -402,7 +413,7 @@ function Store(uuid) {
 
         let sources = Object.keys(actions).sort().reverse()
         let winner = actions[sources[0]]
-        if (winner.action == "set") {
+        if (winner.action == "set" || winner.action == "list_set") {
           this.objects[a.target]._set(a.key, winner.value)
         } else if (winner.action == "del") {
           delete this.objects[a.target]._direct[a.key]
