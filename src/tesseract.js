@@ -137,10 +137,17 @@ function Map(store, id, map) {
 function List(store, id, list) {
     let _splice = function() {
       let args = Array.from(arguments)
+      console.log("SPLICE",this,args)
       let start = args.shift()
       let run = args.shift()
-      let cut = this.slice(start,run)
-      store.apply({ action: "splice", target: this._id, cut: [start,start + run], add: args })
+      let cut = this.slice(start,start+run)
+      let cut_index = store.list_index[this._id].slice(start,start+run)
+      let at = store.list_index[this._id][start]
+      console.log("SLICE",store.list_index[this._id],start,run,at, cut_index)
+      let cut1 = cut_index.shift()
+      let cut2 = cut_index.pop() || cut1;
+      console.log("CUT",cut1,cut2)
+      store.apply({ action: "splice", target: this._id, cut: [cut1,cut2], at: at, add: args })
       return cut
     }
     let _push = function() {
@@ -325,7 +332,7 @@ function Store(uuid) {
     if (typeof value == 'object' && value !== null) {
       this.apply({ action: "link", target: target, key: key, value: this.objectID(value) })
     } else {
-      this.apply({ action: "list_set", target: target, key:key, value: value })
+      this.apply({ action: "set", target: target, key:key, value: value })
     }
   }
 
@@ -393,6 +400,10 @@ function Store(uuid) {
     }
   }
 
+  this.list_find = (a,n) => {
+      return this.list_index[a.target].indexOf(n)
+  }
+
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
@@ -400,7 +411,6 @@ function Store(uuid) {
       case "set":
       case "del":
       case "link":
-      case "list_set":
         if (!(a.key in this.obj_actions[a.target])) this.obj_actions[a.target][a.key] = {}
         let actions = this.obj_actions[a.target][a.key]
         for (var source in actions) {
@@ -413,7 +423,7 @@ function Store(uuid) {
 
         let sources = Object.keys(actions).sort().reverse()
         let winner = actions[sources[0]]
-        if (winner.action == "set" || winner.action == "list_set") {
+        if (winner.action == "set") {
           this.objects[a.target]._set(a.key, winner.value)
         } else if (winner.action == "del") {
           delete this.objects[a.target]._direct[a.key]
@@ -438,8 +448,8 @@ function Store(uuid) {
         this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
           this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
-          this.list_index[a.target] = this.objects[a.target].map((val,i) => i)  // list_index[k] = [0,1,2]
           this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
+          this.list_index[a.target] = this.objects[a.target].map((n,i) => this._id + ":" + i)
           this.list_tombstones[a.target] = this.objects[a.target].map(() => []).concat([[]]) // list_tombstones = [[],[],[],[]]
 /*
           console.log("--- create ----------------------------")
@@ -454,24 +464,35 @@ function Store(uuid) {
         this.links[a.target] = {}
         break;
       case "splice":
-/*
         console.log("splice - before", a)
+        // seq needs to be store specific so we cant get dups
+/*
         console.log("--- object", this.objects[a.target])
         console.log("--- list_squence", this.list_sequence[a.target])
         console.log("--- list_index", this.list_index[a.target])
         console.log("--- list_tombstone", this.list_tombstones[a.target])
 */
-        let indexes = a.add.map((n,i) => this.list_sequence[a.target] + i)
+        let idx = this.list_index[a.target]
+        let list = this.objects[a.target]
+        let indexes = a.add.map((n,i) => this._id + ":" + (this.list_sequence[a.target] + i))
         let tombs = a.add.map((n,i) => [])
         this.list_sequence[a.target] += a.add.length
-        this.objects[a.target]._splice(a.cut[0],a.cut[1],...a.add)
-        let new_tombstones = this.list_index[a.target].splice(a.cut[0],a.cut[1],...indexes)
-        let moved_tombs = this.list_tombstones[a.target].splice(a.cut[0],a.cut[1],...tombs)
-        moved_tombs.push(new_tombstones)
-        if (this.list_tombstones[a.target][a.cut[0]] == undefined) {
-          this.list_tombstones[a.target][a.cut[0]] =  []
+        let add_index = a.at ? idx.indexOf(a.at) : (idx.length)
+        console.log("--splice--",idx,add_index)
+        if (a.cut[0]) {
+          let cut1 = this.list_find(a, a.cut[0])
+          let cut2 = this.list_find(a, a.cut[1])
+          let run = cut2 - cut1 + 1;
+          list._splice(cut1,run)
+          idx.splice(cut1,run)
+//          let moved_tombs = this.list_tombstones[a.target].splice(a.cut[0],a.cut[1])
+//          moved_tombs.push(new_tombstones)
         }
-        this.list_tombstones[a.target][a.cut[0]] = this.list_tombstones[a.target][a.cut[0]].concat(...moved_tombs)
+        list._splice(add_index,0,...a.add)
+        idx.splice(add_index,0,...indexes)
+
+//        if (this.list_tombstones[a.target][a.cut[0]] == undefined) { this.list_tombstones[a.target][a.cut[0]] =  [] }
+//        this.list_tombstones[a.target][a.cut[0]] = this.list_tombstones[a.target][a.cut[0]].concat(...moved_tombs)
 /*
         console.log("splice - after ---------------")
         console.log("--- tombs.splice()", a.cut[0],a.cut[1],tombs)
@@ -496,26 +517,3 @@ module.exports = {
 }
 
 
-/*
-[  1,  2,  3 ] // length = 3
-[ [], [], [], [] ]
-
-[  1,   2  ] //  length = 2
-[ [],  [], [3] ]
-[  1,   3  ] //  length = 2
-[ [],  [2], [] ]
-[  2,   3  ] //  length = 2
-[ [1],  [], [] ]
-
-[  1  ] // length = 1
-[ [], [2,3], ]
-[  2  ] // length = 1
-[ [1], [3], ]
-[  3  ] // length = 1
-[ [1,2], [], ]
-
-[  ] //  length = 0
-[ [1, 2, 3] ]
-
-
-*/
