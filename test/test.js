@@ -267,9 +267,11 @@ describe('Tesseract', function() {
         l1.splice(4,10,'t','r','s')
         l2.splice(4,10,'t','r','s')
         assert.deepEqual(l1,l2)
+/*
         l1.splice(1,1,'A','B')
         l2.splice(1,1,'A','B')
         assert.deepEqual(l1,l2)
+  */
       })
       it('should handle push', function() {
         let l1 = []
@@ -339,6 +341,35 @@ describe('Tesseract', function() {
       })
       it('should handle sort/reverse/copyWithin/fill [TODO]', function() {
         // TODO
+      })
+      it('should sync actions and indexes [1]', function() {
+        s1.root.list = [1,2,3,4,5]
+        let l = s1.root.list
+        assert.deepEqual(l,[1,2,3,4,5])
+        //console.log(l)
+        //console.log(l._tombs)
+        l.splice(0,10,'a','b','c')
+        assert.deepEqual(l,['a','b','c'])
+        //console.log(l)
+        //console.log(l._tombs)
+        l.splice(0,10)
+        assert.deepEqual(l,[])
+        //console.log(l)
+        //console.log(l._tombs)
+      })
+      it('should sync actions and indexes [2]', function() {
+        s1.link(s2)
+        s1.root.list = []
+        s1.root.list.push(1,2,3,4,5)
+        s2.root.list.push(10,11,12,13,14)
+        assert.deepEqual(s1.root.list,s2.root.list)
+        s2.root.list.splice(3,3)
+        assert.deepEqual(s1.root.list,s2.root.list)
+        //console.log(s1.list_index)
+        //console.log(s1.root.list._index)
+        //console.log(s2.root.list._index)
+      })
+      it('should record tombstones on delete', function() {
       })
   })
 })

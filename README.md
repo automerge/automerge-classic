@@ -9,12 +9,30 @@
   $ npm test
 ```
 
+## List TODO
+[X] Create/init lists
+[X] Implement set/delete
+[X] Implement splice
+[X] Implement push/pop/shift/unshift
+[X] Implement index metadata
+[X] Implement non-concurrent syncing/edits
+[ ] Implement Tombstone Metadata
+[ ] Implement Action Metadata
+[ ] Implement Concurrent Inserts
+[ ] Implement Concurrent Deletes
+
+## Other Things to Do
+[ ] Non-durable data
+[ ] WebRTC
+[ ] Boilerplate npm/gulp/babel
+
 vals()    = [ a, b, c, d, e, f, g, h ]
 idx(uuid) = [ 1, 2, 3, 4, 5, 6, 7, 8 ]
+tombs     = [ ., ., ., ., ., ., ., . ]
 
 x = []
 x[0] = 1 // x.push(n)
-x[5] = 1 // x.push(null,null,null,null,n) ; throw "screw you"
+x[5] = 1 // x.push(null,null,null,null,n)
 
 uuid->small number mapping for efficency
 set

@@ -137,17 +137,16 @@ function Map(store, id, map) {
 function List(store, id, list) {
     let _splice = function() {
       let args = Array.from(arguments)
-//      console.log("SPLICE",this,args)
       let start = args.shift()
       let run = args.shift()
       let cut = this.slice(start,start+run)
       let cut_index = store.list_index[this._id].slice(start,start+run)
       let at = store.list_index[this._id][start]
- //     console.log("SLICE",store.list_index[this._id],start,run,at, cut_index)
       let cut1 = cut_index.shift()
       let cut2 = cut_index.pop() || cut1;
-//      console.log("CUT",cut1,cut2)
-      store.apply({ action: "splice", target: this._id, cut: [cut1,cut2], at: at, add: args })
+      let idx = args.map((n,i) => store._id + ":" + (store.list_sequence[this._id] + i))
+      store.list_sequence[this._id] += args.length
+      store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: at, add: args })
       return cut
     }
     let _push = function() {
@@ -192,11 +191,17 @@ function List(store, id, list) {
       return Array.from(this).reverse()
     }
     let _old_splice = list.splice
+    store.list_index[id] = []
+    store.list_tombstones[id] = []
     list.__proto__ = {
       __proto__:  list.__proto__,
       _id:        id,
       _store:     store,
       _conflicts: store.conflicts[id],
+//      _index:     store.list_index,
+      _index:     store.list_index[id],
+//      _index:     id,
+      _tombs:     store.list_tombstones[id],
       _splice:    _old_splice,
       splice:     _splice,
       shift:      _shift,
@@ -449,8 +454,8 @@ function Store(uuid) {
         if (Array.isArray(a.value)) {
           this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
           this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
-          this.list_index[a.target] = this.objects[a.target].map((n,i) => this._id + ":" + i)
-          this.list_tombstones[a.target] = this.objects[a.target].map(() => []).concat([[]]) // list_tombstones = [[],[],[],[]]
+          this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
+          this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
 /*
           console.log("--- create ----------------------------")
           console.log("--- object", this.objects[a.target])
@@ -464,45 +469,26 @@ function Store(uuid) {
         this.links[a.target] = {}
         break;
       case "splice":
-//        console.log("splice - before", a)
-        // seq needs to be store specific so we cant get dups
-/*
-        console.log("--- object", this.objects[a.target])
-        console.log("--- list_squence", this.list_sequence[a.target])
-        console.log("--- list_index", this.list_index[a.target])
-        console.log("--- list_tombstone", this.list_tombstones[a.target])
-*/
         let idx = this.list_index[a.target]
         let list = this.objects[a.target]
-        let indexes = a.add.map((n,i) => this._id + ":" + (this.list_sequence[a.target] + i))
-        let tombs = a.add.map((n,i) => [])
-        this.list_sequence[a.target] += a.add.length
+        let indexes = a.idx
+        console.assert(list.length == idx.length)
         let add_index = a.at ? idx.indexOf(a.at) : (idx.length)
-//        console.log("--splice--",idx,add_index)
         if (a.cut[0]) {
           let cut1 = this.list_find(a, a.cut[0])
           let cut2 = this.list_find(a, a.cut[1])
           let run = cut2 - cut1 + 1;
           list._splice(cut1,run)
-          idx.splice(cut1,run)
-//          let moved_tombs = this.list_tombstones[a.target].splice(a.cut[0],a.cut[1])
-//          moved_tombs.push(new_tombstones)
+          let moved_tombs = list._tombs.splice(cut1,run)
+          let old_idx = [].concat(idx.splice(cut1,run)).concat(...moved_tombs)
+          console.assert(list.length == idx.length)
+          list._tombs[add_index].push(...old_idx)
         }
         list._splice(add_index,0,...a.add)
         idx.splice(add_index,0,...indexes)
-
-//        if (this.list_tombstones[a.target][a.cut[0]] == undefined) { this.list_tombstones[a.target][a.cut[0]] =  [] }
-//        this.list_tombstones[a.target][a.cut[0]] = this.list_tombstones[a.target][a.cut[0]].concat(...moved_tombs)
-/*
-        console.log("splice - after ---------------")
-        console.log("--- tombs.splice()", a.cut[0],a.cut[1],tombs)
-        console.log("--- a.cut[0]", a.cut[0])
-        console.log("--- moved-tombs", moved_tombs)
-        console.log("--- object", this.objects[a.target])
-        console.log("--- list_squence", this.list_sequence[a.target])
-        console.log("--- list_index", this.list_index[a.target])
-        console.log("--- list_tombstone", this.list_tombstones[a.target])
-*/
+        list._tombs.splice(add_index,0,...(a.add.map((n,i) => [])))
+        console.assert(list.length == idx.length)
+        //console.assert(list.length == list._tombs.length)
         break;
       default:
         console.log("unknown-action:", a.action)
