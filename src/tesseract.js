@@ -137,16 +137,16 @@ function Map(store, id, map) {
 function List(store, id, list) {
     let _splice = function() {
       let args = Array.from(arguments)
-      console.log("SPLICE",this,args)
+//      console.log("SPLICE",this,args)
       let start = args.shift()
       let run = args.shift()
       let cut = this.slice(start,start+run)
       let cut_index = store.list_index[this._id].slice(start,start+run)
       let at = store.list_index[this._id][start]
-      console.log("SLICE",store.list_index[this._id],start,run,at, cut_index)
+ //     console.log("SLICE",store.list_index[this._id],start,run,at, cut_index)
       let cut1 = cut_index.shift()
       let cut2 = cut_index.pop() || cut1;
-      console.log("CUT",cut1,cut2)
+//      console.log("CUT",cut1,cut2)
       store.apply({ action: "splice", target: this._id, cut: [cut1,cut2], at: at, add: args })
       return cut
     }
@@ -464,7 +464,7 @@ function Store(uuid) {
         this.links[a.target] = {}
         break;
       case "splice":
-        console.log("splice - before", a)
+//        console.log("splice - before", a)
         // seq needs to be store specific so we cant get dups
 /*
         console.log("--- object", this.objects[a.target])
@@ -478,7 +478,7 @@ function Store(uuid) {
         let tombs = a.add.map((n,i) => [])
         this.list_sequence[a.target] += a.add.length
         let add_index = a.at ? idx.indexOf(a.at) : (idx.length)
-        console.log("--splice--",idx,add_index)
+//        console.log("--splice--",idx,add_index)
         if (a.cut[0]) {
           let cut1 = this.list_find(a, a.cut[0])
           let cut2 = this.list_find(a, a.cut[1])
