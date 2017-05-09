@@ -16,7 +16,7 @@
 [X] Implement push/pop/shift/unshift
 [X] Implement index metadata
 [X] Implement non-concurrent syncing/edits
-[ ] Implement Tombstone Metadata
+[X] Implement Tombstone Metadata
 [ ] Implement Action Metadata
 [ ] Implement Concurrent Inserts
 [ ] Implement Concurrent Deletes

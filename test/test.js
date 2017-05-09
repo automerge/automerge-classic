@@ -429,6 +429,20 @@ describe('Tesseract', function() {
       assert.deepEqual(s2.root.list,[3,'a','b',4,'c','d',5])
       assert.deepEqual(s2.root.list._tombs,[['s1:1','s1:0'],[],[],[],[],[],[],['s1:6','s1:5']])
     })
+    it('should track list actions', function() {
+      s1.root.list = [1,2,3]
+      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][0])
+      s1.root.list.pop()
+      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][2])
+      s1.root.list.pop()
+      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][3])
+      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][2])
+    })
   })
 })
 

@@ -196,6 +196,7 @@ function List(store, id, list) {
     let _old_splice = list.splice
     store.list_index[id] = []
     store.list_tombstones[id] = []
+    store.list_actions[id] = {}
     list.__proto__ = {
       __proto__:  list.__proto__,
       _id:        id,
@@ -205,6 +206,7 @@ function List(store, id, list) {
       _index:     store.list_index[id],
 //      _index:     id,
       _tombs:     store.list_tombstones[id],
+      _actions:   store.list_actions[id],
       _splice:    _old_splice,
       splice:     _splice,
       shift:      _shift,
@@ -226,6 +228,7 @@ function Store(uuid) {
   this.list_index = { }
   this.list_sequence = { }
   this.list_tombstones = { }
+  this.list_actions = { }
   this.conflicts = { [root_id]: {} }
   this.peer_actions = { [this._id]: [] }
   this.obj_actions = { [root_id]: {} }
@@ -460,6 +463,7 @@ function Store(uuid) {
           this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
           this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
           this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
+          this.list_index[a.target].forEach((b) => this.list_actions[a.target][b] = a)
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
         }
@@ -479,10 +483,12 @@ function Store(uuid) {
           let moved_tombs = list._tombs.splice(cut1,run)
           let old_idx = [].concat(idx.splice(cut1,run)).concat(...moved_tombs)
           console.assert(list.length == idx.length)
+          old_idx.forEach((b) => list._actions[b] = a)
           list._tombs[add_index].push(...old_idx)
         }
         list._splice(add_index,0,...a.add)
         idx.splice(add_index,0,...indexes)
+        indexes.forEach((b) => list._actions[b] = a)
         list._tombs.splice(add_index,0,...(a.add.map((n,i) => [])))
         console.assert(list.length == idx.length)
         //console.assert(list.length == list._tombs.length)
