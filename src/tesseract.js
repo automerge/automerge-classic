@@ -237,7 +237,7 @@ function Store(uuid) {
   this.syncing = true
 
   this.handlers = {change:[]}
-  this.getState = () => { return this.root }
+  this.getState = () => this.root
   this.subscribe = (handler) => {
     if (this.handlers['change']) {
       this.handlers['change'].push(handler)
