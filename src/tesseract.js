@@ -1,4 +1,6 @@
 
+'use strict';
+
 let Debug = false
 
 function pp(o) {
@@ -121,6 +123,7 @@ let MapHandler = {
   set: (target,key,value) => {
     if (key.startsWith("_")) { throw "Invalid Key" }
     target._store.setMapValue(target._id, key, value)
+    return true
   },
   deleteProperty: (target,key) => {
     if (key.startsWith("_")) { throw "Invalid Key" }
@@ -457,13 +460,6 @@ function Store(uuid) {
           this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
           this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
           this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
-/*
-          console.log("--- create ----------------------------")
-          console.log("--- object", this.objects[a.target])
-          console.log("--- list_squence", this.list_sequence[a.target])
-          console.log("--- list_index", this.list_index[a.target])
-          console.log("--- list_tombstone", this.list_tombstones[a.target])
-*/
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
         }
