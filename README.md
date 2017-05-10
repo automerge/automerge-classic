@@ -17,7 +17,8 @@
 [X] Implement index metadata
 [X] Implement non-concurrent syncing/edits
 [X] Implement Tombstone Metadata
-[ ] Implement Action Metadata
+[X] Implement Action Metadata
+[ ] Implement List+Link
 [ ] Implement Concurrent Inserts
 [ ] Implement Concurrent Deletes
 

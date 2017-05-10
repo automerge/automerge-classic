@@ -443,6 +443,20 @@ describe('Tesseract', function() {
       assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][3])
       assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][2])
     })
+    it('should track handle concurrent inserts', function() {
+      s1.link(s2)
+      s1.root.list = [1,2,3,4,5,6]
+      s1.pause()
+      s1.root.list.splice(3,0,'a','b','c')
+      s2.root.list.splice(3,0,'x','y','z')
+      s1.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
+      s2.pause()
+      s2.root.list.splice(3,0,'q','r','s')
+      s1.root.list.splice(3,0,'m','b','d')
+      s2.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
+    })
   })
 })
 

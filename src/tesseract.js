@@ -1,7 +1,10 @@
 
-'use strict';
-
 let Debug = false
+function Log() {
+  if (Debug) {
+    console.log(...arguments)
+  }
+}
 
 function pp(o) {
   let keys = Object.keys(o).sort();
@@ -80,7 +83,7 @@ Array.prototype.fill()
 
 let ListHandler = {
   get: (target,key) => {
-    if (Debug) { console.log("GET",key) }
+//    if (Debug) { console.log("GET",key) }
     if (key == "_direct") return target
     if (key == "_set") return (key,val) => {
       console.log("list._set(",key,val,")")
@@ -93,7 +96,7 @@ let ListHandler = {
   },
 //  push: (target,v) => { target.push(v) },
   set: (target,key,value) => {
-    if (Debug) { console.log("SET",key,"[",value,"]") }
+//    if (Debug) { console.log("SET",key,"[",value,"]") }
     if (key.startsWith("_")) { throw "Invalid Key" }
     let n = parseInt(key)
     if (n >= target.length) {
@@ -106,7 +109,7 @@ let ListHandler = {
     return true
   },
   deleteProperty: (target,key) => {
-    if (Debug) { console.log("DELETE",key) }
+//    if (Debug) { console.log("DELETE",key) }
     if (key.startsWith("_")) { throw "Invalid Key" }
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
     target._store.apply({ action: "del", target: target._id, key: key })
@@ -144,11 +147,15 @@ function List(store, id, list) {
       let run = args.shift()
       let cut = this.slice(start,start+run)
       let cut_index = store.list_index[this._id].slice(start,start+run)
-      let at = store.list_index[this._id][start]
+      let at = store.list_index[this._id][start - 1]
       let cut1 = cut_index.shift()
       let cut2 = cut_index.pop() || cut1;
       let idx = args.map((n,i) => store._id + ":" + (store.list_sequence[this._id] + i))
       store.list_sequence[this._id] += args.length
+      Log("SPLICE",this)
+      Log("idx",store.list_index[this._id])
+      Log("start/run",start,run)
+      Log({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: at, add: args })
       store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: at, add: args })
       return cut
     }
@@ -275,6 +282,10 @@ function Store(uuid) {
     }
   }
 
+  this.log = () => {
+    Log(...arguments)
+  }
+
   this.link = (store) => {
     this.peers[store._id] = store
     store.peers[this._id] = this
@@ -370,6 +381,32 @@ function Store(uuid) {
       if (i != action.by && local_clock < action.clock[i]) return false;
     }
     return true
+  }
+
+  this.find_add_index = (a) => {
+    let idx = this.list_index[a.target]
+    let actions = this.list_actions[a.target]
+    Log("FIND",a.at)
+    if (!a.at) { return 0 }
+    let insert_at = idx.indexOf(a.at) + 1
+    console.assert(insert_at != undefined)
+/*
+    console.log("Action:",a)
+    console.log("List:",this.objects[a.target])
+    console.log("List:",idx)
+    console.log("Start at", insert_at)
+*/
+    for (var i = insert_at; i < idx.length; i++) {
+//      console.log("Looking at index", i)
+//      console.log("Value:",this.objects[a.target][i])
+      let b = actions[idx[i]]
+//      console.log(a.clock,"vs",b.clock)
+      if (!this.is_concurrent(a,b)) break;
+//      console.log("--------------------")
+      if (a.by < b.by) break;
+      insert_at += 1
+    }
+    return insert_at
   }
 
   this.try_apply = () => {
@@ -473,8 +510,10 @@ function Store(uuid) {
         let idx = this.list_index[a.target]
         let list = this.objects[a.target]
         let indexes = a.idx
+        Log("BEFORE",list)
         console.assert(list.length == idx.length)
-        let add_index = a.at ? idx.indexOf(a.at) : (idx.length)
+        let add_index = this.find_add_index(a)
+        Log("ADD_INDEX",add_index)
         if (a.cut[0]) {
           let cut1 = this.list_find(a, a.cut[0])
           let cut2 = this.list_find(a, a.cut[1])
@@ -491,6 +530,7 @@ function Store(uuid) {
         indexes.forEach((b) => list._actions[b] = a)
         list._tombs.splice(add_index,0,...(a.add.map((n,i) => [])))
         console.assert(list.length == idx.length)
+        Log("AFTER",list)
         //console.assert(list.length == list._tombs.length)
         break;
       default:
