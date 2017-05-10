@@ -114,6 +114,7 @@ let ListHandler = {
     if (key.startsWith("_")) { throw "Invalid Key" }
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
     target._store.apply({ action: "del", target: target._id, key: key })
+    return true
   }
 }
 
@@ -133,6 +134,7 @@ let MapHandler = {
     if (key.startsWith("_")) { throw "Invalid Key" }
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
     target._store.apply({ action: "del", target: target._id, key: key })
+    return true
   }
 }
 
