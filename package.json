@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "immutable": "^3.8.1"
   },
   "devDependencies": {
     "mocha": "^3.2.0"
