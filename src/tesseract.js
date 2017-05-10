@@ -1,5 +1,6 @@
 
 let Debug = false
+let Testing = false
 function Log() {
   if (Debug) {
     console.log(...arguments)
@@ -496,6 +497,7 @@ function Store(uuid) {
         this.conflicts[a.target] = {}
         this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
+          if (a.by != this._id && !Testing) throw "Cant Sync Lists Yet - Unsupported"
           this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
           this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
           this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
@@ -542,7 +544,8 @@ function Store(uuid) {
 
 module.exports = {
   Store: Store,
-  debug: (bool) => { Debug = bool }
+  debug: (bool) => { Debug = bool },
+  testing: (bool) => { Testing = bool }
 }
 
 
