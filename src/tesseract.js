@@ -7,6 +7,8 @@ function Log() {
   }
 }
 
+//Array.prototype.unique = function() { return this.filter( (v,i,self) => self.indexOf(v) === i ) }
+
 function pp(o) {
   let keys = Object.keys(o).sort();
   let o2 = {}
@@ -150,16 +152,13 @@ function List(store, id, list) {
       let run = args.shift()
       let cut = this.slice(start,start+run)
       let cut_index = store.list_index[this._id].slice(start,start+run)
-      let at = store.list_index[this._id][start - 1]
+      let at1 = store.list_index[this._id][start - 1]
+      let at2 = store.list_index[this._id][start + run]
       let cut1 = cut_index.shift()
       let cut2 = cut_index.pop() || cut1;
       let idx = args.map((n,i) => store._id + ":" + (store.list_sequence[this._id] + i))
       store.list_sequence[this._id] += args.length
-      Log("SPLICE",this)
-      Log("idx",store.list_index[this._id])
-      Log("start/run",start,run)
-      Log({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: at, add: args })
-      store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: at, add: args })
+      store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: [at1,at2], value: args })
       return cut
     }
     let _push = function() {
@@ -205,8 +204,8 @@ function List(store, id, list) {
     }
     let _old_splice = list.splice
     store.list_index[id] = []
+    store.list_meta[id] = {}
     store.list_tombstones[id] = []
-    store.list_actions[id] = {}
     list.__proto__ = {
       __proto__:  list.__proto__,
       _id:        id,
@@ -214,9 +213,9 @@ function List(store, id, list) {
       _conflicts: store.conflicts[id],
 //      _index:     store.list_index,
       _index:     store.list_index[id],
+      _meta:      store.list_meta[id],
 //      _index:     id,
       _tombs:     store.list_tombstones[id],
-      _actions:   store.list_actions[id],
       _splice:    _old_splice,
       splice:     _splice,
       shift:      _shift,
@@ -236,9 +235,9 @@ function Store(uuid) {
   let _uuid = uuid || UUID.generate()
   this._id = _uuid
   this.list_index = { }
+  this.list_meta = { }
   this.list_sequence = { }
   this.list_tombstones = { }
-  this.list_actions = { }
   this.conflicts = { [root_id]: {} }
   this.peer_actions = { [this._id]: [] }
   this.obj_actions = { [root_id]: {} }
@@ -365,6 +364,7 @@ function Store(uuid) {
   // Returns true if the two actions are concurrent, that is, they happened without being aware of
   // each other (neither happened before the other). Returns false if one supercedes the other.
   this.is_concurrent = (action1, action2) => {
+    // FIXME - unqiue()
     let keys = Object.keys(action1.clock).concat(Object.keys(action2.clock))
     let oneFirst = false, twoFirst = false
     for (let i = 0; i < keys.length; i++) {
@@ -372,7 +372,9 @@ function Store(uuid) {
       let two = action2.clock[keys[i]] || 0
       if (one < two) oneFirst = true
       if (two < one) twoFirst = true
+      //console.log("CON:",keys[i], one,two,one < two, two < one)
     }
+    //console.log("CON::",action1.clock,action2.clock,oneFirst,twoFirst)
 
     return oneFirst && twoFirst
   }
@@ -388,10 +390,12 @@ function Store(uuid) {
 
   this.find_add_index = (a) => {
     let idx = this.list_index[a.target]
-    let actions = this.list_actions[a.target]
+    let meta = this.list_meta[a.target]
     Log("FIND",a.at)
-    if (!a.at) { return 0 }
-    let insert_at = idx.indexOf(a.at) + 1
+    let before = a.at[0]
+    let after = a.at[1]
+    if (!before) { return 0 }
+    let insert_at = idx.indexOf(before) + 1
     console.assert(insert_at != undefined)
 /*
     console.log("Action:",a)
@@ -402,7 +406,8 @@ function Store(uuid) {
     for (var i = insert_at; i < idx.length; i++) {
 //      console.log("Looking at index", i)
 //      console.log("Value:",this.objects[a.target][i])
-      let b = actions[idx[i]]
+//      console.log("META",meta)
+      let b = meta[idx[i]].action
 //      console.log(a.clock,"vs",b.clock)
       if (!this.is_concurrent(a,b)) break;
 //      console.log("--------------------")
@@ -452,7 +457,47 @@ function Store(uuid) {
     }
   }
 
-  this.list_find = (a,n) => {
+  this.do_splice = (a) => {
+    let value = a.value
+    let list  = this.objects[a.target]
+    let index = this.list_index[a.target]
+    let meta  = this.list_meta[a.target]
+    let begin = (a.at === undefined || a.at[0] === undefined) ? 0 : (index.indexOf(a.at[0]) + 1)
+    let idx   = a.idx || value.map((n,i) => a.by + ":" + i)
+
+    this.list_sequence[a.target] += idx.length
+
+    for (let i = begin + 1; i < list.length; i++) {
+      let b = meta[index[i]].action
+      if (!this.is_concurrent(a,b)) { 
+        break;
+      }
+      if (a.by > b.by) {
+        break;
+      }
+      begin = i
+    }
+
+    console.assert(value.length == idx.length)
+
+    for (let v in value) {
+      let i = idx[v]
+      list._splice(begin,0,value[v])
+      index.splice(begin,0,i)
+      meta[i] = { action: a }
+      begin++
+    }
+  }
+
+  this.list_find_cut_index = (a,n) => {
+/*
+      [ 1, 2, 3] // - vals
+      [ "s0:1", "s0:2", "s0:3" ] // - indexes
+      { "s0:1":true, "so:3":false, ... }
+      { "s0:1": {"val": 1, "deleted": false, "next": "s0:2", "prev": null}, ... }
+      { "s0:3": "s0:1", "s0:4": "s0:2" }
+      [ ["s0:3"] , ["s0:4"], [], [] ]
+*/
       return this.list_index[a.target].indexOf(n)
   }
 
@@ -500,11 +545,15 @@ function Store(uuid) {
         this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
           if (a.by != this._id && !Testing) throw "Cant Sync Lists Yet - Unsupported"
-          this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
-          this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
-          this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
-          this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
-          this.list_index[a.target].forEach((b) => this.list_actions[a.target][b] = a)
+          //this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
+          this.objects[a.target] = new List(this, a.target, [])            // objects[k] = [a,b,c]
+          this.list_sequence[a.target] = 0
+          this.list_index[a.target] = []
+          //this.list_meta[a.target] = {}
+          this.do_splice(a)
+          //this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
+          //this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
+          //this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
         }
@@ -514,26 +563,34 @@ function Store(uuid) {
         let idx = this.list_index[a.target]
         let list = this.objects[a.target]
         let indexes = a.idx
+        Log("ACTIOn",a)
         Log("BEFORE",list)
+        Log("BEFORE",idx)
+        Log("BEFORE META",Object.keys(list._meta))
+        Log("BEFORE META 2",Object.keys(this.list_meta[a.target]))
         console.assert(list.length == idx.length)
         let add_index = this.find_add_index(a)
         Log("ADD_INDEX",add_index)
         if (a.cut[0]) {
-          let cut1 = this.list_find(a, a.cut[0])
-          let cut2 = this.list_find(a, a.cut[1])
+          let cut1 = this.list_find_cut_index(a, a.cut[0])
+          let cut2 = this.list_find_cut_index(a, a.cut[1])
           let run = cut2 - cut1 + 1;
           list._splice(cut1,run)
           let moved_tombs = list._tombs.splice(cut1,run)
           let old_idx = [].concat(idx.splice(cut1,run)).concat(...moved_tombs)
           console.assert(list.length == idx.length)
-          old_idx.forEach((b) => list._actions[b] = a)
-          list._tombs[add_index].push(...old_idx)
+//          old_idx.forEach((b) => list._meta[b].action = a)
+          //list._tombs[add_index].push(...old_idx)
         }
-        list._splice(add_index,0,...a.add)
+
+        this.do_splice(a)
+/*
+        for (let x in indexes) { list._meta[indexes[x]] = { action: a } }
+        list._splice(add_index,0,...a.value)
         idx.splice(add_index,0,...indexes)
-        indexes.forEach((b) => list._actions[b] = a)
-        list._tombs.splice(add_index,0,...(a.add.map((n,i) => [])))
+//        list._tombs.splice(add_index,0,...(a.value.map((n,i) => [])))
         console.assert(list.length == idx.length)
+*/
         Log("AFTER",list)
         //console.assert(list.length == list._tombs.length)
         break;
