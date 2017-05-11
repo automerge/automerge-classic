@@ -7,7 +7,7 @@ function Log() {
   }
 }
 
-//Array.prototype.unique = function() { return this.filter( (v,i,self) => self.indexOf(v) === i ) }
+let unique = function(list) { return list.filter( (v,i,self) => self.indexOf(v) === i ) }
 
 function pp(o) {
   let keys = Object.keys(o).sort();
@@ -33,56 +33,6 @@ var UUID = (function() {
   }
   return self;
 })();
-
-// [x]=y --- set/link [x]=y
-// push,pop,shift,unshift --- insert after, insert before
-// 
-
-/*
-READ ONLY 
-
-Array.prototype.map()
-Array.prototype.forEach()
-Array.prototype.filter()
-Array.prototype.keys()
-Array.prototype.concat()
-Array.prototype.entries()
-Array.prototype.every()
-Array.prototype.findIndex()
-Array.prototype.find()
-Array.prototype.includes()
-Array.prototype.toString()
-Array.prototype.join()
-Array.prototype.indexOf()
-Array.prototype.lastIndexOf()
-Array.prototype.reduce()
-Array.prototype.reduceRight()
-Array.prototype.toLocaleString()
-Array.prototype.toSource()
-Array.prototype.values()
-Array.prototype.some()
-Array.prototype.slice()
-
-TODO
-
-Array.prototype.splice()
-
-DONE
-
-Array.prototype.sort() // new array?
-Array.prototype.reverse() // new array?
-Array.prototype.pop()
-Array.prototype.push()
-Array.prototype.shift()
-Array.prototype.unshift()
-Array.prototype.copyWithin()
-Array.prototype.fill()
-
-
-
-----
-
-*/
 
 let ListHandler = {
   get: (target,key) => {
@@ -201,17 +151,13 @@ function List(store, id, list) {
     let _old_splice = list.splice
     store.list_index[id] = []
     store.list_meta[id] = {}
-    store.list_tombstones[id] = []
     list.__proto__ = {
       __proto__:  list.__proto__,
       _id:        id,
       _store:     store,
       _conflicts: store.conflicts[id],
-//      _index:     store.list_index,
       _index:     store.list_index[id],
       _meta:      store.list_meta[id],
-//      _index:     id,
-      _tombs:     store.list_tombstones[id],
       _splice:    _old_splice,
       splice:     _splice,
       shift:      _shift,
@@ -233,7 +179,6 @@ function Store(uuid) {
   this.list_index = { }
   this.list_meta = { }
   this.list_sequence = { }
-  this.list_tombstones = { }
   this.conflicts = { [root_id]: {} }
   this.peer_actions = { [this._id]: [] }
   this.obj_actions = { [root_id]: {} }
@@ -363,7 +308,7 @@ function Store(uuid) {
   // each other (neither happened before the other). Returns false if one supercedes the other.
   this.is_concurrent = (action1, action2) => {
     // FIXME - unqiue()
-    let keys = Object.keys(action1.clock).concat(Object.keys(action2.clock))
+    let keys = unique(Object.keys(action1.clock).concat(Object.keys(action2.clock)))
     let oneFirst = false, twoFirst = false
     for (let i = 0; i < keys.length; i++) {
       let one = action1.clock[keys[i]] || 0
@@ -440,13 +385,6 @@ function Store(uuid) {
     if (!this.is_concurrent(m0.action,a)) return false
     if (!this.is_concurrent(m1.action,a)) return false
     return true
-  }
-
-  this.should_delete = (a,n,index,meta,cut) => {
-    if (n == -1) return false
-    let b = meta[cut].action
-    if (!this.is_concurrent(a,b)) return true
-    return false
   }
 
   this.do_splice = (a) => {
