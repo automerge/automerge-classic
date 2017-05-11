@@ -457,16 +457,11 @@ function Store(uuid) {
     let newIndex = a.idx || value.map((n,i) => a.by + ":" + i)
 
     // CUT DATA
-//    Log("A",a)
+
     let covered  = this.is_covered(a,meta)
 
     let cut      = a.cut && a.cut[0]
     let concurrent = {}
-
-
-    Log("A",a)
-    Log("PRE",object)
-    Log("PRE",index)
 
     // find all the things in the span
 
@@ -477,18 +472,13 @@ function Store(uuid) {
       cut = meta[cut].next
     }
 
-    Log("SEEN",concurrent)
-
     for (let s in concurrent) {
       // only delete if its not deleted
-      Log("DELETED?",meta[s].deleted)
       if (meta[s].deleted == false) {
         // delete if its not concurrent 
         // OR
         // I saw the begin and end insertion points while walking the list (we're covering it)
-        Log(concurrent[s] == false, " || ", this.is_covering(meta[s].action, concurrent))
         if (concurrent[s] == false || this.is_covering(meta[s].action, concurrent)) {
-          Log("CUT!!",s)
           let n = index.indexOf(s)
           object._splice(n,1)
           index.splice(n,1)
@@ -530,8 +520,6 @@ function Store(uuid) {
       next = meta[here].next
       n++
     }
-    Log("POST",object)
-    Log("POST",index)
   }
 
   this.do_apply = (a) => {
