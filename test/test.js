@@ -504,8 +504,23 @@ describe('Tesseract', function() {
       assert.deepEqual(s2.root.list,n)
       assert.deepEqual(s1.root.list,s2.root.list)
     })
+    it('should track handle list init with objects', function() {
+      s1.root.list = [1,2,{ foo: "bar" }]
+      s1.link(s2)
+      s2.root.list[2].stuff = ["derp",{hey:"now"},"zip"]
+      s1.root.list[2].stuff[1].hey = "then"
+      assert.deepEqual(s1.root,s2.root)
+    })
+    it('should track handle nested maps and lists', function() {
+      s1.root.list = [1,2,3]
+      s1.root.list[1] =  { foo: "bar", name: "bob" }
+      s1.root.list[1].foo = "zip"
+      s1.link(s2)
+      s2.root.list[1].stuff = [1,2,3]
+      assert.deepEqual(s1.root,s2.root)
+    })
+    it('should track handle concurrent chaos [TODO]', function() {
       /*
-    it('should track handle concurrent chaos', function() {
       s1.link(s2)
       s2.link(s3)
       s2.pause()
@@ -517,8 +532,8 @@ describe('Tesseract', function() {
       }
       assert.deepEqual(s1.root.list,s2.root.list)
       assert.deepEqual(s1.root.list,s3.root.list)
-    })
       */
+    })
   })
 })
 

@@ -37,10 +37,7 @@ var UUID = (function() {
 let ListHandler = {
   get: (target,key) => {
     if (key == "_direct") return target
-    if (key == "_set") return (key,val) => {
-      console.log("list._set(",key,val,")")
-    target[key] = val
-    }
+    if (key == "_set") return (key,val) => { target[key] = val }
     if (key == "_conflicts") return target._conflicts
     if (key == "splice") return function() { return target.splice(...arguments) }
     if (key == "_splice") return function() { return target._splice(...arguments) }
@@ -104,7 +101,7 @@ function List(store, id, list) {
       let cut2 = cut_index.pop() || cut1;
       let idx = args.map((n,i) => store._id + ":" + (store.list_sequence[this._id] + i))
       store.list_sequence[this._id] += args.length
-      store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: [at1,at2], value: args })
+      store.apply({ action: "splice", target: this._id, idx:idx, cut: [cut1,cut2], at: [at1,at2], value:store.to_vals(args), links:store.to_links(args) })
       return cut
     }
     let _push = function() {
@@ -259,6 +256,14 @@ function Store(uuid) {
     this.try_apply()
   }
 
+  this.to_vals = (array) => {
+    return array.map((n) => typeof n == 'object' ? null : n )
+  }
+
+  this.to_links = (array) => {
+    return array.map((n) => typeof n == 'object' ? this.objectID(n) : null )
+  }
+
   this.objectID = (value) => {
     if ('_id' in value) return value._id
     if (Array.isArray(value)) {
@@ -266,7 +271,7 @@ function Store(uuid) {
       let new_id = UUID.generate()
       let idx = value.map((n,i) => this._id + ":" + i)
       this.list_sequence[new_id] = value.length
-      this.apply({ action: "create", target: new_id, value: value, idx: idx })
+      this.apply({ action: "create", target: new_id, value:this.to_vals(value), idx: idx, links:this.to_links(value)  })
       return new_id
     }
 
@@ -389,6 +394,7 @@ function Store(uuid) {
 
   this.do_splice = (a) => {
     let value    = a.value
+    let links    = a.links
     let object   = this.objects[a.target]
     let index    = this.list_index[a.target]
     let meta     = this.list_meta[a.target]
@@ -448,10 +454,11 @@ function Store(uuid) {
     for (let v in value) {
       let here = newIndex[v]
       if (!covered) {
-        object._splice(n,0,value[v])
+        let val = value[v] || this.objects[links[v]]
+        object._splice(n,0,val)
         index.splice(n,0,here)
       }
-      meta[here] = { action: a, val: value[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : undefined  }
+      meta[here] = { action: a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : undefined  }
       if (meta[last]) meta[last].next = here
       if (meta[next]) meta[next].last = here
       last = here
