@@ -86,7 +86,6 @@ Array.prototype.fill()
 
 let ListHandler = {
   get: (target,key) => {
-//    if (Debug) { console.log("GET",key) }
     if (key == "_direct") return target
     if (key == "_set") return (key,val) => {
       console.log("list._set(",key,val,")")
@@ -97,9 +96,7 @@ let ListHandler = {
     if (key == "_splice") return function() { return target._splice(...arguments) }
     return target[key]
   },
-//  push: (target,v) => { target.push(v) },
   set: (target,key,value) => {
-//    if (Debug) { console.log("SET",key,"[",value,"]") }
     if (key.startsWith("_")) { throw "Invalid Key" }
     let n = parseInt(key)
     if (n >= target.length) {
@@ -112,7 +109,6 @@ let ListHandler = {
     return true
   },
   deleteProperty: (target,key) => {
-//    if (Debug) { console.log("DELETE",key) }
     if (key.startsWith("_")) { throw "Invalid Key" }
     // TODO - do i need to distinguish 'del' from 'unlink' - right now, no, but keep eyes open for trouble
     target._store.apply({ action: "del", target: target._id, key: key })
@@ -323,7 +319,9 @@ function Store(uuid) {
     if (Array.isArray(value)) {
       // TODO what is the right way of handling arrays containing nested objects?
       let new_id = UUID.generate()
-      this.apply({ action: "create", target: new_id, value: value })
+      let idx = value.map((n,i) => this._id + ":" + i)
+      this.list_sequence[new_id] = value.length
+      this.apply({ action: "create", target: new_id, value: value, idx: idx })
       return new_id
     }
 
@@ -372,9 +370,7 @@ function Store(uuid) {
       let two = action2.clock[keys[i]] || 0
       if (one < two) oneFirst = true
       if (two < one) twoFirst = true
-      //console.log("CON:",keys[i], one,two,one < two, two < one)
     }
-    //console.log("CON::",action1.clock,action2.clock,oneFirst,twoFirst)
 
     return oneFirst && twoFirst
   }
@@ -386,35 +382,6 @@ function Store(uuid) {
       if (i != action.by && local_clock < action.clock[i]) return false;
     }
     return true
-  }
-
-  this.find_add_index = (a) => {
-    let idx = this.list_index[a.target]
-    let meta = this.list_meta[a.target]
-    Log("FIND",a.at)
-    let before = a.at[0]
-    let after = a.at[1]
-    if (!before) { return 0 }
-    let insert_at = idx.indexOf(before) + 1
-    console.assert(insert_at != undefined)
-/*
-    console.log("Action:",a)
-    console.log("List:",this.objects[a.target])
-    console.log("List:",idx)
-    console.log("Start at", insert_at)
-*/
-    for (var i = insert_at; i < idx.length; i++) {
-//      console.log("Looking at index", i)
-//      console.log("Value:",this.objects[a.target][i])
-//      console.log("META",meta)
-      let b = meta[idx[i]].action
-//      console.log(a.clock,"vs",b.clock)
-      if (!this.is_concurrent(a,b)) break;
-//      console.log("--------------------")
-      if (a.by < b.by) break;
-      insert_at += 1
-    }
-    return insert_at
   }
 
   this.try_apply = () => {
@@ -457,48 +424,114 @@ function Store(uuid) {
     }
   }
 
-  this.do_splice = (a) => {
-    let value = a.value
-    let list  = this.objects[a.target]
-    let index = this.list_index[a.target]
-    let meta  = this.list_meta[a.target]
-    let begin = (a.at === undefined || a.at[0] === undefined) ? 0 : (index.indexOf(a.at[0]) + 1)
-    let idx   = a.idx || value.map((n,i) => a.by + ":" + i)
-
-    this.list_sequence[a.target] += idx.length
-
-    for (let i = begin + 1; i < list.length; i++) {
-      let b = meta[index[i]].action
-      if (!this.is_concurrent(a,b)) { 
-        break;
-      }
-      if (a.by > b.by) {
-        break;
-      }
-      begin = i
-    }
-
-    console.assert(value.length == idx.length)
-
-    for (let v in value) {
-      let i = idx[v]
-      list._splice(begin,0,value[v])
-      index.splice(begin,0,i)
-      meta[i] = { action: a }
-      begin++
-    }
+  this.is_covering = (b, seen) => {
+    if (b.at == undefined) return false;
+    return seen.hasOwnProperty(b.at[0]) && seen.hasOwnProperty(b.at[1])
   }
 
-  this.list_find_cut_index = (a,n) => {
-/*
-      [ 1, 2, 3] // - vals
-      [ "s0:1", "s0:2", "s0:3" ] // - indexes
-      { "s0:1":true, "so:3":false, ... }
-      { "s0:1": {"val": 1, "deleted": false, "next": "s0:2", "prev": null}, ... }
-      { "s0:3": "s0:1", "s0:4": "s0:2" }
-      [ ["s0:3"] , ["s0:4"], [], [] ]
-*/
-      return this.list_index[a.target].indexOf(n)
+  this.is_covered = (a,meta) => {
+    if (a.cut == undefined) return false
+    let m0 = meta[a.cut[0]]
+    let m1 = meta[a.cut[1]]
+    if (m0 == undefined) return false
+    if (m1 == undefined) return false
+    if (m0.deleted == false) return false
+    if (m1.deleted == false) return false
+    if (!this.is_concurrent(m0.action,a)) return false
+    if (!this.is_concurrent(m1.action,a)) return false
+    return true
+  }
+
+  this.should_delete = (a,n,index,meta,cut) => {
+    if (n == -1) return false
+    let b = meta[cut].action
+    if (!this.is_concurrent(a,b)) return true
+    return false
+  }
+
+  this.do_splice = (a) => {
+    let value    = a.value
+    let object   = this.objects[a.target]
+    let index    = this.list_index[a.target]
+    let meta     = this.list_meta[a.target]
+    let newIndex = a.idx || value.map((n,i) => a.by + ":" + i)
+
+    // CUT DATA
+//    Log("A",a)
+    let covered  = this.is_covered(a,meta)
+
+    let cut      = a.cut && a.cut[0]
+    let concurrent = {}
+
+
+    Log("A",a)
+    Log("PRE",object)
+    Log("PRE",index)
+
+    // find all the things in the span
+
+    while (cut) {
+      let n = index.indexOf(cut)
+      concurrent[cut] = this.is_concurrent(a,meta[cut].action)
+      if (cut == a.cut[1]) break; // we reached the end of the cut
+      cut = meta[cut].next
+    }
+
+    Log("SEEN",concurrent)
+
+    for (let s in concurrent) {
+      // only delete if its not deleted
+      Log("DELETED?",meta[s].deleted)
+      if (meta[s].deleted == false) {
+        // delete if its not concurrent 
+        // OR
+        // I saw the begin and end insertion points while walking the list (we're covering it)
+        Log(concurrent[s] == false, " || ", this.is_covering(meta[s].action, concurrent))
+        if (concurrent[s] == false || this.is_covering(meta[s].action, concurrent)) {
+          Log("CUT!!",s)
+          let n = index.indexOf(s)
+          object._splice(n,1)
+          index.splice(n,1)
+          meta[s].deleted = true
+          meta[s].action = a
+        }
+      }
+    }
+
+    let last = a.at === undefined ? undefined : a.at[0]
+    let next = meta[last] ? meta[last].next : undefined
+
+    for (;;) {
+      if (meta[next] === undefined) break;
+      let b = meta[next].action
+      if (!this.is_concurrent(a,b)) break;
+      if (a.by > b.by) break;
+      last = next
+      next = meta[last].next
+    }
+
+    // walk backwards to find an undeleted node to attach to
+    let begin = last
+    while( meta[begin] && index.indexOf(begin) == -1) {
+      begin = meta[begin].last
+    }
+    let n = index.indexOf(begin) + 1
+
+    for (let v in value) {
+      let here = newIndex[v]
+      if (!covered) {
+        object._splice(n,0,value[v])
+        index.splice(n,0,here)
+      }
+      meta[here] = { action: a, val: value[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : undefined  }
+      if (meta[last]) meta[last].next = here
+      if (meta[next]) meta[next].last = here
+      last = here
+      next = meta[here].next
+      n++
+    }
+    Log("POST",object)
+    Log("POST",index)
   }
 
   this.do_apply = (a) => {
@@ -540,59 +573,21 @@ function Store(uuid) {
         break;
 
       case "create":
-        // cant have collisions here b/c guid is unique :p
         this.conflicts[a.target] = {}
         this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
           if (a.by != this._id && !Testing) throw "Cant Sync Lists Yet - Unsupported"
-          //this.objects[a.target] = new List(this, a.target, a.value)            // objects[k] = [a,b,c]
           this.objects[a.target] = new List(this, a.target, [])            // objects[k] = [a,b,c]
-          this.list_sequence[a.target] = 0
+          this.list_sequence[a.target] = this.list_sequence[a.target] || 0
           this.list_index[a.target] = []
-          //this.list_meta[a.target] = {}
           this.do_splice(a)
-          //this.list_sequence[a.target] = this.objects[a.target].length          // list_sequence = 3
-          //this.list_index[a.target].push(...this.objects[a.target].map((n,i) => a.by + ":" + i))
-          //this.list_tombstones[a.target].push(...this.objects[a.target].map(() => []).concat([[]])) // list_tombstones = [[],[],[],[]]
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
         }
         this.links[a.target] = {}
         break;
       case "splice":
-        let idx = this.list_index[a.target]
-        let list = this.objects[a.target]
-        let indexes = a.idx
-        Log("ACTIOn",a)
-        Log("BEFORE",list)
-        Log("BEFORE",idx)
-        Log("BEFORE META",Object.keys(list._meta))
-        Log("BEFORE META 2",Object.keys(this.list_meta[a.target]))
-        console.assert(list.length == idx.length)
-        let add_index = this.find_add_index(a)
-        Log("ADD_INDEX",add_index)
-        if (a.cut[0]) {
-          let cut1 = this.list_find_cut_index(a, a.cut[0])
-          let cut2 = this.list_find_cut_index(a, a.cut[1])
-          let run = cut2 - cut1 + 1;
-          list._splice(cut1,run)
-          let moved_tombs = list._tombs.splice(cut1,run)
-          let old_idx = [].concat(idx.splice(cut1,run)).concat(...moved_tombs)
-          console.assert(list.length == idx.length)
-//          old_idx.forEach((b) => list._meta[b].action = a)
-          //list._tombs[add_index].push(...old_idx)
-        }
-
         this.do_splice(a)
-/*
-        for (let x in indexes) { list._meta[indexes[x]] = { action: a } }
-        list._splice(add_index,0,...a.value)
-        idx.splice(add_index,0,...indexes)
-//        list._tombs.splice(add_index,0,...(a.value.map((n,i) => [])))
-        console.assert(list.length == idx.length)
-*/
-        Log("AFTER",list)
-        //console.assert(list.length == list._tombs.length)
         break;
       default:
         console.log("unknown-action:", a.action)

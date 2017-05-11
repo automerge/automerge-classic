@@ -261,7 +261,6 @@ describe('Tesseract', function() {
       assert.deepEqual(s1.root.lists,l1)
     })
     it('should handle splice', function() {
-      tesseract.debug(false)
       let l1 = ['a','b','c','d','e']
       s1.root.lists = l1
       let l2 = s1.root.lists
@@ -437,23 +436,24 @@ describe('Tesseract', function() {
       assert.deepEqual(s2.root.list,[3,'a','b',4,'c','d',5])
       assert.deepEqual(s2.root.list._tombs,[['s1:1','s1:0'],[],[],[],[],[],[],['s1:6','s1:5']])
     })
+*/
+/*
     it('should track list actions', function() {
       s1.root.list = [1,2,3]
-      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][0])
       s1.root.list.pop()
-      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][2])
+      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][2])
       s1.root.list.pop()
-      assert.deepEqual(s1.root.list._actions['s1:0'], s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._actions['s1:1'], s1.peer_actions['s1'][3])
-      assert.deepEqual(s1.root.list._actions['s1:2'], s1.peer_actions['s1'][2])
+      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
+      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][3])
+      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][2])
     })
 */
     it('should track handle concurrent inserts', function() {
-/*
       s1.link(s2)
       s1.root.list = [1,2,3,4,5,6]
       s1.pause()
@@ -466,9 +466,7 @@ describe('Tesseract', function() {
       s1.root.list.splice(3,0,'m','b','d')
       s2.unpause()
       assert.deepEqual(s1.root.list,s2.root.list)
-*/
     })
-/*
     it('should track handle concurrent deletes', function() {
       s1.link(s2)
       let n = [1,2,3,4,5,6,7]
@@ -477,12 +475,35 @@ describe('Tesseract', function() {
       s1.root.list.splice(2,2)
       s2.root.list.splice(3,2)
       n.splice(2,3)
-      tesseract.debug(true)
       s1.unpause()
       assert.deepEqual(s1.root.list,s2.root.list)
       assert.deepEqual(s1.root.list,n)
     })
-  */
+    it('should track handle concurrent deletes and inserts', function() {
+      s1.link(s2)
+      let n = [1,2,3,4,5,6,7]
+      s1.root.list = n
+      s1.pause()
+      s1.root.list.splice(2,2,'a','b')
+      s2.root.list.splice(3,2,'x','y')
+      n.splice(2,3,'a','b','x','y')
+      s1.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
+      assert.deepEqual(s1.root.list,n)
+    })
+    it('should track handle concurrent nested deletes and inserts', function() {
+      s1.link(s2)
+      let n = [1,2,3,4,5,6,7]
+      s1.root.list = n
+      s1.pause()
+      s1.root.list.splice(1,5,'a','b')
+      s2.root.list.splice(2,3,'x','y')
+      n.splice(1,5,'a','b')
+      s1.unpause()
+      assert.deepEqual(s1.root.list,n)
+      assert.deepEqual(s2.root.list,n)
+      assert.deepEqual(s1.root.list,s2.root.list)
+    })
       /*
     it('should track handle concurrent chaos', function() {
       s1.link(s2)
