@@ -381,8 +381,8 @@ function Store(uuid) {
 
   this.is_covered = (a,meta) => {
     if (a.cut == undefined) return false
-    let m0 = meta[a.cut[0]]
-    let m1 = meta[a.cut[1]]
+    let m0 = meta[a.at[0]]
+    let m1 = meta[a.at[1]]
     if (m0 == undefined) return false
     if (m1 == undefined) return false
     if (m0.deleted == false) return false
@@ -408,6 +408,10 @@ function Store(uuid) {
     let concurrent = {}
 
     // find all the things in the span
+    Log("Splice",a)
+    Log("PRE",object)
+    Log("PRE",index)
+    Log("COVERED?",covered)
 
     while (cut) {
       let n = index.indexOf(cut)
@@ -465,6 +469,8 @@ function Store(uuid) {
       next = meta[here].next
       n++
     }
+    Log("POST",object)
+    Log("POST",index)
   }
 
   this.do_apply = (a) => {

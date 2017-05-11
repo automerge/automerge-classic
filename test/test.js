@@ -519,49 +519,64 @@ describe('Tesseract', function() {
       s2.root.list[1].stuff = [1,2,3]
       assert.deepEqual(s1.root,s2.root)
     })
-    it('should track handle concurrent splices [2] [TODO]', function() {
-      s1.root.list = [1,1,1,1,1,1,1]
+    it('should track handle concurrent splices [2]', function() {
+      let l = [1,1,1,1,1,1,1]
+      s1.root.list = l
       s1.link(s2)
       s1.pause()
       s1.root.list.splice(6, 0, 8, 8, 8, 8, 8, 8, 8, 8)
       s2.root.list.splice(5, 3, 9, 9, 9, 9, 9, 9, 9, 9, 9)
       s1.unpause()
-      //assert.deepEqual(s1.root.list,s2.root.list)
+      assert.deepEqual(s1.root.list,s2.root.list)
+    })
+    it('should track handle concurrent splices [3]', function() {
+      s1.root.list = [ 10, 10, 16, 16, 18, 18, 1, 1, 15 ]
+      s1.link(s2)
+      s1.pause()
+      let l = [ 10, 10, 16, 16, 18, 18, 1, 1, 15 ]
+      l.splice( 0,4, 20, 20, 20 )
+      //tesseract.debug(true)
+      s1.root.list.splice( 0,4, 20, 20, 20 )
+      s2.root.list.splice( 0,0, 21, 21 )
+      s1.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
     })
 
-/*
     it('should track handle concurrent chaos [TODO]', function() {
+      return 
       s1.root.list = [1,1,1,1,1,1,1]
       console.log("BEGIN",s1.root.list)
       let seq = 8
       s1.link(s2)
 //      s2.link(s3)
-      s2.pause()
       let rand = (n) => {
         return Math.floor(Math.random() * n)
       }
       let random_splice = (store) => {
-        let data = (new Array(rand(10)).fill(seq))
+        let data = (new Array(rand(4)).fill(seq))
         seq += 1
         let len = store.root.list.length
         let r1 = rand(len)
         let r2 = rand(Math.round(len/2))
-        console.log("S-",store.root.list)
+        console.log("START",store._id,store.root.list)
         console.log("S",store._id,".splice(",r1,r2,data,")")
         store.root.list.splice(r1,r2,...data)
-        console.log("S+",store.root.list)
+        console.log("END",store._id,store.root.list)
       }
-      for (let i = 0; i < 1; i++)
+      for (let j = 0; j < 100; j++) 
       {
-        random_splice(s1)
-        random_splice(s2)
-//        random_splice(s3)
+        s2.pause()
+        for (let i = 0; i < 1; i++)
+        {
+          random_splice(s1)
+          random_splice(s2)
+  //        random_splice(s3)
+        }
+        s2.unpause()
+        assert.deepEqual(s1.root.list,s2.root.list)
       }
-      s2.unpause()
-      assert.deepEqual(s1.root.list,s2.root.list)
 //      assert.deepEqual(s1.root.list,s3.root.list)
     })
-    */
   })
 })
 
