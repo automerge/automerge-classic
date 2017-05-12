@@ -228,6 +228,21 @@ describe('Tesseract', function() {
       let exp = s1.save()
       let s7 = tesseract.load(exp)
       assert.deepEqual(s1.root,s7.root)
+      let s8 = new Store()
+      s8.merge(s7)
+      assert.deepEqual(s1.root,s8.root)
+    })
+    it('should handle load/save [2]', function() {
+      s1.root.foo = "bar"
+      let save = s1.save()
+      let s7 = tesseract.load(save)
+      s7.root.aaa = 'aaa'
+      let s8 = tesseract.load(save)
+      s8.root.bbb = 'bbb'
+      let s9 = new Store()
+      s9.merge(s7)
+      s9.merge(s8)
+      assert.deepEqual(s9.root,{foo: "bar", aaa:"aaa", bbb:"bbb"})
     })
   })
   describe('Maps', function() {
