@@ -385,19 +385,20 @@ function Store(uuid) {
   }
 
   this.is_covered = (a,meta) => {
-    if (a.cut == undefined) return false
-    if (a.at[0] == "HEAD") return false
-    if (a.at[1] == "TAIL") return false
+    let FALSE = [false]
+    if (a.cut == undefined) return FALSE
+    if (a.at[0] == "HEAD") return FALSE
+    if (a.at[1] == "TAIL") return FALSE
     let m0 = meta[a.at[0]]
     let m1 = meta[a.at[1]]
-    if (m0 == undefined) return false
-    if (m1 == undefined) return false
-    if (m0.deleted == false) return false
-    if (m1.deleted == false) return false
-//    if (m0.action != m1.action) return false
-    if (!this.is_concurrent(m0.action,a)) return false
-    if (!this.is_concurrent(m1.action,a)) return false
-    return true
+    if (m0 == undefined) return FALSE
+    if (m1 == undefined) return FALSE
+    if (m0.deleted == false) return FALSE
+    if (m1.deleted == false) return FALSE
+    if (m0.action != m1.action) return FALSE
+    if (!this.is_concurrent(m0.action,a)) return FALSE
+    if (!this.is_concurrent(m1.action,a)) return FALSE
+    return [true, m0.action]
   }
 
   this.do_splice = (a) => {
@@ -410,7 +411,7 @@ function Store(uuid) {
 
     // CUT DATA
 
-    let covered    = this.is_covered(a,meta)
+    let [covered,covered_action] = this.is_covered(a,meta)
 
     let cut        = a.cut && a.cut[0]
     let concurrent = {}
@@ -477,7 +478,7 @@ function Store(uuid) {
         object._splice(n,0,val)
         index.splice(n,0,here)
       }
-      meta[here] = { action: a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : "TAIL"  }
+      meta[here] = { action: covered ? covered_action : a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : "TAIL"  }
       if (meta[last]) meta[last].next = here
       if (meta[next]) meta[next].last = here
       last = here

@@ -560,15 +560,25 @@ describe('Tesseract', function() {
       assert.deepEqual(s1.root.list,s2.root.list)
     })
     it('should track handle concurrent splices [5]', function() {
-      return
-      let t = [ 22, 34, 34, 31, 28, 28 ]
+      let t = [ 'a1', 'a2', 'a3', 'a4', 'a5', 'a6' ]
       s1.root.list = t
       s1.link(s2)
       s1.pause()
       s1.root.list.splice( 3 ,2 )
       s1.root.list.splice( 2 ,1 )
-      s2.root.list.splice( 3 ,0 ,37 ,37 )
-      //s2.root.list.splice( 1 ,0 )
+      s2.root.list.splice( 3 ,0 ,'b1' ,'b2' )
+      s1.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
+    })
+    it('should track handle concurrent splices [6]', function() {
+      let t = [ 1, 1, 1, 1, 1, 1, 1 ]
+      s1.root.list = t
+      s1.link(s2)
+      s1.pause()
+      s1.root.list.splice( 5 ,2 ,"1a" ,"1a" ,"1a" )
+      //s1.root.list.splice( 6 ,2 ,10 )
+      s2.root.list.splice( 6 ,0 ,"2a" ,"2a" ,"2a" )
+      s2.root.list.splice( 6 ,1 ,"2b" ,"2b" ,"2b" )
       s1.unpause()
       assert.deepEqual(s1.root.list,s2.root.list)
     })
