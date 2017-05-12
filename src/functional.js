@@ -1,4 +1,4 @@
-const immutable = require('immutable')
+const { Map, List, fromJS } = require('immutable')
 const util = require('util')
 
 var UUID = (function() {
@@ -23,16 +23,33 @@ function isObject(obj) {
 
 function getActionValue(state, action) {
   if (!isObject(action)) return action
-  if (action.get('action') === 'set')  return action.get('value')
-  if (action.get('action') === 'link') return mapProxy(state, action.get('value'))
+  const value = action.get('value')
+  if (action.get('action') === 'set') return value
+  if (action.get('action') === 'link') {
+    const type = state.getIn(['objects', value, '_type'])
+    if (type === 'map')  return mapProxy(state, value)
+    if (type === 'list') return listProxy(state, value)
+  }
 }
 
 function getObjectValue(state, id) {
-  let obj = {}
-  state.getIn(['objects', id])
-    .filterNot(field => field.isEmpty())
-    .forEach((field, key) => { obj[key] = getActionValue(state, field.first()) })
-  return obj
+  const src = state.getIn(['objects', id])
+  if (src.get('_type') === 'map') {
+    let obj = {}
+    src.filterNot((field, key) => key.startsWith('_') || field.get('actions', List()).isEmpty())
+      .forEach((field, key) => { obj[key] = getActionValue(state, field.get('actions').first()) })
+    return obj
+  }
+
+  if (src.get('_type') === 'list') {
+    let list = [], elem = '_head'
+    while (elem) {
+      const actions = src.get(elem).get('actions', List())
+      if (!actions.isEmpty()) list.push(getActionValue(state, actions.first()))
+      elem = src.getIn([elem, 'next'])
+    }
+    return list
+  }
 }
 
 function getObjectConflicts(state, id) {
@@ -52,7 +69,7 @@ const MapHandler = {
     if (key === '_id') return target.get('id')
     if (key === '_direct') return obj
     if (key === '_conflicts') return getObjectConflicts(target.get('state'), target.get('id'))
-    return getActionValue(target.get('state'), obj.get(key, immutable.List()).first())
+    return getActionValue(target.get('state'), obj.getIn([key, 'actions'], List()).first())
   },
 
   set (target, key, value) {
@@ -68,8 +85,31 @@ const MapHandler = {
   }
 }
 
+const ListHandler = {
+  get (target, key) {
+    const obj = target.getIn(['state', 'objects', target.get('id')])
+    if (key === util.inspect.custom) return () => getObjectValue(target.get('state'), target.get('id'))
+    if (key === '_id') return target.get('id')
+    if (key === '_direct') return obj
+
+    if (typeof key === 'number' && key >= 0) {
+      let index = -1, elem = '_head'
+      while (elem && index < key) {
+        elem = obj.getIn([elem, 'next'])
+        const actions = obj.get(elem).get('actions', List())
+        if (!actions.isEmpty()) index += 1
+      }
+      if (elem) return getActionValue(target.get('state'), obj.getIn([elem, 'actions']).first())
+    }
+  }
+}
+
 function mapProxy(state, id) {
-  return new Proxy(immutable.fromJS({state, id}), MapHandler)
+  return new Proxy(fromJS({state, id}), MapHandler)
+}
+
+function listProxy(state, id) {
+  return new Proxy(fromJS({state, id}), ListHandler)
 }
 
 const root_id = '00000000-0000-0000-0000-000000000000'
@@ -95,10 +135,10 @@ function makeStore(state) {
 
 function Store(storeId) {
   const _uuid = storeId || UUID.generate()
-  return makeStore(immutable.fromJS({
+  return makeStore(fromJS({
     _id:     _uuid,
     actions: { [_uuid]:   [] },
-    objects: { [root_id]: {} }
+    objects: { [root_id]: {_type: 'map'} }
   }))
 }
 
@@ -119,7 +159,7 @@ function causallyReady(state, action) {
   const storeId = action.get('by')
   return action.get('clock')
     .filterNot((seq, node) => {
-      const applied = state.getIn(['actions', node], immutable.List()).size
+      const applied = state.getIn(['actions', node], List()).size
       if (node === storeId) {
         return seq === applied + 1
       } else {
@@ -134,37 +174,64 @@ function makeAction(state, action) {
   const clock = state
     .get('actions')
     .mapEntries(([id, actions]) => [id, id === storeId ? actions.size + 1 : actions.size])
-  return immutable.fromJS(action).merge({ by: storeId, clock })
+  return fromJS(action).merge({ by: storeId, clock })
 }
 
 function applyFieldAction(state, action) {
-  const { by, clock, target, key } = action.toObject()
+  const target = action.get('target'), key = action.get('key')
   const actions = state
-      .getIn(['objects', target, key], immutable.List())
+      .getIn(['objects', target, key], Map())
+      .get('actions', List())
       .filter(other => isConcurrent(other, action))
       .push(...(action.get('action') === 'del' ? [] : [action]))
       .sortBy(a => a.get('by'))
       .reverse()
-  if (actions.isEmpty()) {
-    return state.deleteIn(['objects', target, key])
-  } else {
-    return state.setIn(['objects', target, key], actions)
+  return state.setIn(['objects', target, key, 'actions'], actions)
+}
+
+function parseLamport(stamp) {
+  const [, name, count] = /^(.*):(\d+)$/.exec(stamp) || []
+  if (count) return [name, parseInt(count)]
+}
+
+function lamportLessThan(stamp1, stamp2) {
+  const [name1, count1] = parseLamport(stamp1)
+  const [name2, count2] = parseLamport(stamp2)
+  return (count1 < count2) || (count1 === count2 && name1 < name2)
+}
+
+function applyInsertAction(state, action) {
+  const target = action.get('target'), after = action.get('after'), elem = action.get('elem')
+  const [elemName, elemCount] = parseLamport(elem)
+  if (elemCount > state.getIn(['objects', target, 'counter'])) {
+    state = state.setIn(['objects', target, 'counter'], elemCount)
   }
+
+  let prev = after, next = state.getIn(['objects', target, after, 'next'])
+  while (next && lamportLessThan(elem, next)) {
+    prev = next
+    next = state.getIn(['objects', target, prev, 'next'])
+  }
+  return state
+    .setIn(['objects', target, prev, 'next'], elem)
+    .setIn(['objects', target, elem, 'next'], next)
 }
 
 function applyAction(state, action) {
   if (!causallyReady(state, action)) throw 'Cannot apply action'
   const by = action.get('by'), a = action.get('action')
-  const actions = state.getIn(['actions', by], immutable.List()).push(action)
+  state = state.setIn(['actions', by], state.getIn(['actions', by], List()).push(action))
 
   if (a === 'set' || a === 'del' || a === 'link')
     return applyFieldAction(state, action)
-        .setIn(['actions', by], actions)
-  if (a === 'create')
-    return state
-        .setIn(['objects', action.get('target')], immutable.Map())
-        .setIn(['actions', by], actions)
-  if (a === 'splice') throw 'Not yet implemented'
+  if (a === 'ins')
+    return applyInsertAction(state, action)
+  if (a === 'makeMap')
+    return state.setIn(['objects', action.get('target')],
+                       fromJS({_type: 'map'}))
+  if (a === 'makeList')
+    return state.setIn(['objects', action.get('target')],
+                       fromJS({_type: 'list', _head: {next: null}, counter: 0}))
   throw 'Unknown action'
 }
 
@@ -173,7 +240,7 @@ function mergeActions(local, remote) {
   do {
     applied = 0
     remote.get('actions').forEach((remoteActions, by) => {
-      const localActions = state.getIn(['actions', by], immutable.List())
+      const localActions = state.getIn(['actions', by], List())
       for (let i = localActions.size; i < remoteActions.size; i++) {
         const action = remoteActions.get(i)
         if (causallyReady(state, action)) {
@@ -184,11 +251,6 @@ function mergeActions(local, remote) {
     })
   } while (applied > 0)
   return state
-}
-
-function createObject(state) {
-  const id = UUID.generate()
-  return [applyAction(state, makeAction(state, { action: 'create', target: id })), id]
 }
 
 function setFieldValue(state, targetId, targetKey, value) {
@@ -206,6 +268,13 @@ function setFieldLink(state, fromId, fromKey, toId) {
   return applyAction(state, makeAction(state, { action: 'link', target: fromId, key: fromKey, value: toId }))
 }
 
+function insertAfter(state, listId, elemId) {
+  if (!state.hasIn(['objects', listId])) throw 'List object does not exist'
+  if (!state.hasIn(['objects', listId, elemId])) throw 'Preceding list element does not exist'
+  const newId = state.get('_id') + ':' + (state.getIn(['objects', listId, 'counter']) + 1)
+  return [applyAction(state, makeAction(state, { action: 'ins', target: listId, after: elemId, elem: newId })), newId]
+}
+
 function setField(state, fromId, fromKey, value) {
   if (!isObject(value)) {
     return setFieldValue(state, fromId, fromKey, value)
@@ -214,9 +283,19 @@ function setField(state, fromId, fromKey, value) {
     return setFieldLink(state, fromId, fromKey, value._id)
   }
 
-  let [newState, objId] = createObject(state)
-  for (let key in value) newState = setField(newState, objId, key, value[key])
-  return setFieldLink(newState, fromId, fromKey, objId)
+  const objId = UUID.generate()
+  if (Array.isArray(value)) {
+    state = applyAction(state, makeAction(state, { action: 'makeList', target: objId }))
+    let elemId = '_head'
+    for (let i = 0; i < value.length; i++) {
+      [state, elemId] = insertAfter(state, objId, elemId)
+      state = setField(state, objId, elemId, value[i])
+    }
+  } else {
+    state = applyAction(state, makeAction(state, { action: 'makeMap', target: objId }))
+    for (let key in value) state = setField(state, objId, key, value[key])
+  }
+  return setFieldLink(state, fromId, fromKey, objId)
 }
 
 function assignObject(state, obj, values) {
