@@ -534,17 +534,24 @@ describe('Tesseract', function() {
       s1.pause()
       let l = [ 10, 10, 16, 16, 18, 18, 1, 1, 15 ]
       l.splice( 0,4, 20, 20, 20 )
-      //tesseract.debug(true)
       s1.root.list.splice( 0,4, 20, 20, 20 )
       s2.root.list.splice( 0,0, 21, 21 )
       s1.unpause()
       assert.deepEqual(s1.root.list,s2.root.list)
     })
-
+    it('should track handle concurrent splices [4]', function() {
+      let t = [ 11, 10, 10, 10, 9 ]
+      s1.root.list = t
+      s1.link(s2)
+      s1.pause()
+      s1.root.list.splice( 3, 1, 12, 12, 12)
+      s2.root.list.splice( 0, 3, 13, 13 )
+      s1.unpause()
+      assert.deepEqual(s1.root.list,s2.root.list)
+    })
     it('should track handle concurrent chaos [TODO]', function() {
-      return 
       s1.root.list = [1,1,1,1,1,1,1]
-      console.log("BEGIN",s1.root.list)
+      //console.log("BEGIN",s1.root.list)
       let seq = 8
       s1.link(s2)
 //      s2.link(s3)
@@ -557,10 +564,11 @@ describe('Tesseract', function() {
         let len = store.root.list.length
         let r1 = rand(len)
         let r2 = rand(Math.round(len/2))
-        console.log("START",store._id,store.root.list)
-        console.log("S",store._id,".splice(",r1,r2,data,")")
+        //console.log("s1.root.list =",store.root.list)
+        //console.log("s1.splice(",[r1,r2,...data].join(" ,"),")")
+        //console.log("s2.splice(",[r1,r2,...data].join(" ,"),")")
         store.root.list.splice(r1,r2,...data)
-        console.log("END",store._id,store.root.list)
+        //console.log("END",store._id,store.root.list)
       }
       for (let j = 0; j < 100; j++) 
       {

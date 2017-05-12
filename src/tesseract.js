@@ -94,8 +94,8 @@ function List(store, id, list) {
       let run = args.shift()
       let cut = this.slice(start,start+run)
       let cut_index = store.list_index[this._id].slice(start,start+run)
-      let at1 = store.list_index[this._id][start - 1]
-      let at2 = store.list_index[this._id][start + run]
+      let at1 = store.list_index[this._id][start - 1] || "HEAD"
+      let at2 = store.list_index[this._id][start + run] || "TAIL"
       let cut1 = cut_index.shift()
       let cut2 = cut_index.pop() || cut1;
       let idx = args.map((n,i) => store._id + ":" + (store.list_sequence[this._id] + i))
@@ -392,24 +392,25 @@ function Store(uuid) {
   }
 
   this.do_splice = (a) => {
-    let value    = a.value
-    let links    = a.links
-    let object   = this.objects[a.target]
-    let index    = this.list_index[a.target]
-    let meta     = this.list_meta[a.target]
-    let newIndex = a.idx || value.map((n,i) => a.by + ":" + i)
+    let value      = a.value
+    let links      = a.links
+    let object     = this.objects[a.target]
+    let index      = this.list_index[a.target]
+    let meta       = this.list_meta[a.target]
+    let newIndex   = a.idx || value.map((n,i) => a.by + ":" + i)
 
     // CUT DATA
 
-    let covered  = this.is_covered(a,meta)
+    let covered    = this.is_covered(a,meta)
 
-    let cut      = a.cut && a.cut[0]
+    let cut        = a.cut && a.cut[0]
     let concurrent = {}
 
     // find all the things in the span
     Log("Splice",a)
     Log("PRE",object)
     Log("PRE",index)
+    //Log("PRE",meta)
     Log("COVERED?",covered)
 
     while (cut) {
@@ -427,6 +428,7 @@ function Store(uuid) {
         // I saw the begin and end insertion points while walking the list (we're covering it)
         if (concurrent[s] == false || this.is_covering(meta[s].action, concurrent)) {
           let n = index.indexOf(s)
+          Log("CUT",n)
           object._splice(n,1)
           index.splice(n,1)
           meta[s].deleted = true
@@ -435,22 +437,26 @@ function Store(uuid) {
       }
     }
 
-    let last = a.at === undefined ? undefined : a.at[0]
+    let last = a.at === undefined ? "HEAD" : a.at[0]
     let next = meta[last] ? meta[last].next : index[0]
 
+    Log("LAST",last)
+    Log("NEXT",next)
     for (;;) {
-      if (meta[next] === undefined) break;
+      if (meta[next] === "TAIL") break;
       let b = meta[next].action
       if (!this.is_concurrent(a,b)) break;
       if (a.by > b.by) break;
       last = next
       next = meta[last].next
+      Log("NEXT+",next)
     }
 
     // walk backwards to find an undeleted node to attach to
     let begin = last
     while( meta[begin] && index.indexOf(begin) == -1) {
       begin = meta[begin].last
+      Log("BACK",begin)
     }
     let n = index.indexOf(begin) + 1
 
@@ -462,7 +468,7 @@ function Store(uuid) {
         object._splice(n,0,val)
         index.splice(n,0,here)
       }
-      meta[here] = { action: a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : undefined  }
+      meta[here] = { action: a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : "TAIL"  }
       if (meta[last]) meta[last].next = here
       if (meta[next]) meta[next].last = here
       last = here
@@ -471,6 +477,7 @@ function Store(uuid) {
     }
     Log("POST",object)
     Log("POST",index)
+    //Log("POST",meta)
   }
 
   this.do_apply = (a) => {
@@ -518,6 +525,8 @@ function Store(uuid) {
           this.objects[a.target] = new List(this, a.target, [])            // objects[k] = [a,b,c]
           this.list_sequence[a.target] = this.list_sequence[a.target] || 0
           this.list_index[a.target] = []
+          this.list_meta[a.target]["HEAD"] = { action: a, deleted: false, next: "TAIL" }
+          this.list_meta[a.target]["TAIL"] = { action: a, deleted: false, last: "HEAD" }
           this.do_splice(a)
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))
