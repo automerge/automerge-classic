@@ -8,6 +8,21 @@ function Log() {
 
 let unique = function(list) { return list.filter( (v,i,self) => self.indexOf(v) === i ) }
 
+
+function _import(data) {
+  let imp = JSON.parse(data)
+  if (imp.tesseract != "v1") throw "Cant Import Data - Invalid"
+  let s = new Store()
+  s.peer_actions = Object.assign(s.peer_actions, imp.actions)
+  s.clock = Object.keys(imp.actions).reduce((obj,n) => Object.assign(obj,{[n]:0}),s.clock)
+  s.try_apply()
+  //console.log("CLOCK",s.clock)
+  //console.log("OBJ",s.objects)
+  //console.log("META",s.list_meta)
+  //console.log("PEER",s.peer_actions)
+  return s
+}
+
 function pp(o) {
   let keys = Object.keys(o).sort();
   let o2 = {}
@@ -212,15 +227,6 @@ function Store(uuid) {
     peer.merge(this)
   }
 
-  this.export = () => {
-    return {
-      peer_actions: Object.assign({}, this.peer_actions ),
-      clock:   Object.assign({}, this.clock ),
-      objects: Object.assign({}, this.objects ),
-      links:   Object.assign({}, this.links )
-    }
-  }
-
   this.log = () => {
     Log(...arguments)
   }
@@ -348,7 +354,7 @@ function Store(uuid) {
             actions_applied += 1
             total_actions += 1
           } else {
-//            console.log("can apply failed:",this._id, next_action)
+//            Log("can apply failed:",this._id, next_action)
 //            throw "x"
           }
         }
@@ -380,12 +386,15 @@ function Store(uuid) {
 
   this.is_covered = (a,meta) => {
     if (a.cut == undefined) return false
+    if (a.at[0] == "HEAD") return false
+    if (a.at[1] == "TAIL") return false
     let m0 = meta[a.at[0]]
     let m1 = meta[a.at[1]]
     if (m0 == undefined) return false
     if (m1 == undefined) return false
     if (m0.deleted == false) return false
     if (m1.deleted == false) return false
+//    if (m0.action != m1.action) return false
     if (!this.is_concurrent(m0.action,a)) return false
     if (!this.is_concurrent(m1.action,a)) return false
     return true
@@ -480,6 +489,13 @@ function Store(uuid) {
     //Log("POST",meta)
   }
 
+  this.export = () => {
+    return JSON.stringify({
+      tesseract: "v1",
+      actions: this.peer_actions
+    })
+  }
+
   this.do_apply = (a) => {
     console.assert(this.clock[a.by] + 1 == a.clock[a.by])
     this.clock[a.by] = a.clock[a.by]
@@ -545,6 +561,7 @@ function Store(uuid) {
 
 module.exports = {
   Store: Store,
+  import: _import,
   debug: (bool) => { Debug = bool }
 }
 
