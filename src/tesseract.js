@@ -436,7 +436,7 @@ function Store(uuid) {
     }
 
     let last = a.at === undefined ? undefined : a.at[0]
-    let next = meta[last] ? meta[last].next : undefined
+    let next = meta[last] ? meta[last].next : index[0]
 
     for (;;) {
       if (meta[next] === undefined) break;
