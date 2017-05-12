@@ -9,7 +9,7 @@ function Log() {
 let unique = function(list) { return list.filter( (v,i,self) => self.indexOf(v) === i ) }
 
 
-function _import(data) {
+function load(data) {
   let imp = JSON.parse(data)
   if (imp.tesseract != "v1") throw "Cant Import Data - Invalid"
   let s = new Store()
@@ -489,7 +489,7 @@ function Store(uuid) {
     //Log("POST",meta)
   }
 
-  this.export = () => {
+  this.save = () => {
     return JSON.stringify({
       tesseract: "v1",
       actions: this.peer_actions
@@ -561,7 +561,7 @@ function Store(uuid) {
 
 module.exports = {
   Store: Store,
-  import: _import,
+  load: load,
   debug: (bool) => { Debug = bool }
 }
 

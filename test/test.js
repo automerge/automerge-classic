@@ -219,14 +219,14 @@ describe('Tesseract', function() {
       assert.equal(s4.root.complex_test, "complex5")
       assert.equal(s5.root.complex_test, "complex5")
     })
-    it('should handle import/export', function() {
+    it('should handle load/save', function() {
       s1.link(s2)
       s1.root.foo = "bar"
       s2.root.list = [1,2,3]
       s1.root.baz = { baz: [3,3,3] }
       assert.deepEqual(s1.root,s2.root)
-      let exp = s1.export()
-      let s7 = tesseract.import(exp)
+      let exp = s1.save()
+      let s7 = tesseract.load(exp)
       assert.deepEqual(s1.root,s7.root)
     })
   })
