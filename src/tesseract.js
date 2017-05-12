@@ -1,6 +1,5 @@
 
 let Debug = false
-let Testing = false
 function Log() {
   if (Debug) {
     console.log(...arguments)
@@ -457,6 +456,7 @@ function Store(uuid) {
 
     for (let v in value) {
       let here = newIndex[v]
+      // covered means that another concurrent spliced covered this splice deleteing it
       if (!covered) {
         let val = value[v] || this.objects[links[v]]
         object._splice(n,0,val)
@@ -515,7 +515,6 @@ function Store(uuid) {
         this.conflicts[a.target] = {}
         this.obj_actions[a.target] = {}
         if (Array.isArray(a.value)) {
-          if (a.by != this._id && !Testing) throw "Cant Sync Lists Yet - Unsupported"
           this.objects[a.target] = new List(this, a.target, [])            // objects[k] = [a,b,c]
           this.list_sequence[a.target] = this.list_sequence[a.target] || 0
           this.list_index[a.target] = []
@@ -537,8 +536,7 @@ function Store(uuid) {
 
 module.exports = {
   Store: Store,
-  debug: (bool) => { Debug = bool },
-  testing: (bool) => { Testing = bool }
+  debug: (bool) => { Debug = bool }
 }
 
 

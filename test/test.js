@@ -6,7 +6,6 @@
 var assert = require('assert');
 let tesseract = require('../src/tesseract')
 let Store = tesseract.Store
-tesseract.testing(true)
 
 describe('Tesseract', function() {
   var s1,s2,s3,s4,s5,s6;
