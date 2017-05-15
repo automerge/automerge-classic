@@ -219,6 +219,7 @@ describe('Tesseract', function() {
       assert.equal(s4.root.complex_test, "complex5")
       assert.equal(s5.root.complex_test, "complex5")
     })
+/*
     it('should handle load/save', function() {
       s1.link(s2)
       s1.root.foo = "bar"
@@ -244,6 +245,7 @@ describe('Tesseract', function() {
       s9.merge(s8)
       assert.deepEqual(s9.root,{foo: "bar", aaa:"aaa", bbb:"bbb"})
     })
+*/
   })
   describe('Maps', function() {
     beforeEach(function() {
@@ -288,20 +290,17 @@ describe('Tesseract', function() {
       let l1 = ['a','b','c','d','e']
       s1.root.lists = l1
       let l2 = s1.root.lists
+      assert.deepEqual(l1,l2)
       l1.splice(3,0,'x','y')
       l2.splice(3,0,'x','y')
       assert.deepEqual(l1,l2)
+      //tesseract.debug(true)
       l1.splice(2,1,'q')
       l2.splice(2,1,'q')
       assert.deepEqual(l1,l2)
       l1.splice(4,10,'t','r','s')
       l2.splice(4,10,'t','r','s')
       assert.deepEqual(l1,l2)
-/*
-      l1.splice(1,1,'A','B')
-      l2.splice(1,1,'A','B')
-      assert.deepEqual(l1,l2)
-*/
     })
     it('should handle push', function() {
       let l1 = []
@@ -405,78 +404,6 @@ describe('Tesseract', function() {
       s2.root.list.splice(3,3)
       assert.deepEqual(s1.root.list,s2.root.list)
     })
-/*
-    it('should record tombstones on splice', function() {
-      s1.root.list = [1,2,3]
-      assert.deepEqual(s1.root.list._tombs,[[],[],[],[]])
-      s1.root.list.splice(0,3)
-      assert.deepEqual(s1.root.list,[])
-      assert.deepEqual(s1.root.list._tombs,[['s1:0', 's1:1', 's1:2']])
-    })
-    it('should record tombstones pop', function() {
-      s1.root.list = [1,2,3]
-      assert.deepEqual(s1.root.list._tombs,[[],[],[],[]])
-      s1.root.list.pop()
-      assert.deepEqual(s1.root.list,[1,2])
-      assert.deepEqual(s1.root.list._tombs,[[],[],['s1:2']])
-    })
-    it('should record tombstones shift', function() {
-      s1.root.list = [1,2,3]
-      assert.deepEqual(s1.root.list._tombs,[[],[],[],[]])
-      s1.root.list.shift()
-      assert.deepEqual(s1.root.list,[2,3])
-      assert.deepEqual(s1.root.list._tombs,[['s1:0'],[],[]])
-    })
-    it('should compound tombstones', function() {
-      s1.root.list = [1,2,3,4,5,6,7]
-      assert.deepEqual(s1.root.list._tombs,[[],[],[],[],[],[],[],[]])
-      s1.root.list.pop()
-      s1.root.list.pop()
-      assert.deepEqual(s1.root.list,[1,2,3,4,5])
-      assert.deepEqual(s1.root.list._tombs,[[],[],[],[],[],['s1:6','s1:5']])
-      s1.root.list.shift()
-      s1.root.list.shift()
-      assert.deepEqual(s1.root.list,[3,4,5])
-      assert.deepEqual(s1.root.list._tombs,[['s1:1','s1:0'],[],[],['s1:6','s1:5']])
-      s1.root.list.splice(2,0,'c','d')
-      s1.root.list.splice(1,0,'a','b')
-      assert.deepEqual(s1.root.list,[3,'a','b',4,'c','d',5])
-      assert.deepEqual(s1.root.list._tombs,[['s1:1','s1:0'],[],[],[],[],[],[],['s1:6','s1:5']])
-    })
-    it('should sync tombstones', function() {
-      s2.link(s1)
-      s1.root.list = [1,2,3,4,5,6,7]
-      assert.deepEqual(s2.root.list._tombs,[[],[],[],[],[],[],[],[]])
-      s1.root.list.pop()
-      s1.root.list.pop()
-      assert.deepEqual(s2.root.list,[1,2,3,4,5])
-      assert.deepEqual(s2.root.list._tombs,[[],[],[],[],[],['s1:6','s1:5']])
-      s1.root.list.shift()
-      s1.root.list.shift()
-      assert.deepEqual(s2.root.list,[3,4,5])
-      assert.deepEqual(s2.root.list._tombs,[['s1:1','s1:0'],[],[],['s1:6','s1:5']])
-      s1.root.list.splice(2,0,'c','d')
-      s1.root.list.splice(1,0,'a','b')
-      assert.deepEqual(s2.root.list,[3,'a','b',4,'c','d',5])
-      assert.deepEqual(s2.root.list._tombs,[['s1:1','s1:0'],[],[],[],[],[],[],['s1:6','s1:5']])
-    })
-*/
-/*
-    it('should track list actions', function() {
-      s1.root.list = [1,2,3]
-      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][0])
-      s1.root.list.pop()
-      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][2])
-      s1.root.list.pop()
-      assert.deepEqual(s1.root.list._meta['s1:0'].action, s1.peer_actions['s1'][0])
-      assert.deepEqual(s1.root.list._meta['s1:1'].action, s1.peer_actions['s1'][3])
-      assert.deepEqual(s1.root.list._meta['s1:2'].action, s1.peer_actions['s1'][2])
-    })
-*/
     it('should track handle concurrent inserts', function() {
       s1.link(s2)
       s1.root.list = [1,2,3,4,5,6]
@@ -591,7 +518,6 @@ describe('Tesseract', function() {
       s1.link(s2)
       s1.pause()
       s1.root.list.splice( 5 ,2 ,"1a" ,"1a" ,"1a" )
-      //s1.root.list.splice( 6 ,2 ,10 )
       s2.root.list.splice( 6 ,0 ,"2a" ,"2a" ,"2a" )
       s2.root.list.splice( 6 ,1 ,"2b" ,"2b" ,"2b" )
       s1.unpause()

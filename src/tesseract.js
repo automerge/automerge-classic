@@ -417,41 +417,25 @@ function Store(uuid) {
     let concurrent = {}
 
     // find all the things in the span
-    Log("Splice",a)
-    Log("PRE",object)
-    Log("PRE",index)
-    //Log("PRE",meta)
-    Log("COVERED?",covered)
-
     while (cut) {
-      let n = index.indexOf(cut)
       concurrent[cut] = this.is_concurrent(a,meta[cut].action)
-      if (cut == a.cut[1]) break; // we reached the end of the cut
+      if (cut == a.cut[1]) break;
       cut = meta[cut].next
-    }
+    } 
 
     for (let s in concurrent) {
-      // only delete if its not deleted
-      if (meta[s].deleted == false) {
-        // delete if its not concurrent 
-        // OR
-        // I saw the begin and end insertion points while walking the list (we're covering it)
-        if (concurrent[s] == false || this.is_covering(meta[s].action, concurrent)) {
-          let n = index.indexOf(s)
-          Log("CUT",n)
-          object._splice(n,1)
-          index.splice(n,1)
-          meta[s].deleted = true
-          meta[s].action = a
-        }
+      if (!meta[s].deleted && (!concurrent[s] || this.is_covering(meta[s].action, concurrent))) {
+        meta[s].deleted = true
+        meta[s].action = a
       }
     }
 
-    let last = a.at === undefined ? "HEAD" : a.at[0]
-    let next = meta[last] ? meta[last].next : index[0]
+    // ADD DATA
 
-    Log("LAST",last)
-    Log("NEXT",next)
+    let last = a.at === undefined ? "HEAD" : a.at[0]
+    let next = meta[last].next
+
+    // start at AT and walk forward until we find a non-concurrent insert or a concurrent insert that out-ranks us
     for (;;) {
       if (meta[next] === "TAIL") break;
       let b = meta[next].action
@@ -459,35 +443,51 @@ function Store(uuid) {
       if (a.by > b.by) break;
       last = next
       next = meta[last].next
-      Log("NEXT+",next)
     }
-
-    // walk backwards to find an undeleted node to attach to
-    let begin = last
-    while( meta[begin] && index.indexOf(begin) == -1) {
-      begin = meta[begin].last
-      Log("BACK",begin)
-    }
-    let n = index.indexOf(begin) + 1
 
     for (let v in value) {
       let here = newIndex[v]
-      // covered means that another concurrent spliced covered this splice deleteing it
-      if (!covered) {
-        let val = value[v] || this.objects[links[v]]
-        object._splice(n,0,val)
-        index.splice(n,0,here)
+      meta[here] = {
+        action:  covered ? covered_action : a,  // inherit the delete that covered us concurrently?
+        val:     value[v],
+        link:    links[v],
+        deleted: covered,
+        last:    last,
+        next:    meta[last].next
       }
-      meta[here] = { action: covered ? covered_action : a, val: value[v], link:links[v], deleted: covered, last: last, next: meta[last] ? meta[last].next : "TAIL"  }
-      if (meta[last]) meta[last].next = here
-      if (meta[next]) meta[next].last = here
+      meta[last].next = here
+      meta[next].last = here
       last = here
       next = meta[here].next
-      n++
     }
+    object._splice(0,999999,...this.meta_to_list(meta))
+    index.splice(0,999999,...this.meta_to_index(meta))
     Log("POST",object)
     Log("POST",index)
-    //Log("POST",meta)
+  }
+
+  this.meta_to_list = (meta) => {
+    let new_array = []
+    let ptr = meta["HEAD"].next
+    while (ptr != "TAIL") {
+      if (!meta[ptr].deleted) {
+        new_array.push(meta[ptr].val || this.objects[meta[ptr].link])
+      }
+      ptr = meta[ptr].next;
+    }
+    return new_array
+  }
+
+  this.meta_to_index = (meta) => {
+    let new_array = []
+    let ptr = meta["HEAD"].next
+    while (ptr != "TAIL") {
+      if (!meta[ptr].deleted) {
+        new_array.push(ptr)
+      }
+      ptr = meta[ptr].next;
+    }
+    return new_array
   }
 
   this.save = () => {
