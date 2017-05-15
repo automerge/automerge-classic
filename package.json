@@ -2,7 +2,7 @@
   "name": "tesseract",
   "version": "0.0.14",
   "description": "js crdt",
-  "main": "src/tesseract.js",
+  "main": "src/functional.js",
   "scripts": {
     "test": "mocha"
   },
