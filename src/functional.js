@@ -60,24 +60,43 @@ function getObjectConflicts(state, id) {
     ]).toJS()
 }
 
+function listElemByIndex(state, obj, index) {
+  let i = -1, elem = obj.getIn(['_head', 'next'])
+  while (elem) {
+    if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+    if (i === index) return getActionValue(state, obj.getIn([elem, 'actions']).first())
+    elem = obj.getIn([elem, 'next'])
+  }
+}
+
+function listLength(obj) {
+  let length = 0, elem = obj.getIn(['_head', 'next'])
+  while (elem) {
+    if (!obj.get(elem).get('actions', List()).isEmpty()) length += 1
+    elem = obj.getIn([elem, 'next'])
+  }
+  return length
+}
+
 const MapHandler = {
   get (target, key) {
     const obj = target.getIn(['state', 'objects', target.get('id')])
     if (key === util.inspect.custom) return () => getObjectValue(target.get('state'), target.get('id'))
     if (typeof key !== 'string') return target[key]
     if (obj === undefined) return undefined
+    if (key === '_type') return 'map'
     if (key === '_id') return target.get('id')
-    if (key === '_direct') return obj
+    if (key === '_state') return target.get('state')
     if (key === '_conflicts') return getObjectConflicts(target.get('state'), target.get('id'))
     return getActionValue(target.get('state'), obj.getIn([key, 'actions'], List()).first())
   },
 
   set (target, key, value) {
-    throw 'This object is read-only. Use Store.assign() to change it.'
+    throw 'This object is read-only. Use tesseract.set() to change it.'
   },
 
   deleteProperty (target, key) {
-    throw 'This object is read-only. Use Store.assign() to change it.'
+    throw 'This object is read-only. Use tesseract.remove() to change it.'
   },
 
   ownKeys (target) {
@@ -89,18 +108,21 @@ const ListHandler = {
   get (target, key) {
     const obj = target.getIn(['state', 'objects', target.get('id')])
     if (key === util.inspect.custom) return () => getObjectValue(target.get('state'), target.get('id'))
+    if (key === '_type') return 'list'
     if (key === '_id') return target.get('id')
-    if (key === '_direct') return obj
-
-    if (typeof key === 'number' && key >= 0) {
-      let index = -1, elem = '_head'
-      while (elem && index < key) {
-        elem = obj.getIn([elem, 'next'])
-        const actions = obj.get(elem).get('actions', List())
-        if (!actions.isEmpty()) index += 1
-      }
-      if (elem) return getActionValue(target.get('state'), obj.getIn([elem, 'actions']).first())
+    if (key === '_state') return target.get('state')
+    if (key === 'length') return listLength(obj)
+    if (obj && typeof key === 'string' && /^[0-9]+$/.test(key)) {
+      return listElemByIndex(target.get('state'), obj, parseInt(key))
     }
+  },
+
+  set (target, key, value) {
+    throw 'This object is read-only. Use tesseract.set() to change it.'
+  },
+
+  deleteProperty (target, key) {
+    throw 'This object is read-only. Use tesseract.remove() to change it.'
   }
 }
 
@@ -110,36 +132,6 @@ function mapProxy(state, id) {
 
 function listProxy(state, id) {
   return new Proxy(fromJS({state, id}), ListHandler)
-}
-
-const root_id = '00000000-0000-0000-0000-000000000000'
-
-function makeStore(state) {
-  const root = mapProxy(state, root_id)
-  return {
-    state: state,
-    root: root,
-    merge (other) {
-      return makeStore(mergeActions(state, other.state))
-    },
-    assign (obj, values) {
-      if (values === undefined) {
-        return makeStore(assignObject(state, root, obj))
-      } else {
-        return makeStore(assignObject(state, obj, values))
-      }
-    },
-    [util.inspect.custom]: () => root
-  }
-}
-
-function Store(storeId) {
-  const _uuid = storeId || UUID.generate()
-  return makeStore(fromJS({
-    _id:     _uuid,
-    actions: { [_uuid]:   [] },
-    objects: { [root_id]: {_type: 'map'} }
-  }))
 }
 
 // Returns true if the two actions are concurrent, that is, they happened without being aware of
@@ -275,15 +267,10 @@ function insertAfter(state, listId, elemId) {
   return [applyAction(state, makeAction(state, { action: 'ins', target: listId, after: elemId, elem: newId })), newId]
 }
 
-function setField(state, fromId, fromKey, value) {
-  if (!isObject(value)) {
-    return setFieldValue(state, fromId, fromKey, value)
-  }
-  if ('_id' in value) {
-    return setFieldLink(state, fromId, fromKey, value._id)
-  }
-
+function createNestedObjects(state, value) {
+  if (typeof value._id === 'string') return [state, value._id]
   const objId = UUID.generate()
+
   if (Array.isArray(value)) {
     state = applyAction(state, makeAction(state, { action: 'makeList', target: objId }))
     let elemId = '_head'
@@ -295,22 +282,87 @@ function setField(state, fromId, fromKey, value) {
     state = applyAction(state, makeAction(state, { action: 'makeMap', target: objId }))
     for (let key in value) state = setField(state, objId, key, value[key])
   }
-  return setFieldLink(state, fromId, fromKey, objId)
+  return [state, objId]
 }
 
-function assignObject(state, obj, values) {
-  if (!obj || !obj._id) throw 'Cannot assign to an object that does not exist'
-  if (!isObject(values)) throw 'Must supply values to assign'
-
-  for (let key in values) {
-    if (key.startsWith('_')) throw 'Invalid Key'
-    if (isObject(obj[key]) && isObject(values[key])) {
-      state = assignObject(state, obj[key], values[key])
-    } else {
-      state = setField(state, obj._id, key, values[key])
-    }
+function setField(state, fromId, fromKey, value) {
+  if (!isObject(value)) {
+    return setFieldValue(state, fromId, fromKey, value)
+  } else {
+    const [newState, objId] = createNestedObjects(state, value)
+    return setFieldLink(newState, fromId, fromKey, objId)
   }
-  return state
 }
 
-module.exports = { Store }
+function insertAt(state, listId, index, value) {
+  const obj = state.getIn(['objects', listId])
+  let i = 0, prev = '_head', next = obj.getIn(['_head', 'next'])
+  while (next && i < index) {
+    if (!obj.get(next).get('actions', List()).isEmpty()) i += 1
+    prev = next
+    next = obj.getIn([next, 'next'])
+  }
+
+  if (i < index) throw 'Cannot insert past the end of the list'
+  const [newState, newElem] = insertAfter(state, listId, prev)
+  return setField(newState, listId, newElem, value)
+}
+
+function deleteField(state, targetId, key) {
+  const obj = state.getIn(['objects', targetId])
+  if (obj.get('_type') === 'list' && typeof key === 'number') {
+    let i = -1, elem = obj.getIn(['_head', 'next'])
+    while (elem) {
+      if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+      if (i === key) break
+      elem = obj.getIn([elem, 'next'])
+    }
+    if (!elem) throw 'Cannot delete list element that does not exist'
+    key = elem
+  }
+
+  if (!obj.has(key)) throw 'Cannot delete field that does not exist'
+  return applyAction(state, makeAction(state, { action: 'del', target: targetId, key: key }))
+}
+
+
+///// Mutation API
+
+const root_id = '00000000-0000-0000-0000-000000000000'
+
+function makeStore(state) {
+  return mapProxy(state, root_id)
+}
+
+function init(storeId) {
+  const _uuid = storeId || UUID.generate()
+  return makeStore(fromJS({
+    _id:     _uuid,
+    actions: { [_uuid]:   [] },
+    objects: { [root_id]: {_type: 'map'} }
+  }))
+}
+
+function set(target, key, value) {
+  if (!target || !target._id) throw 'Cannot modify object that does not exist'
+  if (key.startsWith('_')) throw 'Invalid key'
+  return makeStore(setField(target._state, target._id, key, value))
+}
+
+function insert(target, index, value) {
+  if (!target || !target._id) throw 'Cannot modify an object that does not exist'
+  if (target._type !== 'list') throw 'Cannot insert into a map'
+  if (typeof index !== 'number' || index < 0) throw 'Invalid index'
+  return makeStore(insertAt(target._state, target._id, index, value))
+}
+
+function remove(target, key) {
+  if (!target || !target._id) throw 'Cannot modify an object that does not exist'
+  return makeStore(deleteField(target._state, target._id, key))
+}
+
+function merge(local, remote) {
+  return makeStore(mergeActions(local._state, remote._state))
+}
+
+module.exports = { init, set, insert, remove, merge }

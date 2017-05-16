@@ -1,7 +1,50 @@
-
 ## Tesseract
 
   An attempt at making a transparent javascript CRDT that behaves like native types.
+
+### Example usage
+
+```js
+const t = require('tesseract')
+let s1 = t.init()
+// {}
+
+s1 = t.set(s1, 'cards', [])
+// { cards: [] }
+
+s1 = t.insert(s1.cards, 0, {title: 'Rewrite everything in Clojure', done: false})
+// { cards: [ { title: 'Rewrite everything in Clojure', done: false } ] }
+
+s1 = t.insert(s1.cards, 1, {title: 'Reticulate splines', done: false})
+// { cards:
+//    [ { title: 'Rewrite everything in Clojure', done: false },
+//      { title: 'Reticulate splines', done: false } ] }
+
+s1 = t.insert(s1.cards, 0, {title: 'Rewrite everything in Haskell', done: false})
+// { cards:
+//    [ { title: 'Rewrite everything in Haskell', done: false },
+//      { title: 'Rewrite everything in Clojure', done: false },
+//      { title: 'Reticulate splines', done: false } ] }
+
+let s2 = t.init()
+s2 = t.merge(s2, s1)
+
+s1 = t.set(s1.cards[1], 'done', true)
+// { cards:
+//    [ { title: 'Rewrite everything in Haskell', done: false },
+//      { title: 'Rewrite everything in Clojure', done: true },
+//      { title: 'Reticulate splines', done: false } ] }
+
+s2 = t.remove(s2.cards, 1)
+// { cards:
+//    [ { title: 'Rewrite everything in Haskell', done: false },
+//      { title: 'Reticulate splines', done: false } ] }
+
+s1 = t.merge(s1, s2)
+// { cards:
+//    [ { title: 'Rewrite everything in Haskell', done: false },
+//      { title: 'Reticulate splines', done: false } ] }
+```
 
 ### Testing
 
