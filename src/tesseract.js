@@ -6,7 +6,24 @@ function Log() {
   }
 }
 
-let unique = function(list) { return list.filter( (v,i,self) => self.indexOf(v) === i ) }
+let _intersection = function(a,b) {
+    let setA = new Set(a)
+    let setB = new Set(a)
+    var intersection = new Set();
+    for (var elem of setB) {
+        if (setA.has(elem)) {
+            intersection.add(elem);
+        }
+    }
+    return Array.from(intersection);
+}
+
+let _unique = function(list) { return list.filter( (v,i,self) => self.indexOf(v) === i ) }
+let _compare = function(a,b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
 
 
 function load(data) {
@@ -16,10 +33,6 @@ function load(data) {
   s.peer_actions = Object.assign(s.peer_actions, imp.actions)
   s.clock = Object.keys(imp.actions).reduce((obj,n) => Object.assign(obj,{[n]:0}),s.clock)
   s.try_apply()
-  //console.log("CLOCK",s.clock)
-  //console.log("OBJ",s.objects)
-  //console.log("META",s.list_meta)
-  //console.log("PEER",s.peer_actions)
   return s
 }
 
@@ -316,9 +329,13 @@ function Store(uuid) {
 
   // Returns true if the two actions are concurrent, that is, they happened without being aware of
   // each other (neither happened before the other). Returns false if one supercedes the other.
+  this.are_concurrent = (a, actions) => {
+    return actions.some((b) => this.is_concurrent(a,b))
+  }
+
   this.is_concurrent = (action1, action2) => {
     // FIXME - unqiue()
-    let keys = unique(Object.keys(action1.clock).concat(Object.keys(action2.clock)))
+    let keys = _unique(Object.keys(action1.clock).concat(Object.keys(action2.clock)))
     let oneFirst = false, twoFirst = false
     for (let i = 0; i < keys.length; i++) {
       let one = action1.clock[keys[i]] || 0
@@ -379,9 +396,13 @@ function Store(uuid) {
     }
   }
 
-  this.is_covering = (b, seen) => {
-    if (b.at == undefined) return false;
-    return seen.hasOwnProperty(b.at[0]) && seen.hasOwnProperty(b.at[1])
+  this.is_covering = (actions, seen) => {
+    for (let i in actions) {
+      let b = actions[i]
+      if (b.at == undefined) continue;
+      if (seen.hasOwnProperty(b.at[0]) && seen.hasOwnProperty(b.at[1])) return true
+    }
+    return false
   }
 
   this.is_covered = (a,meta) => {
@@ -395,10 +416,11 @@ function Store(uuid) {
     if (m1 == undefined) return FALSE
     if (m0.deleted == false) return FALSE
     if (m1.deleted == false) return FALSE
-    if (m0.action != m1.action) return FALSE
-    if (!this.is_concurrent(m0.action,a)) return FALSE
-    if (!this.is_concurrent(m1.action,a)) return FALSE
-    return [true, m0.action]
+    let common = _intersection(m0.actions, m1.actions)
+    let concurrent = common.filter((c) => this.is_concurrent(c,a))
+    if (concurrent.length == 0) return FALSE
+    concurrent.sort((x,y) => _compare(x.by,y.by))
+    return [true, concurrent]
   }
 
   this.do_splice = (a) => {
@@ -410,23 +432,40 @@ function Store(uuid) {
     let newIndex   = a.idx || value.map((n,i) => a.by + ":" + i)
 
     // CUT DATA
+    Log("ACTION",a)
+    Log("PRE",object)
+    Log("PRE",index)
+    Log("META",meta)
 
-    let [covered,covered_action] = this.is_covered(a,meta)
+    let [covered,covered_actions] = this.is_covered(a,meta)
 
     let cut        = a.cut && a.cut[0]
     let concurrent = {}
 
     // find all the things in the span
     while (cut) {
-      concurrent[cut] = this.is_concurrent(a,meta[cut].action)
+      concurrent[cut] = this.are_concurrent(a,meta[cut].actions)
       if (cut == a.cut[1]) break;
       cut = meta[cut].next
     } 
 
     for (let s in concurrent) {
-      if (!meta[s].deleted && (!concurrent[s] || this.is_covering(meta[s].action, concurrent))) {
+      if (concurrent[s]) {
+        if (this.is_covering(meta[s].actions, concurrent)) {
+          if (meta[s].deleted == true) {
+            //meta[s].deleted = true
+            meta[s].actions.push(a)
+            meta[s].actions.sort((x,y) => _compare(x.by,y.by))
+          } else {
+            meta[s].deleted = true
+            meta[s].actions = [a]
+          }
+        }
+        // if concurrent and not covering - leave it alone
+      } else {
+        // if not concurrent - delete it
         meta[s].deleted = true
-        meta[s].action = a
+        meta[s].actions = [a]
       }
     }
 
@@ -438,9 +477,9 @@ function Store(uuid) {
     // start at AT and walk forward until we find a non-concurrent insert or a concurrent insert that out-ranks us
     for (;;) {
       if (meta[next] === "TAIL") break;
-      let b = meta[next].action
-      if (!this.is_concurrent(a,b)) break;
-      if (a.by > b.by) break;
+      let b = meta[next].actions
+      if (!this.are_concurrent(a,b)) break;
+      if (a.by > b[0].by) break;
       last = next
       next = meta[last].next
     }
@@ -448,7 +487,7 @@ function Store(uuid) {
     for (let v in value) {
       let here = newIndex[v]
       meta[here] = {
-        action:  covered ? covered_action : a,  // inherit the delete that covered us concurrently?
+        actions: covered ? covered_actions : [a],  // inherit the delete that covered us concurrently?
         val:     value[v],
         link:    links[v],
         deleted: covered,
@@ -542,8 +581,8 @@ function Store(uuid) {
           this.objects[a.target] = new List(this, a.target, [])            // objects[k] = [a,b,c]
           this.list_sequence[a.target] = this.list_sequence[a.target] || 0
           this.list_index[a.target] = []
-          this.list_meta[a.target]["HEAD"] = { action: a, deleted: false, next: "TAIL" }
-          this.list_meta[a.target]["TAIL"] = { action: a, deleted: false, last: "HEAD" }
+          this.list_meta[a.target]["HEAD"] = { actions: [a], deleted: false, next: "TAIL" }
+          this.list_meta[a.target]["TAIL"] = { actions: [a], deleted: false, last: "HEAD" }
           this.do_splice(a)
         } else {
           this.objects[a.target] = new Map(this, a.target, Object.assign({}, a.value))

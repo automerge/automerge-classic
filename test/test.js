@@ -294,7 +294,6 @@ describe('Tesseract', function() {
       l1.splice(3,0,'x','y')
       l2.splice(3,0,'x','y')
       assert.deepEqual(l1,l2)
-      //tesseract.debug(true)
       l1.splice(2,1,'q')
       l2.splice(2,1,'q')
       assert.deepEqual(l1,l2)
@@ -429,6 +428,15 @@ describe('Tesseract', function() {
       s1.unpause()
       assert.deepEqual(s1.root.list,s2.root.list)
       assert.deepEqual(s1.root.list,n)
+      let q = "HEAD";
+      // s1:3 is the key
+      while (q != "TAIL") {
+        console.log("Q=",q)
+        console.log("M1=",s1.root.list._meta[q])
+        console.log("M2=",s2.root.list._meta[q])
+        assert.deepEqual(s1.root.list._meta[q],s2.root.list._meta[q])
+        q = s1.root.list._meta[q].next
+      }
     })
     it('should track handle concurrent deletes and inserts', function() {
       s1.link(s2)
@@ -524,7 +532,7 @@ describe('Tesseract', function() {
       assert.deepEqual(s1.root.list,s2.root.list)
     })
     it('should track handle concurrent chaos [TODO]', function() {
-      return
+      return;
       s1.root.list = [1,1,1,1,1,1,1]
       console.log("BEGIN",s1.root.list)
       let seq = 8
