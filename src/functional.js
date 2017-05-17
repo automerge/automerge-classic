@@ -100,6 +100,16 @@ const MapHandler = {
     throw 'This object is read-only. Use tesseract.remove() to change it.'
   },
 
+  has (target, key) {
+    return target.hasIn(['state', 'objects', target.get('id'), key])
+  },
+
+  getOwnPropertyDescriptor (target, key) {
+    if (!key.startsWith('_') && target.hasIn(['state', 'objects', target.get('id'), key])) {
+      return {configurable: true, enumerable: true}
+    }
+  },
+
   ownKeys (target) {
     return target.getIn(['state', 'objects', target.get('id')]).keySeq().toJS()
   }
@@ -124,6 +134,28 @@ const ListHandler = {
 
   deleteProperty (target, key) {
     throw 'This object is read-only. Use tesseract.remove() to change it.'
+  },
+
+  has (target, key) {
+    if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+      return parseInt(key) < listLength(target.getIn(['state', 'objects', target.get('id')]))
+    }
+    return false
+  },
+
+  getOwnPropertyDescriptor (target, key) {
+    if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+      if (parseInt(key) < listLength(target.getIn(['state', 'objects', target.get('id')]))) {
+        return {configurable: true, enumerable: true}
+      }
+    }
+  },
+
+  ownKeys (target) {
+    const length = listLength(target.getIn(['state', 'objects', target.get('id')]))
+    let keys = []
+    for (let i = 0; i < length; i++) keys.push(i.toString())
+    return keys
   }
 }
 
@@ -374,4 +406,15 @@ function save(store) {
   return transit.toJSON(store._state)
 }
 
-module.exports = { init, set, insert, remove, merge, load, save }
+function equals(val1, val2) {
+  if (!isObject(val1) || !isObject(val2)) return val1 === val2
+  const keys1 = Object.keys(val1).sort(), keys2 = Object.keys(val2).sort()
+  if (keys1.length !== keys2.length) return false
+  for (let i = 0; i < keys1.length; i++) {
+    if (keys1[i] !== keys2[i]) return false
+    if (!equals(val1[keys1[i]], val2[keys2[i]])) return false
+  }
+  return true
+}
+
+module.exports = { init, set, insert, remove, merge, load, save, equals }

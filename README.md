@@ -44,6 +44,9 @@ s1 = t.merge(s1, s2)
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: false },
 //      { title: 'Reticulate splines', done: false } ] }
+
+t.equals(s1.cards[1], { title: 'Reticulate splines', done: false })
+// true
 ```
 
 ### Testing
