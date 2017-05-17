@@ -1,4 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
+const transit = require('transit-immutable-js')
 const util = require('util')
 
 var UUID = (function() {
@@ -365,4 +366,12 @@ function merge(local, remote) {
   return makeStore(mergeActions(local._state, remote._state))
 }
 
-module.exports = { init, set, insert, remove, merge }
+function load(string) {
+  return makeStore(transit.fromJSON(string))
+}
+
+function save(store) {
+  return transit.toJSON(store._state)
+}
+
+module.exports = { init, set, insert, remove, merge, load, save }
