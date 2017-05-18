@@ -404,24 +404,43 @@ function checkTargetKey(funcName, target, key) {
     if (key.startsWith('_'))
       throw new RangeError('Fields starting with underscore are reserved. Bad second argument ' +
                            'to tesseract.' + funcName + ': ' + key)
+    return key
   } else if (target._type === 'list') {
+    if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
     if (typeof key !== 'number')
       throw new TypeError('You are modifying a list, so the second argument to tesseract.' +
                           funcName + ' must be a numerical index. However, you passed ' + key)
     if (key < 0)
       throw new RangeError('The second argument to tesseract.' + funcName + ' must not be negative')
+    return key
   } else {
     throw new TypeError('Unexpected target object type ' + target._type)
   }
 }
 
 function set(target, key, value) {
-  checkTargetKey('set', target, key)
+  key = checkTargetKey('set', target, key)
   if (target._type === 'list') {
     return makeStore(setListIndex(target._state, target._id, key, value))
   } else {
     return makeStore(setField(target._state, target._id, key, value))
   }
+}
+
+function assign(target, values) {
+  checkTarget('assign', target)
+  if (!isObject(values)) throw new TypeError('The second argument to tesseract.assign must be an ' +
+                                             'object, but you passed ' + values)
+  let state = target._state
+  for (let key of Object.keys(values)) {
+    key = checkTargetKey('assign', target, key)
+    if (target._type === 'list') {
+      state = setListIndex(state, target._id, key, values[key])
+    } else {
+      state = setField(state, target._id, key, values[key])
+    }
+  }
+  return makeStore(state)
 }
 
 function insert(target, index, value) {
@@ -463,4 +482,4 @@ function equals(val1, val2) {
   return true
 }
 
-module.exports = { init, set, insert, remove, merge, load, save, equals }
+module.exports = { init, set, assign, insert, remove, merge, load, save, equals }
