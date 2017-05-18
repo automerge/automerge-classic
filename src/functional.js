@@ -93,11 +93,11 @@ const MapHandler = {
   },
 
   set (target, key, value) {
-    throw 'This object is read-only. Use tesseract.set() to change it.'
+    throw new TypeError('This object is read-only. Use tesseract.set() to change it.')
   },
 
   deleteProperty (target, key) {
-    throw 'This object is read-only. Use tesseract.remove() to change it.'
+    throw new TypeError('This object is read-only. Use tesseract.remove() to change it.')
   },
 
   has (target, key) {
@@ -129,11 +129,11 @@ const ListHandler = {
   },
 
   set (target, key, value) {
-    throw 'This object is read-only. Use tesseract.set() to change it.'
+    throw new TypeError('This object is read-only. Use tesseract.set() to change it.')
   },
 
   deleteProperty (target, key) {
-    throw 'This object is read-only. Use tesseract.remove() to change it.'
+    throw new TypeError('This object is read-only. Use tesseract.remove() to change it.')
   },
 
   has (target, key) {
@@ -278,21 +278,6 @@ function mergeActions(local, remote) {
   return state
 }
 
-function setFieldValue(state, targetId, targetKey, value) {
-  if (!state.hasIn(['objects', targetId])) throw 'Target object does not exist'
-  if (typeof targetKey !== 'string' || targetKey === '') throw 'Field name must be a string'
-  if (isObject(value)) throw 'Field value must be a primitive'
-  if (typeof value === 'undefined') throw 'Field value must be defined'
-  return applyAction(state, makeAction(state, { action: 'set', target: targetId, key: targetKey, value: value }))
-}
-
-function setFieldLink(state, fromId, fromKey, toId) {
-  if (!state.hasIn(['objects', fromId])) throw 'Referencing object does not exist'
-  if (!state.hasIn(['objects', toId])) throw 'Referenced object does not exist'
-  if (typeof fromKey !== 'string' || fromKey === '') throw 'Field name must be a string'
-  return applyAction(state, makeAction(state, { action: 'link', target: fromId, key: fromKey, value: toId }))
-}
-
 function insertAfter(state, listId, elemId) {
   if (!state.hasIn(['objects', listId])) throw 'List object does not exist'
   if (!state.hasIn(['objects', listId, elemId])) throw 'Preceding list element does not exist'
@@ -319,11 +304,13 @@ function createNestedObjects(state, value) {
 }
 
 function setField(state, fromId, fromKey, value) {
-  if (!isObject(value)) {
-    return setFieldValue(state, fromId, fromKey, value)
+  if (typeof value === 'undefined') {
+    return deleteField(state, fromId, fromKey)
+  } else if (!isObject(value)) {
+    return applyAction(state, makeAction(state, { action: 'set', target: fromId, key: fromKey, value: value }))
   } else {
     const [newState, objId] = createNestedObjects(state, value)
-    return setFieldLink(newState, fromId, fromKey, objId)
+    return applyAction(newState, makeAction(newState, { action: 'link', target: fromId, key: fromKey, value: objId }))
   }
 }
 
@@ -336,7 +323,8 @@ function insertAt(state, listId, index, value) {
     next = obj.getIn([next, 'next'])
   }
 
-  if (i < index) throw 'Cannot insert past the end of the list'
+  if (i < index) throw new RangeError('Cannot insert at index ' + index +
+                                      ', which is past the end of the list')
   const [newState, newElem] = insertAfter(state, listId, prev)
   return setField(newState, listId, newElem, value)
 }
@@ -366,14 +354,15 @@ function deleteField(state, targetId, key) {
       if (i === key) break
       elem = obj.getIn([elem, 'next'])
     }
-    if (!elem) throw 'Cannot delete list element that does not exist'
+    if (!elem) throw new RangeError('Index ' + key + ' passed to tesseract.remove ' +
+                                    'is past the end of the list')
     key = elem
   }
 
-  if (!obj.has(key)) throw 'Cannot delete field that does not exist'
+  if (!obj.has(key)) throw new RangeError('Field name passed to tesseract.remove ' +
+                                          'does not exist: ' + key)
   return applyAction(state, makeAction(state, { action: 'del', target: targetId, key: key }))
 }
-
 
 ///// Mutation API
 
@@ -392,30 +381,60 @@ function init(storeId) {
   }))
 }
 
-function set(target, key, value) {
-  if (!target || !target._id) throw 'Cannot modify object that does not exist'
-  if (target._type === 'list') {
-    if (typeof key !== 'number' || key < 0) throw 'Invalid index'
-    return makeStore(setListIndex(target._state, target._id, key, value))
+function checkTarget(funcName, target) {
+  if (!target || !target._state || !target._id || !target._state.hasIn(['objects', target._id])) {
+    throw new TypeError('The first argument to tesseract.' + funcName +
+                        ' must be the object to modify, but you passed ' + target)
   }
-  if (key.startsWith('_')) throw 'Invalid key'
-  return makeStore(setField(target._state, target._id, key, value))
+}
+
+function checkTargetKey(funcName, target, key) {
+  checkTarget(funcName, target)
+  if (target._type === 'map') {
+    if (typeof key !== 'string')
+      throw new TypeError('You are modifying a map, so the second argument to tesseract.' +
+                          funcName + ' must be a string. However, you passed ' + key)
+    if (key === '')
+      throw new RangeError('The second argument to tesseract.' + funcName +
+                           ' must not be an empty string')
+    if (key.startsWith('_'))
+      throw new RangeError('Fields starting with underscore are reserved. Bad second argument ' +
+                           'to tesseract.' + funcName + ': ' + key)
+  } else if (target._type === 'list') {
+    if (typeof key !== 'number')
+      throw new TypeError('You are modifying a list, so the second argument to tesseract.' +
+                          funcName + ' must be a numerical index. However, you passed ' + key)
+    if (key < 0)
+      throw new RangeError('The second argument to tesseract.' + funcName + ' must not be negative')
+  } else {
+    throw new TypeError('Unexpected target object type ' + target._type)
+  }
+}
+
+function set(target, key, value) {
+  checkTargetKey('set', target, key)
+  if (target._type === 'list') {
+    return makeStore(setListIndex(target._state, target._id, key, value))
+  } else {
+    return makeStore(setField(target._state, target._id, key, value))
+  }
 }
 
 function insert(target, index, value) {
-  if (!target || !target._id) throw 'Cannot modify an object that does not exist'
-  if (target._type !== 'list') throw 'Cannot insert into a map'
-  if (typeof index !== 'number' || index < 0) throw 'Invalid index'
+  checkTargetKey('insert', target, index)
+  if (target._type !== 'list') throw new TypeError('Cannot insert into a map, only into a list')
   return makeStore(insertAt(target._state, target._id, index, value))
 }
 
 function remove(target, key) {
-  if (!target || !target._id) throw 'Cannot modify an object that does not exist'
+  checkTargetKey('remove', target, key)
   return makeStore(deleteField(target._state, target._id, key))
 }
 
 function merge(local, remote) {
-  if (local._state.get('_id') === remote._state.get('_id')) throw 'Cannot merge a store with itself'
+  checkTarget('merge', local)
+  if (local._state.get('_id') === remote._state.get('_id'))
+    throw new RangeError('Cannot merge a store with itself')
   return makeStore(mergeActions(local._state, remote._state))
 }
 
@@ -425,6 +444,7 @@ function load(string, storeId) {
 }
 
 function save(store) {
+  checkTarget('save', store)
   return transit.toJSON(store._state.filter((v, k) => k !== '_id'))
 }
 
