@@ -341,6 +341,22 @@ function insertAt(state, listId, index, value) {
   return setField(newState, listId, newElem, value)
 }
 
+function setListIndex(state, listId, index, value) {
+  const obj = state.getIn(['objects', listId])
+  let i = -1, elem = obj.getIn(['_head', 'next'])
+  while (elem) {
+    if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+    if (i === index) break
+    elem = obj.getIn([elem, 'next'])
+  }
+
+  if (elem) {
+    return setField(state, listId, elem, value)
+  } else {
+    return insertAt(state, listId, index, value)
+  }
+}
+
 function deleteField(state, targetId, key) {
   const obj = state.getIn(['objects', targetId])
   if (obj.get('_type') === 'list' && typeof key === 'number') {
@@ -378,6 +394,10 @@ function init(storeId) {
 
 function set(target, key, value) {
   if (!target || !target._id) throw 'Cannot modify object that does not exist'
+  if (target._type === 'list') {
+    if (typeof key !== 'number' || key < 0) throw 'Invalid index'
+    return makeStore(setListIndex(target._state, target._id, key, value))
+  }
   if (key.startsWith('_')) throw 'Invalid key'
   return makeStore(setField(target._state, target._id, key, value))
 }
