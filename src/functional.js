@@ -395,6 +395,7 @@ function remove(target, key) {
 }
 
 function merge(local, remote) {
+  if (local._state.get('_id') === remote._state.get('_id')) throw 'Cannot merge a store with itself'
   return makeStore(mergeActions(local._state, remote._state))
 }
 
