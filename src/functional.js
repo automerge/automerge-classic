@@ -399,12 +399,13 @@ function merge(local, remote) {
   return makeStore(mergeActions(local._state, remote._state))
 }
 
-function load(string) {
-  return makeStore(transit.fromJSON(string))
+function load(string, storeId) {
+  if (!storeId) storeId = UUID.generate()
+  return makeStore(transit.fromJSON(string).set('_id', storeId))
 }
 
 function save(store) {
-  return transit.toJSON(store._state)
+  return transit.toJSON(store._state.filter((v, k) => k !== '_id'))
 }
 
 function equals(val1, val2) {
