@@ -93,11 +93,13 @@ const MapHandler = {
   },
 
   set (target, key, value) {
-    throw new TypeError('This object is read-only. Use tesseract.set() to change it.')
+    throw new TypeError('You tried to set property ' + key + ' to ' + value + ', but this object ' +
+                        'is read-only. Please use tesseract.set() to change it.')
   },
 
   deleteProperty (target, key) {
-    throw new TypeError('This object is read-only. Use tesseract.remove() to change it.')
+    throw new TypeError('You tried to delete the property ' + key + ', but this object ' +
+                        'is read-only. Please use tesseract.remove() to change it.')
   },
 
   has (target, key) {
@@ -129,11 +131,13 @@ const ListHandler = {
   },
 
   set (target, key, value) {
-    throw new TypeError('This object is read-only. Use tesseract.set() to change it.')
+    throw new TypeError('You tried to set the list index ' + key + ' to ' + value +
+                        ', but this object is read-only. Please use tesseract.set() to change it.')
   },
 
   deleteProperty (target, key) {
-    throw new TypeError('This object is read-only. Use tesseract.remove() to change it.')
+    throw new TypeError('You tried to delete the list index ' + key + ', but this object ' +
+                        'is read-only. Please use tesseract.remove() to change it.')
   },
 
   has (target, key) {
