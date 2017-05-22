@@ -49,6 +49,12 @@ describe('Tesseract', () => {
         assert.strictEqual(s1._id, '00000000-0000-0000-0000-000000000000')
       })
 
+      it('should know its store ID', () => {
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1._store_id))
+        assert.notEqual(s1._store_id, '00000000-0000-0000-0000-000000000000')
+        assert.strictEqual(tesseract.init('customStoreId')._store_id, 'customStoreId')
+      })
+
       it('should handle single-property assignment', () => {
         s1 = tesseract.set(s1, 'foo', 'bar')
         s1 = tesseract.set(s1, 'zip', 'zap')

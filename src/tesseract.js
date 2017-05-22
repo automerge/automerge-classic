@@ -88,6 +88,7 @@ const MapHandler = {
     if (key === '_type') return 'map'
     if (key === '_id') return target.get('id')
     if (key === '_state') return target.get('state')
+    if (key === '_store_id') return target.getIn(['state', '_id'])
     if (key === '_conflicts') return getObjectConflicts(target.get('state'), target.get('id'))
     return getActionValue(target.get('state'), obj.getIn([key, 'actions'], List()).first())
   },
@@ -124,6 +125,7 @@ const ListHandler = {
     if (key === '_type') return 'list'
     if (key === '_id') return target.get('id')
     if (key === '_state') return target.get('state')
+    if (key === '_store_id') return target.getIn(['state', '_id'])
     if (key === 'length') return listLength(obj)
     if (obj && typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return listElemByIndex(target.get('state'), obj, parseInt(key))
