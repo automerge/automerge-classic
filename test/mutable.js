@@ -7,7 +7,7 @@ var assert = require('assert');
 let tesseract = require('../src/mutable')
 let Store = tesseract.Store
 
-describe('Tesseract', function() {
+describe('Mutable Tesseract', function() {
   var s1,s2,s3,s4,s5,s6;
   describe('CRDTs', function() {
     beforeEach(function() {
