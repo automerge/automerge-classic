@@ -76,7 +76,7 @@ describe('Tesseract', () => {
         s1 = tesseract.remove(s1, 'foo')
         assert.strictEqual(s1.foo, undefined)
         assert.strictEqual(s1.something, null)
-        // assert.deepEqual(s1, {something: null}) // TODO
+        assert.deepEqual(s1, {something: null})
       })
 
       it('should allow the type of a property to be changed', () => {
@@ -179,14 +179,14 @@ describe('Tesseract', () => {
         s1 = tesseract.set(s1, 'textStyle', {typeface: 'Optima', bold: false, fontSize: 12})
         s1 = tesseract.remove(s1.textStyle, 'bold')
         assert.strictEqual(s1.textStyle.bold, undefined)
-        // assert.deepEqual(s1, {textStyle: {typeface: 'Optima', fontSize: 12}}) // TODO
+        assert.deepEqual(s1, {textStyle: {typeface: 'Optima', fontSize: 12}})
       })
 
       it('should handle deletion of references to a map', () => {
         s1 = tesseract.assign(s1, {title: 'Hello', textStyle: {typeface: 'Optima', fontSize: 12}})
         s1 = tesseract.remove(s1, 'textStyle')
         assert.strictEqual(s1.textStyle, undefined)
-        // assert.deepEqual(s1, {title: 'Hello'}) // TODO
+        assert.deepEqual(s1, {title: 'Hello'})
       })
 
       it('should validate field names', () => {

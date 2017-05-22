@@ -33,20 +33,30 @@ function getActionValue(state, action) {
   }
 }
 
+function isFieldPresent(obj, key) {
+  if (typeof obj === undefined) return false
+  if (typeof key !== 'string' || key === '' || key.startsWith('_')) return false
+  return obj.hasIn([key, 'actions']) && !obj.getIn([key, 'actions']).isEmpty()
+}
+
 function getObjectValue(state, id) {
   const src = state.getIn(['objects', id])
   if (src.get('_type') === 'map') {
     let obj = {}
-    src.filterNot((field, key) => key.startsWith('_') || field.get('actions', List()).isEmpty())
-      .forEach((field, key) => { obj[key] = getActionValue(state, field.get('actions').first()) })
+    src.forEach((field, key) => {
+      if (isFieldPresent(src, key)) {
+        obj[key] = getActionValue(state, field.get('actions').first())
+      }
+    })
     return obj
   }
 
   if (src.get('_type') === 'list') {
     let list = [], elem = '_head'
     while (elem) {
-      const actions = src.get(elem).get('actions', List())
-      if (!actions.isEmpty()) list.push(getActionValue(state, actions.first()))
+      if (isFieldPresent(src, elem)) {
+        list.push(getActionValue(state, src.getIn([elem, 'actions']).first()))
+      }
       elem = src.getIn([elem, 'next'])
     }
     return list
@@ -54,8 +64,9 @@ function getObjectValue(state, id) {
 }
 
 function getObjectConflicts(state, id) {
-  return state.getIn(['objects', id])
-    .filter((field, key) => field.size > 1)
+  const obj = state.getIn(['objects', id])
+  return obj
+    .filter((field, key) => isFieldPresent(obj, key) && field.get('actions').size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
       .mapEntries(([idx, action]) => [action.get('by'), getActionValue(state, action)])
     ]).toJS()
@@ -64,7 +75,7 @@ function getObjectConflicts(state, id) {
 function listElemByIndex(state, obj, index) {
   let i = -1, elem = obj.getIn(['_head', 'next'])
   while (elem) {
-    if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+    if (isFieldPresent(obj, elem)) i += 1
     if (i === index) return getActionValue(state, obj.getIn([elem, 'actions']).first())
     elem = obj.getIn([elem, 'next'])
   }
@@ -73,7 +84,7 @@ function listElemByIndex(state, obj, index) {
 function listLength(obj) {
   let length = 0, elem = obj.getIn(['_head', 'next'])
   while (elem) {
-    if (!obj.get(elem).get('actions', List()).isEmpty()) length += 1
+    if (isFieldPresent(obj, elem)) i += 1
     elem = obj.getIn([elem, 'next'])
   }
   return length
@@ -104,17 +115,20 @@ const MapHandler = {
   },
 
   has (target, key) {
-    return target.hasIn(['state', 'objects', target.get('id'), key])
+    return (key === '_type') || (key === '_id') || (key === '_state') ||
+      (key === '_store_id') || (key === '_conflicts') ||
+      isFieldPresent(target.getIn(['state', 'objects', target.get('id')]), key)
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (!key.startsWith('_') && target.hasIn(['state', 'objects', target.get('id'), key])) {
+    if (isFieldPresent(target.getIn(['state', 'objects', target.get('id')]), key)) {
       return {configurable: true, enumerable: true}
     }
   },
 
   ownKeys (target) {
-    return target.getIn(['state', 'objects', target.get('id')]).keySeq().toJS()
+    const obj = target.getIn(['state', 'objects', target.get('id')])
+    return obj.keySeq().filter(key => isFieldPresent(obj, key)).toJS()
   }
 }
 
