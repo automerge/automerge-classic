@@ -98,7 +98,7 @@ describe('Tesseract', () => {
       })
 
       it('should not allow strings to begin with underscore', () => {
-        assert.throws(() => { tesseract.set(s1, '_foo', 'x') }, /Fields starting with underscore are reserved/)
+        assert.throws(() => { tesseract.set(s1, '_foo', 'x') }, /Map entries starting with underscore are not allowed/)
       })
     })
 
@@ -193,9 +193,9 @@ describe('Tesseract', () => {
         s1 = tesseract.set(s1, 'nested', {})
         assert.throws(() => { tesseract.set(s1.nested, 0, 'x') }, /must be a string/)
         assert.throws(() => { tesseract.set(s1.nested, '', 'x') }, /must not be an empty string/)
-        // assert.throws(() => { tesseract.set(s1, 'nested', {'': 'x'}) }, /must not be an empty string/) // TODO
-        assert.throws(() => { tesseract.set(s1.nested, '_foo', 'x') }, /Fields starting with underscore are reserved/)
-        // assert.throws(() => { tesseract.set(s1, 'nested', {'_foo': 'x'}) }, /Fields starting with underscore are reserved/) // TODO
+        assert.throws(() => { tesseract.set(s1, 'nested', {'': 'x'}) }, /must not be an empty string/)
+        assert.throws(() => { tesseract.set(s1.nested, '_foo', 'x') }, /Map entries starting with underscore are not allowed/)
+        assert.throws(() => { tesseract.set(s1, 'nested', {'_foo': 'x'}) }, /Map entries starting with underscore are not allowed/)
       })
     })
 

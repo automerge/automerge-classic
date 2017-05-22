@@ -305,6 +305,18 @@ function insertAfter(state, listId, elemId) {
   return [applyAction(state, makeAction(state, { action: 'ins', target: listId, after: elemId, elem: newId })), newId]
 }
 
+function keyError(key) {
+  if (typeof key !== 'string') {
+    return 'The key of a map entry must be a string, but ' + key + ' is a ' + (typeof key)
+  }
+  if (key === '') {
+    return 'The key of a map entry must not be an empty string'
+  }
+  if (key.startsWith('_')) {
+    return 'Map entries starting with underscore are not allowed: ' + key
+  }
+}
+
 function createNestedObjects(state, value) {
   if (typeof value._id === 'string') return [state, value._id]
   const objId = UUID.generate()
@@ -324,6 +336,8 @@ function createNestedObjects(state, value) {
 }
 
 function setField(state, fromId, fromKey, value) {
+  const error = keyError(fromKey)
+  if (error) throw new TypeError(error)
   if (typeof value === 'undefined') {
     return deleteField(state, fromId, fromKey)
   } else if (!isObject(value)) {
@@ -411,15 +425,8 @@ function checkTarget(funcName, target) {
 function checkTargetKey(funcName, target, key) {
   checkTarget(funcName, target)
   if (target._type === 'map') {
-    if (typeof key !== 'string')
-      throw new TypeError('You are modifying a map, so the second argument to tesseract.' +
-                          funcName + ' must be a string. However, you passed ' + key)
-    if (key === '')
-      throw new RangeError('The second argument to tesseract.' + funcName +
-                           ' must not be an empty string')
-    if (key.startsWith('_'))
-      throw new RangeError('Fields starting with underscore are reserved. Bad second argument ' +
-                           'to tesseract.' + funcName + ': ' + key)
+    const error = keyError(key)
+    if (error) throw new TypeError('Bad second argument to tesseract.' + funcName + ': ' + error)
     return key
   } else if (target._type === 'list') {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
