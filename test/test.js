@@ -105,6 +105,7 @@ describe('Tesseract', () => {
     describe('nested maps', () => {
       it('should assign a UUID to nested maps', () => {
         s1 = tesseract.set(s1, 'nested', {})
+        assert.deepEqual(s1, {nested: {}})
         assert.deepEqual(s1.nested, {})
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.nested._id))
         assert.notEqual(s1.nested._id, '00000000-0000-0000-0000-000000000000')
@@ -197,9 +198,51 @@ describe('Tesseract', () => {
         assert.throws(() => { tesseract.set(s1.nested, '_foo', 'x') }, /Map entries starting with underscore are not allowed/)
         assert.throws(() => { tesseract.set(s1, 'nested', {'_foo': 'x'}) }, /Map entries starting with underscore are not allowed/)
       })
+
+      it('should not allow insertion', () => {
+        s1 = tesseract.set(s1, 'nested', {})
+        assert.throws(() => { tesseract.insert(s1, 0, 'hello') }, /Cannot insert into a map/)
+        assert.throws(() => { tesseract.insert(s1.nested, 0, 'hello') }, /Cannot insert into a map/)
+      })
     })
 
     describe('lists', () => {
+      it('should assign a UUID to nested lists', () => {
+        s1 = tesseract.set(s1, 'list', [])
+        assert.deepEqual(s1, {list: []})
+        assert.deepEqual(s1.list, [])
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.list._id))
+        assert.notEqual(s1.list._id, '00000000-0000-0000-0000-000000000000')
+      })
+
+      it('should insert new elements at the specified position', () => {
+        s1 = tesseract.set(s1, 'list', [])
+        s1 = tesseract.insert(s1.list, 0, 'one')
+        s1 = tesseract.insert(s1.list, 1, 'two')
+        s1 = tesseract.insert(s1.list, 0, 'zero')
+        assert.deepEqual(s1, {list: ['zero', 'one', 'two']})
+        assert.deepEqual(s1.list, ['zero', 'one', 'two'])
+        assert.strictEqual(s1.list[0], 'zero')
+        assert.strictEqual(s1.list[1], 'one')
+        assert.strictEqual(s1.list[2], 'two')
+      })
+
+      it('should handle assignment of a list literal', () => {
+        s1 = tesseract.set(s1, 'list', ['zero', 'one', 'two'])
+        assert.deepEqual(s1, {list: ['zero', 'one', 'two']})
+        assert.deepEqual(s1.list, ['zero', 'one', 'two'])
+        assert.strictEqual(s1.list[0], 'zero')
+        assert.strictEqual(s1.list[1], 'one')
+        assert.strictEqual(s1.list[2], 'two')
+      })
+
+      it('should behave like a JS array', () => {
+        s1 = tesseract.set(s1, 'list', ['zero', 'one'])
+        assert.strictEqual(s1.list[0], 'zero')
+        assert.strictEqual(s1.list[1], 'one')
+        assert.strictEqual(s1.list[2], undefined)
+        assert.strictEqual(s1.list.length, 2)
+      })
     })
   })
 

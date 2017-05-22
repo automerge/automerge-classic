@@ -84,7 +84,7 @@ function listElemByIndex(state, obj, index) {
 function listLength(obj) {
   let length = 0, elem = obj.getIn(['_head', 'next'])
   while (elem) {
-    if (isFieldPresent(obj, elem)) i += 1
+    if (isFieldPresent(obj, elem)) length += 1
     elem = obj.getIn([elem, 'next'])
   }
   return length
@@ -467,8 +467,8 @@ function assign(target, values) {
 }
 
 function insert(target, index, value) {
-  checkTargetKey('insert', target, index)
   if (target._type !== 'list') throw new TypeError('Cannot insert into a map, only into a list')
+  checkTargetKey('insert', target, index)
   return makeStore(insertAt(target._state, target._id, index, value))
 }
 
