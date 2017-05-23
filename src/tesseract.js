@@ -214,6 +214,16 @@ function causallyReady(state, action) {
     .isEmpty()
 }
 
+// Returns true if the action has already been applied to the state.
+function isRedundant(state, action) {
+  const seq = action.getIn(['clock', action.get('by')])
+  const actions = state.getIn(['actions', action.get('by')], List())
+  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
+  if (seq > actions.size) return false
+  if (!actions.get(seq - 1).equals(action)) throw 'Action inconsistency'
+  return true
+}
+
 function makeAction(state, action) {
   const storeId = state.get('_id')
   const clock = state
@@ -280,22 +290,21 @@ function applyAction(state, action) {
   throw 'Unknown action'
 }
 
-function mergeActions(local, remote) {
-  let applied = 0, state = local
-  do {
-    applied = 0
-    remote.get('actions').forEach((remoteActions, by) => {
-      const localActions = state.getIn(['actions', by], List())
-      for (let i = localActions.size; i < remoteActions.size; i++) {
-        const action = remoteActions.get(i)
-        if (causallyReady(state, action)) {
-          state = applyAction(state, action)
-          applied += 1
-        }
+function applyQueuedActions(state) {
+  let queue = List()
+  while (true) {
+    state.get('queue').forEach(action => {
+      if (causallyReady(state, action)) {
+        state = applyAction(state, action)
+      } else if (!isRedundant(state, action)) {
+        queue = queue.push(action)
       }
     })
-  } while (applied > 0)
-  return state
+
+    if (queue.count() === state.get('queue').count()) return state
+    state = state.set('queue', queue)
+    queue = List()
+  }
 }
 
 function insertAfter(state, listId, elemId) {
@@ -410,6 +419,7 @@ function init(storeId) {
   const _uuid = storeId || UUID.generate()
   return makeStore(fromJS({
     _id:     _uuid,
+    queue:   [],
     actions: { [_uuid]:   [] },
     objects: { [root_id]: {_type: 'map'} }
   }))
@@ -477,13 +487,6 @@ function remove(target, key) {
   return makeStore(deleteField(target._state, target._id, key))
 }
 
-function merge(local, remote) {
-  checkTarget('merge', local)
-  if (local._state.get('_id') === remote._state.get('_id'))
-    throw new RangeError('Cannot merge a store with itself')
-  return makeStore(mergeActions(local._state, remote._state))
-}
-
 function load(string, storeId) {
   if (!storeId) storeId = UUID.generate()
   return makeStore(transit.fromJSON(string).set('_id', storeId))
@@ -505,4 +508,41 @@ function equals(val1, val2) {
   return true
 }
 
-module.exports = { init, set, assign, insert, remove, merge, load, save, equals }
+// Network communication API
+
+function getVClock(store) {
+  checkTarget('getVClock', store)
+  return store._state
+    .get('actions')
+    .mapEntries(([id, actions]) => [id, actions.size])
+    .toJS()
+}
+
+function getDeltas(store, vclock) {
+  checkTarget('getDeltas', store)
+  let queue = []
+  store._state.get('actions').forEach((actions, source) => {
+    for (let i = vclock[source] || 0; i < actions.size; i++) {
+      queue.push(actions.get(i).toJS())
+    }
+  })
+  return queue
+}
+
+function applyDeltas(store, deltas) {
+  checkTarget('applyDeltas', store)
+  const queue = store._state.get('queue').concat(fromJS(deltas))
+  return makeStore(applyQueuedActions(store._state.set('queue', queue)))
+}
+
+function merge(local, remote) {
+  checkTarget('merge', local)
+  if (local._state.get('_id') === remote._state.get('_id'))
+    throw new RangeError('Cannot merge a store with itself')
+  return applyDeltas(local, getDeltas(remote, getVClock(local)))
+}
+
+module.exports = {
+  init, set, assign, insert, remove, load, save, equals,
+  getVClock, getDeltas, applyDeltas, merge
+}

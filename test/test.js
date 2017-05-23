@@ -275,4 +275,96 @@ describe('Tesseract', () => {
       assert.deepEqual(s3, {'foo': {'key': 'val', 'hello': 'world'}, 'aaa': {'bbb': 'ccc'}})
     })
   })
+
+  describe('network communication API', () => {
+    let s1, s2, s3
+    beforeEach(() => {
+      s1 = tesseract.init()
+      s2 = tesseract.init()
+      s3 = tesseract.init()
+    })
+
+    it('should do nothing when the store is empty', () => {
+      assert.deepEqual(tesseract.getVClock(s1), {[s1._store_id]: 0})
+      assert.deepEqual(tesseract.getDeltas(s2, tesseract.getVClock(s1)), [])
+      assert.deepEqual(tesseract.applyDeltas(s1, []), {})
+    })
+
+    it('should generate deltas representing changes', () => {
+      s1 = tesseract.set(s1, 's1', 's1')
+      s2 = tesseract.set(s2, 's2', 's2')
+      assert.deepEqual(tesseract.getVClock(s1), {[s1._store_id]: 1})
+      assert.deepEqual(tesseract.getVClock(s2), {[s2._store_id]: 1})
+      const act1 = tesseract.getDeltas(s1, tesseract.getVClock(s2))
+      const act2 = tesseract.getDeltas(s2, tesseract.getVClock(s1))
+      assert.deepEqual(act1, [{
+        action: 'set', by: s1._store_id, clock: {[s1._store_id]: 1},
+        target: '00000000-0000-0000-0000-000000000000', key: 's1', value: 's1'
+      }])
+      assert.deepEqual(act2, [{
+        action: 'set', by: s2._store_id, clock: {[s2._store_id]: 1},
+        target: '00000000-0000-0000-0000-000000000000', key: 's2', value: 's2'
+      }])
+      s1 = tesseract.applyDeltas(s1, act2)
+      s2 = tesseract.applyDeltas(s2, act1)
+      assert.deepEqual(s1, {s1: 's1', s2: 's2'})
+      assert.deepEqual(s2, {s1: 's1', s2: 's2'})
+    })
+
+    it('should determine deltas missing from other stores', () => {
+      s1 = tesseract.set(s1, 'cheeses', ['Comté', 'Stilton'])
+      s2 = tesseract.merge(s2, s1)
+      s2 = tesseract.insert(s2.cheeses, 2, 'Mozzarella')
+      s1 = tesseract.merge(s1, s2)
+      s1 = tesseract.remove(s1.cheeses, 2)
+      s2 = tesseract.insert(s2.cheeses, 1, 'Jarlsberg')
+      const act1 = tesseract.getDeltas(s1, tesseract.getVClock(s2))
+      const act2 = tesseract.getDeltas(s2, tesseract.getVClock(s1))
+      assert.deepEqual(act1.map(a => a.action), ['del'])
+      assert.deepEqual(act2.map(a => a.action), ['ins', 'set'])
+      assert.strictEqual(act2[1].value, 'Jarlsberg')
+    })
+
+    it('should ignore duplicate deliveries', () => {
+      s1 = tesseract.set(s1, 'cheeses', [])
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.insert(s1.cheeses, 0, 'Wensleydale')
+      const act1 = tesseract.getDeltas(s1, tesseract.getVClock(s2))
+      s2 = tesseract.applyDeltas(s2, act1)
+      assert.deepEqual(s2, {cheeses: ['Wensleydale']})
+      s2 = tesseract.applyDeltas(s2, act1)
+      assert.deepEqual(s2, {cheeses: ['Wensleydale']})
+    })
+
+    it('should handle out-of-order delivery', () => {
+      s1 = tesseract.set(s1, 'score', 1)
+      s1 = tesseract.set(s1, 'score', 2)
+      const act1 = tesseract.getDeltas(s1, tesseract.getVClock(s2))
+      assert.deepEqual(act1.map(a => a.action), ['set', 'set'])
+      assert.deepEqual(act1.map(a => a.value), [1, 2])
+      s2 = tesseract.applyDeltas(s2, [act1[1]])
+      assert.deepEqual(s2, {})
+      s2 = tesseract.applyDeltas(s2, [act1[0]])
+      assert.deepEqual(s2, {score: 2})
+    })
+
+    it('should buffer actions until causally ready', () => {
+      s1 = tesseract.set(s1, 'cheeses', [])
+      s2 = tesseract.merge(s2, s1)
+      s3 = tesseract.merge(s3, s1)
+      s1 = tesseract.insert(s1.cheeses, 0, 'Paneer')
+      const act1 = tesseract.getDeltas(s1, tesseract.getVClock(s2))
+      assert.deepEqual(act1.map(a => a.action), ['ins', 'set'])
+      assert.strictEqual(act1[1].value, 'Paneer')
+      s2 = tesseract.merge(s2, s1)
+      s2 = tesseract.insert(s2.cheeses, 1, 'Feta')
+      const act2 = tesseract.getDeltas(s2, tesseract.getVClock(s1))
+      assert.deepEqual(act2.map(a => a.action), ['ins', 'set'])
+      assert.strictEqual(act2[1].value, 'Feta')
+      s3 = tesseract.applyDeltas(s3, act2)
+      assert.deepEqual(s3, {cheeses: []})
+      s3 = tesseract.applyDeltas(s3, act1)
+      assert.deepEqual(s3, {cheeses: ['Paneer', 'Feta']})
+    })
+  })
 })
