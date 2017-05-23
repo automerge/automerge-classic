@@ -518,8 +518,8 @@ function getVClock(store) {
     .toJS()
 }
 
-function getDeltas(store, vclock) {
-  checkTarget('getDeltas', store)
+function getDeltasAfter(store, vclock) {
+  checkTarget('getDeltasAfter', store)
   let queue = []
   store._state.get('actions').forEach((actions, source) => {
     for (let i = vclock[source] || 0; i < actions.size; i++) {
@@ -539,10 +539,10 @@ function merge(local, remote) {
   checkTarget('merge', local)
   if (local._state.get('_id') === remote._state.get('_id'))
     throw new RangeError('Cannot merge a store with itself')
-  return applyDeltas(local, getDeltas(remote, getVClock(local)))
+  return applyDeltas(local, getDeltasAfter(remote, getVClock(local)))
 }
 
 module.exports = {
   init, set, assign, insert, remove, load, save, equals,
-  getVClock, getDeltas, applyDeltas, merge
+  getVClock, getDeltasAfter, applyDeltas, merge
 }
