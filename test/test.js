@@ -1,20 +1,6 @@
 const assert = require('assert')
 const tesseract = require('../src/tesseract')
 
-// Assertion that succeeds if the first argument deepEquals at least one of the
-// subsequent arguments (but we don't care which one)
-function equalsOneOf(actual, ...expected) {
-  assert(expected.length > 0)
-  for (let i = 0; i < expected.length; i++) {
-    try {
-      assert.deepEqual(actual, expected[i])
-      return // if we get here without an exception, that means success
-    } catch (e) {
-      if (e.name !== 'AssertionError' || i === expected.length - 1) throw e
-    }
-  }
-}
-
 describe('Tesseract', () => {
   describe('sequential use', () => {
     let s1, s2
@@ -24,10 +10,6 @@ describe('Tesseract', () => {
 
     it('should initially be an empty map', () => {
       assert.deepEqual(s1, {})
-      assert.deepEqual(Object.keys(s1), [])
-      assert.strictEqual(s1._type, 'map')
-      assert.strictEqual(s1.someProperty, undefined)
-      assert.strictEqual(s1['someProperty'], undefined)
     })
 
     it('should not mutate objects', () => {
@@ -45,23 +27,12 @@ describe('Tesseract', () => {
     })
 
     describe('root object', () => {
-      it('should have a fixed object ID', () => {
-        assert.strictEqual(s1._id, '00000000-0000-0000-0000-000000000000')
-      })
-
-      it('should know its store ID', () => {
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1._store_id))
-        assert.notEqual(s1._store_id, '00000000-0000-0000-0000-000000000000')
-        assert.strictEqual(tesseract.init('customStoreId')._store_id, 'customStoreId')
-      })
-
       it('should handle single-property assignment', () => {
         s1 = tesseract.set(s1, 'foo', 'bar')
         s1 = tesseract.set(s1, 'zip', 'zap')
         assert.strictEqual(s1.foo, 'bar')
         assert.strictEqual(s1.zip, 'zap')
         assert.deepEqual(s1, {'foo': 'bar', 'zip': 'zap'})
-        equalsOneOf(Object.keys(s1), ['foo', 'zip'], ['zip', 'foo'])
       })
 
       it('should handle multi-property assignment', () => {
