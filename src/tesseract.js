@@ -344,6 +344,11 @@ function equals(val1, val2) {
   return true
 }
 
+function inspect(store) {
+  checkTarget('inspect', store)
+  return JSON.parse(JSON.stringify(store))
+}
+
 // Network communication API
 
 function getVClock(store) {
@@ -379,6 +384,6 @@ function merge(local, remote) {
 }
 
 module.exports = {
-  init, set, assign, insert, remove, load, save, equals,
+  init, set, assign, insert, remove, load, save, equals, inspect,
   getVClock, getDeltasAfter, applyDeltas, merge
 }

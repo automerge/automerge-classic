@@ -71,16 +71,17 @@ function listLength(obj) {
 
 const MapHandler = {
   get (target, key) {
-    const obj = target.getIn(['state', 'objects', target.get('id')])
-    if (key === util.inspect.custom) return () => getObjectValue(target.get('state'), target.get('id'))
+    const state = target.get('state'), id = target.get('id'), obj = state.getIn(['objects', id])
+    if (key === util.inspect.custom) return () => getObjectValue(state, id)
     if (typeof key !== 'string') return target[key]
     if (obj === undefined) return undefined
+    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(state, id)))
     if (key === '_type') return 'map'
-    if (key === '_id') return target.get('id')
-    if (key === '_state') return target.get('state')
-    if (key === '_store_id') return target.getIn(['state', '_id'])
-    if (key === '_conflicts') return getObjectConflicts(target.get('state'), target.get('id'))
-    return getActionValue(target.get('state'), obj.getIn([key, 'actions'], List()).first())
+    if (key === '_id') return id
+    if (key === '_state') return state
+    if (key === '_store_id') return state.get('_id')
+    if (key === '_conflicts') return getObjectConflicts(state, id)
+    return getActionValue(state, obj.getIn([key, 'actions'], List()).first())
   },
 
   set (target, key, value) {
@@ -113,15 +114,16 @@ const MapHandler = {
 
 const ListHandler = {
   get (target, key) {
-    const obj = target.getIn(['state', 'objects', target.get('id')])
-    if (key === util.inspect.custom) return () => getObjectValue(target.get('state'), target.get('id'))
+    const [state, id] = target, obj = state.getIn(['objects', id])
+    if (key === util.inspect.custom) return () => getObjectValue(state, id)
+    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(state, id)))
     if (key === '_type') return 'list'
-    if (key === '_id') return target.get('id')
-    if (key === '_state') return target.get('state')
-    if (key === '_store_id') return target.getIn(['state', '_id'])
+    if (key === '_id') return id
+    if (key === '_state') return state
+    if (key === '_store_id') return state.get('_id')
     if (key === 'length') return listLength(obj)
     if (obj && typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return listElemByIndex(target.get('state'), obj, parseInt(key))
+      return listElemByIndex(state, obj, parseInt(key))
     }
   },
 
@@ -137,22 +139,25 @@ const ListHandler = {
 
   has (target, key) {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return parseInt(key) < listLength(target.getIn(['state', 'objects', target.get('id')]))
+      const [state, id] = target
+      return parseInt(key) < listLength(state.getIn(['objects', id]))
     }
-    return false
+    return key === 'length'
   },
 
   getOwnPropertyDescriptor (target, key) {
+    if (key === 'length') return {}
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      if (parseInt(key) < listLength(target.getIn(['state', 'objects', target.get('id')]))) {
+      const [state, id] = target
+      if (parseInt(key) < listLength(state.getIn(['objects', id]))) {
         return {configurable: true, enumerable: true}
       }
     }
   },
 
   ownKeys (target) {
-    const length = listLength(target.getIn(['state', 'objects', target.get('id')]))
-    let keys = []
+    const [state, id] = target, length = listLength(state.getIn(['objects', id]))
+    let keys = ['length']
     for (let i = 0; i < length; i++) keys.push(i.toString())
     return keys
   }
@@ -163,7 +168,7 @@ function mapProxy(state, id) {
 }
 
 function listProxy(state, id) {
-  return new Proxy(fromJS({state, id}), ListHandler)
+  return new Proxy([state, id], ListHandler)
 }
 
 module.exports = { mapProxy }
