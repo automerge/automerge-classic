@@ -256,7 +256,7 @@ describe('Tesseract', () => {
     })
 
     it('should do nothing when the store is empty', () => {
-      assert.deepEqual(tesseract.getVClock(s1), {[s1._store_id]: 0})
+      assert.deepEqual(tesseract.getVClock(s1), {})
       assert.deepEqual(tesseract.getDeltasAfter(s2, tesseract.getVClock(s1)), [])
       assert.deepEqual(tesseract.applyDeltas(s1, []), {})
     })
@@ -280,6 +280,17 @@ describe('Tesseract', () => {
       s2 = tesseract.applyDeltas(s2, act1)
       assert.deepEqual(s1, {s1: 's1', s2: 's2'})
       assert.deepEqual(s2, {s1: 's1', s2: 's2'})
+    })
+
+    it('should set the local sequence number after loading from file', () => {
+      s1 = tesseract.set(s1, 'bestFruit', 'banana')
+      s2 = tesseract.load(tesseract.save(s1))
+      s2 = tesseract.set(s2, 'bestFruit', 'pineapple')
+      const deltas = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
+      assert.deepEqual(deltas, [{
+        action: 'set', by: s2._store_id, clock: {[s1._store_id]: 1, [s2._store_id]: 1},
+        target: '00000000-0000-0000-0000-000000000000', key: 'bestFruit', value: 'pineapple'
+      }])
     })
 
     it('should determine deltas missing from other stores', () => {

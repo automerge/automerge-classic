@@ -38,6 +38,9 @@ function isConcurrent(action1, action2) {
 // Returns true if all actions that causally precede `action` have already been applied in `state`.
 function causallyReady(state, action) {
   const storeId = action.get('by')
+  const seq = action.getIn(['clock', storeId])
+  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
+
   return action.get('clock')
     .filterNot((seq, node) => {
       const applied = state.getIn(['actions', node], List()).size
@@ -64,7 +67,8 @@ function makeAction(state, action) {
   const storeId = state.get('_id')
   const clock = state
     .get('actions')
-    .mapEntries(([id, actions]) => [id, id === storeId ? actions.size + 1 : actions.size])
+    .mapEntries(([id, actions]) => [id, actions.size])
+    .set(storeId, state.getIn(['actions', storeId], List()).size + 1)
   return fromJS(action).merge({ by: storeId, clock })
 }
 
@@ -256,7 +260,7 @@ function init(storeId) {
   return makeStore(fromJS({
     _id:     _uuid,
     queue:   [],
-    actions: { [_uuid]:   [] },
+    actions: { },
     objects: { [root_id]: {_type: 'map'} }
   }))
 }
