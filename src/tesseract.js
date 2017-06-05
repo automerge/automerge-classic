@@ -1,5 +1,6 @@
 const { Map, List, fromJS } = require('immutable')
 const { mapProxy } = require('./proxies')
+const OpSet = require('./op_set')
 const transit = require('transit-immutable-js')
 
 var UUID = (function() {
@@ -22,136 +23,21 @@ function isObject(obj) {
   return typeof obj === 'object' && obj !== null
 }
 
-
-// Returns true if the two actions are concurrent, that is, they happened without being aware of
-// each other (neither happened before the other). Returns false if one supersedes the other.
-function isConcurrent(action1, action2) {
-  const [clock1, clock2] = [action1.get('clock'), action2.get('clock')]
-  let oneFirst = false, twoFirst = false
-  clock1.keySeq().concat(clock2.keySeq()).forEach(key => {
-    if (clock1.get(key, 0) < clock2.get(key, 0)) oneFirst = true
-    if (clock2.get(key, 0) < clock1.get(key, 0)) twoFirst = true
-  })
-  return oneFirst && twoFirst
-}
-
-// Returns true if all actions that causally precede `action` have already been applied in `state`.
-function causallyReady(state, action) {
-  const storeId = action.get('by')
-  const seq = action.getIn(['clock', storeId])
-  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
-
-  return action.get('clock')
-    .filterNot((seq, node) => {
-      const applied = state.getIn(['actions', node], List()).size
-      if (node === storeId) {
-        return seq === applied + 1
-      } else {
-        return seq <= applied
-      }
-    })
-    .isEmpty()
-}
-
-// Returns true if the action has already been applied to the state.
-function isRedundant(state, action) {
-  const seq = action.getIn(['clock', action.get('by')])
-  const actions = state.getIn(['actions', action.get('by')], List())
-  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
-  if (seq > actions.size) return false
-  if (!actions.get(seq - 1).equals(action)) throw 'Action inconsistency'
-  return true
-}
-
-function makeAction(state, action) {
-  const storeId = state.get('_id')
-  const clock = state
-    .get('actions')
-    .mapEntries(([id, actions]) => [id, actions.size])
-    .set(storeId, state.getIn(['actions', storeId], List()).size + 1)
-  return fromJS(action).merge({ by: storeId, clock })
-}
-
-function applyFieldAction(state, action) {
-  const target = action.get('target'), key = action.get('key')
-  const actions = state
-      .getIn(['objects', target, key], Map())
-      .get('actions', List())
-      .filter(other => isConcurrent(other, action))
-      .push(...(action.get('action') === 'del' ? [] : [action]))
-      .sortBy(a => a.get('by'))
-      .reverse()
-  return state.setIn(['objects', target, key, 'actions'], actions)
-}
-
-function parseLamport(stamp) {
-  const [, name, count] = /^(.*):(\d+)$/.exec(stamp) || []
-  if (count) return [name, parseInt(count)]
-}
-
-function lamportLessThan(stamp1, stamp2) {
-  const [name1, count1] = parseLamport(stamp1)
-  const [name2, count2] = parseLamport(stamp2)
-  return (count1 < count2) || (count1 === count2 && name1 < name2)
-}
-
-function applyInsertAction(state, action) {
-  const target = action.get('target'), after = action.get('after'), elem = action.get('elem')
-  const [elemName, elemCount] = parseLamport(elem)
-  if (elemCount > state.getIn(['objects', target, 'counter'])) {
-    state = state.setIn(['objects', target, 'counter'], elemCount)
-  }
-
-  let prev = after, next = state.getIn(['objects', target, after, 'next'])
-  while (next && lamportLessThan(elem, next)) {
-    prev = next
-    next = state.getIn(['objects', target, prev, 'next'])
-  }
-  return state
-    .setIn(['objects', target, prev, 'next'], elem)
-    .setIn(['objects', target, elem, 'next'], next)
-}
-
-function applyAction(state, action) {
-  if (!causallyReady(state, action)) throw 'Cannot apply action'
-  const by = action.get('by'), a = action.get('action')
-  state = state.setIn(['actions', by], state.getIn(['actions', by], List()).push(action))
-
-  if (a === 'set' || a === 'del' || a === 'link')
-    return applyFieldAction(state, action)
-  if (a === 'ins')
-    return applyInsertAction(state, action)
-  if (a === 'makeMap')
-    return state.setIn(['objects', action.get('target')],
-                       fromJS({_type: 'map'}))
-  if (a === 'makeList')
-    return state.setIn(['objects', action.get('target')],
-                       fromJS({_type: 'list', _head: {next: null}, counter: 0}))
-  throw 'Unknown action'
-}
-
-function applyQueuedActions(state) {
-  let queue = List()
-  while (true) {
-    state.get('queue').forEach(action => {
-      if (causallyReady(state, action)) {
-        state = applyAction(state, action)
-      } else if (!isRedundant(state, action)) {
-        queue = queue.push(action)
-      }
-    })
-
-    if (queue.count() === state.get('queue').count()) return state
-    state = state.set('queue', queue)
-    queue = List()
-  }
+function makeOp(state, opProps) {
+  const origin = state.get('_id')
+  const clock = OpSet.getVClock(state.get('ops'))
+    .set(origin, state.getIn(['ops', 'byActor', origin], List()).size + 1)
+  const op = fromJS(opProps).merge({ actor: origin, clock })
+  return state.set('ops', OpSet.add(state.get('ops'), op))
 }
 
 function insertAfter(state, listId, elemId) {
-  if (!state.hasIn(['objects', listId])) throw 'List object does not exist'
-  if (!state.hasIn(['objects', listId, elemId])) throw 'Preceding list element does not exist'
-  const newId = state.get('_id') + ':' + (state.getIn(['objects', listId, 'counter']) + 1)
-  return [applyAction(state, makeAction(state, { action: 'ins', target: listId, after: elemId, elem: newId })), newId]
+  if (!state.hasIn(['ops', 'byObject', listId])) throw 'List object does not exist'
+  if (!state.hasIn(['ops', 'byObject', listId, elemId]) && elemId !== '_head') {
+    throw 'Preceding list element does not exist'
+  }
+  const newId = state.get('_id') + ':' + (state.getIn(['ops', 'byObject', listId, '_counter'], 0) + 1)
+  return [makeOp(state, { action: 'ins', obj: listId, key: elemId, next: newId }), newId]
 }
 
 function keyError(key) {
@@ -171,15 +57,15 @@ function createNestedObjects(state, value) {
   const objId = UUID.generate()
 
   if (Array.isArray(value)) {
-    state = applyAction(state, makeAction(state, { action: 'makeList', target: objId }))
+    state = makeOp(state, { action: 'makeList', obj: objId })
     let elemId = '_head'
     for (let i = 0; i < value.length; i++) {
       [state, elemId] = insertAfter(state, objId, elemId)
       state = setField(state, objId, elemId, value[i])
     }
   } else {
-    state = applyAction(state, makeAction(state, { action: 'makeMap', target: objId }))
-    for (let key in value) state = setField(state, objId, key, value[key])
+    state = makeOp(state, { action: 'makeMap', obj: objId })
+    for (let key of Object.keys(value)) state = setField(state, objId, key, value[key])
   }
   return [state, objId]
 }
@@ -190,20 +76,19 @@ function setField(state, fromId, fromKey, value) {
   if (typeof value === 'undefined') {
     return deleteField(state, fromId, fromKey)
   } else if (!isObject(value)) {
-    return applyAction(state, makeAction(state, { action: 'set', target: fromId, key: fromKey, value: value }))
+    return makeOp(state, { action: 'set', obj: fromId, key: fromKey, value: value })
   } else {
     const [newState, objId] = createNestedObjects(state, value)
-    return applyAction(newState, makeAction(newState, { action: 'link', target: fromId, key: fromKey, value: objId }))
+    return makeOp(newState, { action: 'link', obj: fromId, key: fromKey, value: objId })
   }
 }
 
 function insertAt(state, listId, index, value) {
-  const obj = state.getIn(['objects', listId])
-  let i = 0, prev = '_head', next = obj.getIn(['_head', 'next'])
+  let i = 0, prev = '_head', next = OpSet.getNext(state.get('ops'), listId, prev)
   while (next && i < index) {
-    if (!obj.get(next).get('actions', List()).isEmpty()) i += 1
+    if (!OpSet.getFieldOps(state.get('ops'), listId, next).isEmpty()) i += 1
     prev = next
-    next = obj.getIn([next, 'next'])
+    next = OpSet.getNext(state.get('ops'), listId, prev)
   }
 
   if (i < index) throw new RangeError('Cannot insert at index ' + index +
@@ -213,12 +98,11 @@ function insertAt(state, listId, index, value) {
 }
 
 function setListIndex(state, listId, index, value) {
-  const obj = state.getIn(['objects', listId])
-  let i = -1, elem = obj.getIn(['_head', 'next'])
+  let i = -1, elem = OpSet.getNext(state.get('ops'), listId, '_head')
   while (elem) {
-    if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+    if (!OpSet.getFieldOps(state.get('ops'), listId, elem).isEmpty()) i += 1
     if (i === index) break
-    elem = obj.getIn([elem, 'next'])
+    elem = OpSet.getNext(state.get('ops'), listId, elem)
   }
 
   if (elem) {
@@ -228,23 +112,23 @@ function setListIndex(state, listId, index, value) {
   }
 }
 
-function deleteField(state, targetId, key) {
-  const obj = state.getIn(['objects', targetId])
-  if (obj.get('_type') === 'list' && typeof key === 'number') {
-    let i = -1, elem = obj.getIn(['_head', 'next'])
+function deleteField(state, objId, key) {
+  if (state.getIn(['ops', 'byObject', objId, '_init', 'action']) === 'makeList' && typeof key === 'number') {
+    let i = -1, elem = OpSet.getNext(state.get('ops'), objId, '_head')
     while (elem) {
-      if (!obj.get(elem).get('actions', List()).isEmpty()) i += 1
+      if (!OpSet.getFieldOps(state.get('ops'), objId, elem).isEmpty()) i += 1
       if (i === key) break
-      elem = obj.getIn([elem, 'next'])
+      elem = OpSet.getNext(state.get('ops'), objId, elem)
     }
     if (!elem) throw new RangeError('Index ' + key + ' passed to tesseract.remove ' +
                                     'is past the end of the list')
     key = elem
   }
 
-  if (!obj.has(key)) throw new RangeError('Field name passed to tesseract.remove ' +
-                                          'does not exist: ' + key)
-  return applyAction(state, makeAction(state, { action: 'del', target: targetId, key: key }))
+  if (!state.hasIn(['ops', 'byObject', objId, key])) {
+    throw new RangeError('Field name passed to tesseract.remove does not exist: ' + key)
+  }
+  return makeOp(state, { action: 'del', obj: objId, key: key })
 }
 
 ///// Mutation API
@@ -256,19 +140,15 @@ function makeStore(state) {
 }
 
 function init(storeId) {
-  const _uuid = storeId || UUID.generate()
-  return makeStore(fromJS({
-    _id:     _uuid,
-    queue:   [],
-    actions: { },
-    objects: { [root_id]: {_type: 'map'} }
-  }))
+  return makeStore(Map()
+    .set('_id', storeId || UUID.generate())
+    .set('ops', OpSet.init()))
 }
 
 function checkTarget(funcName, target) {
-  if (!target || !target._state || !target._id || !target._state.hasIn(['objects', target._id])) {
+  if (!target || !target._state || !target._id || !target._state.hasIn(['ops', 'byObject', target._id])) {
     throw new TypeError('The first argument to tesseract.' + funcName +
-                        ' must be the object to modify, but you passed ' + target)
+                        ' must be the object to modify, but you passed ' + Object.toString(target))
   }
 }
 
@@ -328,13 +208,16 @@ function remove(target, key) {
 }
 
 function load(string, storeId) {
-  if (!storeId) storeId = UUID.generate()
-  return makeStore(transit.fromJSON(string).set('_id', storeId))
+  let ops = OpSet.init()
+  transit.fromJSON(string).forEach(op => { ops = OpSet.add(ops, op) })
+  return makeStore(Map()
+    .set('_id', storeId || UUID.generate())
+    .set('ops', ops))
 }
 
 function save(store) {
   checkTarget('save', store)
-  return transit.toJSON(store._state.filter((v, k) => k !== '_id'))
+  return transit.toJSON(store._state.getIn(['ops', 'byActor']).valueSeq().flatMap(ops => ops))
 }
 
 function equals(val1, val2) {
@@ -357,18 +240,15 @@ function inspect(store) {
 
 function getVClock(store) {
   checkTarget('getVClock', store)
-  return store._state
-    .get('actions')
-    .mapEntries(([id, actions]) => [id, actions.size])
-    .toJS()
+  return OpSet.getVClock(store._state.get('ops')).toJS()
 }
 
 function getDeltasAfter(store, vclock) {
   checkTarget('getDeltasAfter', store)
   let queue = []
-  store._state.get('actions').forEach((actions, source) => {
-    for (let i = vclock[source] || 0; i < actions.size; i++) {
-      queue.push(actions.get(i).toJS())
+  store._state.getIn(['ops', 'byActor']).forEach((ops, origin) => {
+    for (let i = vclock[origin] || 0; i < ops.size; i++) {
+      queue.push(ops.get(i).toJS())
     }
   })
   return queue
@@ -376,8 +256,9 @@ function getDeltasAfter(store, vclock) {
 
 function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
-  const queue = store._state.get('queue').concat(fromJS(deltas))
-  return makeStore(applyQueuedActions(store._state.set('queue', queue)))
+  let ops = store._state.get('ops')
+  for (let delta of deltas) ops = OpSet.add(ops, fromJS(delta))
+  return makeStore(store._state.set('ops', ops))
 }
 
 function merge(local, remote) {

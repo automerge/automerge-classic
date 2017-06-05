@@ -1,87 +1,74 @@
 const { List, fromJS } = require('immutable')
 const util = require('util')
+const OpSet = require('./op_set')
 
-function getActionValue(state, action) {
-  if (typeof action !== 'object' || action === null) return action
-  const value = action.get('value')
-  if (action.get('action') === 'set') return value
-  if (action.get('action') === 'link') {
-    const type = state.getIn(['objects', value, '_type'])
+function getObjType(state, objId) {
+  const action = state.getIn(['ops', 'byObject', objId, '_init', 'action'])
+  if (action === 'makeMap') return 'map'
+  if (action === 'makeList') return 'list'
+}
+
+function getOpValue(state, op) {
+  if (typeof op !== 'object' || op === null) return op
+  const value = op.get('value')
+  if (op.get('action') === 'set') return value
+  if (op.get('action') === 'link') {
+    const type = getObjType(state, value)
     if (type === 'map')  return mapProxy(state, value)
     if (type === 'list') return listProxy(state, value)
   }
 }
 
-function isFieldPresent(obj, key) {
-  if (typeof obj === undefined) return false
-  if (typeof key !== 'string' || key === '' || key.startsWith('_')) return false
-  return obj.hasIn([key, 'actions']) && !obj.getIn([key, 'actions']).isEmpty()
+function validFieldName(key) {
+  return (typeof key === 'string' && key !== '' && !key.startsWith('_'))
 }
 
-function getObjectValue(state, id) {
-  const src = state.getIn(['objects', id])
-  if (src.get('_type') === 'map') {
-    let obj = {}
-    src.forEach((field, key) => {
-      if (isFieldPresent(src, key)) {
-        obj[key] = getActionValue(state, field.get('actions').first())
-      }
-    })
-    return obj
-  }
-
-  if (src.get('_type') === 'list') {
-    let list = [], elem = '_head'
-    while (elem) {
-      if (isFieldPresent(src, elem)) {
-        list.push(getActionValue(state, src.getIn([elem, 'actions']).first()))
-      }
-      elem = src.getIn([elem, 'next'])
-    }
-    return list
-  }
+function isFieldPresent(state, objId, key) {
+  return validFieldName(key) && !OpSet.getFieldOps(state.get('ops'), objId, key).isEmpty()
 }
 
-function getObjectConflicts(state, id) {
-  const obj = state.getIn(['objects', id])
-  return obj
-    .filter((field, key) => isFieldPresent(obj, key) && field.get('actions').size > 1)
+function getObjectConflicts(state, objId) {
+  return state
+    .getIn(['ops', 'byObject', objId])
+    .filter((field, key) => validFieldName(key) && OpSet.getFieldOps(state.get('ops'), objId, key).size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
-      .mapEntries(([idx, action]) => [action.get('by'), getActionValue(state, action)])
+      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(state, op)])
     ]).toJS()
 }
 
-function listElemByIndex(state, obj, index) {
-  let i = -1, elem = obj.getIn(['_head', 'next'])
+function listElemByIndex(state, listId, index) {
+  let i = -1, elem = OpSet.getNext(state.get('ops'), listId, '_head')
   while (elem) {
-    if (isFieldPresent(obj, elem)) i += 1
-    if (i === index) return getActionValue(state, obj.getIn([elem, 'actions']).first())
-    elem = obj.getIn([elem, 'next'])
+    const ops = OpSet.getFieldOps(state.get('ops'), listId, elem)
+    if (!ops.isEmpty()) i += 1
+    if (i === index) return getOpValue(state, ops.first())
+    elem = OpSet.getNext(state.get('ops'), listId, elem)
   }
 }
 
-function listLength(obj) {
-  let length = 0, elem = obj.getIn(['_head', 'next'])
+function listLength(state, listId) {
+  let length = 0, elem = OpSet.getNext(state.get('ops'), listId, '_head')
   while (elem) {
-    if (isFieldPresent(obj, elem)) length += 1
-    elem = obj.getIn([elem, 'next'])
+    if (!OpSet.getFieldOps(state.get('ops'), listId, elem).isEmpty()) length += 1
+    elem = OpSet.getNext(state.get('ops'), listId, elem)
   }
   return length
 }
 
 const MapHandler = {
   get (target, key) {
-    const state = target.get('state'), id = target.get('id'), obj = state.getIn(['objects', id])
-    if (key === util.inspect.custom) return () => getObjectValue(state, id)
-    if (typeof key !== 'string') return target[key]
-    if (obj === undefined) return undefined
-    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(state, id)))
+    const state = target.get('state'), objId = target.get('objId')
+    if (!state.hasIn(['ops', 'byObject', objId])) throw 'Target object does not exist: ' + objId
+    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(mapProxy(state, objId)))
+    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(state, objId)))
     if (key === '_type') return 'map'
-    if (key === '_id') return id
+    if (key === '_id') return objId
     if (key === '_state') return state
     if (key === '_store_id') return state.get('_id')
-    if (key === '_conflicts') return getObjectConflicts(state, id)
-    return getActionValue(state, obj.getIn([key, 'actions'], List()).first())
+    if (key === '_conflicts') return getObjectConflicts(state, objId)
+    if (!validFieldName(key)) return undefined
+    const ops = OpSet.getFieldOps(state.get('ops'), objId, key)
+    if (!ops.isEmpty()) return getOpValue(state, ops.first())
   },
 
   set (target, key, value) {
@@ -97,33 +84,38 @@ const MapHandler = {
   has (target, key) {
     return (key === '_type') || (key === '_id') || (key === '_state') ||
       (key === '_store_id') || (key === '_conflicts') ||
-      isFieldPresent(target.getIn(['state', 'objects', target.get('id')]), key)
+      isFieldPresent(target.get('state'), target.get('objId'), key)
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (isFieldPresent(target.getIn(['state', 'objects', target.get('id')]), key)) {
+    if (isFieldPresent(target.get('state'), target.get('objId'), key)) {
       return {configurable: true, enumerable: true}
     }
   },
 
   ownKeys (target) {
-    const obj = target.getIn(['state', 'objects', target.get('id')])
-    return obj.keySeq().filter(key => isFieldPresent(obj, key)).toJS()
+    const state = target.get('state'), objId = target.get('objId')
+    return state
+      .getIn(['ops', 'byObject', objId])
+      .keySeq()
+      .filter(key => isFieldPresent(state, objId, key))
+      .toJS()
   }
 }
 
 const ListHandler = {
   get (target, key) {
-    const [state, id] = target, obj = state.getIn(['objects', id])
-    if (key === util.inspect.custom) return () => getObjectValue(state, id)
-    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(state, id)))
+    const [state, objId] = target
+    if (!state.hasIn(['ops', 'byObject', objId])) throw 'Target object does not exist: ' + objId
+    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(state, objId)))
+    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(state, objId)))
     if (key === '_type') return 'list'
-    if (key === '_id') return id
+    if (key === '_id') return objId
     if (key === '_state') return state
     if (key === '_store_id') return state.get('_id')
-    if (key === 'length') return listLength(obj)
-    if (obj && typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return listElemByIndex(state, obj, parseInt(key))
+    if (key === 'length') return listLength(state, objId)
+    if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+      return listElemByIndex(state, objId, parseInt(key))
     }
   },
 
@@ -139,8 +131,7 @@ const ListHandler = {
 
   has (target, key) {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      const [state, id] = target
-      return parseInt(key) < listLength(state.getIn(['objects', id]))
+      return parseInt(key) < listLength(...target)
     }
     return key === 'length'
   },
@@ -148,27 +139,26 @@ const ListHandler = {
   getOwnPropertyDescriptor (target, key) {
     if (key === 'length') return {}
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      const [state, id] = target
-      if (parseInt(key) < listLength(state.getIn(['objects', id]))) {
+      if (parseInt(key) < listLength(...target)) {
         return {configurable: true, enumerable: true}
       }
     }
   },
 
   ownKeys (target) {
-    const [state, id] = target, length = listLength(state.getIn(['objects', id]))
+    const length = listLength(...target)
     let keys = ['length']
     for (let i = 0; i < length; i++) keys.push(i.toString())
     return keys
   }
 }
 
-function mapProxy(state, id) {
-  return new Proxy(fromJS({state, id}), MapHandler)
+function mapProxy(state, objId) {
+  return new Proxy(fromJS({state, objId}), MapHandler)
 }
 
-function listProxy(state, id) {
-  return new Proxy([state, id], ListHandler)
+function listProxy(state, objId) {
+  return new Proxy([state, objId], ListHandler)
 }
 
 module.exports = { mapProxy }

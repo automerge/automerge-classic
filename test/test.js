@@ -269,12 +269,12 @@ describe('Tesseract', () => {
       const act1 = tesseract.getDeltasAfter(s1, tesseract.getVClock(s2))
       const act2 = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(act1, [{
-        action: 'set', by: s1._store_id, clock: {[s1._store_id]: 1},
-        target: '00000000-0000-0000-0000-000000000000', key: 's1', value: 's1'
+        action: 'set', actor: s1._store_id, clock: {[s1._store_id]: 1},
+        obj: '00000000-0000-0000-0000-000000000000', key: 's1', value: 's1'
       }])
       assert.deepEqual(act2, [{
-        action: 'set', by: s2._store_id, clock: {[s2._store_id]: 1},
-        target: '00000000-0000-0000-0000-000000000000', key: 's2', value: 's2'
+        action: 'set', actor: s2._store_id, clock: {[s2._store_id]: 1},
+        obj: '00000000-0000-0000-0000-000000000000', key: 's2', value: 's2'
       }])
       s1 = tesseract.applyDeltas(s1, act2)
       s2 = tesseract.applyDeltas(s2, act1)
@@ -288,8 +288,8 @@ describe('Tesseract', () => {
       s2 = tesseract.set(s2, 'bestFruit', 'pineapple')
       const deltas = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(deltas, [{
-        action: 'set', by: s2._store_id, clock: {[s1._store_id]: 1, [s2._store_id]: 1},
-        target: '00000000-0000-0000-0000-000000000000', key: 'bestFruit', value: 'pineapple'
+        action: 'set', actor: s2._store_id, clock: {[s1._store_id]: 1, [s2._store_id]: 1},
+        obj: '00000000-0000-0000-0000-000000000000', key: 'bestFruit', value: 'pineapple'
       }])
     })
 
