@@ -139,9 +139,9 @@ function makeStore(state) {
   return mapProxy(state, root_id)
 }
 
-function init(storeId) {
+function init(actorId) {
   return makeStore(Map()
-    .set('_id', storeId || UUID.generate())
+    .set('_id', actorId || UUID.generate())
     .set('ops', OpSet.init()))
 }
 
@@ -207,11 +207,11 @@ function remove(target, key) {
   return makeStore(deleteField(target._state, target._id, key))
 }
 
-function load(string, storeId) {
+function load(string, actorId) {
   let ops = OpSet.init()
   transit.fromJSON(string).forEach(op => { ops = OpSet.add(ops, op) })
   return makeStore(Map()
-    .set('_id', storeId || UUID.generate())
+    .set('_id', actorId || UUID.generate())
     .set('ops', ops))
 }
 

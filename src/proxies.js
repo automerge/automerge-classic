@@ -64,7 +64,7 @@ const MapHandler = {
     if (key === '_type') return 'map'
     if (key === '_id') return objId
     if (key === '_state') return state
-    if (key === '_store_id') return state.get('_id')
+    if (key === '_actor_id') return state.get('_id')
     if (key === '_conflicts') return getObjectConflicts(state, objId)
     if (!validFieldName(key)) return undefined
     const ops = OpSet.getFieldOps(state.get('ops'), objId, key)
@@ -83,7 +83,7 @@ const MapHandler = {
 
   has (target, key) {
     return (key === '_type') || (key === '_id') || (key === '_state') ||
-      (key === '_store_id') || (key === '_conflicts') ||
+      (key === '_actor_id') || (key === '_conflicts') ||
       isFieldPresent(target.get('state'), target.get('objId'), key)
   },
 
@@ -112,7 +112,7 @@ const ListHandler = {
     if (key === '_type') return 'list'
     if (key === '_id') return objId
     if (key === '_state') return state
-    if (key === '_store_id') return state.get('_id')
+    if (key === '_actor_id') return state.get('_id')
     if (key === 'length') return listLength(state, objId)
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return listElemByIndex(state, objId, parseInt(key))

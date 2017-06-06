@@ -14,10 +14,10 @@ describe('Tesseract proxy API', () => {
       assert.strictEqual(root._id, '00000000-0000-0000-0000-000000000000')
     })
 
-    it('should know its store ID', () => {
-      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(root._store_id))
-      assert.notEqual(root._store_id, '00000000-0000-0000-0000-000000000000')
-      assert.strictEqual(tesseract.init('customStoreId')._store_id, 'customStoreId')
+    it('should know its actor ID', () => {
+      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(root._actor_id))
+      assert.notEqual(root._actor_id, '00000000-0000-0000-0000-000000000000')
+      assert.strictEqual(tesseract.init('customActorId')._actor_id, 'customActorId')
     })
 
     it('should prohibit mutation', () => {
