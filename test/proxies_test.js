@@ -101,12 +101,16 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should allow entries to be fetched by index', () => {
-      assert.strictEqual(root.list[0], 1)
-      assert.strictEqual(root.list[1], 2)
-      assert.strictEqual(root.list[2], 3)
-      assert.strictEqual(root.list[3], undefined)
-      assert.strictEqual(root.list[-1], undefined)
-      assert.strictEqual(root.list.someProperty, undefined)
+      assert.strictEqual(root.list[0],   1)
+      assert.strictEqual(root.list['0'], 1)
+      assert.strictEqual(root.list[1],   2)
+      assert.strictEqual(root.list['1'], 2)
+      assert.strictEqual(root.list[2],   3)
+      assert.strictEqual(root.list['2'], 3)
+      assert.strictEqual(root.list[3],   undefined)
+      assert.strictEqual(root.list['3'], undefined)
+      assert.strictEqual(root.list[-1],  undefined)
+      assert.strictEqual(root.list.someProperty,    undefined)
       assert.strictEqual(root.list['someProperty'], undefined)
     })
 
