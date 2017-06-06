@@ -53,14 +53,13 @@ function applyOp(opSet, op) {
     opSet = opSet.setIn(['byObject', obj, op.get('key')], keyOps.push(op))
 
     if (action === 'ins') {
-      const next = op.get('next')
-      if (opSet.hasIn(['byObject', obj, '_insertion', next])) throw 'Duplicate list element ID ' + next
-      opSet = opSet.setIn(['byObject', obj, '_insertion', next], op)
+      const counter = op.get('counter'), elemId = actor + ':' + counter
+      if (opSet.hasIn(['byObject', obj, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
+      opSet = opSet.setIn(['byObject', obj, '_insertion', elemId], op)
 
-      const [name, newCount] = parseLamport(next)
-      const oldCount = opSet.getIn(['byObject', obj, '_counter'], 0)
-      if (newCount && newCount > oldCount) {
-        opSet = opSet.setIn(['byObject', obj, '_counter'], newCount)
+      const oldCounter = opSet.getIn(['byObject', obj, '_counter'], 0)
+      if (counter && counter > oldCounter) {
+        opSet = opSet.setIn(['byObject', obj, '_counter'], counter)
       }
     }
   }
@@ -125,23 +124,21 @@ function getParent(opSet, obj, key) {
   return insertion.get('key')
 }
 
-function parseLamport(stamp) {
-  const [, name, count] = /^(.*):(\d+)$/.exec(stamp) || []
-  if (count) return [name, parseInt(count)]
-}
-
-function lamportLessThan(stamp1, stamp2) {
-  const [name1, count1] = parseLamport(stamp1)
-  const [name2, count2] = parseLamport(stamp2)
-  return (count1 < count2) || (count1 === count2 && name1 < name2)
+function lamportCompare(op1, op2) {
+  if (op1.get('counter') < op2.get('counter')) return -1
+  if (op1.get('counter') > op2.get('counter')) return  1
+  if (op1.get('actor'  ) < op2.get('actor'  )) return -1
+  if (op1.get('actor'  ) > op2.get('actor'  )) return  1
+  return 0
 }
 
 function insertionsAfter(opSet, obj, key) {
   return opSet
     .getIn(['byObject', obj, key], List())
     .filter(op => (op.get('action') === 'ins'))
-    .map(op => op.get('next'))
-    .sort((a, b) => lamportLessThan(a, b) ? 1 : -1) // descending order
+    .sort(lamportCompare)
+    .reverse() // descending order
+    .map(op => op.get('actor') + ':' + op.get('counter'))
 }
 
 function getNext(opSet, obj, key) {

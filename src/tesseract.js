@@ -36,8 +36,9 @@ function insertAfter(state, listId, elemId) {
   if (!state.hasIn(['ops', 'byObject', listId, elemId]) && elemId !== '_head') {
     throw 'Preceding list element does not exist'
   }
-  const newId = state.get('_id') + ':' + (state.getIn(['ops', 'byObject', listId, '_counter'], 0) + 1)
-  return [makeOp(state, { action: 'ins', obj: listId, key: elemId, next: newId }), newId]
+  const counter = state.getIn(['ops', 'byObject', listId, '_counter'], 0) + 1
+  state = makeOp(state, { action: 'ins', obj: listId, key: elemId, counter })
+  return [state, state.get('_id') + ':' + counter]
 }
 
 function keyError(key) {

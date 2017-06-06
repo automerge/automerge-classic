@@ -121,23 +121,36 @@ the following types of operation:
   The user created a new empty list object, and that list will henceforth be
   identified by the UUID `objId`.
 
-* `{ action: 'ins', obj: listId, key: elemId, next: elemId }`
+* `{ action: 'ins', obj: listId, key: elemId, counter: int }`
 
-  The user inserted a new item into a list. `obj` is the UUID of the list
-  object being modified. `key` and `next` are both IDs that identify elements
-  within the list, and which must be constructed in a particular way
-  (technically, they must be
-  [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamps)).
-  `next` is the ID of the newly inserted element, which must not exist in the
-  list already. `key` is the ID of an existing element after which the new
+  The user inserted a new item into a list. `obj` is the UUID of the list object
+  being modified. `key` is the ID of an existing element after which the new
   element should be inserted, or the string `'_head'` if the new element should
-  be inserted at the beginning of the list.
+  be inserted at the beginning of the list. `counter` is an integer that is
+  strictly greater than the counter of any other element in this list at the
+  time of insertion.
+
+  The ID of the newly inserted list element is constructed by concatenating the
+  actor ID on which the operation originated, a colon character `':'`, and the
+  counter value (as a decimal string). This ID is unique per list: although
+  different actors may generate insertions with the same counter value, the same
+  actor never reuses counters. This element ID is then used by subsequent `set`
+  and `link` operations to assign a value to the list element, by `del`
+  operations to delete the list element, and by `ins` operations to insert new
+  list elements after this one.
 
   Note that the operation does not use list indexes, which are not safe under
   concurrent use, but instead uses unique identifiers for list elements. Note
   also that this operation does not specify what value should be inserted into
   the list; it only creates a placeholder at a particular position. A subsequent
   `set` or `link` operation is used to assign the actual value.
+
+  The counter looks a bit similar to a sequence number in the vector clock, but
+  it is different due to the requirement that it must be greater than *any
+  other* counter in that list (regardless of originating actor). This fact is
+  required to ensure the list elements are ordered correctly. Technically, this
+  construction is known as a
+  [Lamport timestamp](https://en.wikipedia.org/wiki/Lamport_timestamps).
 
 * `{ action: 'set', obj: objId, key: key, value: value }`
 
@@ -190,7 +203,7 @@ expands into the following sequence of operations:
 { action: 'ins',
   obj: 'fd06ead4-039b-4959-b848-5fe500679a0e',    // insert into the list we just created
   key: '_head',                                   // insert at the beginning of the list
-  next: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd:1', // the :1 makes it an element identifier
+  counter: 1,                                     // for constructing the new list element ID
   actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
   clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 2 } } // sequence number 2
 
@@ -211,7 +224,7 @@ expands into the following sequence of operations:
 // Make the card the first element of the list
 { action: 'link',
   obj: 'fd06ead4-039b-4959-b848-5fe500679a0e',    // update the list object
-  key: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd:1',  // update the new list element we created earlier
+  key: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd:1',  // assign to the new list element (note the :1)
   value: '39530b90-5361-43f8-80dd-a9e737af75a7',  // value is the UUID of the card object
   actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
   clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 5 } }
