@@ -28,7 +28,7 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should expose keys as object properties', () => {
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.strictEqual(root.key1, 'value1')
       assert.strictEqual(root['key1'], 'value1')
     })
@@ -40,41 +40,41 @@ describe('Tesseract proxy API', () => {
 
     it('should support the "in" operator', () => {
       assert.strictEqual('key1' in root, false)
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.strictEqual('key1' in root, true)
     })
 
     it('should support Object.keys()', () => {
       assert.deepEqual(Object.keys(root), [])
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.deepEqual(Object.keys(root), ['key1'])
-      root = tesseract.set(root, 'key2', 'value2')
+      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
       equalsOneOf(Object.keys(root), ['key1', 'key2'], ['key2', 'key1'])
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
       assert.deepEqual(Object.getOwnPropertyNames(root), [])
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.deepEqual(Object.getOwnPropertyNames(root), ['key1'])
-      root = tesseract.set(root, 'key2', 'value2')
+      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
       equalsOneOf(Object.getOwnPropertyNames(root), ['key1', 'key2'], ['key2', 'key1'])
     })
 
     it('should support JSON.stringify()', () => {
       assert.deepEqual(JSON.stringify(root), '{}')
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.deepEqual(JSON.stringify(root), '{"key1":"value1"}')
-      root = tesseract.set(root, 'key2', 'value2')
+      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
       equalsOneOf(JSON.stringify(root), '{"key1":"value1","key2":"value2"}', '{"key2":"value2","key1":"value1"}')
     })
 
     it('should allow inspection as regular JS objects', () => {
       assert.deepEqual(root._inspect, {})
       assert.deepEqual(tesseract.inspect(root), {})
-      root = tesseract.set(root, 'key1', 'value1')
+      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
       assert.deepEqual(root._inspect, {key1: 'value1'})
       assert.deepEqual(tesseract.inspect(root), {key1: 'value1'})
-      root = tesseract.set(root, 'key2', 'value2')
+      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
       assert.deepEqual(root._inspect, {key1: 'value1', key2: 'value2'})
       assert.deepEqual(tesseract.inspect(root), {key1: 'value1', key2: 'value2'})
     })
@@ -83,7 +83,7 @@ describe('Tesseract proxy API', () => {
   describe('list object', () => {
     let root
     beforeEach(() => {
-      root = tesseract.set(tesseract.init(), 'list', [1, 2, 3])
+      root = tesseract.changeset(tesseract.init(), doc => doc.list = [1, 2, 3])
     })
 
     it('should look like a JavaScript array', () => {
@@ -93,11 +93,11 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should prohibit mutation', () => {
-      assert.throws(() => { root.list[0] = 42 }, /this object is read-only/)
-      assert.throws(() => { root.list.push(42) }, /push is not a function/)
-      assert.throws(() => { delete root.list[0] }, /this object is read-only/)
-      assert.throws(() => { root.list.shift() }, /shift is not a function/)
-      assert.throws(() => { Object.assign(root.list, ['value']) }, /this object is read-only/)
+      assert.throws(() => { root.list[0] = 42   }, /this list is read-only/)
+      assert.throws(() => { root.list.push(42)  }, /this list is read-only/)
+      assert.throws(() => { delete root.list[0] }, /this list is read-only/)
+      assert.throws(() => { root.list.shift()   }, /this list is read-only/)
+      assert.throws(() => { Object.assign(root.list, ['value']) }, /this list is read-only/)
     })
 
     it('should allow entries to be fetched by index', () => {

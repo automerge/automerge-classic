@@ -4,6 +4,7 @@ const { Map, List, fromJS } = require('immutable')
 // each other (neither happened before the other). Returns false if one supersedes the other.
 function isConcurrent(op1, op2) {
   const [clock1, clock2] = [op1.get('clock'), op2.get('clock')]
+  if (!clock1 || !clock2) return false
   let oneFirst = false, twoFirst = false
   clock1.keySeq().concat(clock2.keySeq()).forEach(key => {
     if (clock1.get(key, 0) < clock2.get(key, 0)) oneFirst = true
@@ -12,12 +13,13 @@ function isConcurrent(op1, op2) {
   return oneFirst && twoFirst
 }
 
-// Returns true if all operations that causally precede `op` have already been applied in `opSet`.
-function causallyReady(opSet, op) {
-  const origin = op.get('actor'), seq = op.getIn(['clock', origin])
+// Returns true if all changesets that causally precede the given changeset
+// have already been applied in `opSet`.
+function causallyReady(opSet, changeset) {
+  const origin = changeset.get('actor'), seq = changeset.getIn(['clock', origin])
   if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
 
-  return op.get('clock')
+  return changeset.get('clock')
     .filterNot((seq, actor) => {
       const applied = opSet.getIn(['byActor', actor], List()).size
       if (actor === origin) {
@@ -29,21 +31,19 @@ function causallyReady(opSet, op) {
     .isEmpty()
 }
 
-// Returns true if the op has already been applied to the opSet.
-function isRedundant(opSet, op) {
-  const seq = op.getIn(['clock', op.get('actor')])
-  const ops = opSet.getIn(['byActor', op.get('actor')], List())
+// Returns true if the changeset has already been applied to the opSet.
+function isRedundant(opSet, changeset) {
+  const seq = changeset.getIn(['clock', changeset.get('actor')])
+  const ops = opSet.getIn(['byActor', changeset.get('actor')], List())
   if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
   if (seq > ops.size) return false
-  if (!ops.get(seq - 1).equals(op)) throw 'Inconsistent reuse of sequence number'
+  if (!ops.get(seq - 1).equals(changeset)) throw 'Inconsistent reuse of sequence number'
   return true
 }
 
+// Updates the various indexes that we need in order to search for operations
 function applyOp(opSet, op) {
-  const actor = op.get('actor'), obj = op.get('obj'), action = op.get('action')
-  opSet = opSet.setIn(['byActor', actor], opSet.getIn(['byActor', actor], List()).push(op))
-
-  // Index maintenance
+  const obj = op.get('obj'), action = op.get('action')
   if (action === 'makeMap' || action == 'makeList') {
     if (opSet.hasIn(['byObject', obj])) throw 'Duplicate creation of object ' + obj
     opSet = opSet.setIn(['byObject', obj], Map().set('_init', op))
@@ -53,7 +53,7 @@ function applyOp(opSet, op) {
     opSet = opSet.setIn(['byObject', obj, op.get('key')], keyOps.push(op))
 
     if (action === 'ins') {
-      const counter = op.get('counter'), elemId = actor + ':' + counter
+      const counter = op.get('counter'), elemId = op.get('actor') + ':' + counter
       if (opSet.hasIn(['byObject', obj, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
       opSet = opSet.setIn(['byObject', obj, '_insertion', elemId], op)
 
@@ -66,14 +66,21 @@ function applyOp(opSet, op) {
   return opSet
 }
 
+function applyChangeset(opSet, changeset) {
+  const actor = changeset.get('actor'), clock = changeset.get('clock')
+  opSet = opSet.setIn(['byActor', actor], opSet.getIn(['byActor', actor], List()).push(changeset))
+  changeset.get('ops').forEach(op => { opSet = applyOp(opSet, op.merge({actor, clock})) })
+  return opSet
+}
+
 function applyQueuedOps(opSet) {
   let queue = List()
   while (true) {
-    opSet.get('queue').forEach(op => {
-      if (causallyReady(opSet, op)) {
-        opSet = applyOp(opSet, op)
-      } else if (!isRedundant(opSet, op)) {
-        queue = queue.push(op)
+    opSet.get('queue').forEach(changeset => {
+      if (causallyReady(opSet, changeset)) {
+        opSet = applyChangeset(opSet, changeset)
+      } else if (!isRedundant(opSet, changeset)) {
+        queue = queue.push(changeset)
       }
     })
 
@@ -89,12 +96,19 @@ function init() {
   return fromJS({
     byActor:  {},
     byObject: { [root_id]: {} },
+    local:    [],
     queue:    []
   })
 }
 
-function add(opSet, op) {
-  return applyQueuedOps(opSet.set('queue', opSet.get('queue').push(op)))
+function addLocalOp(opSet, op, actor) {
+  opSet = opSet.set('local', opSet.get('local').push(op))
+  return applyOp(opSet, op.set('actor', actor))
+}
+
+function addChangeset(opSet, changeset) {
+  opSet = opSet.set('queue', opSet.get('queue').push(changeset))
+  return applyQueuedOps(opSet)
 }
 
 function getVClock(opSet) {
@@ -156,5 +170,5 @@ function getNext(opSet, obj, key) {
 }
 
 module.exports = {
-  init, add, getVClock, getFieldOps, getNext
+  init, addLocalOp, addChangeset, getVClock, getFieldOps, getNext
 }

@@ -24,11 +24,8 @@ function isObject(obj) {
 }
 
 function makeOp(state, opProps) {
-  const origin = state.get('_id')
-  const clock = OpSet.getVClock(state.get('ops'))
-    .set(origin, state.getIn(['ops', 'byActor', origin], List()).size + 1)
-  const op = fromJS(opProps).merge({ actor: origin, clock })
-  return state.set('ops', OpSet.add(state.get('ops'), op))
+  const opSet = state.get('ops'), actor = state.get('_id'), op = fromJS(opProps)
+  return state.set('ops', OpSet.addLocalOp(opSet, op, actor))
 }
 
 function insertAfter(state, listId, elemId) {
@@ -39,18 +36,6 @@ function insertAfter(state, listId, elemId) {
   const counter = state.getIn(['ops', 'byObject', listId, '_counter'], 0) + 1
   state = makeOp(state, { action: 'ins', obj: listId, key: elemId, counter })
   return [state, state.get('_id') + ':' + counter]
-}
-
-function keyError(key) {
-  if (typeof key !== 'string') {
-    return 'The key of a map entry must be a string, but ' + key + ' is a ' + (typeof key)
-  }
-  if (key === '') {
-    return 'The key of a map entry must not be an empty string'
-  }
-  if (key.startsWith('_')) {
-    return 'Map entries starting with underscore are not allowed: ' + key
-  }
 }
 
 function createNestedObjects(state, value) {
@@ -71,35 +56,60 @@ function createNestedObjects(state, value) {
   return [state, objId]
 }
 
-function setField(state, fromId, fromKey, value) {
-  const error = keyError(fromKey)
-  if (error) throw new TypeError(error)
+function setField(state, objId, key, value) {
+  if (typeof key !== 'string') {
+    throw new TypeError('The key of a map entry must be a string, but ' +
+                        JSON.stringify(key) + ' is a ' + (typeof key))
+  }
+  if (key === '') {
+    throw new TypeError('The key of a map entry must not be an empty string')
+  }
+  if (key.startsWith('_')) {
+    throw new TypeError('Map entries starting with underscore are not allowed: ' + key)
+  }
+
   if (typeof value === 'undefined') {
-    return deleteField(state, fromId, fromKey)
-  } else if (!isObject(value)) {
-    return makeOp(state, { action: 'set', obj: fromId, key: fromKey, value: value })
+    return deleteField(state, objId, key)
+  } else if (isObject(value)) {
+    const [newState, newId] = createNestedObjects(state, value)
+    return makeOp(newState, { action: 'link', obj: objId, key, value: newId })
   } else {
-    const [newState, objId] = createNestedObjects(state, value)
-    return makeOp(newState, { action: 'link', obj: fromId, key: fromKey, value: objId })
+    return makeOp(state, { action: 'set', obj: objId, key, value })
   }
 }
 
-function insertAt(state, listId, index, value) {
+function splice(state, listId, start, deletions, insertions) {
+  // Find start position
   let i = 0, prev = '_head', next = OpSet.getNext(state.get('ops'), listId, prev)
-  while (next && i < index) {
+  while (next && i < start) {
     if (!OpSet.getFieldOps(state.get('ops'), listId, next).isEmpty()) i += 1
     prev = next
     next = OpSet.getNext(state.get('ops'), listId, prev)
   }
+  if (i < start && insertions.length > 0) {
+    throw new RangeError('Cannot insert at index ' + start + ', which is past the end of the list')
+  }
 
-  if (i < index) throw new RangeError('Cannot insert at index ' + index +
-                                      ', which is past the end of the list')
-  const [newState, newElem] = insertAfter(state, listId, prev)
-  return setField(newState, listId, newElem, value)
+  // Apply insertions
+  for (let ins of insertions) {
+    [state, prev] = insertAfter(state, listId, prev)
+    state = setField(state, listId, prev, ins)
+  }
+
+  // Apply deletions
+  while (next && i < start + deletions) {
+    if (!OpSet.getFieldOps(state.get('ops'), listId, next).isEmpty()) {
+      state = makeOp(state, { action: 'del', obj: listId, key: next })
+      i += 1
+    }
+    next = OpSet.getNext(state.get('ops'), listId, next)
+  }
+  return state
 }
 
 function setListIndex(state, listId, index, value) {
   let i = -1, elem = OpSet.getNext(state.get('ops'), listId, '_head')
+  index = parseListIndex(index)
   while (elem) {
     if (!OpSet.getFieldOps(state.get('ops'), listId, elem).isEmpty()) i += 1
     if (i === index) break
@@ -109,111 +119,106 @@ function setListIndex(state, listId, index, value) {
   if (elem) {
     return setField(state, listId, elem, value)
   } else {
-    return insertAt(state, listId, index, value)
+    return splice(state, listId, index, 0, [value])
   }
 }
 
 function deleteField(state, objId, key) {
-  if (state.getIn(['ops', 'byObject', objId, '_init', 'action']) === 'makeList' && typeof key === 'number') {
-    let i = -1, elem = OpSet.getNext(state.get('ops'), objId, '_head')
-    while (elem) {
-      if (!OpSet.getFieldOps(state.get('ops'), objId, elem).isEmpty()) i += 1
-      if (i === key) break
-      elem = OpSet.getNext(state.get('ops'), objId, elem)
-    }
-    if (!elem) throw new RangeError('Index ' + key + ' passed to tesseract.remove ' +
-                                    'is past the end of the list')
-    key = elem
+  if (state.getIn(['ops', 'byObject', objId, '_init', 'action']) === 'makeList') {
+    return splice(state, objId, parseListIndex(key), 1, [])
   }
-
   if (!state.hasIn(['ops', 'byObject', objId, key])) {
-    throw new RangeError('Field name passed to tesseract.remove does not exist: ' + key)
+    throw new RangeError('Field name does not exist: ' + key)
   }
   return makeOp(state, { action: 'del', obj: objId, key: key })
 }
 
-///// Mutation API
+function makeChangeset(oldState, newState, message) {
+  const actor = oldState.get('_id')
+  const clock = OpSet.getVClock(oldState.get('ops'))
+    .set(actor, oldState.getIn(['ops', 'byActor', actor], List()).size + 1)
+  const changeset = fromJS({actor, clock, message})
+    .set('ops', newState.getIn(['ops', 'local']))
+  return oldState.set('ops', OpSet.addChangeset(oldState.get('ops'), changeset))
+}
+
+///// tesseract.* API
 
 const root_id = '00000000-0000-0000-0000-000000000000'
 
-function makeStore(state) {
-  return mapProxy(state, root_id)
+function makeStore(changeset) {
+  return mapProxy(changeset, root_id)
 }
 
 function init(actorId) {
-  return makeStore(Map()
+  const state = Map()
     .set('_id', actorId || UUID.generate())
-    .set('ops', OpSet.init()))
+    .set('ops', OpSet.init())
+  return mapProxy({state}, root_id)
 }
 
-function checkTarget(funcName, target) {
+function checkTarget(funcName, target, needMutable) {
   if (!target || !target._state || !target._id || !target._state.hasIn(['ops', 'byObject', target._id])) {
     throw new TypeError('The first argument to tesseract.' + funcName +
-                        ' must be the object to modify, but you passed ' + Object.toString(target))
+                        ' must be the object to modify, but you passed ' + JSON.stringify(target))
+  }
+  if (!target._changeset.mutable && needMutable) {
+    throw new TypeError('tesseract.' + funcName + ' requires a writable object as first argument, ' +
+                        'but the one you passed is read-only. Please use tesseract.changeset() ' +
+                        'to get a writable version.')
   }
 }
 
-function checkTargetKey(funcName, target, key) {
-  checkTarget(funcName, target)
-  if (target._type === 'map') {
-    const error = keyError(key)
-    if (error) throw new TypeError('Bad second argument to tesseract.' + funcName + ': ' + error)
-    return key
-  } else if (target._type === 'list') {
-    if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
-    if (typeof key !== 'number')
-      throw new TypeError('You are modifying a list, so the second argument to tesseract.' +
-                          funcName + ' must be a numerical index. However, you passed ' + key)
-    if (key < 0)
-      throw new RangeError('The second argument to tesseract.' + funcName + ' must not be negative')
-    return key
-  } else {
-    throw new TypeError('Unexpected target object type ' + target._type)
-  }
+function parseListIndex(key) {
+  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
+  if (typeof key !== 'number')
+    throw new TypeError('A list index must be a number, but you passed ' + JSON.stringify(key))
+  if (key < 0 || isNaN(key) || key === Infinity || key === -Infinity)
+    throw new RangeError('A list index must be positive, but you passed ' + key)
+  return key
 }
 
-function set(target, key, value) {
-  key = checkTargetKey('set', target, key)
-  if (target._type === 'list') {
-    return makeStore(setListIndex(target._state, target._id, key, value))
-  } else {
-    return makeStore(setField(target._state, target._id, key, value))
+function changeset(root, message, callback) {
+  checkTarget('changeset', root)
+  if (root._id !== root_id) {
+    throw new TypeError('The first argument to tesseract.changeset must be the document root')
   }
+  if (root._changeset.mutable) {
+    throw new TypeError('Calls to tesseract.changeset cannot be nested')
+  }
+  if (typeof message === 'function' && callback === undefined) {
+    [message, callback] = [callback, message]
+  }
+
+  const oldState = root._state
+  const changeset = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
+  callback(mapProxy(changeset, root_id))
+  return mapProxy({state: makeChangeset(oldState, changeset.state, message)}, root_id)
 }
 
 function assign(target, values) {
-  checkTarget('assign', target)
+  checkTarget('assign', target, true)
   if (!isObject(values)) throw new TypeError('The second argument to tesseract.assign must be an ' +
-                                             'object, but you passed ' + values)
+                                             'object, but you passed ' + JSON.stringify(values))
   let state = target._state
   for (let key of Object.keys(values)) {
-    key = checkTargetKey('assign', target, key)
     if (target._type === 'list') {
       state = setListIndex(state, target._id, key, values[key])
     } else {
       state = setField(state, target._id, key, values[key])
     }
   }
-  return makeStore(state)
-}
-
-function insert(target, index, value) {
-  if (target._type !== 'list') throw new TypeError('Cannot insert into a map, only into a list')
-  checkTargetKey('insert', target, index)
-  return makeStore(insertAt(target._state, target._id, index, value))
-}
-
-function remove(target, key) {
-  checkTargetKey('remove', target, key)
-  return makeStore(deleteField(target._state, target._id, key))
+  target._changeset.state = state
+  return makeStore(target._changeset)
 }
 
 function load(string, actorId) {
   let ops = OpSet.init()
-  transit.fromJSON(string).forEach(op => { ops = OpSet.add(ops, op) })
-  return makeStore(Map()
+  transit.fromJSON(string).forEach(changeset => { ops = OpSet.addChangeset(ops, changeset) })
+  const state = Map()
     .set('_id', actorId || UUID.generate())
-    .set('ops', ops))
+    .set('ops', ops)
+  return mapProxy({state}, root_id)
 }
 
 function save(store) {
@@ -247,9 +252,9 @@ function getVClock(store) {
 function getDeltasAfter(store, vclock) {
   checkTarget('getDeltasAfter', store)
   let queue = []
-  store._state.getIn(['ops', 'byActor']).forEach((ops, origin) => {
-    for (let i = vclock[origin] || 0; i < ops.size; i++) {
-      queue.push(ops.get(i).toJS())
+  store._state.getIn(['ops', 'byActor']).forEach((changesets, origin) => {
+    for (let i = vclock[origin] || 0; i < changesets.size; i++) {
+      queue.push(changesets.get(i).toJS())
     }
   })
   return queue
@@ -258,18 +263,19 @@ function getDeltasAfter(store, vclock) {
 function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
   let ops = store._state.get('ops')
-  for (let delta of deltas) ops = OpSet.add(ops, fromJS(delta))
-  return makeStore(store._state.set('ops', ops))
+  for (let delta of deltas) ops = OpSet.addChangeset(ops, fromJS(delta))
+  return mapProxy({state: store._state.set('ops', ops)}, root_id)
 }
 
 function merge(local, remote) {
   checkTarget('merge', local)
-  if (local._state.get('_id') === remote._state.get('_id'))
+  if (local._state.get('_id') === remote._state.get('_id')) {
     throw new RangeError('Cannot merge a store with itself')
+  }
   return applyDeltas(local, getDeltasAfter(remote, getVClock(local)))
 }
 
 module.exports = {
-  init, set, assign, insert, remove, load, save, equals, inspect,
+  init, changeset, assign, load, save, equals, inspect,
   getVClock, getDeltasAfter, applyDeltas, merge
 }
