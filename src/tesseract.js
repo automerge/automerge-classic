@@ -24,39 +24,39 @@ function isObject(obj) {
 }
 
 function makeOp(state, opProps) {
-  const opSet = state.get('ops'), actor = state.get('_id'), op = fromJS(opProps)
-  return state.set('ops', OpSet.addLocalOp(opSet, op, actor))
+  const opSet = state.get('opSet'), actor = state.get('actorId'), op = fromJS(opProps)
+  return state.set('opSet', OpSet.addLocalOp(opSet, op, actor))
 }
 
 function insertAfter(state, listId, elemId) {
-  if (!state.hasIn(['ops', 'byObject', listId])) throw 'List object does not exist'
-  if (!state.hasIn(['ops', 'byObject', listId, elemId]) && elemId !== '_head') {
+  if (!state.hasIn(['opSet', 'byObject', listId])) throw 'List object does not exist'
+  if (!state.hasIn(['opSet', 'byObject', listId, elemId]) && elemId !== '_head') {
     throw 'Preceding list element does not exist'
   }
-  const counter = state.getIn(['ops', 'byObject', listId, '_counter'], 0) + 1
-  state = makeOp(state, { action: 'ins', obj: listId, key: elemId, counter })
-  return [state, state.get('_id') + ':' + counter]
+  const elem = state.getIn(['opSet', 'byObject', listId, '_maxElem'], 0) + 1
+  state = makeOp(state, { action: 'ins', obj: listId, key: elemId, elem })
+  return [state, state.get('actorId') + ':' + elem]
 }
 
 function createNestedObjects(state, value) {
-  if (typeof value._id === 'string') return [state, value._id]
-  const objId = UUID.generate()
+  if (typeof value._objectId === 'string') return [state, value._objectId]
+  const objectId = UUID.generate()
 
   if (Array.isArray(value)) {
-    state = makeOp(state, { action: 'makeList', obj: objId })
+    state = makeOp(state, { action: 'makeList', obj: objectId })
     let elemId = '_head'
     for (let i = 0; i < value.length; i++) {
-      [state, elemId] = insertAfter(state, objId, elemId)
-      state = setField(state, objId, elemId, value[i])
+      [state, elemId] = insertAfter(state, objectId, elemId)
+      state = setField(state, objectId, elemId, value[i])
     }
   } else {
-    state = makeOp(state, { action: 'makeMap', obj: objId })
-    for (let key of Object.keys(value)) state = setField(state, objId, key, value[key])
+    state = makeOp(state, { action: 'makeMap', obj: objectId })
+    for (let key of Object.keys(value)) state = setField(state, objectId, key, value[key])
   }
-  return [state, objId]
+  return [state, objectId]
 }
 
-function setField(state, objId, key, value) {
+function setField(state, objectId, key, value) {
   if (typeof key !== 'string') {
     throw new TypeError('The key of a map entry must be a string, but ' +
                         JSON.stringify(key) + ' is a ' + (typeof key))
@@ -69,22 +69,22 @@ function setField(state, objId, key, value) {
   }
 
   if (typeof value === 'undefined') {
-    return deleteField(state, objId, key)
+    return deleteField(state, objectId, key)
   } else if (isObject(value)) {
     const [newState, newId] = createNestedObjects(state, value)
-    return makeOp(newState, { action: 'link', obj: objId, key, value: newId })
+    return makeOp(newState, { action: 'link', obj: objectId, key, value: newId })
   } else {
-    return makeOp(state, { action: 'set', obj: objId, key, value })
+    return makeOp(state, { action: 'set', obj: objectId, key, value })
   }
 }
 
 function splice(state, listId, start, deletions, insertions) {
   // Find start position
-  let i = 0, prev = '_head', next = OpSet.getNext(state.get('ops'), listId, prev)
+  let i = 0, prev = '_head', next = OpSet.getNext(state.get('opSet'), listId, prev)
   while (next && i < start) {
-    if (!OpSet.getFieldOps(state.get('ops'), listId, next).isEmpty()) i += 1
+    if (!OpSet.getFieldOps(state.get('opSet'), listId, next).isEmpty()) i += 1
     prev = next
-    next = OpSet.getNext(state.get('ops'), listId, prev)
+    next = OpSet.getNext(state.get('opSet'), listId, prev)
   }
   if (i < start && insertions.length > 0) {
     throw new RangeError('Cannot insert at index ' + start + ', which is past the end of the list')
@@ -98,22 +98,22 @@ function splice(state, listId, start, deletions, insertions) {
 
   // Apply deletions
   while (next && i < start + deletions) {
-    if (!OpSet.getFieldOps(state.get('ops'), listId, next).isEmpty()) {
+    if (!OpSet.getFieldOps(state.get('opSet'), listId, next).isEmpty()) {
       state = makeOp(state, { action: 'del', obj: listId, key: next })
       i += 1
     }
-    next = OpSet.getNext(state.get('ops'), listId, next)
+    next = OpSet.getNext(state.get('opSet'), listId, next)
   }
   return state
 }
 
 function setListIndex(state, listId, index, value) {
-  let i = -1, elem = OpSet.getNext(state.get('ops'), listId, '_head')
+  let i = -1, elem = OpSet.getNext(state.get('opSet'), listId, '_head')
   index = parseListIndex(index)
   while (elem) {
-    if (!OpSet.getFieldOps(state.get('ops'), listId, elem).isEmpty()) i += 1
+    if (!OpSet.getFieldOps(state.get('opSet'), listId, elem).isEmpty()) i += 1
     if (i === index) break
-    elem = OpSet.getNext(state.get('ops'), listId, elem)
+    elem = OpSet.getNext(state.get('opSet'), listId, elem)
   }
 
   if (elem) {
@@ -123,23 +123,23 @@ function setListIndex(state, listId, index, value) {
   }
 }
 
-function deleteField(state, objId, key) {
-  if (state.getIn(['ops', 'byObject', objId, '_init', 'action']) === 'makeList') {
-    return splice(state, objId, parseListIndex(key), 1, [])
+function deleteField(state, objectId, key) {
+  if (state.getIn(['opSet', 'byObject', objectId, '_init', 'action']) === 'makeList') {
+    return splice(state, objectId, parseListIndex(key), 1, [])
   }
-  if (!state.hasIn(['ops', 'byObject', objId, key])) {
+  if (!state.hasIn(['opSet', 'byObject', objectId, key])) {
     throw new RangeError('Field name does not exist: ' + key)
   }
-  return makeOp(state, { action: 'del', obj: objId, key: key })
+  return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
 
 function makeChangeset(oldState, newState, message) {
-  const actor = oldState.get('_id')
-  const clock = OpSet.getVClock(oldState.get('ops'))
-    .set(actor, oldState.getIn(['ops', 'byActor', actor], List()).size + 1)
+  const actor = oldState.get('actorId')
+  const clock = OpSet.getVClock(oldState.get('opSet'))
+    .set(actor, oldState.getIn(['opSet', 'byActor', actor], List()).size + 1)
   const changeset = fromJS({actor, clock, message})
-    .set('ops', newState.getIn(['ops', 'local']))
-  return oldState.set('ops', OpSet.addChangeset(oldState.get('ops'), changeset))
+    .set('ops', newState.getIn(['opSet', 'local']))
+  return oldState.set('opSet', OpSet.addChangeset(oldState.get('opSet'), changeset))
 }
 
 ///// tesseract.* API
@@ -152,13 +152,14 @@ function makeStore(changeset) {
 
 function init(actorId) {
   const state = Map()
-    .set('_id', actorId || UUID.generate())
-    .set('ops', OpSet.init())
+    .set('actorId', actorId || UUID.generate())
+    .set('opSet', OpSet.init())
   return mapProxy({state}, root_id)
 }
 
 function checkTarget(funcName, target, needMutable) {
-  if (!target || !target._state || !target._id || !target._state.hasIn(['ops', 'byObject', target._id])) {
+  if (!target || !target._state || !target._objectId ||
+      !target._state.hasIn(['opSet', 'byObject', target._objectId])) {
     throw new TypeError('The first argument to tesseract.' + funcName +
                         ' must be the object to modify, but you passed ' + JSON.stringify(target))
   }
@@ -180,7 +181,7 @@ function parseListIndex(key) {
 
 function changeset(root, message, callback) {
   checkTarget('changeset', root)
-  if (root._id !== root_id) {
+  if (root._objectId !== root_id) {
     throw new TypeError('The first argument to tesseract.changeset must be the document root')
   }
   if (root._changeset.mutable) {
@@ -203,9 +204,9 @@ function assign(target, values) {
   let state = target._state
   for (let key of Object.keys(values)) {
     if (target._type === 'list') {
-      state = setListIndex(state, target._id, key, values[key])
+      state = setListIndex(state, target._objectId, key, values[key])
     } else {
-      state = setField(state, target._id, key, values[key])
+      state = setField(state, target._objectId, key, values[key])
     }
   }
   target._changeset.state = state
@@ -213,17 +214,17 @@ function assign(target, values) {
 }
 
 function load(string, actorId) {
-  let ops = OpSet.init()
-  transit.fromJSON(string).forEach(changeset => { ops = OpSet.addChangeset(ops, changeset) })
+  let opSet = OpSet.init()
+  transit.fromJSON(string).forEach(changeset => { opSet = OpSet.addChangeset(opSet, changeset) })
   const state = Map()
-    .set('_id', actorId || UUID.generate())
-    .set('ops', ops)
+    .set('actorId', actorId || UUID.generate())
+    .set('opSet', opSet)
   return mapProxy({state}, root_id)
 }
 
 function save(store) {
   checkTarget('save', store)
-  return transit.toJSON(store._state.getIn(['ops', 'byActor']).valueSeq().flatMap(ops => ops))
+  return transit.toJSON(store._state.getIn(['opSet', 'byActor']).valueSeq().flatMap(ops => ops))
 }
 
 function equals(val1, val2) {
@@ -246,13 +247,13 @@ function inspect(store) {
 
 function getVClock(store) {
   checkTarget('getVClock', store)
-  return OpSet.getVClock(store._state.get('ops')).toJS()
+  return OpSet.getVClock(store._state.get('opSet')).toJS()
 }
 
 function getDeltasAfter(store, vclock) {
   checkTarget('getDeltasAfter', store)
   let queue = []
-  store._state.getIn(['ops', 'byActor']).forEach((changesets, origin) => {
+  store._state.getIn(['opSet', 'byActor']).forEach((changesets, origin) => {
     for (let i = vclock[origin] || 0; i < changesets.size; i++) {
       queue.push(changesets.get(i).toJS())
     }
@@ -262,14 +263,14 @@ function getDeltasAfter(store, vclock) {
 
 function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
-  let ops = store._state.get('ops')
-  for (let delta of deltas) ops = OpSet.addChangeset(ops, fromJS(delta))
-  return mapProxy({state: store._state.set('ops', ops)}, root_id)
+  let opSet = store._state.get('opSet')
+  for (let delta of deltas) opSet = OpSet.addChangeset(opSet, fromJS(delta))
+  return mapProxy({state: store._state.set('opSet', opSet)}, root_id)
 }
 
 function merge(local, remote) {
   checkTarget('merge', local)
-  if (local._state.get('_id') === remote._state.get('_id')) {
+  if (local._state.get('actorId') === remote._state.get('actorId')) {
     throw new RangeError('Cannot merge a store with itself')
   }
   return applyDeltas(local, getDeltasAfter(remote, getVClock(local)))

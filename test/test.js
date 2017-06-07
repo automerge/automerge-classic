@@ -136,8 +136,8 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => { doc.nested = {} })
         assert.deepEqual(s1, {nested: {}})
         assert.deepEqual(s1.nested, {})
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.nested._id))
-        assert.notEqual(s1.nested._id, '00000000-0000-0000-0000-000000000000')
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.nested._objectId))
+        assert.notEqual(s1.nested._objectId, '00000000-0000-0000-0000-000000000000')
       })
 
       it('should handle assignment of a nested property', () => {
@@ -220,7 +220,7 @@ describe('Tesseract', () => {
         s2 = tesseract.changeset(s1, 'update y', doc => doc.position.y = 2)
         assert.strictEqual(s1.size.y, 1)
         assert.strictEqual(s2.size.y, 2)
-        assert.strictEqual(s1.position._id, s1.size._id)
+        assert.strictEqual(s1.position._objectId, s1.size._objectId)
       })
 
       it('should handle deletion of properties within a map', () => {
@@ -255,8 +255,8 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.list = [])
         assert.deepEqual(s1, {list: []})
         assert.deepEqual(s1.list, [])
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.list._id))
-        assert.notEqual(s1.list._id, '00000000-0000-0000-0000-000000000000')
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.list._objectId))
+        assert.notEqual(s1.list._objectId, '00000000-0000-0000-0000-000000000000')
       })
 
       it('should have a length property', () => {
@@ -490,16 +490,16 @@ describe('Tesseract', () => {
     it('should generate deltas representing changes', () => {
       s1 = tesseract.changeset(s1, 'change 1', doc => doc.s1 = 's1')
       s2 = tesseract.changeset(s2, 'change 2', doc => doc.s2 = 's2')
-      assert.deepEqual(tesseract.getVClock(s1), {[s1._actor_id]: 1})
-      assert.deepEqual(tesseract.getVClock(s2), {[s2._actor_id]: 1})
+      assert.deepEqual(tesseract.getVClock(s1), {[s1._actorId]: 1})
+      assert.deepEqual(tesseract.getVClock(s2), {[s2._actorId]: 1})
       const delta1 = tesseract.getDeltasAfter(s1, tesseract.getVClock(s2))
       const delta2 = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(delta1, [{
-        actor: s1._actor_id, clock: {[s1._actor_id]: 1}, message: 'change 1',
+        actor: s1._actorId, clock: {[s1._actorId]: 1}, message: 'change 1',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 's1', value: 's1'}]
       }])
       assert.deepEqual(delta2, [{
-        actor: s2._actor_id, clock: {[s2._actor_id]: 1}, message: 'change 2',
+        actor: s2._actorId, clock: {[s2._actorId]: 1}, message: 'change 2',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 's2', value: 's2'}]
       }])
       s1 = tesseract.applyDeltas(s1, delta2)
@@ -514,7 +514,7 @@ describe('Tesseract', () => {
       s2 = tesseract.changeset(s2, 'omg pineapples', doc => doc.bestFruit = 'pineapple')
       const deltas = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(deltas, [{
-        actor: s2._actor_id, clock: {[s1._actor_id]: 1, [s2._actor_id]: 1}, message: 'omg pineapples',
+        actor: s2._actorId, clock: {[s1._actorId]: 1, [s2._actorId]: 1}, message: 'omg pineapples',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 'bestFruit', value: 'pineapple'}]
       }])
     })

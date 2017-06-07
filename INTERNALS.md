@@ -31,18 +31,21 @@ to do something that changes the state, you call a function that takes the old
 state as first argument, and returns a new state reflecting the change. There
 are two ways how the state can change:
 
-1. A *local operation*, which is generally triggered by the user changing some
+1. *Local operations*, which are generally triggered by the user changing some
    piece of application data in the user interface. Such editing by the user is
-   expressed as one or more calls to `tesseract.set()`, `.assign()`,
-   `.insert()`, and/or `.remove()`, which are internally translated into
-   operations. The functions return a copy of the state with those new
-   operations included.
-2. A *remote operation*: a user on another device has edited their copy of
-   a document, that change was sent to you via the network, and now you want to
-   apply the change to your own copy of the document. Remote operations are
-   applied using `tesseract.applyDeltas()`, and `tesseract.merge()` is
-   a short-cut for the case where the "remote" document is actually just another
-   instance of Tesseract in the same process.
+   expressed by calling `tesseract.changeset()`, which groups together a block
+   of operations that should be applied as an atomic unit. Within that block, a
+   mutable API is used for expressing the changes, but internally these API
+   calls are translated into operations on the immutable state. The
+   `changeset()` function returns a new copy of the state with those operations
+   included.
+2. *Remote operations*: a user on another device has edited their copy of
+   a document, that changeset was sent to you via the network, and now you want
+   to apply it to your own copy of the document. Remote operations are applied
+   using `tesseract.applyDeltas()`, which again returns a new copy of the
+   state. For testing purposes there is also `tesseract.merge()`, which is
+   is a short-cut for the case where the "remote" document is actually just
+   another instance of Tesseract in the same process.
 
 To facilitate network communication, the functions `tesseract.getVClock()` and
 `.getDeltasAfter()` allow Tesseract instances on different devices to figure out
@@ -56,88 +59,94 @@ Actor IDs, vector clocks, and causality
 Each Tesseract instance has an *actor ID* — a UUID that is generated randomly
 whenever you do `tesseract.init()` or `tesseract.load()` (unless you explicitly
 pass an actor ID into those functions). Whenever you make a local edit on that
-Tesseract instance, the origin of those operations is set to that actor ID. All
-edits made on a Tesseract instance are numbered sequentially, starting with
-1 and never skipping or reusing sequence numbers. We assume that nobody else is
-using the same actor ID, and thus each operation is uniquely identified by the
-combination of its originating actor ID and its sequence number. That unique
-identifier for the operation always remains fixed, even when the operation is
+Tesseract instance, the operations are tagged with that actor ID as the origin.
+All changesets made on a Tesseract instance are numbered sequentially, starting
+with 1 and never skipping or reusing sequence numbers. We assume that nobody
+else is using the same actor ID, and thus each changeset is uniquely identified
+by the combination of its originating actor ID and its sequence number. That
+unique identifier for the changeset always remains fixed, even when it is
 applied on remote copies of the document.
 
-It's perhaps easiest to think of the actor ID as a device ID. Each device can
-generate local edits independently from every other device, and so each device
-needs to have its own numbering sequence for operations. There might be cases in
-which you want several actor IDs for a single device, but there is a performance
-cost to having lots of actor IDs, so it's a good idea to preserve actor IDs
-across restarts of an application on the same device, if possible.
+An actor ID is a bit similar to a device ID. Each device can generate changesets
+independently from every other device, and so each device needs to have its own
+numbering sequence. You can have several actor IDs for the same device, for
+example if the user might run several instances of the application on the same
+device (in which case, each instance needs its own actor ID). However, there is
+a performance cost to having lots of actor IDs, so it's a good idea to keep
+using the same actor ID if possible (at least for the lifetime of an application
+process).
 
 With those sequence numbers in place, we can fairly efficiently keep track of
-all operations we've seen: for each actor ID, we apply the operations
+all changesets we've seen: for each actor ID, we apply the changesets
 originating on that instance in strictly incrementing order; and then we only
 need to store the highest sequence number we've seen for each actor ID. This
 mapping from actor ID to highest sequence number is called a *vector clock*.
 
-With our documents, one operation sometimes depends on another. For example, if
+With our documents, one changeset sometimes depends on another. For example, if
 an item is first added and then removed, it doesn't make sense to try to apply
 the removal if you haven't already seen the addition (since you'd be trying to
 remove something that doesn't yet exist). To keep track of these dependencies,
-every operation includes the vector clock of the originating Tesseract instance
+every changeset includes the vector clock of the originating Tesseract instance
 at the time when the local edit was made. Every other Tesseract instance that
-wants to apply this operation needs to check that the prior operations have
+wants to apply this changeset needs to check that the prior changesets have
 already been applied; it can do this by checking that for all known actor IDs,
 the greatest sequence number it has already applied is no less than the sequence
-number in the operation's vector clock. If the operation depends on some other
-operation that has not yet been seen, the operation is buffered until the
-prerequisite operation arrives. This ordering and buffering process is known as
+number in the changeset's vector clock. If the changeset depends on some other
+changeset that has not yet been seen, the changeset is buffered until the
+prerequisite changeset arrives. This ordering and buffering process is known as
 *causally ordered delivery* (because it ensures that everybody first sees the
 cause, then the effect, not the other way round).
 
 
-Operation types
----------------
+Changeset structure and operation types
+---------------------------------------
 
-As mentioned above, every operation has two common properties:
+Every changeset is a JSON document with four properties:
 
-* `actor`: The actor ID on which the operation originated (a UUID).
+* `actor`: The actor ID on which the changeset originated (a UUID).
 * `clock`: The vector clock of the originating Tesseract instance at the time
-  the operation was generated, represented as a map from actor IDs to sequence
+  the changeset was generated, represented as a map from actor IDs to sequence
   numbers: `{[actorId1]: seq1, [actorId2]: seq2, ...}`. The entry for the actor
-  ID on which the operation originated, i.e. `operation.clock[operation.actor]`,
-  is the sequence number of this particular operation.
+  ID on which the changeset originated, i.e. `changeset.clock[changeset.actor]`,
+  is the sequence number of this particular changeset.
+* `message`: An optional human-readable "commit message" that describes the
+  changeset in a meaningful way. It is not interpreted by Tesseract, only
+  stored for introspection, debugging, undo, and similar purposes.
+* `ops`: An array of operations that are grouped into this changeset.
 
-The remaining properties depend on the type of operation. Tesseract currently uses
-the following types of operation:
-
-* `{ action: 'makeMap', obj: objId }`
+Each operation in the `ops` array is a JSON object. Tesseract currently uses the
+following types of operation:
+ 
+* `{ action: 'makeMap', obj: objectId }`
 
   The user created a new empty map object, and that object will henceforth be
-  identified by the UUID `objId`. The contents of the map, and its position
-  within the document, are defined by subsequent operations. For the root object,
-  which has a fixed UUID consisting of all zeros, a `makeMap` operation is not
+  identified by the UUID `obj`. The contents of the map, and its position within
+  the document, are defined by subsequent operations. For the root object, which
+  has a fixed UUID consisting of all zeros, a `makeMap` operation is not
   required.
 
-* `{ action: 'makeList', obj: objId }`
+* `{ action: 'makeList', obj: objectId }`
 
   The user created a new empty list object, and that list will henceforth be
-  identified by the UUID `objId`.
+  identified by the UUID `obj`.
 
-* `{ action: 'ins', obj: listId, key: elemId, counter: int }`
+* `{ action: 'ins', obj: listId, key: elemId, elem: uint }`
 
   The user inserted a new item into a list. `obj` is the UUID of the list object
   being modified. `key` is the ID of an existing element after which the new
   element should be inserted, or the string `'_head'` if the new element should
-  be inserted at the beginning of the list. `counter` is an integer that is
-  strictly greater than the counter of any other element in this list at the
-  time of insertion.
+  be inserted at the beginning of the list. `elem` is an integer that is
+  strictly greater than the `elem` value of any other element in this list at
+  the time of insertion.
 
   The ID of the newly inserted list element is constructed by concatenating the
   actor ID on which the operation originated, a colon character `':'`, and the
-  counter value (as a decimal string). This ID is unique per list: although
-  different actors may generate insertions with the same counter value, the same
-  actor never reuses counters. This element ID is then used by subsequent `set`
-  and `link` operations to assign a value to the list element, by `del`
-  operations to delete the list element, and by `ins` operations to insert new
-  list elements after this one.
+  elem value (as a decimal string). This ID is unique per list: although
+  different actors may generate insertions with the same elem value, the same
+  actor never reuses elems. This element ID is then used by subsequent `set` and
+  `link` operations to assign a value to the list element, by `del` operations
+  to delete the list element, and by `ins` operations to insert new list
+  elements after this one.
 
   Note that the operation does not use list indexes, which are not safe under
   concurrent use, but instead uses unique identifiers for list elements. Note
@@ -145,14 +154,14 @@ the following types of operation:
   the list; it only creates a placeholder at a particular position. A subsequent
   `set` or `link` operation is used to assign the actual value.
 
-  The counter looks a bit similar to a sequence number in the vector clock, but
-  it is different due to the requirement that it must be greater than *any
-  other* counter in that list (regardless of originating actor). This fact is
+  The elem value looks a bit similar to a sequence number in the vector clock,
+  but it is different due to the requirement that it must be greater than *any
+  other* elem in that list (regardless of originating actor). This fact is
   required to ensure the list elements are ordered correctly. Technically, this
   construction is known as a
   [Lamport timestamp](https://en.wikipedia.org/wiki/Lamport_timestamps).
 
-* `{ action: 'set', obj: objId, key: key, value: value }`
+* `{ action: 'set', obj: objectId, key: key, value: value }`
 
   The user assigned a value to a key in a map, or to an existing index in a
   list. `obj` is the UUID of the map or list being modified. If the target
@@ -161,7 +170,7 @@ the following types of operation:
   been created by a prior `ins` operation. `value` is always a primitive value
   (string, number, boolean, or null); use `link` for assigning objects or arrays.
 
-* `{ action: 'link', obj: objId, key: key, value: objId }`
+* `{ action: 'link', obj: objectId, key: key, value: objectId }`
 
   The user took a previously created map (created with `makeMap`) or list
   object (created with `makeList`), and made it a nested object within another
@@ -177,68 +186,47 @@ the following types of operation:
   updated. `value` is the UUID of the object being referenced (i.e. the nested
   map or list).
 
-* `{ action: 'del', obj: objId, key: key }`
+* `{ action: 'del', obj: objectId, key: key }`
 
   The user deleted a key from a map, or an element from a list. `obj` is the
   UUID of the map or list being modified. `key` is the key being removed from
   the map, or the ID of the list element being removed, as appropriate.
   Assigning the value `undefined` is interpreted as a deletion.
 
-For example, the following local edit:
+For example, the following code:
 
 ```js
-tesseract.set(tesseract.init(), 'cards', [ { title: 'hello world' } ])
+tesseract.changeset(tesseract.init(), 'Create document', doc => doc.cards = [ { title: 'hello world' } ])
 ```
 
-expands into the following sequence of operations:
+generates the following JSON object describing the changeset:
 
 ```js
-// Make a list object to hold the cards
-{ action: 'makeList',
-  obj: 'fd06ead4-039b-4959-b848-5fe500679a0e',    // new UUID for the list
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',  // all operations originate on the same actor ID
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 1 } } // sequence number 1
-
-// Insert a list element to contain the card
-{ action: 'ins',
-  obj: 'fd06ead4-039b-4959-b848-5fe500679a0e',    // insert into the list we just created
-  key: '_head',                                   // insert at the beginning of the list
-  counter: 1,                                     // for constructing the new list element ID
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 2 } } // sequence number 2
-
-// Make a map object to represent a card
-{ action: 'makeMap',
-  obj: '39530b90-5361-43f8-80dd-a9e737af75a7',    // new UUID for the card object
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 3 } }
-
-// Set the title of the card
-{ action: 'set',
-  obj: '39530b90-5361-43f8-80dd-a9e737af75a7',    // update the map object we just created
-  key: 'title',                                   // set the title field
-  value: 'hello world',
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 4 } }
-
-// Make the card the first element of the list
-{ action: 'link',
-  obj: 'fd06ead4-039b-4959-b848-5fe500679a0e',    // update the list object
-  key: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd:1',  // assign to the new list element (note the :1)
-  value: '39530b90-5361-43f8-80dd-a9e737af75a7',  // value is the UUID of the card object
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 5 } }
-
-// Now place the list of cards in the root object
-{ action: 'link',
-  obj: '00000000-0000-0000-0000-000000000000',    // UUID of the root object (hard-coded)
-  key: 'cards',                                   // setting root.cards
-  value: 'fd06ead4-039b-4959-b848-5fe500679a0e',  // UUID of the list object
-  actor: 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd',
-  clock: { 'dc5ee0b8-ee92-484f-aecc-81c1f56a65fd': 6 } } 
+{ actor: 'be3a9238-66c1-4215-9694-8688f1162cea',        // actorId where this changeset originated
+  clock: { 'be3a9238-66c1-4215-9694-8688f1162cea': 1 }, // sequence number 1
+  message: 'Create document',                           // human-readable message
+  ops:
+   [ { action: 'makeList',                              // Make a list object to hold the cards
+       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46' },   // New UUID for the list
+     { action: 'ins',                                   // Insert a new element into the list we created
+       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',
+       key: '_head',                                    // Insert at the beginning of the list
+       elem: 1 },
+     { action: 'makeMap',                               // Make a map object to reprsent a card
+       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3' },
+     { action: 'set',                                   // Set the title of the card
+       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3',
+       key: 'title',
+       value: 'hello world' },
+     { action: 'link',                                  // Make the card the first element of the list
+       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',
+       key: 'be3a9238-66c1-4215-9694-8688f1162cea:1',   // Assign to the list element with elem:1
+       value: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3' }, // UUID of the card object
+     { action: 'link',                                  // Place the list of cards in the root object
+       obj: '00000000-0000-0000-0000-000000000000',     // UUID of the root object (hard-coded)
+       key: 'cards',
+       value: '3a64c13f-c270-4af4-a733-abaadc5e7c46' } ] }
 ```
-
-Aren't you glad you don't have to write all those operations by hand? :)
 
 
 Applying operations to the local state

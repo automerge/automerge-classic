@@ -43,23 +43,23 @@ function isRedundant(opSet, changeset) {
 
 // Updates the various indexes that we need in order to search for operations
 function applyOp(opSet, op) {
-  const obj = op.get('obj'), action = op.get('action')
+  const objectId = op.get('obj'), action = op.get('action')
   if (action === 'makeMap' || action == 'makeList') {
-    if (opSet.hasIn(['byObject', obj])) throw 'Duplicate creation of object ' + obj
-    opSet = opSet.setIn(['byObject', obj], Map().set('_init', op))
+    if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
+    opSet = opSet.setIn(['byObject', objectId], Map().set('_init', op))
   } else {
-    if (!opSet.get('byObject').has(obj)) throw 'Modification of unknown object ' + obj
-    const keyOps = opSet.getIn(['byObject', obj, op.get('key')], List())
-    opSet = opSet.setIn(['byObject', obj, op.get('key')], keyOps.push(op))
+    if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+    const keyOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
+    opSet = opSet.setIn(['byObject', objectId, op.get('key')], keyOps.push(op))
 
     if (action === 'ins') {
-      const counter = op.get('counter'), elemId = op.get('actor') + ':' + counter
-      if (opSet.hasIn(['byObject', obj, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
-      opSet = opSet.setIn(['byObject', obj, '_insertion', elemId], op)
+      const elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
+      if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
+      opSet = opSet.setIn(['byObject', objectId, '_insertion', elemId], op)
 
-      const oldCounter = opSet.getIn(['byObject', obj, '_counter'], 0)
-      if (counter && counter > oldCounter) {
-        opSet = opSet.setIn(['byObject', obj, '_counter'], counter)
+      const maxElem = opSet.getIn(['byObject', objectId, '_maxElem'], 0)
+      if (elem && elem > maxElem) {
+        opSet = opSet.setIn(['byObject', objectId, '_maxElem'], elem)
       }
     }
   }
@@ -117,9 +117,9 @@ function getVClock(opSet) {
     .mapEntries(([actor, ops]) => [actor, ops.size])
 }
 
-function getFieldOps(opSet, obj, key) {
+function getFieldOps(opSet, objectId, key) {
   let ops = opSet
-    .getIn(['byObject', obj, key], List())
+    .getIn(['byObject', objectId, key], List())
     .filter(op => (op.get('action') === 'set' || op.get('action') === 'link' || op.get('action') == 'del'))
   let values = List()
 
@@ -131,39 +131,39 @@ function getFieldOps(opSet, obj, key) {
   return values.sortBy(op => op.get('actor')).reverse()
 }
 
-function getParent(opSet, obj, key) {
+function getParent(opSet, objectId, key) {
   if (key === '_head') return
-  const insertion = opSet.getIn(['byObject', obj, '_insertion', key])
+  const insertion = opSet.getIn(['byObject', objectId, '_insertion', key])
   if (!insertion) throw new TypeError('Missing index entry for list element ' + key)
   return insertion.get('key')
 }
 
 function lamportCompare(op1, op2) {
-  if (op1.get('counter') < op2.get('counter')) return -1
-  if (op1.get('counter') > op2.get('counter')) return  1
-  if (op1.get('actor'  ) < op2.get('actor'  )) return -1
-  if (op1.get('actor'  ) > op2.get('actor'  )) return  1
+  if (op1.get('elem' ) < op2.get('elem' )) return -1
+  if (op1.get('elem' ) > op2.get('elem' )) return  1
+  if (op1.get('actor') < op2.get('actor')) return -1
+  if (op1.get('actor') > op2.get('actor')) return  1
   return 0
 }
 
-function insertionsAfter(opSet, obj, key) {
+function insertionsAfter(opSet, objectId, key) {
   return opSet
-    .getIn(['byObject', obj, key], List())
+    .getIn(['byObject', objectId, key], List())
     .filter(op => (op.get('action') === 'ins'))
     .sort(lamportCompare)
     .reverse() // descending order
-    .map(op => op.get('actor') + ':' + op.get('counter'))
+    .map(op => op.get('actor') + ':' + op.get('elem'))
 }
 
-function getNext(opSet, obj, key) {
-  const children = insertionsAfter(opSet, obj, key)
+function getNext(opSet, objectId, key) {
+  const children = insertionsAfter(opSet, objectId, key)
   if (!children.isEmpty()) return children.first()
 
   let ancestor
   while (true) {
-    ancestor = getParent(opSet, obj, key)
+    ancestor = getParent(opSet, objectId, key)
     if (!ancestor) return
-    const siblings = insertionsAfter(opSet, obj, ancestor).filter(sib => sib < key)
+    const siblings = insertionsAfter(opSet, objectId, ancestor).filter(sib => sib < key)
     if (!siblings.isEmpty()) return siblings.first()
     key = ancestor
   }

@@ -11,13 +11,13 @@ describe('Tesseract proxy API', () => {
 
     it('should have a fixed object ID', () => {
       assert.strictEqual(root._type, 'map')
-      assert.strictEqual(root._id, '00000000-0000-0000-0000-000000000000')
+      assert.strictEqual(root._objectId, '00000000-0000-0000-0000-000000000000')
     })
 
     it('should know its actor ID', () => {
-      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(root._actor_id))
-      assert.notEqual(root._actor_id, '00000000-0000-0000-0000-000000000000')
-      assert.strictEqual(tesseract.init('customActorId')._actor_id, 'customActorId')
+      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(root._actorId))
+      assert.notEqual(root._actorId, '00000000-0000-0000-0000-000000000000')
+      assert.strictEqual(tesseract.init('customActorId')._actorId, 'customActorId')
     })
 
     it('should prohibit mutation', () => {
