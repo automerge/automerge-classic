@@ -135,9 +135,9 @@ function deleteField(state, objectId, key) {
 
 function makeChangeset(oldState, newState, message) {
   const actor = oldState.get('actorId')
-  const clock = OpSet.getVClock(oldState.get('opSet'))
-    .set(actor, oldState.getIn(['opSet', 'byActor', actor], List()).size + 1)
-  const changeset = fromJS({actor, clock, message})
+  const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
+  const deps = oldState.getIn(['opSet', 'deps']).remove(actor)
+  const changeset = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
   return oldState.set('opSet', OpSet.addChangeset(oldState.get('opSet'), changeset))
 }
@@ -224,7 +224,10 @@ function load(string, actorId) {
 
 function save(store) {
   checkTarget('save', store)
-  return transit.toJSON(store._state.getIn(['opSet', 'byActor']).valueSeq().flatMap(ops => ops))
+  const history = store._state
+    .getIn(['opSet', 'history'])
+    .map(state => state.get('changeset'))
+  return transit.toJSON(history)
 }
 
 function equals(val1, val2) {
@@ -247,18 +250,12 @@ function inspect(store) {
 
 function getVClock(store) {
   checkTarget('getVClock', store)
-  return OpSet.getVClock(store._state.get('opSet')).toJS()
+  return store._state.getIn(['opSet', 'clock']).toJS()
 }
 
 function getDeltasAfter(store, vclock) {
   checkTarget('getDeltasAfter', store)
-  let queue = []
-  store._state.getIn(['opSet', 'byActor']).forEach((changesets, origin) => {
-    for (let i = vclock[origin] || 0; i < changesets.size; i++) {
-      queue.push(changesets.get(i).toJS())
-    }
-  })
-  return queue
+  return OpSet.getMissingChanges(store._state.get('opSet'), fromJS(vclock)).toJS()
 }
 
 function applyDeltas(store, deltas) {

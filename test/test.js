@@ -495,11 +495,11 @@ describe('Tesseract', () => {
       const delta1 = tesseract.getDeltasAfter(s1, tesseract.getVClock(s2))
       const delta2 = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(delta1, [{
-        actor: s1._actorId, clock: {[s1._actorId]: 1}, message: 'change 1',
+        actor: s1._actorId, seq: 1, deps: {}, message: 'change 1',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 's1', value: 's1'}]
       }])
       assert.deepEqual(delta2, [{
-        actor: s2._actorId, clock: {[s2._actorId]: 1}, message: 'change 2',
+        actor: s2._actorId, seq: 1, deps: {}, message: 'change 2',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 's2', value: 's2'}]
       }])
       s1 = tesseract.applyDeltas(s1, delta2)
@@ -514,7 +514,7 @@ describe('Tesseract', () => {
       s2 = tesseract.changeset(s2, 'omg pineapples', doc => doc.bestFruit = 'pineapple')
       const deltas = tesseract.getDeltasAfter(s2, tesseract.getVClock(s1))
       assert.deepEqual(deltas, [{
-        actor: s2._actorId, clock: {[s1._actorId]: 1, [s2._actorId]: 1}, message: 'omg pineapples',
+        actor: s2._actorId, seq: 1, deps: {[s1._actorId]: 1}, message: 'omg pineapples',
         ops: [{action: 'set', obj: '00000000-0000-0000-0000-000000000000', key: 'bestFruit', value: 'pineapple'}]
       }])
     })

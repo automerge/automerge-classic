@@ -1,76 +1,103 @@
-const { Map, List, fromJS } = require('immutable')
+const { Map, List } = require('immutable')
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
-function isConcurrent(op1, op2) {
-  const [clock1, clock2] = [op1.get('clock'), op2.get('clock')]
-  if (!clock1 || !clock2) return false
-  let oneFirst = false, twoFirst = false
-  clock1.keySeq().concat(clock2.keySeq()).forEach(key => {
-    if (clock1.get(key, 0) < clock2.get(key, 0)) oneFirst = true
-    if (clock2.get(key, 0) < clock1.get(key, 0)) twoFirst = true
-  })
-  return oneFirst && twoFirst
+function isConcurrent(opSet, op1, op2) {
+  const [actor1, seq1] = [op1.get('actor'), op1.get('seq')]
+  const [actor2, seq2] = [op2.get('actor'), op2.get('seq')]
+  if (!actor1 || !actor2 || !seq1 || !seq2) return false
+
+  const clock1 = opSet.getIn(['states', actor1, seq1 - 1, 'allDeps'])
+  const clock2 = opSet.getIn(['states', actor2, seq2 - 1, 'allDeps'])
+
+  return clock1.get(actor2, 0) < seq2 && clock2.get(actor1, 0) < seq1
 }
 
 // Returns true if all changesets that causally precede the given changeset
 // have already been applied in `opSet`.
 function causallyReady(opSet, changeset) {
-  const origin = changeset.get('actor'), seq = changeset.getIn(['clock', origin])
-  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
-
-  return changeset.get('clock')
-    .filterNot((seq, actor) => {
-      const applied = opSet.getIn(['byActor', actor], List()).size
-      if (actor === origin) {
-        return seq === applied + 1
-      } else {
-        return seq <= applied
-      }
-    })
-    .isEmpty()
+  const actor = changeset.get('actor'), seq = changeset.get('seq')
+  let satisfied = true
+  changeset.get('deps').set(actor, seq - 1).forEach((depSeq, depActor) => {
+    if (opSet.getIn(['clock', depActor], 0) < depSeq) satisfied = false
+  })
+  return satisfied
 }
 
-// Returns true if the changeset has already been applied to the opSet.
-function isRedundant(opSet, changeset) {
-  const seq = changeset.getIn(['clock', changeset.get('actor')])
-  const ops = opSet.getIn(['byActor', changeset.get('actor')], List())
-  if (typeof seq !== 'number' || seq <= 0) throw 'Invalid sequence number'
-  if (seq > ops.size) return false
-  if (!ops.get(seq - 1).equals(changeset)) throw 'Inconsistent reuse of sequence number'
-  return true
+function transitiveDeps(opSet, baseDeps) {
+  return baseDeps.reduce((deps, depSeq, depActor) => {
+    if (depSeq <= 0) return deps
+    const transitive = opSet.getIn(['states', depActor, depSeq - 1, 'allDeps'])
+    return deps
+      .mergeWith((a, b) => Math.max(a, b), transitive)
+      .set(depActor, depSeq)
+  }, Map())
 }
 
 // Updates the various indexes that we need in order to search for operations
 function applyOp(opSet, op) {
-  const objectId = op.get('obj'), action = op.get('action')
-  if (action === 'makeMap' || action == 'makeList') {
-    if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
-    opSet = opSet.setIn(['byObject', objectId], Map().set('_init', op))
-  } else {
-    if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
-    const keyOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
-    opSet = opSet.setIn(['byObject', objectId, op.get('key')], keyOps.push(op))
+  const objectId = op.get('obj')
+  switch (op.get('action')) {
+    case 'makeMap':
+    case 'makeList':
+      if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
+      return opSet.setIn(['byObject', objectId], Map().set('_init', op))
 
-    if (action === 'ins') {
+    case 'ins':
       const elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
+      if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
       if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
-      opSet = opSet.setIn(['byObject', objectId, '_insertion', elemId], op)
 
-      const maxElem = opSet.getIn(['byObject', objectId, '_maxElem'], 0)
-      if (elem && elem > maxElem) {
-        opSet = opSet.setIn(['byObject', objectId, '_maxElem'], elem)
-      }
-    }
+      return opSet
+        .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
+        .updateIn(['byObject', objectId, '_maxElem'], 0, maxElem => Math.max(elem, maxElem))
+        .setIn(['byObject', objectId, '_insertion', elemId], op)
+
+    case 'set':
+    case 'del':
+    case 'link':
+      if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+      const keyOps = opSet
+        .getIn(['byObject', objectId, op.get('key')], List())
+        .filter(other => isConcurrent(opSet, other, op))
+        .push(...(op.get('action') === 'del' ? [] : [op]))
+        .sortBy(op => op.get('actor'))
+        .reverse()
+      return opSet.setIn(['byObject', objectId, op.get('key')], keyOps)
+
+    default:
+      throw 'Unknown operation type ' + obj.get('action')
   }
-  return opSet
 }
 
 function applyChangeset(opSet, changeset) {
-  const actor = changeset.get('actor'), clock = changeset.get('clock')
-  opSet = opSet.setIn(['byActor', actor], opSet.getIn(['byActor', actor], List()).push(changeset))
-  changeset.get('ops').forEach(op => { opSet = applyOp(opSet, op.merge({actor, clock})) })
+  const actor = changeset.get('actor'), seq = changeset.get('seq')
+  const prior = opSet.getIn(['states', actor], List())
+  if (seq <= prior.size) {
+    if (!prior.get(seq - 1).get('changeset').equals(changeset)) {
+      throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
+    }
+    return opSet // changeset already applied, return unchanged
+  }
+
+  const allDeps = transitiveDeps(opSet, changeset.get('deps').set(actor, seq - 1))
+  let state = Map({changeset, allDeps})
+  opSet = opSet.setIn(['states', actor], prior.push(state))
+
+  changeset.get('ops').forEach(op => {
+    opSet = applyOp(opSet, op.merge({actor, seq}))
+  })
+  state = state.set('byObject', opSet.get('byObject'))
+
+  const remainingDeps = opSet.get('deps')
+    .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
+    .set(actor, seq)
+
   return opSet
+    .set('deps', remainingDeps)
+    .setIn(['clock', actor], seq)
+    .setIn(['states', actor, seq - 1], state)
+    .update('history', history => history.push(state))
 }
 
 function applyQueuedOps(opSet) {
@@ -79,7 +106,7 @@ function applyQueuedOps(opSet) {
     opSet.get('queue').forEach(changeset => {
       if (causallyReady(opSet, changeset)) {
         opSet = applyChangeset(opSet, changeset)
-      } else if (!isRedundant(opSet, changeset)) {
+      } else {
         queue = queue.push(changeset)
       }
     })
@@ -93,42 +120,36 @@ function applyQueuedOps(opSet) {
 const root_id = '00000000-0000-0000-0000-000000000000'
 
 function init() {
-  return fromJS({
-    byActor:  {},
-    byObject: { [root_id]: {} },
-    local:    [],
-    queue:    []
-  })
+  return Map()
+    .set('states',   Map())
+    .set('history',  List())
+    .set('byObject', Map().set(root_id, Map()))
+    .set('clock',    Map())
+    .set('deps',     Map())
+    .set('local',    List())
+    .set('queue',    List())
 }
 
 function addLocalOp(opSet, op, actor) {
-  opSet = opSet.set('local', opSet.get('local').push(op))
+  opSet = opSet.update('local', ops => ops.push(op))
   return applyOp(opSet, op.set('actor', actor))
 }
 
 function addChangeset(opSet, changeset) {
-  opSet = opSet.set('queue', opSet.get('queue').push(changeset))
-  return applyQueuedOps(opSet)
+  return applyQueuedOps(opSet.update('queue', queue => queue.push(changeset)))
 }
 
-function getVClock(opSet) {
-  return opSet
-    .get('byActor')
-    .mapEntries(([actor, ops]) => [actor, ops.size])
+function getMissingChanges(opSet, haveDeps) {
+  const allDeps = transitiveDeps(opSet, haveDeps)
+  return opSet.get('states')
+    .map((states, actor) => states.skip(allDeps.get(actor, 0)))
+    .valueSeq()
+    .flatten(1)
+    .map(state => state.get('changeset'))
 }
 
 function getFieldOps(opSet, objectId, key) {
-  let ops = opSet
-    .getIn(['byObject', objectId, key], List())
-    .filter(op => (op.get('action') === 'set' || op.get('action') === 'link' || op.get('action') == 'del'))
-  let values = List()
-
-  while (!ops.isEmpty()) {
-    const lastOp = ops.last()
-    if (lastOp.get('action') !== 'del') values = values.push(lastOp)
-    ops = ops.butLast().filter(op => isConcurrent(op, lastOp))
-  }
-  return values.sortBy(op => op.get('actor')).reverse()
+  return opSet.getIn(['byObject', objectId, key], List())
 }
 
 function getParent(opSet, objectId, key) {
@@ -148,7 +169,7 @@ function lamportCompare(op1, op2) {
 
 function insertionsAfter(opSet, objectId, key) {
   return opSet
-    .getIn(['byObject', objectId, key], List())
+    .getIn(['byObject', objectId, '_following', key], List())
     .filter(op => (op.get('action') === 'ins'))
     .sort(lamportCompare)
     .reverse() // descending order
@@ -170,5 +191,5 @@ function getNext(opSet, objectId, key) {
 }
 
 module.exports = {
-  init, addLocalOp, addChangeset, getVClock, getFieldOps, getNext
+  init, addLocalOp, addChangeset, getMissingChanges, getFieldOps, getNext
 }
