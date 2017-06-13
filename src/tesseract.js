@@ -246,6 +246,18 @@ function inspect(store) {
   return JSON.parse(JSON.stringify(store))
 }
 
+function getHistory(store) {
+  checkTarget('inspect', store)
+  return store._state.getIn(['opSet', 'history']).reduce((history, state) => {
+    const snapshot = Map({actorId: store._actorId, opSet: state})
+    history.push({
+      changeset: state.get('changeset').toJS(),
+      snapshot: mapProxy({state: snapshot}, root_id)
+    })
+    return history
+  }, [])
+}
+
 // Network communication API
 
 function getVClock(store) {
@@ -274,6 +286,6 @@ function merge(local, remote) {
 }
 
 module.exports = {
-  init, changeset, assign, load, save, equals, inspect,
+  init, changeset, assign, load, save, equals, inspect, getHistory,
   getVClock, getDeltasAfter, applyDeltas, merge
 }
