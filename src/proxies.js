@@ -55,6 +55,27 @@ function listLength(changeset, listId) {
   return length
 }
 
+function listIterator(changeset, listId, entries) {
+  let elem = '_head', index = -1
+  const next = () => {
+    while (elem) {
+      elem = OpSet.getNext(changeset.state.get('opSet'), listId, elem)
+      if (!elem) return {done: true}
+
+      const ops = OpSet.getFieldOps(changeset.state.get('opSet'), listId, elem)
+      if (!ops.isEmpty()) {
+        const value = getOpValue(changeset, ops.first())
+        index += 1
+        return entries ? {done: false, value: [index, value]} : {done: false, value}
+      }
+    }
+  }
+
+  const iterator = {next}
+  iterator[Symbol.iterator] = () => { return iterator }
+  return iterator
+}
+
 function listImmutable(attempt) {
   throw new TypeError('You tried to ' + attempt + ', but this list is read-only. ' +
                       'Please use tesseract.changeset() to get a writable version.')
@@ -62,6 +83,10 @@ function listImmutable(attempt) {
 
 function listMethods(changeset, listId) {
   return {
+    entries() {
+      return listIterator(changeset, listId, true)
+    },
+
     splice(start, deleteCount, ...values) {
       if (!changeset.mutable) listImmutable('splice a list')
       changeset.state = changeset.splice(changeset.state, listId, start, deleteCount || 0, values)
@@ -152,6 +177,7 @@ const ListHandler = {
   get (target, key) {
     const [changeset, objectId] = target
     if (!changeset.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
+    if (key === Symbol.iterator) return () => listIterator(changeset, objectId, false)
     if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
     if (key === '_type') return 'list'

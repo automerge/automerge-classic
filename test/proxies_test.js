@@ -140,5 +140,21 @@ describe('Tesseract proxy API', () => {
       assert.deepEqual(root._inspect, {list: [1, 2, 3]})
       assert.deepEqual(tesseract.inspect(root), {list: [1, 2, 3]})
     })
+
+    it('should support iteration', () => {
+      let copy = []
+      for (let x of root.list) copy.push(x)
+      assert.deepEqual(copy, [1, 2, 3])
+
+      // spread operator also uses iteration protocol
+      assert.deepEqual([0, ...root.list, 4], [0, 1, 2, 3, 4])
+    })
+
+    it('should support iterating over entries', () => {
+      let copy = []
+      for (let x of root.list.entries()) copy.push(x)
+      assert.deepEqual(copy, [[0, 1], [1, 2], [2, 3]])
+      assert.deepEqual([...root.list.entries()], [[0, 1], [1, 2], [2, 3]])
+    })
   })
 })
