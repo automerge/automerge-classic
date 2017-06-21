@@ -1,5 +1,6 @@
 const assert = require('assert')
 const tesseract = require('../src/tesseract')
+const { equalsOneOf } = require('./helpers')
 
 describe('Tesseract', () => {
   describe('sequential use:', () => {
@@ -457,19 +458,133 @@ describe('Tesseract', () => {
       s3 = tesseract.merge(s1, s2)
       assert.strictEqual(s3.foo, 'bar')
       assert.strictEqual(s3.hello, 'world')
-      assert.deepEqual(s3, {'foo': 'bar', 'hello': 'world' })
+      assert.deepEqual(s3, {foo: 'bar', hello: 'world' })
+      assert.deepEqual(s3._conflicts, {})
     })
 
-    it('should allow nested objects', () => {
-      s1 = tesseract.changeset(s1, doc => doc.foo = {'hello': 'world'})
-      assert.deepEqual(s1, {'foo': {'hello': 'world' }})
-      s2 = tesseract.changeset(s2, doc => doc.aaa = {'bbb': 'ccc'})
-      assert.deepEqual(s2, {'aaa': {'bbb': 'ccc'}})
-      s3 = tesseract.merge(s3, s2)
-      s3 = tesseract.merge(s3, s1)
-      assert.deepEqual(s3, {'foo': {'hello': 'world'}, 'aaa': {'bbb': 'ccc'}})
-      s3 = tesseract.changeset(s3, doc => doc.foo.key = 'val')
-      assert.deepEqual(s3, {'foo': {'key': 'val', 'hello': 'world'}, 'aaa': {'bbb': 'ccc'}})
+    it('should detect concurrent updates of the same field', () => {
+      s1 = tesseract.changeset(s1, doc => doc.field = 'one')
+      s2 = tesseract.changeset(s2, doc => doc.field = 'two')
+      s3 = tesseract.merge(s1, s2)
+      if (s1._actorId > s2._actorId) {
+        assert.deepEqual(s3, {field: 'one'})
+        assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: 'two'}})
+      } else {
+        assert.deepEqual(s3, {field: 'two'})
+        assert.deepEqual(s3._conflicts, {field: {[s1._actorId]: 'one'}})
+      }
+    })
+
+    it('should handle assignment conflicts of different types', () => {
+      s1 = tesseract.changeset(s1, doc => doc.field = 'string')
+      s2 = tesseract.changeset(s2, doc => doc.field = ['list'])
+      s3 = tesseract.changeset(s3, doc => doc.field = {thing: 'map'})
+      s1 = tesseract.merge(tesseract.merge(s1, s2), s3)
+      equalsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
+      if (s1.field === 'string') {
+        assert.deepEqual(s1._conflicts, {field: {[s2._actorId]: ['list'], [s3._actorId]: {thing: 'map'}}})
+      } else if (tesseract.equals(s1.field, ['list'])) {
+        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s3._actorId]: {thing: 'map'}}})
+      } else if (tesseract.equals(s1.field, {thing: 'map'})) {
+        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s2._actorId]: ['list']}})
+      } else {
+        assert.fail(s1.field, 'string or list or map', 'not one of the expected values')
+      }
+    })
+
+    it('should not merge concurrently assigned nested maps', () => {
+      s1 = tesseract.changeset(s1, doc => doc.config = {background: 'blue'})
+      s2 = tesseract.changeset(s2, doc => doc.config = {logo_url: 'logo.png'})
+      s3 = tesseract.merge(s1, s2)
+      equalsOneOf(s3.config, {background: 'blue'}, {logo_url: 'logo.png'})
+      if (s3.config.background === 'blue') {
+        assert.deepEqual(s3._conflicts.config, {[s2._actorId]: {logo_url: 'logo.png'}})
+      } else {
+        assert.deepEqual(s3._conflicts.config, {[s1._actorId]: {background: 'blue'}})
+      }
+    })
+
+    it('should clear conflicts after assigning a new value', () => {
+      s1 = tesseract.changeset(s1, doc => doc.field = 'one')
+      s2 = tesseract.changeset(s2, doc => doc.field = 'two')
+      s3 = tesseract.merge(s1, s2)
+      s3 = tesseract.changeset(s3, doc => doc.field = 'three')
+      assert.deepEqual(s3, {field: 'three'})
+      assert.deepEqual(s3._conflicts, {})
+      s2 = tesseract.merge(s2, s3)
+      assert.deepEqual(s2, {field: 'three'})
+      assert.deepEqual(s2._conflicts, {})
+    })
+
+    it('should handle concurrent insertions at different list positions', () => {
+      s1 = tesseract.changeset(s1, doc => doc.list = ['one', 'three'])
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => doc.list.splice(1, 0, 'two'))
+      s2 = tesseract.changeset(s2, doc => doc.list.push('four'))
+      s3 = tesseract.merge(s1, s2)
+      assert.deepEqual(s3, {list: ['one', 'two', 'three', 'four']})
+      assert.deepEqual(s3._conflicts, {})
+    })
+
+    it('should handle concurrent insertions at the same list position', () => {
+      s1 = tesseract.changeset(s1, doc => doc.birds = ['parakeet'])
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => doc.birds.push('starling'))
+      s2 = tesseract.changeset(s2, doc => doc.birds.push('chaffinch'))
+      s3 = tesseract.merge(s1, s2)
+      equalsOneOf(s3.birds, ['parakeet', 'starling', 'chaffinch'], ['parakeet', 'chaffinch', 'starling'])
+      s2 = tesseract.merge(s2, s1)
+      assert.deepEqual(s2, s3)
+    })
+
+    it('should handle concurrent assignment and deletion of a map entry', () => {
+      // Add-wins semantics
+      s1 = tesseract.changeset(s1, doc => doc.bestBird = 'robin')
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => delete doc['bestBird'])
+      s2 = tesseract.changeset(s2, doc => doc.bestBird = 'magpie')
+      s3 = tesseract.merge(s1, s2)
+      assert.deepEqual(s1, {})
+      assert.deepEqual(s2, {bestBird: 'magpie'})
+      assert.deepEqual(s3, {bestBird: 'magpie'})
+      assert.deepEqual(s3._conflicts, {})
+    })
+
+    it('should handle concurrent assignment and deletion of a list element', () => {
+      // Concurrent assignment ressurects a deleted list element. Perhaps a little
+      // surprising, but consistent with add-wins semantics of maps (see test above)
+      s1 = tesseract.changeset(s1, doc => doc.birds = ['blackbird', 'thrush', 'goldfinch'])
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => doc.birds[1] = 'starling')
+      s2 = tesseract.changeset(s2, doc => doc.birds.splice(1, 1))
+      s3 = tesseract.merge(s1, s2)
+      assert.deepEqual(s1.birds, ['blackbird', 'starling', 'goldfinch'])
+      assert.deepEqual(s2.birds, ['blackbird', 'goldfinch'])
+      assert.deepEqual(s3.birds, ['blackbird', 'starling', 'goldfinch'])
+    })
+
+    it('should handle concurrent updates at different levels of the tree', () => {
+      // A delete higher up in the tree overrides an update in a subtree
+      s1 = tesseract.changeset(s1, doc => doc.animals = {birds: {pink: 'flamingo', black: 'starling'}, mammals: ['badger']})
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => doc.animals.birds.brown = 'sparrow')
+      s2 = tesseract.changeset(s2, doc => delete doc.animals['birds'])
+      s3 = tesseract.merge(s1, s2)
+      assert.deepEqual(s1.animals, {birds: {pink: 'flamingo', brown: 'sparrow', black: 'starling'}, mammals: ['badger']})
+      assert.deepEqual(s2.animals, {mammals: ['badger']})
+      assert.deepEqual(s3.animals, {mammals: ['badger']})
+    })
+
+    it('should not interleave sequence insertions at the same position', () => {
+      s1 = tesseract.changeset(s1, doc => doc.wisdom = [])
+      s2 = tesseract.merge(s2, s1)
+      s1 = tesseract.changeset(s1, doc => doc.wisdom.push('to', 'be', 'is', 'to', 'do'))
+      s2 = tesseract.changeset(s2, doc => doc.wisdom.push('to', 'do', 'is', 'to', 'be'))
+      s3 = tesseract.merge(s1, s2)
+      equalsOneOf(s3.wisdom,
+        ['to', 'be', 'is', 'to', 'do', 'to', 'do', 'is', 'to', 'be'],
+        ['to', 'do', 'is', 'to', 'be', 'to', 'be', 'is', 'to', 'do'])
+      // In case you're wondering: http://quoteinvestigator.com/2013/09/16/do-be-do/
     })
   })
 
