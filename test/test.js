@@ -260,45 +260,10 @@ describe('Tesseract', () => {
         assert.notEqual(s1.list._objectId, '00000000-0000-0000-0000-000000000000')
       })
 
-      it('should have a length property', () => {
-        s1 = tesseract.changeset(s1, doc => doc.list = [])
-        assert.strictEqual(s1.list.length, 0)
-        s1 = tesseract.changeset(s1, doc => doc.list.push('zero'))
-        assert.strictEqual(s1.list.length, 1)
-        s1 = tesseract.changeset(s1, doc => doc.list.push('one'))
-        assert.strictEqual(s1.list.length, 2)
-      })
-
-      it('should insert new elements at the beginning', () => {
+      it('should allow elements to be inserted', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = [])
-        s1 = tesseract.changeset(s1, doc => doc.noodles.unshift('udon'))
-        s1 = tesseract.changeset(s1, doc => doc.noodles.unshift('soba'))
-        s1 = tesseract.changeset(s1, doc => doc.noodles.unshift('ramen'))
-        assert.deepEqual(s1, {noodles: ['ramen', 'soba', 'udon']})
-        assert.deepEqual(s1.noodles, ['ramen', 'soba', 'udon'])
-        assert.strictEqual(s1.noodles[0], 'ramen')
-        assert.strictEqual(s1.noodles[1], 'soba')
-        assert.strictEqual(s1.noodles[2], 'udon')
-        assert.strictEqual(s1.noodles.length, 3)
-      })
-
-      it('should insert new elements at the end', () => {
-        s1 = tesseract.changeset(s1, doc => doc.noodles = [])
-        s1 = tesseract.changeset(s1, doc => doc.noodles.push('udon'))
-        s1 = tesseract.changeset(s1, doc => doc.noodles.push('soba'))
-        s1 = tesseract.changeset(s1, doc => doc.noodles.push('ramen'))
-        assert.deepEqual(s1, {noodles: ['udon', 'soba', 'ramen']})
-        assert.deepEqual(s1.noodles, ['udon', 'soba', 'ramen'])
-        assert.strictEqual(s1.noodles[0], 'udon')
-        assert.strictEqual(s1.noodles[1], 'soba')
-        assert.strictEqual(s1.noodles[2], 'ramen')
-        assert.strictEqual(s1.noodles.length, 3)
-      })
-
-      it('should insert new elements in the middle', () => {
-        s1 = tesseract.changeset(s1, doc => doc.noodles = [])
-        s1 = tesseract.changeset(s1, doc => doc.noodles.push('udon', 'soba'))
-        s1 = tesseract.changeset(s1, doc => doc.noodles.splice(1, 0, 'ramen'))
+        s1 = tesseract.changeset(s1, doc => doc.noodles.insertAt(0, 'udon', 'soba'))
+        s1 = tesseract.changeset(s1, doc => doc.noodles.insertAt(1, 'ramen'))
         assert.deepEqual(s1, {noodles: ['udon', 'ramen', 'soba']})
         assert.deepEqual(s1.noodles, ['udon', 'ramen', 'soba'])
         assert.strictEqual(s1.noodles[0], 'udon')
@@ -333,7 +298,7 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
         s1 = tesseract.changeset(s1, doc => delete doc.noodles[1])
         assert.deepEqual(s1, {noodles: ['udon', 'soba']})
-        s1 = tesseract.changeset(s1, doc => doc.noodles.splice(1, 1))
+        s1 = tesseract.changeset(s1, doc => doc.noodles.deleteAt(1))
         assert.deepEqual(s1, {noodles: ['udon']})
         assert.deepEqual(s1.noodles, ['udon'])
         assert.strictEqual(s1.noodles[0], 'udon')

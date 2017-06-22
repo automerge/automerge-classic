@@ -55,7 +55,7 @@ function listLength(changeset, listId) {
   return length
 }
 
-function listIterator(changeset, listId, entries) {
+function listIterator(changeset, listId, mode) {
   let elem = '_head', index = -1
   const next = () => {
     while (elem) {
@@ -66,7 +66,12 @@ function listIterator(changeset, listId, entries) {
       if (!ops.isEmpty()) {
         const value = getOpValue(changeset, ops.first())
         index += 1
-        return entries ? {done: false, value: [index, value]} : {done: false, value}
+        switch (mode) {
+          case 'keys':    return {done: false, value: index}
+          case 'values':  return {done: false, value: value}
+          case 'entries': return {done: false, value: [index, value]}
+          case 'elems':   return {done: false, value: [index, elem]}
+        }
       }
     }
   }
@@ -82,14 +87,37 @@ function listImmutable(attempt) {
 }
 
 function listMethods(changeset, listId) {
-  return {
-    entries() {
-      return listIterator(changeset, listId, true)
+  const methods = {
+    deleteAt(index, numDelete) {
+      if (!changeset.mutable) listImmutable('delete the list element at index ' + index)
+      changeset.state = changeset.splice(changeset.state, listId, index, numDelete || 1, [])
+      return this
     },
 
-    splice(start, deleteCount, ...values) {
-      if (!changeset.mutable) listImmutable('splice a list')
-      changeset.state = changeset.splice(changeset.state, listId, start, deleteCount || 0, values)
+    fill(value, start, end) {
+      if (!changeset.mutable) listImmutable('fill a list with a value')
+      for (let [index, elem] of listIterator(changeset, listId, 'elems')) {
+        if (end && index >= end) break
+        if (index >= (start || 0)) {
+          changeset.state = changeset.setField(changeset.state, listId, elem, value)
+        }
+      }
+      return this
+    },
+
+    insertAt(index, ...values) {
+      if (!changeset.mutable) listImmutable('insert a list element at index ' + index)
+      changeset.state = changeset.splice(changeset.state, listId, index, 0, values)
+      return this
+    },
+
+    pop() {
+      if (!changeset.mutable) listImmutable('pop the last element off a list')
+      const length = listLength(changeset, listId)
+      if (length == 0) return
+      const last = listElemByIndex(changeset, listId, length - 1)
+      changeset.state = changeset.splice(changeset.state, listId, length - 1, 1, [])
+      return last
     },
 
     push(...values) {
@@ -105,12 +133,36 @@ function listMethods(changeset, listId) {
       return first
     },
 
+    splice(start, deleteCount, ...values) {
+      if (!changeset.mutable) listImmutable('splice a list')
+      if (deleteCount === undefined) {
+        deleteCount = listLength(changeset, listId) - start
+      }
+      changeset.state = changeset.splice(changeset.state, listId, start, deleteCount, values)
+    },
+
     unshift(...values) {
       if (!changeset.mutable) listImmutable('unshift a new list element ' + JSON.stringify(values[0]))
       changeset.state = changeset.splice(changeset.state, listId, 0, 0, values)
       return listLength(changeset, listId)
     }
   }
+
+  for (let iterator of ['entries', 'keys', 'values']) {
+    methods[iterator] = () => listIterator(changeset, listId, iterator)
+  }
+
+  // Read-only methods that can delegate to the JavaScript built-in implementations
+  for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach', 'includes',
+                      'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
+                      'slice', 'some', 'toLocaleString', 'toString']) {
+    methods[method] = (...args) => {
+      const array = [...listIterator(changeset, listId, 'values')]
+      return array[method].call(array, ...args)
+    }
+  }
+
+  return methods
 }
 
 const MapHandler = {
@@ -177,7 +229,7 @@ const ListHandler = {
   get (target, key) {
     const [changeset, objectId] = target
     if (!changeset.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
-    if (key === Symbol.iterator) return () => listIterator(changeset, objectId, false)
+    if (key === Symbol.iterator) return () => listIterator(changeset, objectId, 'values')
     if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
     if (key === '_type') return 'list'
