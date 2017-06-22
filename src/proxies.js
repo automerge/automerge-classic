@@ -211,7 +211,7 @@ const MapHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (isFieldPresent(target.changeset, target.objectId, key)) {
+    if (key === '_objectId' || isFieldPresent(target.changeset, target.objectId, key)) {
       return {configurable: true, enumerable: true}
     }
   },
@@ -221,6 +221,8 @@ const MapHandler = {
       .getIn(['opSet', 'byObject', target.objectId])
       .keySeq()
       .filter(key => isFieldPresent(target.changeset, target.objectId, key))
+      .toList()
+      .unshift('_objectId')
       .toJS()
   }
 }
@@ -269,12 +271,13 @@ const ListHandler = {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseInt(key) < listLength(...target)
     }
-    return key === 'length'
+    return (key === 'length') || (key === '_type') || (key === '_objectId') ||
+      (key === '_state') || (key === '_actorId')
   },
 
   getOwnPropertyDescriptor (target, key) {
     if (key === 'length') return {}
-    if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+    if (key === '_objectId' || (typeof key === 'string' && /^[0-9]+$/.test(key))) {
       if (parseInt(key) < listLength(...target)) {
         return {configurable: true, enumerable: true}
       }
@@ -283,7 +286,7 @@ const ListHandler = {
 
   ownKeys (target) {
     const length = listLength(...target)
-    let keys = ['length']
+    let keys = ['length', '_objectId']
     for (let i = 0; i < length; i++) keys.push(i.toString())
     return keys
   }
