@@ -1,4 +1,4 @@
-const { Map, List } = require('immutable')
+const { Map, List, Set } = require('immutable')
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -41,7 +41,7 @@ function applyOp(opSet, op) {
     case 'makeMap':
     case 'makeList':
       if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
-      return opSet.setIn(['byObject', objectId], Map().set('_init', op))
+      return opSet.setIn(['byObject', objectId], Map().set('_init', op).set('_inbound', Set()))
 
     case 'ins':
       const elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
@@ -57,13 +57,26 @@ function applyOp(opSet, op) {
     case 'del':
     case 'link':
       if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
-      const keyOps = opSet
+      const priorOpsConcurrent = opSet
         .getIn(['byObject', objectId, op.get('key')], List())
-        .filter(other => isConcurrent(opSet, other, op))
-        .push(...(op.get('action') === 'del' ? [] : [op]))
-        .sortBy(op => op.get('actor'))
-        .reverse()
-      return opSet.setIn(['byObject', objectId, op.get('key')], keyOps)
+        .groupBy(other => !!isConcurrent(opSet, other, op))
+      let overwritten = priorOpsConcurrent.get(false, List())
+      let remaining   = priorOpsConcurrent.get(true,  List())
+
+      // If any links were overwritten, remove them from the index of inbound links
+      overwritten.filter(op => op.get('action') === 'link')
+        .forEach(op => {
+          opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
+        })
+
+      if (op.get('action') === 'link') {
+        opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
+      }
+      if (op.get('action') !== 'del') {
+        remaining = remaining.push(op)
+      }
+      remaining = remaining.sortBy(op => op.get('actor')).reverse()
+      return opSet.setIn(['byObject', objectId, op.get('key')], remaining)
 
     default:
       throw 'Unknown operation type ' + obj.get('action')
@@ -89,11 +102,26 @@ function applyChangeset(opSet, changeset) {
   })
   state = state.set('byObject', opSet.get('byObject'))
 
+  let linkedObjs = changeset.get('ops').map(op => op.get('obj')).toSet()
+  let affectedObjs = Set()
+  while (!linkedObjs.isEmpty()) {
+    affectedObjs = affectedObjs.union(linkedObjs)
+    linkedObjs = linkedObjs
+      .flatMap(obj => opSet.getIn(['byObject', obj, '_inbound'], Set()).map(op => op.get('obj')))
+      .toSet()
+      .subtract(affectedObjs)
+  }
+
+  // According to the Immutable.js docs, Map.removeAll() ought to do this, but it doesn't exist?
+  let cache = opSet.get('cache')
+  affectedObjs.forEach(obj => { cache = cache.remove(obj) })
+
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
   return opSet
+    .set('cache', cache)
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
     .setIn(['states', actor, seq - 1], state)
@@ -124,6 +152,7 @@ function init() {
     .set('states',   Map())
     .set('history',  List())
     .set('byObject', Map().set(root_id, Map()))
+    .set('cache',    Map())
     .set('clock',    Map())
     .set('deps',     Map())
     .set('local',    List())
