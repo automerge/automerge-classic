@@ -2,154 +2,76 @@ const { List, fromJS } = require('immutable')
 const util = require('util')
 const OpSet = require('./op_set')
 
-function getObjType(changeset, objectId) {
-  const action = changeset.state.getIn(['opSet', 'byObject', objectId, '_init', 'action'])
-  if (action === 'makeMap') return 'map'
-  if (action === 'makeList') return 'list'
-}
-
-function getOpValue(changeset, op) {
-  if (typeof op !== 'object' || op === null) return op
-  const value = op.get('value')
-  if (op.get('action') === 'set') return value
-  if (op.get('action') === 'link') {
-    const type = getObjType(changeset, value)
-    if (type === 'map')  return mapProxy(changeset, value)
-    if (type === 'list') return listProxy(changeset, value)
-  }
-}
-
-function validFieldName(key) {
-  return (typeof key === 'string' && key !== '' && !key.startsWith('_'))
-}
-
-function isFieldPresent(changeset, objectId, key) {
-  return validFieldName(key) && !OpSet.getFieldOps(changeset.state.get('opSet'), objectId, key).isEmpty()
-}
-
-function getObjectConflicts(changeset, objectId) {
-  return changeset.state
-    .getIn(['opSet', 'byObject', objectId])
-    .filter((field, key) => validFieldName(key) && OpSet.getFieldOps(changeset.state.get('opSet'), objectId, key).size > 1)
-    .mapEntries(([key, field]) => [key, field.shift().toMap()
-      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(changeset, op)])
-    ]).toJS()
-}
-
-function listElemByIndex(changeset, listId, index) {
-  let i = -1, elem = OpSet.getNext(changeset.state.get('opSet'), listId, '_head')
-  while (elem) {
-    const ops = OpSet.getFieldOps(changeset.state.get('opSet'), listId, elem)
-    if (!ops.isEmpty()) i += 1
-    if (i === index) return getOpValue(changeset, ops.first())
-    elem = OpSet.getNext(changeset.state.get('opSet'), listId, elem)
-  }
-}
-
-function listLength(changeset, listId) {
-  let length = 0, elem = OpSet.getNext(changeset.state.get('opSet'), listId, '_head')
-  while (elem) {
-    if (!OpSet.getFieldOps(changeset.state.get('opSet'), listId, elem).isEmpty()) length += 1
-    elem = OpSet.getNext(changeset.state.get('opSet'), listId, elem)
-  }
-  return length
-}
-
-function listIterator(changeset, listId, mode) {
-  let elem = '_head', index = -1
-  const next = () => {
-    while (elem) {
-      elem = OpSet.getNext(changeset.state.get('opSet'), listId, elem)
-      if (!elem) return {done: true}
-
-      const ops = OpSet.getFieldOps(changeset.state.get('opSet'), listId, elem)
-      if (!ops.isEmpty()) {
-        const value = getOpValue(changeset, ops.first())
-        index += 1
-        switch (mode) {
-          case 'keys':    return {done: false, value: index}
-          case 'values':  return {done: false, value: value}
-          case 'entries': return {done: false, value: [index, value]}
-          case 'elems':   return {done: false, value: [index, elem]}
-        }
-      }
-    }
-  }
-
-  const iterator = {next}
-  iterator[Symbol.iterator] = () => { return iterator }
-  return iterator
-}
-
 function listImmutable(attempt) {
   throw new TypeError('You tried to ' + attempt + ', but this list is read-only. ' +
                       'Please use tesseract.changeset() to get a writable version.')
 }
 
-function listMethods(changeset, listId) {
+function listMethods(context, listId) {
   const methods = {
     deleteAt(index, numDelete) {
-      if (!changeset.mutable) listImmutable('delete the list element at index ' + index)
-      changeset.state = changeset.splice(changeset.state, listId, index, numDelete || 1, [])
+      if (!context.mutable) listImmutable('delete the list element at index ' + index)
+      context.state = context.splice(context.state, listId, index, numDelete || 1, [])
       return this
     },
 
     fill(value, start, end) {
-      if (!changeset.mutable) listImmutable('fill a list with a value')
-      for (let [index, elem] of listIterator(changeset, listId, 'elems')) {
+      if (!context.mutable) listImmutable('fill a list with a value')
+      for (let [index, elem] of OpSet.listIterator(context.state.get('opSet'), listId, 'elems', context)) {
         if (end && index >= end) break
         if (index >= (start || 0)) {
-          changeset.state = changeset.setField(changeset.state, listId, elem, value)
+          context.state = context.setField(context.state, listId, elem, value)
         }
       }
       return this
     },
 
     insertAt(index, ...values) {
-      if (!changeset.mutable) listImmutable('insert a list element at index ' + index)
-      changeset.state = changeset.splice(changeset.state, listId, index, 0, values)
+      if (!context.mutable) listImmutable('insert a list element at index ' + index)
+      context.state = context.splice(context.state, listId, index, 0, values)
       return this
     },
 
     pop() {
-      if (!changeset.mutable) listImmutable('pop the last element off a list')
-      const length = listLength(changeset, listId)
+      if (!context.mutable) listImmutable('pop the last element off a list')
+      const length = OpSet.listLength(context.state.get('opSet'), listId)
       if (length == 0) return
-      const last = listElemByIndex(changeset, listId, length - 1)
-      changeset.state = changeset.splice(changeset.state, listId, length - 1, 1, [])
+      const last = OpSet.listElemByIndex(context.state.get('opSet'), listId, length - 1, context)
+      context.state = context.splice(context.state, listId, length - 1, 1, [])
       return last
     },
 
     push(...values) {
-      if (!changeset.mutable) listImmutable('push a new list element ' + JSON.stringify(values[0]))
-      changeset.state = changeset.splice(changeset.state, listId, listLength(changeset, listId), 0, values)
-      return listLength(changeset, listId)
+      if (!context.mutable) listImmutable('push a new list element ' + JSON.stringify(values[0]))
+      const length = OpSet.listLength(context.state.get('opSet'), listId)
+      context.state = context.splice(context.state, listId, length, 0, values)
+      return OpSet.listLength(context.state.get('opSet'), listId)
     },
 
     shift() {
-      if (!changeset.mutable) listImmutable('shift the first element off a list')
-      const first = listElemByIndex(changeset, listId, 0)
-      changeset.state = changeset.splice(changeset.state, listId, 0, 1, [])
+      if (!context.mutable) listImmutable('shift the first element off a list')
+      const first = OpSet.listElemByIndex(context.state.get('opSet'), listId, 0, context)
+      context.state = context.splice(context.state, listId, 0, 1, [])
       return first
     },
 
     splice(start, deleteCount, ...values) {
-      if (!changeset.mutable) listImmutable('splice a list')
+      if (!context.mutable) listImmutable('splice a list')
       if (deleteCount === undefined) {
-        deleteCount = listLength(changeset, listId) - start
+        deleteCount = OpSet.listLength(context.state.get('opSet'), listId) - start
       }
-      changeset.state = changeset.splice(changeset.state, listId, start, deleteCount, values)
+      context.state = context.splice(context.state, listId, start, deleteCount, values)
     },
 
     unshift(...values) {
-      if (!changeset.mutable) listImmutable('unshift a new list element ' + JSON.stringify(values[0]))
-      changeset.state = changeset.splice(changeset.state, listId, 0, 0, values)
-      return listLength(changeset, listId)
+      if (!context.mutable) listImmutable('unshift a new list element ' + JSON.stringify(values[0]))
+      context.state = context.splice(context.state, listId, 0, 0, values)
+      return OpSet.listLength(context.state.get('opSet'), listId)
     }
   }
 
   for (let iterator of ['entries', 'keys', 'values']) {
-    methods[iterator] = () => listIterator(changeset, listId, iterator)
+    methods[iterator] = () => OpSet.listIterator(context.state.get('opSet'), listId, iterator, context)
   }
 
   // Read-only methods that can delegate to the JavaScript built-in implementations
@@ -157,7 +79,7 @@ function listMethods(changeset, listId) {
                       'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
-      const array = [...listIterator(changeset, listId, 'values')]
+      const array = [...OpSet.listIterator(context.state.get('opSet'), listId, 'values', context)]
       return array[method].call(array, ...args)
     }
   }
@@ -167,137 +89,143 @@ function listMethods(changeset, listId) {
 
 const MapHandler = {
   get (target, key) {
-    const { changeset, objectId } = target
-    if (!changeset.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
-    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(mapProxy(changeset, objectId)))
-    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(changeset, objectId)))
+    const { context, objectId } = target
+    if (!context.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
+    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(mapProxy(context, objectId)))
+    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(context, objectId)))
     if (key === '_type') return 'map'
     if (key === '_objectId') return objectId
-    if (key === '_state') return changeset.state
-    if (key === '_actorId') return changeset.state.get('actorId')
-    if (key === '_conflicts') return getObjectConflicts(changeset, objectId)
-    if (key === '_changeset') return changeset
-    if (!validFieldName(key)) return undefined
-    const ops = OpSet.getFieldOps(changeset.state.get('opSet'), objectId, key)
-    if (!ops.isEmpty()) return getOpValue(changeset, ops.first())
+    if (key === '_state') return context.state
+    if (key === '_actorId') return context.state.get('actorId')
+    if (key === '_conflicts') return OpSet.getObjectConflicts(context.state.get('opSet'), objectId, context)
+    if (key === '_changeset') return context
+    return OpSet.getObjectField(context.state.get('opSet'), objectId, key, context)
   },
 
   set (target, key, value) {
-    const { changeset, objectId } = target
-    if (!changeset.mutable) {
+    const { context, objectId } = target
+    if (!context.mutable) {
       throw new TypeError('You tried to set property ' + JSON.stringify(key) + ' to ' +
                           JSON.stringify(value) + ', but this object is read-only. ' +
                           'Please use tesseract.changeset() to get a writable version.')
     }
-    changeset.state = changeset.setField(changeset.state, objectId, key, value)
+    context.state = context.setField(context.state, objectId, key, value)
     return true
   },
 
   deleteProperty (target, key) {
-    const { changeset, objectId } = target
-    if (!changeset.mutable) {
+    const { context, objectId } = target
+    if (!context.mutable) {
       throw new TypeError('You tried to delete the property ' + JSON.stringify(key) +
                           ', but this object is read-only. Please use tesseract.changeset() ' +
                           'to get a writable version.')
     }
-    changeset.state = changeset.deleteField(changeset.state, objectId, key)
+    context.state = context.deleteField(context.state, objectId, key)
     return true
   },
 
   has (target, key) {
-    return (key === '_type') || (key === '_objectId') || (key === '_state') ||
-      (key === '_actorId') || (key === '_conflicts') ||
-      isFieldPresent(target.changeset, target.objectId, key)
+    return (key === '_type') || (key === '_state') || (key === '_actorId') || (key === '_conflicts') ||
+      OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).has(key)
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (key === '_objectId' || isFieldPresent(target.changeset, target.objectId, key)) {
+    if (OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).has(key)) {
       return {configurable: true, enumerable: true}
     }
   },
 
   ownKeys (target) {
-    return target.changeset.state
-      .getIn(['opSet', 'byObject', target.objectId])
-      .keySeq()
-      .filter(key => isFieldPresent(target.changeset, target.objectId, key))
-      .toList()
-      .unshift('_objectId')
-      .toJS()
+    return OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).toJS()
   }
 }
 
 const ListHandler = {
   get (target, key) {
-    const [changeset, objectId] = target
-    if (!changeset.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
-    if (key === Symbol.iterator) return () => listIterator(changeset, objectId, 'values')
-    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
-    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(changeset, objectId)))
+    const [context, objectId] = target
+    if (!context.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
+    if (key === Symbol.iterator) return () => OpSet.listIterator(context.state.get('opSet'), objectId, 'values', context)
+    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(context, objectId)))
+    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_type') return 'list'
     if (key === '_objectId') return objectId
-    if (key === '_state') return changeset.state
-    if (key === '_actorId') return changeset.state.get('actorId')
-    if (key === '_changeset') return changeset
-    if (key === 'length') return listLength(changeset, objectId)
+    if (key === '_state') return context.state
+    if (key === '_actorId') return context.state.get('actorId')
+    if (key === '_changeset') return context
+    if (key === 'length') return OpSet.listLength(context.state.get('opSet'), objectId)
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return listElemByIndex(changeset, objectId, parseInt(key))
+      return OpSet.listElemByIndex(context.state.get('opSet'), objectId, parseInt(key), context)
     }
-    return listMethods(changeset, objectId)[key]
+    return listMethods(context, objectId)[key]
   },
 
   set (target, key, value) {
-    const [changeset, objectId] = target
-    if (!changeset.mutable) {
+    const [context, objectId] = target
+    if (!context.mutable) {
       throw new TypeError('You tried to set index ' + key + ' to ' + JSON.stringify(value) +
                           ', but this list is read-only. Please use tesseract.changeset() ' +
                           'to get a writable version.')
     }
-    changeset.state = changeset.setListIndex(changeset.state, objectId, key, value)
+    context.state = context.setListIndex(context.state, objectId, key, value)
     return true
   },
 
   deleteProperty (target, key) {
-    const [changeset, objectId] = target
-    if (!changeset.mutable) {
+    const [context, objectId] = target
+    if (!context.mutable) {
       throw new TypeError('You tried to delete the list index ' + key + ', but this list is ' +
                           'read-only. Please use tesseract.changeset() to get a writable version.')
     }
-    changeset.state = changeset.deleteField(changeset.state, objectId, key)
+    context.state = context.deleteField(context.state, objectId, key)
     return true
   },
 
   has (target, key) {
+    const [context, objectId] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return parseInt(key) < listLength(...target)
+      return parseInt(key) < OpSet.listLength(context.state.get('opSet'), objectId)
     }
     return (key === 'length') || (key === '_type') || (key === '_objectId') ||
       (key === '_state') || (key === '_actorId')
   },
 
   getOwnPropertyDescriptor (target, key) {
+    const [context, objectId] = target
     if (key === 'length') return {}
     if (key === '_objectId' || (typeof key === 'string' && /^[0-9]+$/.test(key))) {
-      if (parseInt(key) < listLength(...target)) {
+      if (parseInt(key) < OpSet.listLength(context.state.get('opSet'), objectId)) {
         return {configurable: true, enumerable: true}
       }
     }
   },
 
   ownKeys (target) {
-    const length = listLength(...target)
+    const [context, objectId] = target
+    const length = OpSet.listLength(context.state.get('opSet'), objectId)
     let keys = ['length', '_objectId']
     for (let i = 0; i < length; i++) keys.push(i.toString())
     return keys
   }
 }
 
-function mapProxy(changeset, objectId) {
-  return new Proxy({changeset, objectId}, MapHandler)
+function mapProxy(context, objectId) {
+  return new Proxy({context, objectId}, MapHandler)
 }
 
-function listProxy(changeset, objectId) {
-  return new Proxy([changeset, objectId], ListHandler)
+function listProxy(context, objectId) {
+  return new Proxy([context, objectId], ListHandler)
 }
 
-module.exports = { mapProxy }
+function instantiateProxy(objectId) {
+  switch (this.state.getIn(['opSet', 'byObject', objectId, '_init', 'action'])) {
+    case 'makeMap':  return mapProxy(this, objectId)
+    case 'makeList': return listProxy(this, objectId)
+  }
+}
+
+function rootObjectProxy(context) {
+  context.instantiateObject = instantiateProxy
+  return mapProxy(context, '00000000-0000-0000-0000-000000000000')
+}
+
+module.exports = { rootObjectProxy }

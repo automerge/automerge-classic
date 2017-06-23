@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const { mapProxy } = require('./proxies')
+const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const transit = require('transit-immutable-js')
 
@@ -144,17 +144,15 @@ function makeChangeset(oldState, newState, message) {
 
 ///// tesseract.* API
 
-const root_id = '00000000-0000-0000-0000-000000000000'
-
-function makeStore(changeset) {
-  return mapProxy(changeset, root_id)
+function makeStore(context) {
+  return rootObjectProxy(context)
 }
 
 function init(actorId) {
   const state = Map()
     .set('actorId', actorId || UUID.generate())
     .set('opSet', OpSet.init())
-  return mapProxy({state}, root_id)
+  return rootObjectProxy({state})
 }
 
 function checkTarget(funcName, target, needMutable) {
@@ -181,7 +179,7 @@ function parseListIndex(key) {
 
 function changeset(root, message, callback) {
   checkTarget('changeset', root)
-  if (root._objectId !== root_id) {
+  if (root._objectId !== '00000000-0000-0000-0000-000000000000') {
     throw new TypeError('The first argument to tesseract.changeset must be the document root')
   }
   if (root._changeset.mutable) {
@@ -192,9 +190,9 @@ function changeset(root, message, callback) {
   }
 
   const oldState = root._state
-  const changeset = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
-  callback(mapProxy(changeset, root_id))
-  return mapProxy({state: makeChangeset(oldState, changeset.state, message)}, root_id)
+  const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
+  callback(rootObjectProxy(context))
+  return rootObjectProxy({state: makeChangeset(oldState, context.state, message)})
 }
 
 function assign(target, values) {
@@ -219,7 +217,7 @@ function load(string, actorId) {
   const state = Map()
     .set('actorId', actorId || UUID.generate())
     .set('opSet', opSet)
-  return mapProxy({state}, root_id)
+  return rootObjectProxy({state})
 }
 
 function save(store) {
@@ -252,7 +250,7 @@ function getHistory(store) {
     const snapshot = Map({actorId: store._actorId, opSet: state})
     history.push({
       changeset: state.get('changeset').toJS(),
-      snapshot: mapProxy({state: snapshot}, root_id)
+      snapshot: rootObjectProxy({state: snapshot})
     })
     return history
   }, [])
@@ -274,7 +272,7 @@ function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
   let opSet = store._state.get('opSet')
   for (let delta of deltas) opSet = OpSet.addChangeset(opSet, fromJS(delta))
-  return mapProxy({state: store._state.set('opSet', opSet)}, root_id)
+  return rootObjectProxy({state: store._state.set('opSet', opSet)})
 }
 
 function merge(local, remote) {

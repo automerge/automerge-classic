@@ -47,23 +47,31 @@ describe('Tesseract proxy API', () => {
     it('should support Object.keys()', () => {
       assert.deepEqual(Object.keys(root), ['_objectId'])
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(Object.keys(root), ['_objectId', 'key1'])
+      equalsOneOf(Object.keys(root), ['_objectId', 'key1'], ['key1', '_objectId'])
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.keys(root), ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'])
+      equalsOneOf(Object.keys(root),
+        ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
+        ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
+        ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
       assert.deepEqual(Object.getOwnPropertyNames(root), ['_objectId'])
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(Object.getOwnPropertyNames(root), ['_objectId', 'key1'])
+      equalsOneOf(Object.getOwnPropertyNames(root), ['_objectId', 'key1'], ['key1', '_objectId'])
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.getOwnPropertyNames(root), ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'])
+      equalsOneOf(Object.getOwnPropertyNames(root),
+        ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
+        ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
+        ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
     })
 
     it('should support JSON.stringify()', () => {
       assert.deepEqual(JSON.stringify(root), '{"_objectId":"00000000-0000-0000-0000-000000000000"}')
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(JSON.stringify(root), '{"_objectId":"00000000-0000-0000-0000-000000000000","key1":"value1"}')
+      equalsOneOf(JSON.stringify(root),
+        '{"_objectId":"00000000-0000-0000-0000-000000000000","key1":"value1"}',
+        '{"key1":"value1","_objectId":"00000000-0000-0000-0000-000000000000"}')
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
       assert.deepEqual(JSON.parse(JSON.stringify(root)), {
         _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'

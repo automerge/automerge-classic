@@ -219,6 +219,90 @@ function getNext(opSet, objectId, key) {
   }
 }
 
+function getOpValue(op, context) {
+  if (typeof op !== 'object' || op === null) return op
+  switch (op.get('action')) {
+    case 'set':  return op.get('value')
+    case 'link': return context.instantiateObject(op.get('value'))
+  }
+}
+
+function validFieldName(key) {
+  return (typeof key === 'string' && key !== '' && !key.startsWith('_'))
+}
+
+function isFieldPresent(opSet, objectId, key) {
+  return validFieldName(key) && !getFieldOps(opSet, objectId, key).isEmpty()
+}
+
+function getObjectFields(opSet, objectId) {
+  return opSet.getIn(['byObject', objectId])
+    .keySeq()
+    .filter(key => isFieldPresent(opSet, objectId, key))
+    .toSet()
+    .add('_objectId')
+}
+
+function getObjectField(opSet, objectId, key, context) {
+  if (!validFieldName(key)) return undefined
+  const ops = getFieldOps(opSet, objectId, key)
+  if (!ops.isEmpty()) return getOpValue(ops.first(), context)
+}
+
+function getObjectConflicts(opSet, objectId, context) {
+  return opSet.getIn(['byObject', objectId])
+    .filter((field, key) => validFieldName(key) && getFieldOps(opSet, objectId, key).size > 1)
+    .mapEntries(([key, field]) => [key, field.shift().toMap()
+      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(op, context)])
+    ]).toJS()
+}
+
+function listElemByIndex(opSet, listId, index, context) {
+  let i = -1, elem = getNext(opSet, listId, '_head')
+  while (elem) {
+    const ops = getFieldOps(opSet, listId, elem)
+    if (!ops.isEmpty()) i += 1
+    if (i === index) return getOpValue(ops.first(), context)
+    elem = getNext(opSet, listId, elem)
+  }
+}
+
+function listLength(opSet, listId) {
+  let length = 0, elem = getNext(opSet, listId, '_head')
+  while (elem) {
+    if (!getFieldOps(opSet, listId, elem).isEmpty()) length += 1
+    elem = getNext(opSet, listId, elem)
+  }
+  return length
+}
+
+function listIterator(opSet, listId, mode, context) {
+  let elem = '_head', index = -1
+  const next = () => {
+    while (elem) {
+      elem = getNext(opSet, listId, elem)
+      if (!elem) return {done: true}
+
+      const ops = getFieldOps(opSet, listId, elem)
+      if (!ops.isEmpty()) {
+        const value = getOpValue(ops.first(), context)
+        index += 1
+        switch (mode) {
+          case 'keys':    return {done: false, value: index}
+          case 'values':  return {done: false, value: value}
+          case 'entries': return {done: false, value: [index, value]}
+          case 'elems':   return {done: false, value: [index, elem]}
+        }
+      }
+    }
+  }
+
+  const iterator = {next}
+  iterator[Symbol.iterator] = () => { return iterator }
+  return iterator
+}
+
 module.exports = {
-  init, addLocalOp, addChangeset, getMissingChanges, getFieldOps, getNext
+  init, addLocalOp, addChangeset, getMissingChanges, getFieldOps, getObjectFields, getObjectField,
+  getObjectConflicts, getNext, listElemByIndex, listLength, listIterator
 }
