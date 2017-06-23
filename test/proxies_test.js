@@ -4,92 +4,98 @@ const { equalsOneOf } = require('./helpers')
 
 describe('Tesseract proxy API', () => {
   describe('root object', () => {
-    let root
-    beforeEach(() => {
-      root = tesseract.init()
-    })
-
     it('should have a fixed object ID', () => {
-      assert.strictEqual(root._type, 'map')
-      assert.strictEqual(root._objectId, '00000000-0000-0000-0000-000000000000')
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.strictEqual(doc._type, 'map')
+        assert.strictEqual(doc._objectId, '00000000-0000-0000-0000-000000000000')
+      })
     })
 
     it('should know its actor ID', () => {
-      assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(root._actorId))
-      assert.notEqual(root._actorId, '00000000-0000-0000-0000-000000000000')
-      assert.strictEqual(tesseract.init('customActorId')._actorId, 'customActorId')
-    })
-
-    it('should prohibit mutation', () => {
-      assert.throws(() => { root.key = 'value' }, /this object is read-only/)
-      assert.throws(() => { root['key'] = 'value' }, /this object is read-only/)
-      assert.throws(() => { delete root['key'] }, /this object is read-only/)
-      assert.throws(() => { Object.assign(root, {key: 'value'}) }, /this object is read-only/)
+      tesseract.changeset(tesseract.init(), doc => {
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(doc._actorId))
+        assert.notEqual(doc._actorId, '00000000-0000-0000-0000-000000000000')
+        assert.strictEqual(tesseract.init('customActorId')._actorId, 'customActorId')
+      })
     })
 
     it('should expose keys as object properties', () => {
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.strictEqual(root.key1, 'value1')
-      assert.strictEqual(root['key1'], 'value1')
+      tesseract.changeset(tesseract.init(), doc => {
+        doc.key1 = 'value1'
+        assert.strictEqual(doc.key1, 'value1')
+        assert.strictEqual(doc['key1'], 'value1')
+      })
     })
 
     it('should return undefined for unknown properties', () => {
-      assert.strictEqual(root.someProperty, undefined)
-      assert.strictEqual(root['someProperty'], undefined)
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.strictEqual(doc.someProperty, undefined)
+        assert.strictEqual(doc['someProperty'], undefined)
+      })
     })
 
     it('should support the "in" operator', () => {
-      assert.strictEqual('key1' in root, false)
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.strictEqual('key1' in root, true)
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.strictEqual('key1' in doc, false)
+        doc.key1 = 'value1'
+        assert.strictEqual('key1' in doc, true)
+      })
     })
 
     it('should support Object.keys()', () => {
-      assert.deepEqual(Object.keys(root), ['_objectId'])
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      equalsOneOf(Object.keys(root), ['_objectId', 'key1'], ['key1', '_objectId'])
-      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.keys(root),
-        ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
-        ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
-        ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.deepEqual(Object.keys(doc), ['_objectId'])
+        doc.key1 = 'value1'
+        equalsOneOf(Object.keys(doc), ['_objectId', 'key1'], ['key1', '_objectId'])
+        doc.key2 = 'value2'
+        equalsOneOf(Object.keys(doc),
+          ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
+          ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
+          ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
+      })
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
-      assert.deepEqual(Object.getOwnPropertyNames(root), ['_objectId'])
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      equalsOneOf(Object.getOwnPropertyNames(root), ['_objectId', 'key1'], ['key1', '_objectId'])
-      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.getOwnPropertyNames(root),
-        ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
-        ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
-        ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.deepEqual(Object.getOwnPropertyNames(doc), ['_objectId'])
+        doc.key1 = 'value1'
+        equalsOneOf(Object.getOwnPropertyNames(doc), ['_objectId', 'key1'], ['key1', '_objectId'])
+        doc.key2 = 'value2'
+        equalsOneOf(Object.getOwnPropertyNames(doc),
+          ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'],
+          ['key1', '_objectId', 'key2'], ['key2', '_objectId', 'key1'],
+          ['key1', 'key2', '_objectId'], ['key2', 'key1', '_objectId'])
+      })
     })
 
     it('should support JSON.stringify()', () => {
-      assert.deepEqual(JSON.stringify(root), '{"_objectId":"00000000-0000-0000-0000-000000000000"}')
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      equalsOneOf(JSON.stringify(root),
-        '{"_objectId":"00000000-0000-0000-0000-000000000000","key1":"value1"}',
-        '{"key1":"value1","_objectId":"00000000-0000-0000-0000-000000000000"}')
-      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      assert.deepEqual(JSON.parse(JSON.stringify(root)), {
-        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.deepEqual(JSON.stringify(doc), '{"_objectId":"00000000-0000-0000-0000-000000000000"}')
+        doc.key1 = 'value1'
+        equalsOneOf(JSON.stringify(doc),
+          '{"_objectId":"00000000-0000-0000-0000-000000000000","key1":"value1"}',
+          '{"key1":"value1","_objectId":"00000000-0000-0000-0000-000000000000"}')
+        doc.key2 = 'value2'
+        assert.deepEqual(JSON.parse(JSON.stringify(doc)), {
+          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+        })
       })
     })
 
     it('should allow inspection as regular JS objects', () => {
-      assert.deepEqual(root._inspect, {_objectId: '00000000-0000-0000-0000-000000000000'})
-      assert.deepEqual(tesseract.inspect(root), {_objectId: '00000000-0000-0000-0000-000000000000'})
-      root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(root._inspect, {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
-      assert.deepEqual(tesseract.inspect(root), {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
-      root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      assert.deepEqual(root._inspect, {
-        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
-      })
-      assert.deepEqual(tesseract.inspect(root), {
-        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+      tesseract.changeset(tesseract.init(), doc => {
+        assert.deepEqual(doc._inspect, {_objectId: '00000000-0000-0000-0000-000000000000'})
+        assert.deepEqual(tesseract.inspect(doc), {_objectId: '00000000-0000-0000-0000-000000000000'})
+        doc.key1 = 'value1'
+        assert.deepEqual(doc._inspect, {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
+        assert.deepEqual(tesseract.inspect(doc), {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
+        doc.key2 = 'value2'
+        assert.deepEqual(doc._inspect, {
+          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+        })
+        assert.deepEqual(tesseract.inspect(doc), {
+          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+        })
       })
     })
   })
@@ -101,218 +107,266 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should look like a JavaScript array', () => {
-      assert.strictEqual(Array.isArray(root.list), true)
-      assert.strictEqual(typeof root.list, 'object')
-      assert.strictEqual(toString.call(root.list), '[object Array]')
+      tesseract.changeset(root, doc => {
+        assert.strictEqual(Array.isArray(doc.list), true)
+        assert.strictEqual(typeof doc.list, 'object')
+        assert.strictEqual(toString.call(doc.list), '[object Array]')
+      })
     })
 
     it('should have a length property', () => {
-      assert.strictEqual(root.empty.length, 0)
-      assert.strictEqual(root.list.length, 3)
-    })
-
-    it('should prohibit mutation', () => {
-      assert.throws(() => { root.list[0] = 42   }, /this list is read-only/)
-      assert.throws(() => { root.list.push(42)  }, /this list is read-only/)
-      assert.throws(() => { delete root.list[0] }, /this list is read-only/)
-      assert.throws(() => { root.list.shift()   }, /this list is read-only/)
-      assert.throws(() => { Object.assign(root.list, ['value']) }, /this list is read-only/)
+      tesseract.changeset(root, doc => {
+        assert.strictEqual(doc.empty.length, 0)
+        assert.strictEqual(doc.list.length, 3)
+      })
     })
 
     it('should allow entries to be fetched by index', () => {
-      assert.strictEqual(root.list[0],   1)
-      assert.strictEqual(root.list['0'], 1)
-      assert.strictEqual(root.list[1],   2)
-      assert.strictEqual(root.list['1'], 2)
-      assert.strictEqual(root.list[2],   3)
-      assert.strictEqual(root.list['2'], 3)
-      assert.strictEqual(root.list[3],   undefined)
-      assert.strictEqual(root.list['3'], undefined)
-      assert.strictEqual(root.list[-1],  undefined)
-      assert.strictEqual(root.list.someProperty,    undefined)
-      assert.strictEqual(root.list['someProperty'], undefined)
+      tesseract.changeset(root, doc => {
+        assert.strictEqual(doc.list[0],   1)
+        assert.strictEqual(doc.list['0'], 1)
+        assert.strictEqual(doc.list[1],   2)
+        assert.strictEqual(doc.list['1'], 2)
+        assert.strictEqual(doc.list[2],   3)
+        assert.strictEqual(doc.list['2'], 3)
+        assert.strictEqual(doc.list[3],   undefined)
+        assert.strictEqual(doc.list['3'], undefined)
+        assert.strictEqual(doc.list[-1],  undefined)
+        assert.strictEqual(doc.list.someProperty,    undefined)
+        assert.strictEqual(doc.list['someProperty'], undefined)
+      })
     })
 
     it('should support the "in" operator', () => {
-      assert.strictEqual(0 in root.list, true)
-      assert.strictEqual('0' in root.list, true)
-      assert.strictEqual(3 in root.list, false)
-      assert.strictEqual('3' in root.list, false)
-      assert.strictEqual('length' in root.list, true)
-      assert.strictEqual('someProperty' in root.list, false)
+      tesseract.changeset(root, doc => {
+        assert.strictEqual(0 in doc.list, true)
+        assert.strictEqual('0' in doc.list, true)
+        assert.strictEqual(3 in doc.list, false)
+        assert.strictEqual('3' in doc.list, false)
+        assert.strictEqual('length' in doc.list, true)
+        assert.strictEqual('someProperty' in doc.list, false)
+      })
     })
 
     it('should support Object.keys()', () => {
-      assert.deepEqual(Object.keys(root.list), ['0', '1', '2'])
+      tesseract.changeset(root, doc => {
+        assert.deepEqual(Object.keys(doc.list), ['0', '1', '2'])
+      })
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
-      assert.deepEqual(Object.getOwnPropertyNames(root.list), ['length', '_objectId', '0', '1', '2'])
+      tesseract.changeset(root, doc => {
+        assert.deepEqual(Object.getOwnPropertyNames(doc.list), ['length', '_objectId', '0', '1', '2'])
+      })
     })
 
     it('should support JSON.stringify()', () => {
-      assert.deepEqual(JSON.parse(JSON.stringify(root)), {
-        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+      tesseract.changeset(root, doc => {
+        assert.deepEqual(JSON.parse(JSON.stringify(doc)), {
+          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+        })
+        assert.deepEqual(JSON.stringify(doc.list), '[1,2,3]')
       })
-      assert.deepEqual(JSON.stringify(root.list), '[1,2,3]')
     })
 
     it('should allow inspection as regular JS objects', () => {
-      assert.deepEqual(root._inspect, {
-        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
-      })
-      assert.deepEqual(tesseract.inspect(root), {
-        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+      tesseract.changeset(root, doc => {
+        assert.deepEqual(doc._inspect, {
+          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+        })
+        assert.deepEqual(tesseract.inspect(doc), {
+          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+        })
       })
     })
 
     it('should support iteration', () => {
-      let copy = []
-      for (let x of root.list) copy.push(x)
-      assert.deepEqual(copy, [1, 2, 3])
+      tesseract.changeset(root, doc => {
+        let copy = []
+        for (let x of doc.list) copy.push(x)
+        assert.deepEqual(copy, [1, 2, 3])
 
-      // spread operator also uses iteration protocol
-      assert.deepEqual([0, ...root.list, 4], [0, 1, 2, 3, 4])
+        // spread operator also uses iteration protocol
+        assert.deepEqual([0, ...doc.list, 4], [0, 1, 2, 3, 4])
+      })
     })
 
     describe('should support standard read-only methods', () => {
       it('concat()', () => {
-        assert.deepEqual(root.list.concat([4, 5, 6]), [1, 2, 3, 4, 5, 6])
-        assert.deepEqual(root.list.concat([4], [5, [6]]), [1, 2, 3, 4, 5, [6]])
+        tesseract.changeset(root, doc => {
+          assert.deepEqual(doc.list.concat([4, 5, 6]), [1, 2, 3, 4, 5, 6])
+          assert.deepEqual(doc.list.concat([4], [5, [6]]), [1, 2, 3, 4, 5, [6]])
+        })
       })
 
       it('entries()', () => {
-        let copy = []
-        for (let x of root.list.entries()) copy.push(x)
-        assert.deepEqual(copy, [[0, 1], [1, 2], [2, 3]])
-        assert.deepEqual([...root.list.entries()], [[0, 1], [1, 2], [2, 3]])
+        tesseract.changeset(root, doc => {
+          let copy = []
+          for (let x of doc.list.entries()) copy.push(x)
+          assert.deepEqual(copy, [[0, 1], [1, 2], [2, 3]])
+          assert.deepEqual([...doc.list.entries()], [[0, 1], [1, 2], [2, 3]])
+        })
       })
 
       it('every()', () => {
-        assert.strictEqual(root.empty.every(() => false), true)
-        assert.strictEqual(root.list.every(val => val > 0), true)
-        assert.strictEqual(root.list.every(val => val > 2), false)
-        assert.strictEqual(root.list.every((val, index) => index < 3), true)
-        root.list.every(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.every(() => false), true)
+          assert.strictEqual(doc.list.every(val => val > 0), true)
+          assert.strictEqual(doc.list.every(val => val > 2), false)
+          assert.strictEqual(doc.list.every((val, index) => index < 3), true)
+          doc.list.every(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('filter()', () => {
-        assert.deepEqual(root.empty.filter(() => false), [])
-        assert.deepEqual(root.list.filter(num => num % 2 === 1), [1, 3])
-        assert.deepEqual(root.list.filter(num => true), [1, 2, 3])
-        root.list.filter(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.deepEqual(doc.empty.filter(() => false), [])
+          assert.deepEqual(doc.list.filter(num => num % 2 === 1), [1, 3])
+          assert.deepEqual(doc.list.filter(num => true), [1, 2, 3])
+          doc.list.filter(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('find()', () => {
-        assert.strictEqual(root.empty.find(() => true), undefined)
-        assert.strictEqual(root.list.find(num => num >= 2), 2)
-        assert.strictEqual(root.list.find(num => num >= 4), undefined)
-        root.list.find(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.find(() => true), undefined)
+          assert.strictEqual(doc.list.find(num => num >= 2), 2)
+          assert.strictEqual(doc.list.find(num => num >= 4), undefined)
+          doc.list.find(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('findIndex()', () => {
-        assert.strictEqual(root.empty.findIndex(() => true), -1)
-        assert.strictEqual(root.list.findIndex(num => num >= 2), 1)
-        assert.strictEqual(root.list.findIndex(num => num >= 4), -1)
-        root.list.findIndex(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.findIndex(() => true), -1)
+          assert.strictEqual(doc.list.findIndex(num => num >= 2), 1)
+          assert.strictEqual(doc.list.findIndex(num => num >= 4), -1)
+          doc.list.findIndex(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('forEach()', () => {
-        root.empty.forEach(() => { assert.fail('was called', 'not called', 'callback error') })
-        let binary = []
-        root.list.forEach(num => binary.push(num.toString(2)))
-        assert.deepEqual(binary, ['1', '10', '11'])
-        root.list.forEach(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          doc.empty.forEach(() => { assert.fail('was called', 'not called', 'callback error') })
+          let binary = []
+          doc.list.forEach(num => binary.push(num.toString(2)))
+          assert.deepEqual(binary, ['1', '10', '11'])
+          doc.list.forEach(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('includes()', () => {
-        assert.strictEqual(root.empty.includes(3), false)
-        assert.strictEqual(root.list.includes(3), true)
-        assert.strictEqual(root.list.includes(1, 1), false)
-        assert.strictEqual(root.list.includes(2, -2), true)
-        assert.strictEqual(root.list.includes(0), false)
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.includes(3), false)
+          assert.strictEqual(doc.list.includes(3), true)
+          assert.strictEqual(doc.list.includes(1, 1), false)
+          assert.strictEqual(doc.list.includes(2, -2), true)
+          assert.strictEqual(doc.list.includes(0), false)
+        })
       })
 
       it('indexOf()', () => {
-        assert.strictEqual(root.empty.indexOf(3), -1)
-        assert.strictEqual(root.list.indexOf(3), 2)
-        assert.strictEqual(root.list.indexOf(1, 1), -1)
-        assert.strictEqual(root.list.indexOf(2, -2), 1)
-        assert.strictEqual(root.list.indexOf(0), -1)
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.indexOf(3), -1)
+          assert.strictEqual(doc.list.indexOf(3), 2)
+          assert.strictEqual(doc.list.indexOf(1, 1), -1)
+          assert.strictEqual(doc.list.indexOf(2, -2), 1)
+          assert.strictEqual(doc.list.indexOf(0), -1)
+        })
       })
 
       it('join()', () => {
-        assert.strictEqual(root.empty.join(', '), '')
-        assert.strictEqual(root.list.join(), '1,2,3')
-        assert.strictEqual(root.list.join(''), '123')
-        assert.strictEqual(root.list.join(', '), '1, 2, 3')
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.join(', '), '')
+          assert.strictEqual(doc.list.join(), '1,2,3')
+          assert.strictEqual(doc.list.join(''), '123')
+          assert.strictEqual(doc.list.join(', '), '1, 2, 3')
+        })
       })
 
       it('keys()', () => {
-        let keys = []
-        for (let x of root.list.keys()) keys.push(x)
-        assert.deepEqual(keys, [0, 1, 2])
-        assert.deepEqual([...root.list.keys()], [0, 1, 2])
+        tesseract.changeset(root, doc => {
+          let keys = []
+          for (let x of doc.list.keys()) keys.push(x)
+          assert.deepEqual(keys, [0, 1, 2])
+          assert.deepEqual([...doc.list.keys()], [0, 1, 2])
+        })
       })
 
       it('lastIndexOf()', () => {
-        assert.strictEqual(root.empty.lastIndexOf(3), -1)
-        assert.strictEqual(root.list.lastIndexOf(3), 2)
-        assert.strictEqual(root.list.lastIndexOf(3, 1), -1)
-        assert.strictEqual(root.list.lastIndexOf(3, -1), 2)
-        assert.strictEqual(root.list.lastIndexOf(0), -1)
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.lastIndexOf(3), -1)
+          assert.strictEqual(doc.list.lastIndexOf(3), 2)
+          assert.strictEqual(doc.list.lastIndexOf(3, 1), -1)
+          assert.strictEqual(doc.list.lastIndexOf(3, -1), 2)
+          assert.strictEqual(doc.list.lastIndexOf(0), -1)
+        })
       })
 
       it('map()', () => {
-        assert.deepEqual(root.empty.map(num => num * 2), [])
-        assert.deepEqual(root.list.map(num => num * 2), [2, 4, 6])
-        assert.deepEqual(root.list.map((num, index) => index + '->' + num), ['0->1', '1->2', '2->3'])
-        root.list.map(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.deepEqual(doc.empty.map(num => num * 2), [])
+          assert.deepEqual(doc.list.map(num => num * 2), [2, 4, 6])
+          assert.deepEqual(doc.list.map((num, index) => index + '->' + num), ['0->1', '1->2', '2->3'])
+          doc.list.map(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('reduce()', () => {
-        assert.strictEqual(root.empty.reduce((sum, val) => sum + val, 0), 0)
-        assert.strictEqual(root.list.reduce((sum, val) => sum + val, 0), 6)
-        assert.strictEqual(root.list.reduce((sum, val) => sum + val, ''), '123')
-        assert.strictEqual(root.list.reduce((sum, val) => sum + val), 6)
-        assert.strictEqual(root.list.reduce((sum, val, index) => (index % 2 === 0) ? (sum + val) : sum, 0), 4)
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.reduce((sum, val) => sum + val, 0), 0)
+          assert.strictEqual(doc.list.reduce((sum, val) => sum + val, 0), 6)
+          assert.strictEqual(doc.list.reduce((sum, val) => sum + val, ''), '123')
+          assert.strictEqual(doc.list.reduce((sum, val) => sum + val), 6)
+          assert.strictEqual(doc.list.reduce((sum, val, index) => (index % 2 === 0) ? (sum + val) : sum, 0), 4)
+        })
       })
 
       it('reduceRight()', () => {
-        assert.strictEqual(root.empty.reduceRight((sum, val) => sum + val, 0), 0)
-        assert.strictEqual(root.list.reduceRight((sum, val) => sum + val, 0), 6)
-        assert.strictEqual(root.list.reduceRight((sum, val) => sum + val, ''), '321')
-        assert.strictEqual(root.list.reduceRight((sum, val) => sum + val), 6)
-        assert.strictEqual(root.list.reduceRight((sum, val, index) => (index % 2 === 0) ? (sum + val) : sum, 0), 4)
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.reduceRight((sum, val) => sum + val, 0), 0)
+          assert.strictEqual(doc.list.reduceRight((sum, val) => sum + val, 0), 6)
+          assert.strictEqual(doc.list.reduceRight((sum, val) => sum + val, ''), '321')
+          assert.strictEqual(doc.list.reduceRight((sum, val) => sum + val), 6)
+          assert.strictEqual(doc.list.reduceRight((sum, val, index) => (index % 2 === 0) ? (sum + val) : sum, 0), 4)
+        })
       })
 
       it('slice()', () => {
-        assert.deepEqual(root.empty.slice(), [])
-        assert.deepEqual(root.list.slice(2), [3])
-        assert.deepEqual(root.list.slice(-2), [2, 3])
-        assert.deepEqual(root.list.slice(0, 0), [])
-        assert.deepEqual(root.list.slice(0, 1), [1])
-        assert.deepEqual(root.list.slice(0, -1), [1, 2])
+        tesseract.changeset(root, doc => {
+          assert.deepEqual(doc.empty.slice(), [])
+          assert.deepEqual(doc.list.slice(2), [3])
+          assert.deepEqual(doc.list.slice(-2), [2, 3])
+          assert.deepEqual(doc.list.slice(0, 0), [])
+          assert.deepEqual(doc.list.slice(0, 1), [1])
+          assert.deepEqual(doc.list.slice(0, -1), [1, 2])
+        })
       })
 
       it('some()', () => {
-        assert.strictEqual(root.empty.some(() => true), false)
-        assert.strictEqual(root.list.some(val => val > 2), true)
-        assert.strictEqual(root.list.some(val => val > 4), false)
-        assert.strictEqual(root.list.some((val, index) => index > 2), false)
-        root.list.some(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.some(() => true), false)
+          assert.strictEqual(doc.list.some(val => val > 2), true)
+          assert.strictEqual(doc.list.some(val => val > 4), false)
+          assert.strictEqual(doc.list.some((val, index) => index > 2), false)
+          doc.list.some(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'})
+        })
       })
 
       it('toString()', () => {
-        assert.strictEqual(root.empty.toString(), '')
-        assert.strictEqual(root.list.toString(), '1,2,3')
+        tesseract.changeset(root, doc => {
+          assert.strictEqual(doc.empty.toString(), '')
+          assert.strictEqual(doc.list.toString(), '1,2,3')
+        })
       })
 
       it('values()', () => {
-        let values = []
-        for (let x of root.list.values()) values.push(x)
-        assert.deepEqual(values, [1, 2, 3])
-        assert.deepEqual([...root.list.values()], [1, 2, 3])
+        tesseract.changeset(root, doc => {
+          let values = []
+          for (let x of doc.list.values()) values.push(x)
+          assert.deepEqual(values, [1, 2, 3])
+          assert.deepEqual([...doc.list.values()], [1, 2, 3])
+        })
       })
     })
 

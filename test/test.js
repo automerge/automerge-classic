@@ -45,9 +45,9 @@ describe('Tesseract', () => {
 
       it('should prevent mutations outside of a changeset block', () => {
         s2 = tesseract.changeset(s1, doc => doc.foo = 'bar')
-        assert.throws(() => { s2.foo = 'lemon' }, /this object is read-only/)
-        assert.throws(() => { delete s2['foo'] }, /this object is read-only/)
-        assert.throws(() => { tesseract.changeset(s2, doc => s2.foo = 'bar') }, /this object is read-only/)
+        assert.throws(() => { s2.foo = 'lemon' }, /Cannot assign to read only property/)
+        assert.throws(() => { delete s2['foo'] }, /Cannot delete property/)
+        assert.throws(() => { tesseract.changeset(s2, doc => s2.foo = 'bar') }, /Cannot assign to read only property/)
         assert.throws(() => { tesseract.assign(s2, {x: 4}) }, /tesseract.assign requires a writable object/)
       })
 
@@ -63,10 +63,14 @@ describe('Tesseract', () => {
         assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', counter: 3})
       })
 
+      /* FIXME: the example in the previous test case actually creates spurious conflicts,
+       * but the deepEqual comparison doesn't detect them */
+      it('should not record conflicts when writing the same field several times within one changeset')
+
       it('should sanity-check arguments', () => {
         s1 = tesseract.changeset(s1, doc => doc.nested = {})
         assert.throws(() => { tesseract.changeset({},        doc => doc.foo = 'bar') }, /must be the object to modify/)
-        assert.throws(() => { tesseract.changeset(s1.nested, doc => doc.foo = 'bar') }, /must be the document root/)
+        assert.throws(() => { tesseract.changeset(s1.nested, doc => doc.foo = 'bar') }, /must be the object to modify/)
       })
 
       it('should not allow nested changeset blocks', () => {
@@ -280,14 +284,6 @@ describe('Tesseract', () => {
     })
 
     describe('lists', () => {
-      it('should assign a UUID to nested lists', () => {
-        s1 = tesseract.changeset(s1, doc => doc.list = [])
-        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', list: []})
-        assert.deepEqual(s1.list, [])
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.list._objectId))
-        assert.notEqual(s1.list._objectId, '00000000-0000-0000-0000-000000000000')
-      })
-
       it('should allow elements to be inserted', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = [])
         s1 = tesseract.changeset(s1, doc => doc.noodles.insertAt(0, 'udon', 'soba'))
@@ -431,7 +427,7 @@ describe('Tesseract', () => {
 
       it('should allow several references to the same list object', () => {
         s1 = tesseract.changeset(s1, doc => doc.japaneseNoodles = ['udon', 'soba'])
-        s1 = tesseract.changeset(s1, doc => doc.theBestNoodles = s1.japaneseNoodles)
+        s1 = tesseract.changeset(s1, doc => doc.theBestNoodles = doc.japaneseNoodles)
         s1 = tesseract.changeset(s1, doc => doc.theBestNoodles.push('ramen'))
         assert.deepEqual(s1, {
           _objectId: '00000000-0000-0000-0000-000000000000',

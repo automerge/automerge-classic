@@ -244,6 +244,7 @@ function getObjectFields(opSet, objectId) {
 }
 
 function getObjectField(opSet, objectId, key, context) {
+  if (key === '_objectId') return objectId
   if (!validFieldName(key)) return undefined
   const ops = getFieldOps(opSet, objectId, key)
   if (!ops.isEmpty()) return getOpValue(ops.first(), context)
@@ -254,7 +255,7 @@ function getObjectConflicts(opSet, objectId, context) {
     .filter((field, key) => validFieldName(key) && getFieldOps(opSet, objectId, key).size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
       .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(op, context)])
-    ]).toJS()
+    ])
 }
 
 function listElemByIndex(opSet, listId, index, context) {

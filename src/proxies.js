@@ -97,7 +97,7 @@ const MapHandler = {
     if (key === '_objectId') return objectId
     if (key === '_state') return context.state
     if (key === '_actorId') return context.state.get('actorId')
-    if (key === '_conflicts') return OpSet.getObjectConflicts(context.state.get('opSet'), objectId, context)
+    if (key === '_conflicts') return OpSet.getObjectConflicts(context.state.get('opSet'), objectId, context).toJS()
     if (key === '_changeset') return context
     return OpSet.getObjectField(context.state.get('opSet'), objectId, key, context)
   },

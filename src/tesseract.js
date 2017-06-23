@@ -142,17 +142,54 @@ function makeChangeset(oldState, newState, message) {
   return oldState.set('opSet', OpSet.addChangeset(oldState.get('opSet'), changeset))
 }
 
-///// tesseract.* API
+function instantiateImmutable(objectId) {
+  const isRoot = (objectId === '00000000-0000-0000-0000-000000000000')
+  const opSet = this.state.get('opSet')
+  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  const cached = opSet.getIn(['cache', objectId])
+  if (cached && !isRoot) return cached
+  let obj
 
-function makeStore(context) {
-  return rootObjectProxy(context)
+  if (isRoot || objType === 'makeMap') {
+    let proto = {_actorId: this.state.get('actorId')}
+    obj = Object.create(proto)
+    OpSet.getObjectFields(opSet, objectId).forEach(field => {
+      obj[field] = OpSet.getObjectField(opSet, objectId, field, this)
+    })
+
+    // TODO would be better to make _conflicts an own property (not in the prototype)
+    const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
+    proto._conflicts = Object.freeze(conflicts.toJS())
+
+  } else if (objType === 'makeList') {
+    obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
+  } else {
+    throw 'Unknown object type: ' + objType
+  }
+
+  // Don't cache the root object, because it contains a bunch of state that may change
+  // without invalidating the cache entry for the root object (for example, the queue of
+  // operations that are not yet causally ready).
+  if (isRoot) {
+    Object.getPrototypeOf(obj)._state = this.state
+  } else {
+    this.state = this.state.setIn(['opSet', 'cache', objectId], obj)
+  }
+  Object.freeze(obj)
+  return obj
 }
 
+function rootObject(state) {
+  const context = {state, instantiateObject: instantiateImmutable}
+  return context.instantiateObject('00000000-0000-0000-0000-000000000000')
+}
+
+///// tesseract.* API
+
 function init(actorId) {
-  const state = Map()
+  return rootObject(Map()
     .set('actorId', actorId || UUID.generate())
-    .set('opSet', OpSet.init())
-  return rootObjectProxy({state})
+    .set('opSet', OpSet.init()))
 }
 
 function checkTarget(funcName, target, needMutable) {
@@ -161,7 +198,7 @@ function checkTarget(funcName, target, needMutable) {
     throw new TypeError('The first argument to tesseract.' + funcName +
                         ' must be the object to modify, but you passed ' + JSON.stringify(target))
   }
-  if (!target._changeset.mutable && needMutable) {
+  if (needMutable && (!target._changeset || !target._changeset.mutable)) {
     throw new TypeError('tesseract.' + funcName + ' requires a writable object as first argument, ' +
                         'but the one you passed is read-only. Please use tesseract.changeset() ' +
                         'to get a writable version.')
@@ -182,7 +219,7 @@ function changeset(root, message, callback) {
   if (root._objectId !== '00000000-0000-0000-0000-000000000000') {
     throw new TypeError('The first argument to tesseract.changeset must be the document root')
   }
-  if (root._changeset.mutable) {
+  if (root._changeset && root._changeset.mutable) {
     throw new TypeError('Calls to tesseract.changeset cannot be nested')
   }
   if (typeof message === 'function' && callback === undefined) {
@@ -192,7 +229,7 @@ function changeset(root, message, callback) {
   const oldState = root._state
   const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return rootObjectProxy({state: makeChangeset(oldState, context.state, message)})
+  return rootObject(makeChangeset(oldState, context.state, message))
 }
 
 function assign(target, values) {
@@ -208,16 +245,14 @@ function assign(target, values) {
     }
   }
   target._changeset.state = state
-  return makeStore(target._changeset)
 }
 
 function load(string, actorId) {
   let opSet = OpSet.init()
   transit.fromJSON(string).forEach(changeset => { opSet = OpSet.addChangeset(opSet, changeset) })
-  const state = Map()
+  return rootObject(Map()
     .set('actorId', actorId || UUID.generate())
-    .set('opSet', opSet)
-  return rootObjectProxy({state})
+    .set('opSet', opSet))
 }
 
 function save(store) {
@@ -250,7 +285,7 @@ function getHistory(store) {
     const snapshot = Map({actorId: store._actorId, opSet: state})
     history.push({
       changeset: state.get('changeset').toJS(),
-      snapshot: rootObjectProxy({state: snapshot})
+      snapshot: rootObject(snapshot)
     })
     return history
   }, [])
@@ -272,7 +307,7 @@ function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
   let opSet = store._state.get('opSet')
   for (let delta of deltas) opSet = OpSet.addChangeset(opSet, fromJS(delta))
-  return rootObjectProxy({state: store._state.set('opSet', opSet)})
+  return rootObject(store._state.set('opSet', opSet))
 }
 
 function merge(local, remote) {
