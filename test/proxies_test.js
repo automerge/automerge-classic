@@ -45,38 +45,44 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should support Object.keys()', () => {
-      assert.deepEqual(Object.keys(root), [])
+      assert.deepEqual(Object.keys(root), ['_objectId'])
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(Object.keys(root), ['key1'])
+      assert.deepEqual(Object.keys(root), ['_objectId', 'key1'])
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.keys(root), ['key1', 'key2'], ['key2', 'key1'])
+      equalsOneOf(Object.keys(root), ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'])
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
-      assert.deepEqual(Object.getOwnPropertyNames(root), [])
+      assert.deepEqual(Object.getOwnPropertyNames(root), ['_objectId'])
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(Object.getOwnPropertyNames(root), ['key1'])
+      assert.deepEqual(Object.getOwnPropertyNames(root), ['_objectId', 'key1'])
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(Object.getOwnPropertyNames(root), ['key1', 'key2'], ['key2', 'key1'])
+      equalsOneOf(Object.getOwnPropertyNames(root), ['_objectId', 'key1', 'key2'], ['_objectId', 'key2', 'key1'])
     })
 
     it('should support JSON.stringify()', () => {
-      assert.deepEqual(JSON.stringify(root), '{}')
+      assert.deepEqual(JSON.stringify(root), '{"_objectId":"00000000-0000-0000-0000-000000000000"}')
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(JSON.stringify(root), '{"key1":"value1"}')
+      assert.deepEqual(JSON.stringify(root), '{"_objectId":"00000000-0000-0000-0000-000000000000","key1":"value1"}')
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      equalsOneOf(JSON.stringify(root), '{"key1":"value1","key2":"value2"}', '{"key2":"value2","key1":"value1"}')
+      assert.deepEqual(JSON.parse(JSON.stringify(root)), {
+        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+      })
     })
 
     it('should allow inspection as regular JS objects', () => {
-      assert.deepEqual(root._inspect, {})
-      assert.deepEqual(tesseract.inspect(root), {})
+      assert.deepEqual(root._inspect, {_objectId: '00000000-0000-0000-0000-000000000000'})
+      assert.deepEqual(tesseract.inspect(root), {_objectId: '00000000-0000-0000-0000-000000000000'})
       root = tesseract.changeset(root, doc => doc.key1 = 'value1')
-      assert.deepEqual(root._inspect, {key1: 'value1'})
-      assert.deepEqual(tesseract.inspect(root), {key1: 'value1'})
+      assert.deepEqual(root._inspect, {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
+      assert.deepEqual(tesseract.inspect(root), {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
       root = tesseract.changeset(root, doc => doc.key2 = 'value2')
-      assert.deepEqual(root._inspect, {key1: 'value1', key2: 'value2'})
-      assert.deepEqual(tesseract.inspect(root), {key1: 'value1', key2: 'value2'})
+      assert.deepEqual(root._inspect, {
+        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+      })
+      assert.deepEqual(tesseract.inspect(root), {
+        _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+      })
     })
   })
 
@@ -133,17 +139,23 @@ describe('Tesseract proxy API', () => {
     })
 
     it('should support Object.getOwnPropertyNames()', () => {
-      assert.deepEqual(Object.getOwnPropertyNames(root.list), ['length', '0', '1', '2'])
+      assert.deepEqual(Object.getOwnPropertyNames(root.list), ['length', '_objectId', '0', '1', '2'])
     })
 
     it('should support JSON.stringify()', () => {
-      equalsOneOf(JSON.stringify(root), '{"list":[1,2,3],"empty":[]}', '{"empty":[],"list":[1,2,3]}')
+      assert.deepEqual(JSON.parse(JSON.stringify(root)), {
+        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+      })
       assert.deepEqual(JSON.stringify(root.list), '[1,2,3]')
     })
 
     it('should allow inspection as regular JS objects', () => {
-      assert.deepEqual(root._inspect, {list: [1, 2, 3], empty: []})
-      assert.deepEqual(tesseract.inspect(root), {list: [1, 2, 3], empty: []})
+      assert.deepEqual(root._inspect, {
+        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+      })
+      assert.deepEqual(tesseract.inspect(root), {
+        _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+      })
     })
 
     it('should support iteration', () => {

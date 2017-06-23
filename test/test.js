@@ -10,7 +10,7 @@ describe('Tesseract', () => {
     })
 
     it('should initially be an empty map', () => {
-      assert.deepEqual(s1, {})
+      assert.deepEqual(s1, { _objectId: '00000000-0000-0000-0000-000000000000' })
     })
 
     it('should not mutate objects', () => {
@@ -33,10 +33,14 @@ describe('Tesseract', () => {
           doc.first = 'one'
           assert.strictEqual(doc.first, 'one')
           doc.second = 'two'
-          assert.deepEqual(doc, {first: 'one', second: 'two'})
+          assert.deepEqual(doc, {
+            _objectId: '00000000-0000-0000-0000-000000000000', first: 'one', second: 'two'
+          })
         })
-        assert.deepEqual(s1, {})
-        assert.deepEqual(s2, {first: 'one', second: 'two'})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000'})
+        assert.deepEqual(s2, {
+          _objectId: '00000000-0000-0000-0000-000000000000', first: 'one', second: 'two'
+        })
       })
 
       it('should prevent mutations outside of a changeset block', () => {
@@ -55,8 +59,8 @@ describe('Tesseract', () => {
           doc.counter += 1
           assert.strictEqual(doc.counter, 3)
         })
-        assert.deepEqual(s1, {})
-        assert.deepEqual(s2, {counter: 3})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000'})
+        assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', counter: 3})
       })
 
       it('should sanity-check arguments', () => {
@@ -80,8 +84,8 @@ describe('Tesseract', () => {
           s2 = tesseract.changeset(s1, doc2 => doc2.two = 2)
           doc1.one = 1
         })
-        assert.deepEqual(s1, {one: 1})
-        assert.deepEqual(s2, {two: 2})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', one: 1})
+        assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', two: 2})
       })
     })
 
@@ -91,7 +95,7 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, 'set zap', doc => doc.zip = 'zap')
         assert.strictEqual(s1.foo, 'bar')
         assert.strictEqual(s1.zip, 'zap')
-        assert.deepEqual(s1, {'foo': 'bar', 'zip': 'zap'})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', foo: 'bar', zip: 'zap'})
       })
 
       it('should handle multi-property assignment', () => {
@@ -100,7 +104,7 @@ describe('Tesseract', () => {
         })
         assert.strictEqual(s1.foo, 'bar')
         assert.strictEqual(s1.answer, 42)
-        assert.deepEqual(s1, {'foo': 'bar', 'answer': 42})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', foo: 'bar', answer: 42})
       })
 
       it('should handle root property deletion', () => {
@@ -108,7 +112,7 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, 'del foo', doc => { delete doc['foo'] })
         assert.strictEqual(s1.foo, undefined)
         assert.strictEqual(s1.something, null)
-        assert.deepEqual(s1, {something: null})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', something: null})
       })
 
       it('should allow the type of a property to be changed', () => {
@@ -135,10 +139,13 @@ describe('Tesseract', () => {
     describe('nested maps', () => {
       it('should assign a UUID to nested maps', () => {
         s1 = tesseract.changeset(s1, doc => { doc.nested = {} })
-        assert.deepEqual(s1, {nested: {}})
-        assert.deepEqual(s1.nested, {})
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.nested._objectId))
         assert.notEqual(s1.nested._objectId, '00000000-0000-0000-0000-000000000000')
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000',
+          nested: {_objectId: s1.nested._objectId}
+        })
+        assert.deepEqual(s1.nested, {_objectId: s1.nested._objectId})
       })
 
       it('should handle assignment of a nested property', () => {
@@ -149,8 +156,11 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, 'second change', doc => {
           doc.nested.one = 1
         })
-        assert.deepEqual(s1, {nested: {foo: 'bar', one: 1}})
-        assert.deepEqual(s1.nested, {foo: 'bar', one: 1})
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000',
+          nested: {_objectId: s1.nested._objectId, foo: 'bar', one: 1}
+        })
+        assert.deepEqual(s1.nested, {_objectId: s1.nested._objectId, foo: 'bar', one: 1})
         assert.strictEqual(s1.nested.foo, 'bar')
         assert.strictEqual(s1.nested['foo'], 'bar')
         assert.strictEqual(s1.nested.one, 1)
@@ -161,8 +171,11 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => {
           doc.textStyle = {bold: false, fontSize: 12}
         })
-        assert.deepEqual(s1, {textStyle: {bold: false, fontSize: 12}})
-        assert.deepEqual(s1.textStyle, {bold: false, fontSize: 12})
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000',
+          textStyle: {_objectId: s1.textStyle._objectId, bold: false, fontSize: 12}
+        })
+        assert.deepEqual(s1.textStyle, {_objectId: s1.textStyle._objectId, bold: false, fontSize: 12})
         assert.strictEqual(s1.textStyle.bold, false)
         assert.strictEqual(s1.textStyle.fontSize, 12)
       })
@@ -175,7 +188,9 @@ describe('Tesseract', () => {
         assert.strictEqual(s1.textStyle.typeface, 'Optima')
         assert.strictEqual(s1.textStyle.bold, false)
         assert.strictEqual(s1.textStyle.fontSize, 14)
-        assert.deepEqual(s1, {textStyle: {typeface: 'Optima', bold: false, fontSize: 14}})
+        assert.deepEqual(s1.textStyle, {
+          _objectId: s1.textStyle._objectId, typeface: 'Optima', bold: false, fontSize: 14
+        })
       })
 
       it('should handle arbitrary-depth nesting', () => {
@@ -185,7 +200,15 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => {
           doc.a.b.c.d.e.f.i = 'j'
         })
-        assert.deepEqual(s1, {a: {b: {c: {d: {e: {f: {g: 'h', i: 'j'}}}}}}})
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000', a: {
+            _objectId: s1.a._objectId, b: {
+              _objectId: s1.a.b._objectId, c: {
+                _objectId: s1.a.b.c._objectId, d: {
+                  _objectId: s1.a.b.c.d._objectId, e: {
+                    _objectId: s1.a.b.c.d.e._objectId, f: {
+                      _objectId: s1.a.b.c.d.e.f._objectId,
+                      g: 'h', i: 'j'}}}}}}})
         assert.strictEqual(s1.a.b.c.d.e.f.g, 'h')
         assert.strictEqual(s1.a.b.c.d.e.f.i, 'j')
       })
@@ -197,20 +220,25 @@ describe('Tesseract', () => {
         s2 = tesseract.changeset(s1, 'change 2', doc => {
           doc.myPet = {species: 'koi', variety: '紅白', colors: {red: true, white: true, black: false}}
         })
-        assert.deepEqual(s1, {myPet: {species: 'dog', legs: 4, breed: 'dachshund'}})
+        assert.deepEqual(s1.myPet, {
+          _objectId: s1.myPet._objectId, species: 'dog', legs: 4, breed: 'dachshund'
+        })
         assert.strictEqual(s1.myPet.breed, 'dachshund')
-        assert.deepEqual(s2, {myPet: {species: 'koi', variety: '紅白', colors: {red: true, white: true, black: false}}})
+        assert.deepEqual(s2.myPet, {
+          _objectId: s2.myPet._objectId, species: 'koi', variety: '紅白',
+          colors: {_objectId: s2.myPet.colors._objectId, red: true, white: true, black: false}
+        })
         assert.strictEqual(s2.myPet.breed, undefined)
         assert.strictEqual(s2.myPet.variety, '紅白')
       })
 
       it('should allow fields to be changed between primitive and nested map', () => {
         s1 = tesseract.changeset(s1, doc => doc.color = '#ff7f00')
-        assert.deepEqual(s1.color, '#ff7f00')
+        assert.strictEqual(s1.color, '#ff7f00')
         s1 = tesseract.changeset(s1, doc => doc.color = {red: 255, green: 127, blue: 0})
-        assert.deepEqual(s1.color, {red: 255, green: 127, blue: 0})
+        assert.deepEqual(s1.color, {_objectId: s1.color._objectId, red: 255, green: 127, blue: 0})
         s1 = tesseract.changeset(s1, doc => doc.color = '#ff7f00')
-        assert.deepEqual(s1.color, '#ff7f00')
+        assert.strictEqual(s1.color, '#ff7f00')
       })
 
       it('should allow several references to the same map object', () => {
@@ -230,7 +258,7 @@ describe('Tesseract', () => {
         })
         s1 = tesseract.changeset(s1, 'non-bold', doc => delete doc.textStyle['bold'])
         assert.strictEqual(s1.textStyle.bold, undefined)
-        assert.deepEqual(s1, {textStyle: {typeface: 'Optima', fontSize: 12}})
+        assert.deepEqual(s1.textStyle, {_objectId: s1.textStyle._objectId, typeface: 'Optima', fontSize: 12})
       })
 
       it('should handle deletion of references to a map', () => {
@@ -239,7 +267,7 @@ describe('Tesseract', () => {
         })
         s1 = tesseract.changeset(s1, doc => delete doc['textStyle'])
         assert.strictEqual(s1.textStyle, undefined)
-        assert.deepEqual(s1, {title: 'Hello'})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', title: 'Hello'})
       })
 
       it('should validate field names', () => {
@@ -254,7 +282,7 @@ describe('Tesseract', () => {
     describe('lists', () => {
       it('should assign a UUID to nested lists', () => {
         s1 = tesseract.changeset(s1, doc => doc.list = [])
-        assert.deepEqual(s1, {list: []})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', list: []})
         assert.deepEqual(s1.list, [])
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.list._objectId))
         assert.notEqual(s1.list._objectId, '00000000-0000-0000-0000-000000000000')
@@ -264,7 +292,7 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = [])
         s1 = tesseract.changeset(s1, doc => doc.noodles.insertAt(0, 'udon', 'soba'))
         s1 = tesseract.changeset(s1, doc => doc.noodles.insertAt(1, 'ramen'))
-        assert.deepEqual(s1, {noodles: ['udon', 'ramen', 'soba']})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', noodles: ['udon', 'ramen', 'soba']})
         assert.deepEqual(s1.noodles, ['udon', 'ramen', 'soba'])
         assert.strictEqual(s1.noodles[0], 'udon')
         assert.strictEqual(s1.noodles[1], 'ramen')
@@ -274,7 +302,7 @@ describe('Tesseract', () => {
 
       it('should handle assignment of a list literal', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
-        assert.deepEqual(s1, {noodles: ['udon', 'ramen', 'soba']})
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', noodles: ['udon', 'ramen', 'soba']})
         assert.deepEqual(s1.noodles, ['udon', 'ramen', 'soba'])
         assert.strictEqual(s1.noodles[0], 'udon')
         assert.strictEqual(s1.noodles[1], 'ramen')
@@ -297,9 +325,8 @@ describe('Tesseract', () => {
       it('should handle deletion of list elements', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
         s1 = tesseract.changeset(s1, doc => delete doc.noodles[1])
-        assert.deepEqual(s1, {noodles: ['udon', 'soba']})
+        assert.deepEqual(s1.noodles, ['udon', 'soba'])
         s1 = tesseract.changeset(s1, doc => doc.noodles.deleteAt(1))
-        assert.deepEqual(s1, {noodles: ['udon']})
         assert.deepEqual(s1.noodles, ['udon'])
         assert.strictEqual(s1.noodles[0], 'udon')
         assert.strictEqual(s1.noodles[1], undefined)
@@ -310,7 +337,6 @@ describe('Tesseract', () => {
       it('should handle assignment of individual list indexes', () => {
         s1 = tesseract.changeset(s1, doc => doc.japaneseFood = ['udon', 'ramen', 'soba'])
         s1 = tesseract.changeset(s1, doc => doc.japaneseFood[1] = 'sushi')
-        assert.deepEqual(s1, {japaneseFood: ['udon', 'sushi', 'soba']})
         assert.deepEqual(s1.japaneseFood, ['udon', 'sushi', 'soba'])
         assert.strictEqual(s1.japaneseFood[0], 'udon')
         assert.strictEqual(s1.japaneseFood[1], 'sushi')
@@ -322,7 +348,6 @@ describe('Tesseract', () => {
       it('should treat out-by-one assignment as insertion', () => {
         s1 = tesseract.changeset(s1, doc => doc.japaneseFood = ['udon'])
         s1 = tesseract.changeset(s1, doc => doc.japaneseFood[1] = 'sushi')
-        assert.deepEqual(s1, {japaneseFood: ['udon', 'sushi']})
         assert.deepEqual(s1.japaneseFood, ['udon', 'sushi'])
         assert.strictEqual(s1.japaneseFood[0], 'udon')
         assert.strictEqual(s1.japaneseFood[1], 'sushi')
@@ -338,7 +363,7 @@ describe('Tesseract', () => {
       it('should allow bulk assignment of multiple list indexes', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
         s1 = tesseract.changeset(s1, doc => tesseract.assign(doc.noodles, {0: 'うどん', 2: 'そば'}))
-        assert.deepEqual(s1, {noodles: ['うどん', 'ramen', 'そば']})
+        assert.deepEqual(s1.noodles, ['うどん', 'ramen', 'そば'])
         assert.strictEqual(s1.noodles[0], 'うどん')
         assert.strictEqual(s1.noodles[1], 'ramen')
         assert.strictEqual(s1.noodles[2], 'そば')
@@ -349,19 +374,23 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = [{type: 'ramen', dishes: ['tonkotsu', 'shoyu']}])
         s1 = tesseract.changeset(s1, doc => doc.noodles.push({type: 'udon', dishes: ['tempura udon']}))
         s1 = tesseract.changeset(s1, doc => doc.noodles[0].dishes.push('miso'))
-        assert.deepEqual(s1, {noodles: [
-          {type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']},
-          {type: 'udon', dishes: ['tempura udon']}
+        assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', noodles: [
+          {_objectId: s1.noodles[0]._objectId, type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']},
+          {_objectId: s1.noodles[1]._objectId, type: 'udon', dishes: ['tempura udon']}
         ]})
-        assert.deepEqual(s1.noodles[0], {type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']})
-        assert.deepEqual(s1.noodles[1], {type: 'udon', dishes: ['tempura udon']})
+        assert.deepEqual(s1.noodles[0], {
+          _objectId: s1.noodles[0]._objectId, type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']
+        })
+        assert.deepEqual(s1.noodles[1], {
+          _objectId: s1.noodles[1]._objectId, type: 'udon', dishes: ['tempura udon']
+        })
       })
 
       it('should handle nested lists', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodleMatrix = [['ramen', 'tonkotsu', 'shoyu']])
         s1 = tesseract.changeset(s1, doc => doc.noodleMatrix.push(['udon', 'tempura udon']))
         s1 = tesseract.changeset(s1, doc => doc.noodleMatrix[0].push('miso'))
-        assert.deepEqual(s1, {noodleMatrix: [['ramen', 'tonkotsu', 'shoyu', 'miso'], ['udon', 'tempura udon']]})
+        assert.deepEqual(s1.noodleMatrix, [['ramen', 'tonkotsu', 'shoyu', 'miso'], ['udon', 'tempura udon']])
         assert.deepEqual(s1.noodleMatrix[0], ['ramen', 'tonkotsu', 'shoyu', 'miso'])
         assert.deepEqual(s1.noodleMatrix[1], ['udon', 'tempura udon'])
       })
@@ -370,7 +399,11 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'soba', 'ramen'])
         s1 = tesseract.changeset(s1, doc => doc.japaneseNoodles = doc.noodles)
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['wonton', 'pho'])
-        assert.deepEqual(s1, {noodles: ['wonton', 'pho'], japaneseNoodles: ['udon', 'soba', 'ramen']})
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000',
+          noodles: ['wonton', 'pho'],
+          japaneseNoodles: ['udon', 'soba', 'ramen']
+        })
         assert.deepEqual(s1.noodles, ['wonton', 'pho'])
         assert.strictEqual(s1.noodles[0], 'wonton')
         assert.strictEqual(s1.noodles[1], 'pho')
@@ -380,19 +413,19 @@ describe('Tesseract', () => {
 
       it('should allow assignment to change the type of a list element', () => {
         s1 = tesseract.changeset(s1, doc => doc.noodles = ['udon', 'soba', 'ramen'])
-        assert.deepEqual(s1, {noodles: ['udon', 'soba', 'ramen']})
+        assert.deepEqual(s1.noodles, ['udon', 'soba', 'ramen'])
         s1 = tesseract.changeset(s1, doc => doc.noodles[1] = {type: 'soba', options: ['hot', 'cold']})
-        assert.deepEqual(s1, {noodles: ['udon', {type: 'soba', options: ['hot', 'cold']}, 'ramen']})
+        assert.deepEqual(s1.noodles, ['udon', {_objectId: s1.noodles[1]._objectId, type: 'soba', options: ['hot', 'cold']}, 'ramen'])
         s1 = tesseract.changeset(s1, doc => doc.noodles[1] = ['hot soba', 'cold soba'])
-        assert.deepEqual(s1, {noodles: ['udon', ['hot soba', 'cold soba'], 'ramen']})
+        assert.deepEqual(s1.noodles, ['udon', ['hot soba', 'cold soba'], 'ramen'])
         s1 = tesseract.changeset(s1, doc => doc.noodles[1] = 'soba is the best')
-        assert.deepEqual(s1, {noodles: ['udon', 'soba is the best', 'ramen']})
+        assert.deepEqual(s1.noodles, ['udon', 'soba is the best', 'ramen'])
       })
 
       it('should handle arbitrary-depth nesting', () => {
         s1 = tesseract.changeset(s1, doc => doc.maze = [[[[[[[['noodles', ['here']]]]]]]]])
         s1 = tesseract.changeset(s1, doc => doc.maze[0][0][0][0][0][0][0][1].unshift('found'))
-        assert.deepEqual(s1, {maze: [[[[[[[['noodles', ['found', 'here']]]]]]]]]})
+        assert.deepEqual(s1.maze, [[[[[[[['noodles', ['found', 'here']]]]]]]]])
         assert.deepEqual(s1.maze[0][0][0][0][0][0][0][1][1], 'here')
       })
 
@@ -400,7 +433,11 @@ describe('Tesseract', () => {
         s1 = tesseract.changeset(s1, doc => doc.japaneseNoodles = ['udon', 'soba'])
         s1 = tesseract.changeset(s1, doc => doc.theBestNoodles = s1.japaneseNoodles)
         s1 = tesseract.changeset(s1, doc => doc.theBestNoodles.push('ramen'))
-        assert.deepEqual(s1, {japaneseNoodles: ['udon', 'soba', 'ramen'], theBestNoodles: ['udon', 'soba', 'ramen']})
+        assert.deepEqual(s1, {
+          _objectId: '00000000-0000-0000-0000-000000000000',
+          japaneseNoodles: ['udon', 'soba', 'ramen'],
+          theBestNoodles: ['udon', 'soba', 'ramen']
+        })
         assert.strictEqual(s1.japaneseNoodles[2], 'ramen')
         assert.strictEqual(s1.japaneseNoodles.length, 3)
         assert.strictEqual(s1.theBestNoodles[2], 'ramen')
@@ -423,7 +460,7 @@ describe('Tesseract', () => {
       s3 = tesseract.merge(s1, s2)
       assert.strictEqual(s3.foo, 'bar')
       assert.strictEqual(s3.hello, 'world')
-      assert.deepEqual(s3, {foo: 'bar', hello: 'world' })
+      assert.deepEqual(s3, {_objectId: '00000000-0000-0000-0000-000000000000', foo: 'bar', hello: 'world' })
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -432,10 +469,10 @@ describe('Tesseract', () => {
       s2 = tesseract.changeset(s2, doc => doc.field = 'two')
       s3 = tesseract.merge(s1, s2)
       if (s1._actorId > s2._actorId) {
-        assert.deepEqual(s3, {field: 'one'})
+        assert.deepEqual(s3, {_objectId: '00000000-0000-0000-0000-000000000000', field: 'one'})
         assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: 'two'}})
       } else {
-        assert.deepEqual(s3, {field: 'two'})
+        assert.deepEqual(s3, {_objectId: '00000000-0000-0000-0000-000000000000', field: 'two'})
         assert.deepEqual(s3._conflicts, {field: {[s1._actorId]: 'one'}})
       }
     })
@@ -445,12 +482,12 @@ describe('Tesseract', () => {
       s2 = tesseract.changeset(s2, doc => doc.field = ['list'])
       s3 = tesseract.changeset(s3, doc => doc.field = {thing: 'map'})
       s1 = tesseract.merge(tesseract.merge(s1, s2), s3)
-      equalsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
+      equalsOneOf(s1.field, 'string', ['list'], {_objectId: s3.field._objectId, thing: 'map'})
       if (s1.field === 'string') {
-        assert.deepEqual(s1._conflicts, {field: {[s2._actorId]: ['list'], [s3._actorId]: {thing: 'map'}}})
+        assert.deepEqual(s1._conflicts, {field: {[s2._actorId]: ['list'], [s3._actorId]: {_objectId: s3.field._objectId, thing: 'map'}}})
       } else if (tesseract.equals(s1.field, ['list'])) {
-        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s3._actorId]: {thing: 'map'}}})
-      } else if (tesseract.equals(s1.field, {thing: 'map'})) {
+        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s3._actorId]: {_objectId: s3.field._objectId, thing: 'map'}}})
+      } else if (tesseract.equals(s1.field, {_objectId: s3.field._objectId, thing: 'map'})) {
         assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s2._actorId]: ['list']}})
       } else {
         assert.fail(s1.field, 'string or list or map', 'not one of the expected values')
@@ -461,11 +498,14 @@ describe('Tesseract', () => {
       s1 = tesseract.changeset(s1, doc => doc.config = {background: 'blue'})
       s2 = tesseract.changeset(s2, doc => doc.config = {logo_url: 'logo.png'})
       s3 = tesseract.merge(s1, s2)
-      equalsOneOf(s3.config, {background: 'blue'}, {logo_url: 'logo.png'})
+      equalsOneOf(s3.config,
+        {_objectId: s1.config._objectId, background: 'blue'},
+        {_objectId: s2.config._objectId, logo_url: 'logo.png'}
+      )
       if (s3.config.background === 'blue') {
-        assert.deepEqual(s3._conflicts.config, {[s2._actorId]: {logo_url: 'logo.png'}})
+        assert.deepEqual(s3._conflicts.config, {[s2._actorId]: {_objectId: s2.config._objectId, logo_url: 'logo.png'}})
       } else {
-        assert.deepEqual(s3._conflicts.config, {[s1._actorId]: {background: 'blue'}})
+        assert.deepEqual(s3._conflicts.config, {[s1._actorId]: {_objectId: s1.config._objectId, background: 'blue'}})
       }
     })
 
@@ -474,10 +514,10 @@ describe('Tesseract', () => {
       s2 = tesseract.changeset(s2, doc => doc.field = 'two')
       s3 = tesseract.merge(s1, s2)
       s3 = tesseract.changeset(s3, doc => doc.field = 'three')
-      assert.deepEqual(s3, {field: 'three'})
+      assert.deepEqual(s3, {_objectId: '00000000-0000-0000-0000-000000000000', field: 'three'})
       assert.deepEqual(s3._conflicts, {})
       s2 = tesseract.merge(s2, s3)
-      assert.deepEqual(s2, {field: 'three'})
+      assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', field: 'three'})
       assert.deepEqual(s2._conflicts, {})
     })
 
@@ -487,7 +527,10 @@ describe('Tesseract', () => {
       s1 = tesseract.changeset(s1, doc => doc.list.splice(1, 0, 'two'))
       s2 = tesseract.changeset(s2, doc => doc.list.push('four'))
       s3 = tesseract.merge(s1, s2)
-      assert.deepEqual(s3, {list: ['one', 'two', 'three', 'four']})
+      assert.deepEqual(s3, {
+        _objectId: '00000000-0000-0000-0000-000000000000',
+        list: ['one', 'two', 'three', 'four']
+      })
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -509,9 +552,9 @@ describe('Tesseract', () => {
       s1 = tesseract.changeset(s1, doc => delete doc['bestBird'])
       s2 = tesseract.changeset(s2, doc => doc.bestBird = 'magpie')
       s3 = tesseract.merge(s1, s2)
-      assert.deepEqual(s1, {})
-      assert.deepEqual(s2, {bestBird: 'magpie'})
-      assert.deepEqual(s3, {bestBird: 'magpie'})
+      assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000'})
+      assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', bestBird: 'magpie'})
+      assert.deepEqual(s3, {_objectId: '00000000-0000-0000-0000-000000000000', bestBird: 'magpie'})
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -535,9 +578,16 @@ describe('Tesseract', () => {
       s1 = tesseract.changeset(s1, doc => doc.animals.birds.brown = 'sparrow')
       s2 = tesseract.changeset(s2, doc => delete doc.animals['birds'])
       s3 = tesseract.merge(s1, s2)
-      assert.deepEqual(s1.animals, {birds: {pink: 'flamingo', brown: 'sparrow', black: 'starling'}, mammals: ['badger']})
-      assert.deepEqual(s2.animals, {mammals: ['badger']})
-      assert.deepEqual(s3.animals, {mammals: ['badger']})
+      assert.deepEqual(s1.animals, {
+        _objectId: s1.animals._objectId,
+        birds: {
+          _objectId: s1.animals.birds._objectId,
+          pink: 'flamingo', brown: 'sparrow', black: 'starling'
+        },
+        mammals: ['badger']
+      })
+      assert.deepEqual(s2.animals, {_objectId: s1.animals._objectId, mammals: ['badger']})
+      assert.deepEqual(s3.animals, {_objectId: s1.animals._objectId, mammals: ['badger']})
     })
 
     it('should not interleave sequence insertions at the same position', () => {
@@ -564,7 +614,7 @@ describe('Tesseract', () => {
     it('should do nothing when the store is empty', () => {
       assert.deepEqual(tesseract.getVClock(s1), {})
       assert.deepEqual(tesseract.getDeltasAfter(s2, tesseract.getVClock(s1)), [])
-      assert.deepEqual(tesseract.applyDeltas(s1, []), {})
+      assert.deepEqual(tesseract.applyDeltas(s1, []), {_objectId: '00000000-0000-0000-0000-000000000000'})
     })
 
     it('should generate deltas representing changes', () => {
@@ -584,8 +634,8 @@ describe('Tesseract', () => {
       }])
       s1 = tesseract.applyDeltas(s1, delta2)
       s2 = tesseract.applyDeltas(s2, delta1)
-      assert.deepEqual(s1, {s1: 's1', s2: 's2'})
-      assert.deepEqual(s2, {s1: 's1', s2: 's2'})
+      assert.deepEqual(s1, {_objectId: '00000000-0000-0000-0000-000000000000', s1: 's1', s2: 's2'})
+      assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', s1: 's1', s2: 's2'})
     })
 
     it('should set the local sequence number after loading from file', () => {
@@ -619,9 +669,9 @@ describe('Tesseract', () => {
       s1 = tesseract.changeset(s1, doc => doc.cheeses.unshift('Wensleydale'))
       const delta1 = tesseract.getDeltasAfter(s1, tesseract.getVClock(s2))
       s2 = tesseract.applyDeltas(s2, delta1)
-      assert.deepEqual(s2, {cheeses: ['Wensleydale']})
+      assert.deepEqual(s2.cheeses, ['Wensleydale'])
       s2 = tesseract.applyDeltas(s2, delta1)
-      assert.deepEqual(s2, {cheeses: ['Wensleydale']})
+      assert.deepEqual(s2.cheeses, ['Wensleydale'])
     })
 
     it('should handle out-of-order delivery', () => {
@@ -631,9 +681,9 @@ describe('Tesseract', () => {
       assert.deepEqual(delta1.map(d => d.ops.map(op => op.action)), [['set'], ['set']])
       assert.deepEqual(delta1.map(d => d.ops.map(op => op.value)), [[1], [2]])
       s2 = tesseract.applyDeltas(s2, [delta1[1]])
-      assert.deepEqual(s2, {})
+      assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000'})
       s2 = tesseract.applyDeltas(s2, [delta1[0]])
-      assert.deepEqual(s2, {score: 2})
+      assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', score: 2})
     })
 
     it('should buffer actions until causally ready', () => {
@@ -650,9 +700,9 @@ describe('Tesseract', () => {
       assert.deepEqual(delta2.map(d => d.ops.map(op => op.action)), [['ins', 'set']])
       assert.strictEqual(delta2[0].ops[1].value, 'Feta')
       s3 = tesseract.applyDeltas(s3, delta2)
-      assert.deepEqual(s3, {cheeses: []})
+      assert.deepEqual(s3.cheeses, [])
       s3 = tesseract.applyDeltas(s3, delta1)
-      assert.deepEqual(s3, {cheeses: ['Paneer', 'Feta']})
+      assert.deepEqual(s3.cheeses, ['Paneer', 'Feta'])
     })
   })
 })
