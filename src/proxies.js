@@ -1,5 +1,4 @@
 const { List, fromJS } = require('immutable')
-const util = require('util')
 const OpSet = require('./op_set')
 
 function listImmutable(attempt) {
@@ -91,7 +90,6 @@ const MapHandler = {
   get (target, key) {
     const { context, objectId } = target
     if (!context.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
-    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(mapProxy(context, objectId)))
     if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(context, objectId)))
     if (key === '_type') return 'map'
     if (key === '_objectId') return objectId
@@ -145,7 +143,6 @@ const ListHandler = {
     const [context, objectId] = target
     if (!context.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
     if (key === Symbol.iterator) return () => OpSet.listIterator(context.state.get('opSet'), objectId, 'values', context)
-    if (key === util.inspect.custom) return () => JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_type') return 'list'
     if (key === '_objectId') return objectId
