@@ -45,9 +45,22 @@ describe('Tesseract', () => {
 
       it('should prevent mutations outside of a changeset block', () => {
         s2 = tesseract.changeset(s1, doc => doc.foo = 'bar')
-        assert.throws(() => { s2.foo = 'lemon' }, /Cannot assign to read only property/)
-        assert.throws(() => { delete s2['foo'] }, /Cannot delete property/)
-        assert.throws(() => { tesseract.changeset(s2, doc => s2.foo = 'bar') }, /Cannot assign to read only property/)
+        if (typeof window === 'object') {
+          // Chrome and Firefox silently ignore modifications of a frozen object
+          s2.foo = 'lemon'
+          assert.strictEqual(s2.foo, 'bar')
+          delete s2['foo']
+          assert.strictEqual(s2.foo, 'bar')
+          tesseract.changeset(s2, doc => {
+            s2.foo = 'bar'
+            assert.strictEqual(s2.foo, 'bar')
+          })
+        } else {
+          // Node throws exceptions when trying to modify a frozen object
+          assert.throws(() => { s2.foo = 'lemon' }, /Cannot assign to read only property/)
+          assert.throws(() => { delete s2['foo'] }, /Cannot delete property/)
+          assert.throws(() => { tesseract.changeset(s2, doc => s2.foo = 'bar') }, /Cannot assign to read only property/)
+        }
         assert.throws(() => { tesseract.assign(s2, {x: 4}) }, /tesseract.assign requires a writable object/)
       })
 

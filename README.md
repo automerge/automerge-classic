@@ -109,6 +109,10 @@ tesseract.getHistory(state1).map(state => [state.changeset.message, state.snapsh
 
 ### Testing
 
-```
-  $ npm test
-```
+To run the test suite in Node:
+
+    $ npm test
+
+To run the test suite in web browsers:
+
+    $ npm browsertest
