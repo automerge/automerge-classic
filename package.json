@@ -12,7 +12,8 @@
   "dependencies": {
     "immutable": "^3.8.1",
     "transit-immutable-js": "^0.7.0",
-    "transit-js": "^0.8.846"
+    "transit-js": "^0.8.846",
+    "uuid": "^3.1.0"
   },
   "devDependencies": {
     "mocha": "^3.2.0",
