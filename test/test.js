@@ -701,4 +701,45 @@ describe('Tesseract', () => {
       assert.deepEqual(s3.cheeses, ['Paneer', 'Feta'])
     })
   })
+
+  describe('history API', () => {
+    it('should return an empty history for an empty document', () => {
+      assert.deepEqual(tesseract.getHistory(tesseract.init()), [])
+    })
+
+    it('should make past document states accessible', () => {
+      let s = tesseract.init()
+      s = tesseract.changeset(s, doc => doc.config = {background: 'blue'})
+      s = tesseract.changeset(s, doc => doc.birds = ['mallard'])
+      s = tesseract.changeset(s, doc => doc.birds.unshift('oystercatcher'))
+      assert.deepEqual(tesseract.getHistory(s).map(state => state.snapshot), [
+                       {_objectId: '00000000-0000-0000-0000-000000000000',
+                        config: {_objectId: s.config._objectId, background: 'blue'}},
+                       {_objectId: '00000000-0000-0000-0000-000000000000',
+                        config: {_objectId: s.config._objectId, background: 'blue'},
+                        birds: ['mallard']},
+                       {_objectId: '00000000-0000-0000-0000-000000000000',
+                        config: {_objectId: s.config._objectId, background: 'blue'},
+                        birds: ['oystercatcher', 'mallard']}])
+    })
+
+    it('should reuse unmodified portions of past documents', () => {
+      let s = tesseract.init()
+      s = tesseract.changeset(s, doc => doc.config = {background: 'blue'})
+      s = tesseract.changeset(s, doc => doc.birds = ['mallard'])
+      s = tesseract.changeset(s, doc => doc.birds.unshift('oystercatcher'))
+      assert.strictEqual(tesseract.getHistory(s)[1].snapshot.config, tesseract.getHistory(s)[0].snapshot.config)
+      assert.strictEqual(tesseract.getHistory(s)[2].snapshot.config, tesseract.getHistory(s)[0].snapshot.config)
+    })
+
+    it('should make changeset messages accessible', () => {
+      let s = tesseract.init()
+      s = tesseract.changeset(s, 'Empty Bookshelf', doc => doc.books = [])
+      s = tesseract.changeset(s, 'Add Orwell', doc => doc.books.push('Nineteen Eighty-Four'))
+      s = tesseract.changeset(s, 'Add Huxley', doc => doc.books.push('Brave New World'))
+      assert.deepEqual(s.books, ['Nineteen Eighty-Four', 'Brave New World'])
+      assert.deepEqual(tesseract.getHistory(s).map(state => state.changeset.message),
+                       ['Empty Bookshelf', 'Add Orwell', 'Add Huxley'])
+    })
+  })
 })

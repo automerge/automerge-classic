@@ -216,8 +216,8 @@ function listProxy(context, objectId) {
   return new Proxy([context, objectId], ListHandler)
 }
 
-function instantiateProxy(objectId) {
-  switch (this.state.getIn(['opSet', 'byObject', objectId, '_init', 'action'])) {
+function instantiateProxy(opSet, objectId) {
+  switch (opSet.getIn(['byObject', objectId, '_init', 'action'])) {
     case 'makeMap':  return mapProxy(this, objectId)
     case 'makeList': return listProxy(this, objectId)
   }

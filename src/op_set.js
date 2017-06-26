@@ -1,4 +1,5 @@
 const { Map, List, Set } = require('immutable')
+const root_id = '00000000-0000-0000-0000-000000000000'
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -83,25 +84,7 @@ function applyOp(opSet, op) {
   }
 }
 
-function applyChangeset(opSet, changeset) {
-  const actor = changeset.get('actor'), seq = changeset.get('seq')
-  const prior = opSet.getIn(['states', actor], List())
-  if (seq <= prior.size) {
-    if (!prior.get(seq - 1).get('changeset').equals(changeset)) {
-      throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
-    }
-    return opSet // changeset already applied, return unchanged
-  }
-
-  const allDeps = transitiveDeps(opSet, changeset.get('deps').set(actor, seq - 1))
-  let state = Map({changeset, allDeps})
-  opSet = opSet.setIn(['states', actor], prior.push(state))
-
-  changeset.get('ops').forEach(op => {
-    opSet = applyOp(opSet, op.merge({actor, seq}))
-  })
-  state = state.set('byObject', opSet.get('byObject'))
-
+function invalidateCache(opSet, changeset) {
   let linkedObjs = changeset.get('ops').map(op => op.get('obj')).toSet()
   let affectedObjs = Set()
   while (!linkedObjs.isEmpty()) {
@@ -112,40 +95,97 @@ function applyChangeset(opSet, changeset) {
       .subtract(affectedObjs)
   }
 
-  // According to the Immutable.js docs, Map.removeAll() ought to do this, but it doesn't exist?
+  // Can use Map.removeAll() in Immutable.js 4.0
   let cache = opSet.get('cache')
   affectedObjs.forEach(obj => { cache = cache.remove(obj) })
+  return opSet.set('cache', cache)
+}
+
+function materialize(opSet) {
+  const context = {instantiateObject: instantiateImmutable, cache: {}}
+  const snapshot = context.instantiateObject(opSet, root_id)
+  opSet = opSet.update('cache', cache => cache.merge(Map(context.cache)))
+  return [opSet, snapshot]
+}
+
+function applyChangeset(opSet, changeset) {
+  const actor = changeset.get('actor'), seq = changeset.get('seq')
+  const prior = opSet.getIn(['states', actor], List())
+  if (seq <= prior.size) {
+    if (!prior.get(seq - 1).get('changeset').equals(changeset)) {
+      throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
+    }
+    return [opSet, undefined] // changeset already applied, return unchanged
+  }
+
+  const allDeps = transitiveDeps(opSet, changeset.get('deps').set(actor, seq - 1))
+  opSet = opSet.setIn(['states', actor], prior.push(Map({changeset, allDeps})))
+
+  changeset.get('ops').forEach(op => {
+    opSet = applyOp(opSet, op.merge({actor, seq}))
+  })
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
-  return opSet
-    .set('cache', cache)
+  opSet = invalidateCache(opSet, changeset)
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
-    .setIn(['states', actor, seq - 1], state)
-    .update('history', history => history.push(state))
+
+  let snapshot
+  [opSet, snapshot] = materialize(opSet)
+  opSet = opSet.update('history', history => history.push(Map({changeset, snapshot})))
+  return [opSet, snapshot]
 }
 
 function applyQueuedOps(opSet) {
-  let queue = List()
+  let queue = List(), snapshot = null
   while (true) {
     opSet.get('queue').forEach(changeset => {
       if (causallyReady(opSet, changeset)) {
-        opSet = applyChangeset(opSet, changeset)
+        [opSet, snapshot] = applyChangeset(opSet, changeset)
       } else {
         queue = queue.push(changeset)
       }
     })
 
-    if (queue.count() === opSet.get('queue').count()) return opSet
+    if (queue.count() === opSet.get('queue').count()) return [opSet, snapshot]
     opSet = opSet.set('queue', queue)
     queue = List()
   }
 }
 
-const root_id = '00000000-0000-0000-0000-000000000000'
+function instantiateImmutable(opSet, objectId) {
+  const isRoot = (objectId === root_id)
+  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+
+  // Don't read the root object from cache, because it may reference an outdated state.
+  // The state may change without without invalidating the cache entry for the root object (for
+  // example, adding an item to the queue of operations that are not yet causally ready).
+  if (!isRoot) {
+    if (opSet.hasIn(['cache', objectId])) return opSet.getIn(['cache', objectId])
+    if (this.cache && this.cache[objectId]) return this.cache[objectId]
+  }
+
+  let obj
+  if (isRoot || objType === 'makeMap') {
+    const conflicts = getObjectConflicts(opSet, objectId, this)
+    obj = Object.create({_conflicts: Object.freeze(conflicts.toJS())})
+
+    getObjectFields(opSet, objectId).forEach(field => {
+      obj[field] = getObjectField(opSet, objectId, field, this)
+    })
+  } else if (objType === 'makeList') {
+    obj = [...listIterator(opSet, objectId, 'values', this)]
+  } else {
+    throw 'Unknown object type: ' + objType
+  }
+
+  Object.freeze(obj)
+  if (this.cache) this.cache[objectId] = obj
+  return obj
+}
 
 function init() {
   return Map()
@@ -165,7 +205,11 @@ function addLocalOp(opSet, op, actor) {
 }
 
 function addChangeset(opSet, changeset) {
-  return applyQueuedOps(opSet.update('queue', queue => queue.push(changeset)))
+  opSet = opSet.update('queue', queue => queue.push(changeset))
+  let snapshot
+  [opSet, snapshot] = applyQueuedOps(opSet)
+  if (snapshot) return [opSet, snapshot]
+  return materialize(opSet)
 }
 
 function getMissingChanges(opSet, haveDeps) {
@@ -219,11 +263,11 @@ function getNext(opSet, objectId, key) {
   }
 }
 
-function getOpValue(op, context) {
+function getOpValue(opSet, op, context) {
   if (typeof op !== 'object' || op === null) return op
   switch (op.get('action')) {
     case 'set':  return op.get('value')
-    case 'link': return context.instantiateObject(op.get('value'))
+    case 'link': return context.instantiateObject(opSet, op.get('value'))
   }
 }
 
@@ -247,14 +291,14 @@ function getObjectField(opSet, objectId, key, context) {
   if (key === '_objectId') return objectId
   if (!validFieldName(key)) return undefined
   const ops = getFieldOps(opSet, objectId, key)
-  if (!ops.isEmpty()) return getOpValue(ops.first(), context)
+  if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
 }
 
 function getObjectConflicts(opSet, objectId, context) {
   return opSet.getIn(['byObject', objectId])
     .filter((field, key) => validFieldName(key) && getFieldOps(opSet, objectId, key).size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
-      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(op, context)])
+      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
     ])
 }
 
@@ -263,7 +307,7 @@ function listElemByIndex(opSet, listId, index, context) {
   while (elem) {
     const ops = getFieldOps(opSet, listId, elem)
     if (!ops.isEmpty()) i += 1
-    if (i === index) return getOpValue(ops.first(), context)
+    if (i === index) return getOpValue(opSet, ops.first(), context)
     elem = getNext(opSet, listId, elem)
   }
 }
@@ -286,7 +330,7 @@ function listIterator(opSet, listId, mode, context) {
 
       const ops = getFieldOps(opSet, listId, elem)
       if (!ops.isEmpty()) {
-        const value = getOpValue(ops.first(), context)
+        const value = getOpValue(opSet, ops.first(), context)
         index += 1
         switch (mode) {
           case 'keys':    return {done: false, value: index}
@@ -304,6 +348,7 @@ function listIterator(opSet, listId, mode, context) {
 }
 
 module.exports = {
-  init, addLocalOp, addChangeset, getMissingChanges, getFieldOps, getObjectFields, getObjectField,
-  getObjectConflicts, getNext, listElemByIndex, listLength, listIterator
+  init, addLocalOp, addChangeset, materialize, getMissingChanges,
+  getFieldOps, getObjectFields, getObjectField, getObjectConflicts,
+  getNext, listElemByIndex, listLength, listIterator
 }

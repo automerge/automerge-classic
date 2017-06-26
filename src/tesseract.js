@@ -133,63 +133,32 @@ function deleteField(state, objectId, key) {
   return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
 
+function rootObject(state, rootObj) {
+  Object.assign(Object.getPrototypeOf(rootObj), {_state: state, _actorId: state.get('actorId')})
+  Object.freeze(Object.getPrototypeOf(rootObj))
+  return rootObj
+}
+
+function applyChangeset(state, changeset) {
+  const [opSet, root] = OpSet.addChangeset(state.get('opSet'), changeset)
+  return rootObject(state.set('opSet', opSet), root)
+}
+
 function makeChangeset(oldState, newState, message) {
   const actor = oldState.get('actorId')
   const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
   const deps = oldState.getIn(['opSet', 'deps']).remove(actor)
   const changeset = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
-  return oldState.set('opSet', OpSet.addChangeset(oldState.get('opSet'), changeset))
-}
-
-function instantiateImmutable(objectId) {
-  const isRoot = (objectId === '00000000-0000-0000-0000-000000000000')
-  const opSet = this.state.get('opSet')
-  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-  const cached = opSet.getIn(['cache', objectId])
-  if (cached && !isRoot) return cached
-  let obj
-
-  if (isRoot || objType === 'makeMap') {
-    let proto = {_actorId: this.state.get('actorId')}
-    obj = Object.create(proto)
-    OpSet.getObjectFields(opSet, objectId).forEach(field => {
-      obj[field] = OpSet.getObjectField(opSet, objectId, field, this)
-    })
-
-    // TODO would be better to make _conflicts an own property (not in the prototype)
-    const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
-    proto._conflicts = Object.freeze(conflicts.toJS())
-
-  } else if (objType === 'makeList') {
-    obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
-  } else {
-    throw 'Unknown object type: ' + objType
-  }
-
-  // Don't cache the root object, because it contains a bunch of state that may change
-  // without invalidating the cache entry for the root object (for example, the queue of
-  // operations that are not yet causally ready).
-  if (isRoot) {
-    Object.getPrototypeOf(obj)._state = this.state
-  } else {
-    this.state = this.state.setIn(['opSet', 'cache', objectId], obj)
-  }
-  Object.freeze(obj)
-  return obj
-}
-
-function rootObject(state) {
-  const context = {state, instantiateObject: instantiateImmutable}
-  return context.instantiateObject('00000000-0000-0000-0000-000000000000')
+  return applyChangeset(oldState, changeset)
 }
 
 ///// tesseract.* API
 
 function init(actorId) {
-  return rootObject(Map()
-    .set('actorId', actorId || UUID.generate())
-    .set('opSet', OpSet.init()))
+  const [opSet, rootObj] = OpSet.materialize(OpSet.init())
+  const state = Map({actorId: actorId || UUID.generate(), opSet})
+  return rootObject(state, rootObj)
 }
 
 function checkTarget(funcName, target, needMutable) {
@@ -229,7 +198,7 @@ function changeset(root, message, callback) {
   const oldState = root._state
   const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return rootObject(makeChangeset(oldState, context.state, message))
+  return makeChangeset(oldState, context.state, message)
 }
 
 function assign(target, values) {
@@ -248,11 +217,10 @@ function assign(target, values) {
 }
 
 function load(string, actorId) {
-  let opSet = OpSet.init()
-  transit.fromJSON(string).forEach(changeset => { opSet = OpSet.addChangeset(opSet, changeset) })
-  return rootObject(Map()
-    .set('actorId', actorId || UUID.generate())
-    .set('opSet', opSet))
+  return transit.fromJSON(string).reduce(
+    (root, changeset) => applyChangeset(root._state, changeset),
+    init(actorId)
+  )
 }
 
 function save(store) {
@@ -281,20 +249,17 @@ function inspect(store) {
 
 function getHistory(store) {
   checkTarget('inspect', store)
-  return store._state.getIn(['opSet', 'history']).reduce((history, state) => {
-    const snapshot = Map({actorId: store._actorId, opSet: state})
-    history.push({
-      changeset: state.get('changeset').toJS(),
-      snapshot: rootObject(snapshot)
-    })
-    return history
-  }, [])
+  return store._state.getIn(['opSet', 'history']).toJS()
 }
 
 // Network communication API
 
 function getVClock(store) {
   checkTarget('getVClock', store)
+  if (!store._state.hasIn(['opSet', 'clock'])) {
+    throw new TypeError('This object cannot be used for network sync. ' +
+                        'Are you trying to sync a snapshot from the history?')
+  }
   return store._state.getIn(['opSet', 'clock']).toJS()
 }
 
@@ -305,9 +270,10 @@ function getDeltasAfter(store, vclock) {
 
 function applyDeltas(store, deltas) {
   checkTarget('applyDeltas', store)
-  let opSet = store._state.get('opSet')
-  for (let delta of deltas) opSet = OpSet.addChangeset(opSet, fromJS(delta))
-  return rootObject(store._state.set('opSet', opSet))
+  return deltas.reduce(
+    (root, delta) => applyChangeset(root._state, fromJS(delta)),
+    store
+  )
 }
 
 function merge(local, remote) {
