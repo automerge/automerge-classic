@@ -4,7 +4,8 @@
   "description": "js crdt",
   "main": "src/tesseract.js",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "webpack": "webpack --config webpack.config.js"
   },
   "author": "",
   "license": "ISC",
@@ -14,6 +15,7 @@
     "transit-js": "^0.8.846"
   },
   "devDependencies": {
-    "mocha": "^3.2.0"
+    "mocha": "^3.2.0",
+    "webpack": "^3.0.0"
   }
 }
