@@ -207,3 +207,21 @@ The project currently has a number of limitations that you should be aware of:
   is no hard limit on the number of devices that can update a document, performance will degrade
   if you beyond, say, 100 devices or so.
 * ...and more, see the [open issues](https://github.com/inkandswitch/tesseract/issues).
+
+
+## Meta
+
+Copyright 2017, Ink & Switch LLC, and University of Cambridge.
+Released under the Apache License, Version 2.0 (see `LICENSE`).
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing permissions and limitations under the
+License.
+
+Created by
+[Martin Kleppmann](http://martin.kleppmann.com/),
+[Orion Henry](https://www.linkedin.com/in/orion-henry-9056727/),
+[Peter van Hardenberg](https://twitter.com/pvh),
+[Roshan Choxi](https://www.linkedin.com/in/choxi/), and
+[Adam Wiggins](https://twitter.com/hirodusk).
