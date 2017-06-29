@@ -45,7 +45,7 @@ and merging**:
 * **Network-agnostic**. Automerge is a pure data structure library that does not care what kind of
   network you use: client/server, peer-to-peer, Bluetooth, carrier pigeon, whatever, anything goes.
   Bindings to particular networking technologies are handled by separate libraries. For example, see
-  [aMPL](https://github.com/inkandswitch/ampl) for an implementation that uses Automerge in a
+  [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge in a
   peer-to-peer model using [WebRTC](https://webrtc.org/).
 * **Immutable state**. A Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
@@ -69,10 +69,12 @@ and merging**:
 ## Example Usage
 
 ```js
+// This is how you load Automerge in Node. In a browser, simply including the
+// script tag will set up the Automerge object.
+const Automerge = require('automerge')
+
 // Let's say state1 is the application state on device 1.
 // Further down we'll simulate a second device.
-
-const Automerge = require('Automerge')
 let state1 = Automerge.init()
 
 // That initial state is just an empty object: {}
@@ -187,7 +189,7 @@ For an example of a real-life application built upon Automerge, check out
 ## Setup
 
 If you're in Node.js, you can install Automerge through npm, and then import it with
-`require('Automerge')` as in the example above:
+`require('automerge')` as in the example above:
 
     $ npm install --save automerge
 
@@ -211,7 +213,7 @@ The project currently has a number of limitations that you should be aware of:
   work to be done before it's suitable for more ambitious apps.
 * Small number of collaborators: Automerge is designed for small-group collaborations. While there
   is no hard limit on the number of devices that can update a document, performance will degrade
-  if you beyond, say, 100 devices or so.
+  if you go beyond, say, 100 devices or so.
 * ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
 
 
