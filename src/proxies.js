@@ -3,7 +3,7 @@ const OpSet = require('./op_set')
 
 function listImmutable(attempt) {
   throw new TypeError('You tried to ' + attempt + ', but this list is read-only. ' +
-                      'Please use tesseract.changeset() to get a writable version.')
+                      'Please use Automerge.changeset() to get a writable version.')
 }
 
 function listMethods(context, listId) {
@@ -105,7 +105,7 @@ const MapHandler = {
     if (!context.mutable) {
       throw new TypeError('You tried to set property ' + JSON.stringify(key) + ' to ' +
                           JSON.stringify(value) + ', but this object is read-only. ' +
-                          'Please use tesseract.changeset() to get a writable version.')
+                          'Please use Automerge.changeset() to get a writable version.')
     }
     context.state = context.setField(context.state, objectId, key, value)
     return true
@@ -115,7 +115,7 @@ const MapHandler = {
     const { context, objectId } = target
     if (!context.mutable) {
       throw new TypeError('You tried to delete the property ' + JSON.stringify(key) +
-                          ', but this object is read-only. Please use tesseract.changeset() ' +
+                          ', but this object is read-only. Please use Automerge.changeset() ' +
                           'to get a writable version.')
     }
     context.state = context.deleteField(context.state, objectId, key)
@@ -160,7 +160,7 @@ const ListHandler = {
     const [context, objectId] = target
     if (!context.mutable) {
       throw new TypeError('You tried to set index ' + key + ' to ' + JSON.stringify(value) +
-                          ', but this list is read-only. Please use tesseract.changeset() ' +
+                          ', but this list is read-only. Please use Automerge.changeset() ' +
                           'to get a writable version.')
     }
     context.state = context.setListIndex(context.state, objectId, key, value)
@@ -171,7 +171,7 @@ const ListHandler = {
     const [context, objectId] = target
     if (!context.mutable) {
       throw new TypeError('You tried to delete the list index ' + key + ', but this list is ' +
-                          'read-only. Please use tesseract.changeset() to get a writable version.')
+                          'read-only. Please use Automerge.changeset() to get a writable version.')
     }
     context.state = context.deleteField(context.state, objectId, key)
     return true

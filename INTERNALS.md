@@ -1,23 +1,23 @@
-Tesseract internal data structures
+Automerge internal data structures
 ==================================
 
-This document is a quick summary of how Tesseract stores data internally. You
-shouldn't need to read it in order to use Tesseract in your application, but you
-might find it useful if you want to hack on the Tesseract code itself.
+This document is a quick summary of how Automerge stores data internally. You
+shouldn't need to read it in order to use Automerge in your application, but you
+might find it useful if you want to hack on the Automerge code itself.
 
 
 State, operations, and deltas
 -----------------------------
 
-You get a Tesseract instance by calling `tesseract.init()` (creates a new, empty
-document) or `tesseract.load()` (loads an existing document, typically from
+You get a Automerge instance by calling `Automerge.init()` (creates a new, empty
+document) or `Automerge.load()` (loads an existing document, typically from
 a file on disk). By default, this document exists only in memory on a single
 device, and you don't need any network communication for read or write access.
 There may be a separate networking layer that asynchronously propagates changes
 from one device to another, but that networking layer is outside of the scope of
-Tesseract itself.
+Automerge itself.
 
-The Tesseract document looks like a JavaScript object (by default the empty
+The Automerge document looks like a JavaScript object (by default the empty
 object `{}`), but it's actually a wrapper (technically, a
 [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy))
 around a *state* object. The *state* is an
@@ -33,7 +33,7 @@ are two ways how the state can change:
 
 1. *Local operations*, which are generally triggered by the user changing some
    piece of application data in the user interface. Such editing by the user is
-   expressed by calling `tesseract.changeset()`, which groups together a block
+   expressed by calling `Automerge.changeset()`, which groups together a block
    of operations that should be applied as an atomic unit. Within that block, a
    mutable API is used for expressing the changes, but internally these API
    calls are translated into operations on the immutable state. The
@@ -42,13 +42,13 @@ are two ways how the state can change:
 2. *Remote operations*: a user on another device has edited their copy of
    a document, that changeset was sent to you via the network, and now you want
    to apply it to your own copy of the document. Remote operations are applied
-   using `tesseract.applyDeltas()`, which again returns a new copy of the
-   state. For testing purposes there is also `tesseract.merge()`, which is
+   using `Automerge.applyDeltas()`, which again returns a new copy of the
+   state. For testing purposes there is also `Automerge.merge()`, which is
    is a short-cut for the case where the "remote" document is actually just
-   another instance of Tesseract in the same process.
+   another instance of Automerge in the same process.
 
-To facilitate network communication, the functions `tesseract.getVClock()` and
-`.getDeltasAfter()` allow Tesseract instances on different devices to figure out
+To facilitate network communication, the functions `Automerge.getVClock()` and
+`.getDeltasAfter()` allow Automerge instances on different devices to figure out
 their differences (which operations are missing on which device). These
 functions only query the state, but do not change it.
 
@@ -56,11 +56,11 @@ functions only query the state, but do not change it.
 Actor IDs, vector clocks, and causality
 ---------------------------------------
 
-Each Tesseract instance has an *actor ID* — a UUID that is generated randomly
-whenever you do `tesseract.init()` or `tesseract.load()` (unless you explicitly
+Each Automerge instance has an *actor ID* — a UUID that is generated randomly
+whenever you do `Automerge.init()` or `Automerge.load()` (unless you explicitly
 pass an actor ID into those functions). Whenever you make a local edit on that
-Tesseract instance, the operations are tagged with that actor ID as the origin.
-All changesets made on a Tesseract instance are numbered sequentially, starting
+Automerge instance, the operations are tagged with that actor ID as the origin.
+All changesets made on a Automerge instance are numbered sequentially, starting
 with 1 and never skipping or reusing sequence numbers. We assume that nobody
 else is using the same actor ID, and thus each changeset is uniquely identified
 by the combination of its originating actor ID and its sequence number. That
@@ -86,8 +86,8 @@ With our documents, one changeset sometimes depends on another. For example, if
 an item is first added and then removed, it doesn't make sense to try to apply
 the removal if you haven't already seen the addition (since you'd be trying to
 remove something that doesn't yet exist). To keep track of these dependencies,
-every changeset includes the vector clock of the originating Tesseract instance
-at the time when the local edit was made. Every other Tesseract instance that
+every changeset includes the vector clock of the originating Automerge instance
+at the time when the local edit was made. Every other Automerge instance that
 wants to apply this changeset needs to check that the prior changesets have
 already been applied; it can do this by checking that for all known actor IDs,
 the greatest sequence number it has already applied is no less than the sequence
@@ -104,17 +104,17 @@ Changeset structure and operation types
 Every changeset is a JSON document with four properties:
 
 * `actor`: The actor ID on which the changeset originated (a UUID).
-* `clock`: The vector clock of the originating Tesseract instance at the time
+* `clock`: The vector clock of the originating Automerge instance at the time
   the changeset was generated, represented as a map from actor IDs to sequence
   numbers: `{[actorId1]: seq1, [actorId2]: seq2, ...}`. The entry for the actor
   ID on which the changeset originated, i.e. `changeset.clock[changeset.actor]`,
   is the sequence number of this particular changeset.
 * `message`: An optional human-readable "commit message" that describes the
-  changeset in a meaningful way. It is not interpreted by Tesseract, only
+  changeset in a meaningful way. It is not interpreted by Automerge, only
   stored for introspection, debugging, undo, and similar purposes.
 * `ops`: An array of operations that are grouped into this changeset.
 
-Each operation in the `ops` array is a JSON object. Tesseract currently uses the
+Each operation in the `ops` array is a JSON object. Automerge currently uses the
 following types of operation:
  
 * `{ action: 'makeMap', obj: objectId }`
@@ -196,7 +196,7 @@ following types of operation:
 For example, the following code:
 
 ```js
-tesseract.changeset(tesseract.init(), 'Create document', doc => doc.cards = [ { title: 'hello world' } ])
+Automerge.changeset(Automerge.init(), 'Create document', doc => doc.cards = [ { title: 'hello world' } ])
 ```
 
 generates the following JSON object describing the changeset:

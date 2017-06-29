@@ -1,8 +1,8 @@
 {
-  "name": "tesseract",
+  "name": "Automerge",
   "version": "0.4.1",
   "description": "js crdt",
-  "main": "src/tesseract.js",
+  "main": "src/automerge.js",
   "scripts": {
     "browsertest": "karma start karma.conf.js",
     "test": "mocha",

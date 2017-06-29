@@ -138,7 +138,7 @@ function makeChangeset(oldState, newState, message) {
   return applyChangeset(oldState, changeset)
 }
 
-///// tesseract.* API
+///// Automerge.* API
 
 function init(actorId) {
   const [opSet, rootObj] = OpSet.materialize(OpSet.init())
@@ -149,12 +149,12 @@ function init(actorId) {
 function checkTarget(funcName, target, needMutable) {
   if (!target || !target._state || !target._objectId ||
       !target._state.hasIn(['opSet', 'byObject', target._objectId])) {
-    throw new TypeError('The first argument to tesseract.' + funcName +
+    throw new TypeError('The first argument to Automerge.' + funcName +
                         ' must be the object to modify, but you passed ' + JSON.stringify(target))
   }
   if (needMutable && (!target._changeset || !target._changeset.mutable)) {
-    throw new TypeError('tesseract.' + funcName + ' requires a writable object as first argument, ' +
-                        'but the one you passed is read-only. Please use tesseract.changeset() ' +
+    throw new TypeError('Automerge.' + funcName + ' requires a writable object as first argument, ' +
+                        'but the one you passed is read-only. Please use Automerge.changeset() ' +
                         'to get a writable version.')
   }
 }
@@ -171,10 +171,10 @@ function parseListIndex(key) {
 function changeset(root, message, callback) {
   checkTarget('changeset', root)
   if (root._objectId !== '00000000-0000-0000-0000-000000000000') {
-    throw new TypeError('The first argument to tesseract.changeset must be the document root')
+    throw new TypeError('The first argument to Automerge.changeset must be the document root')
   }
   if (root._changeset && root._changeset.mutable) {
-    throw new TypeError('Calls to tesseract.changeset cannot be nested')
+    throw new TypeError('Calls to Automerge.changeset cannot be nested')
   }
   if (typeof message === 'function' && callback === undefined) {
     [message, callback] = [callback, message]
@@ -188,7 +188,7 @@ function changeset(root, message, callback) {
 
 function assign(target, values) {
   checkTarget('assign', target, true)
-  if (!isObject(values)) throw new TypeError('The second argument to tesseract.assign must be an ' +
+  if (!isObject(values)) throw new TypeError('The second argument to Automerge.assign must be an ' +
                                              'object, but you passed ' + JSON.stringify(values))
   let state = target._state
   for (let key of Object.keys(values)) {

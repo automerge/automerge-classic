@@ -1,10 +1,10 @@
 var path = require('path');
 
 module.exports = {
-  entry: './src/tesseract.js',
+  entry: './src/automerge.js',
   output: {
-    filename: 'tesseract.js',
-    library: 'tesseract',
+    filename: 'automerge.js',
+    library: 'Automerge',
     path: path.resolve(__dirname, 'dist')
   }
 }
