@@ -1,7 +1,7 @@
 {
   "name": "automerge",
   "version": "0.4.1",
-  "description": "js crdt",
+  "description": "Data structures for building collaborative applications",
   "main": "src/automerge.js",
   "scripts": {
     "browsertest": "karma start karma.conf.js",
@@ -9,7 +9,7 @@
     "webpack": "webpack --config webpack.config.js"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "immutable": "^3.8.1",
     "transit-immutable-js": "^0.7.0",
