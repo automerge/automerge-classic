@@ -1,5 +1,5 @@
 {
-  "name": "Automerge",
+  "name": "automerge",
   "version": "0.4.1",
   "description": "js crdt",
   "main": "src/automerge.js",
