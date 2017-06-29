@@ -183,7 +183,7 @@ For an example of a real-life application built upon Automerge, check out
 If you're in Node.js, you can install Automerge through npm, and then import it with
 `require('Automerge')` as in the example above:
 
-    $ npm install --save Automerge
+    $ npm install --save automerge
 
 Otherwise, clone this repository, and then you can use the following commands:
 
@@ -191,7 +191,7 @@ Otherwise, clone this repository, and then you can use the following commands:
 * `npm test` — run the test suite in Node.
 * `npm run browsertest` — run the test suite in web browsers.
 * `npm run webpack` — create a bundled JS file for web browsers (including dependencies) that
-  you can load through a script tag, and write it to `dist/Automerge.js`.
+  you can load through a script tag, and write it to `dist/automerge.js`.
 
 
 ## Caveats
@@ -206,7 +206,7 @@ The project currently has a number of limitations that you should be aware of:
 * Small number of collaborators: Automerge is designed for small-group collaborations. While there
   is no hard limit on the number of devices that can update a document, performance will degrade
   if you beyond, say, 100 devices or so.
-* ...and more, see the [open issues](https://github.com/inkandswitch/Automerge/issues).
+* ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
 
 
 ## Meta
