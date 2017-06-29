@@ -76,13 +76,15 @@ const Automerge = require('Automerge')
 let state1 = Automerge.init()
 
 // That initial state is just an empty object: {}
-// Actually, it's got an automatically generated _objectId property, but we'll leave out the
-// object IDs from this example in order to make it easier to read.
+// Actually, it's got an automatically generated _objectId property, but we'll
+// leave out the object IDs from this example in order to make it easier to
+// read.
 
-// The state1 object is immutable -- you cannot change it directly (if you try, you'll either get
-// an exception or your change will be silently ignored, depending on your JavaScript engine).
-// To change it, you need to call Automerge.changeset() with a callback in which you can mutate
-// the state. You can also include a human-readable description of the change, like a commit
+// The state1 object is immutable -- you cannot change it directly (if you try,
+// you'll either get an exception or your change will be silently ignored,
+// depending on your JavaScript engine). To change it, you need to call
+// Automerge.changeset() with a callback in which you can mutate the state. You
+// can also include a human-readable description of the change, like a commit
 // message, which is stored in the change history (see below).
 
 state1 = Automerge.changeset(state1, 'Initialize card list', doc => {
@@ -91,10 +93,11 @@ state1 = Automerge.changeset(state1, 'Initialize card list', doc => {
 
 // { cards: [] }
 
-// To change the state, you can use the regular JavaScript array mutation methods such as push().
-// Internally, Automerge translates this mutable API call into an update of the immutable state
-// object. Note that we must pass in state1, and get back an updated object which we assign to
-// the same variable state1. The original state object is not modified.
+// To change the state, you can use the regular JavaScript array mutation
+// methods such as push(). Internally, Automerge translates this mutable API
+// call into an update of the immutable state object. Note that we must pass in
+// state1, and get back an updated object which we assign to the same variable
+// state1. The original state object is not modified.
 
 state1 = Automerge.changeset(state1, 'Add card', doc => {
   doc.cards.push({title: 'Rewrite everything in Clojure', done: false})
@@ -122,9 +125,9 @@ state1 = Automerge.changeset(state1, 'Add a third card', doc => {
 //      { title: 'Rewrite everything in Clojure', done: false },
 //      { title: 'Reticulate splines', done: false } ] }
 
-// Now let's simulate another device, whose application state is state2. We initialise it
-// separately, and merge state1 into it. After merging, state2 has a copy of all the cards
-// in state1.
+// Now let's simulate another device, whose application state is state2. We
+// initialise it separately, and merge state1 into it. After merging, state2 has
+// a copy of all the cards in state1.
 
 let state2 = Automerge.init()
 state2 = Automerge.merge(state2, state1)
@@ -148,10 +151,11 @@ state2 = Automerge.changeset(state2, 'Delete card', doc => {
 //    [ { title: 'Rewrite everything in Haskell', done: false },
 //      { title: 'Reticulate splines', done: false } ] }
 
-// Now comes the moment of truth. Let's merge the changes from device 2 back into device 1.
-// You can also do the merge the other way round, and you'll get the same result.
-// The merged result remembers that 'Rewrite everything in Haskell' was set to true,
-// and that 'Rewrite everything in Clojure' was deleted:
+// Now comes the moment of truth. Let's merge the changes from device 2 back
+// into device 1. You can also do the merge the other way round, and you'll get
+// the same result. The merged result remembers that 'Rewrite everything in
+// Haskell' was set to true, and that 'Rewrite everything in Clojure' was
+// deleted:
 
 state1 = Automerge.merge(state1, state2)
 
@@ -159,13 +163,15 @@ state1 = Automerge.merge(state1, state2)
 //    [ { title: 'Rewrite everything in Haskell', done: true },
 //      { title: 'Reticulate splines', done: false } ] }
 
-// As our final trick, we can inspect the change history. Automerge automatically keeps a log of
-// every change, along with the "commit message" that you passed to changeset(). When you query
-// that log, it includes both changes you made locally, and also changes that came from other
-// devices. You can also see a snapshot of the application state at any moment in time in the
+// As our final trick, we can inspect the change history. Automerge
+// automatically keeps track of every change, along with the "commit message"
+// that you passed to changeset(). When you query that history, it includes both
+// changes you made locally, and also changes that came from other devices. You
+// can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(state1).map(state => [state.changeset.message, state.snapshot.cards.length])
+Automerge.getHistory(state1)
+  .map(state => [state.changeset.message, state.snapshot.cards.length])
 // [ [ 'Initialize card list', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],
