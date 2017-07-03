@@ -183,7 +183,7 @@ Automerge.getHistory(state1)
 ```
 
 For an example of a real-life application built upon Automerge, check out
-[Trellis](https://github.com/inkandswitch/trellis), a project management tool.
+[Trellis](https://github.com/automerge/trellis), a project management tool.
 
 
 ## Setup
@@ -224,7 +224,7 @@ Released under the terms of the MIT license (see `LICENSE`).
 
 Created by
 [Martin Kleppmann](http://martin.kleppmann.com/),
-[Orion Henry](https://www.linkedin.com/in/orion-henry-9056727/),
+Orion Henry,
 [Peter van Hardenberg](https://twitter.com/pvh),
 [Roshan Choxi](https://www.linkedin.com/in/choxi/), and
-[Adam Wiggins](https://twitter.com/hirodusk).
+[Adam Wiggins](http://about.adamwiggins.com/).
