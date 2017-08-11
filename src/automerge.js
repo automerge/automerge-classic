@@ -1,5 +1,7 @@
 const { Map, List, fromJS } = require('immutable')
 const uuid = require('uuid/v4')
+// let n=0
+// const uuid = () => "UUID-" + n++
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const transit = require('transit-immutable-js')

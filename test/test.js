@@ -463,6 +463,37 @@ describe('Automerge', () => {
       s3 = Automerge.init()
     })
 
+    it('merges string arrays', () => {
+      for(let x=0; x<1000; x++) {
+        console.log(x)
+        s1 = Automerge.init()
+        s2 = Automerge.init()
+        s3 = Automerge.init()
+
+        s1 = Automerge.changeset(s1, doc => (doc.body = 'ABCD'.split('')))
+        assert.strictEqual(s1.body.join(''), 'ABCD')
+
+        s2 = Automerge.merge(s2, s1)
+        assert.strictEqual(s2.body.join(''), 'ABCD')
+        s2 = Automerge.changeset(s2, doc =>
+          doc.body.insertAt(1, ...'joe'.split(''))
+        )
+        assert.strictEqual(s2.body.join(''), 'AjoeBCD') // Sometimes 'Ajoe' ???
+
+        s3 = Automerge.merge(s3, s1)
+        assert.strictEqual(s3.body.join(''), 'ABCD')
+        s3 = Automerge.changeset(s3, doc =>
+          doc.body.insertAt(2, ...'lisa'.split(''))
+        )
+        assert.strictEqual(s3.body.join(''), 'ABlisaCD') // Sometimes 'ABlisa' ???
+
+        s1 = Automerge.merge(s1, s2)
+        assert.strictEqual(s1.body.join(''), 'AjoeBCD')
+        s1 = Automerge.merge(s1, s3)
+        assert.strictEqual(s1.body.join(''), 'AjoeBlisaCD')
+      }
+    })
+
     it('should merge concurrent updates of different properties', () => {
       s1 = Automerge.changeset(s1, doc => doc.foo = 'bar')
       s2 = Automerge.changeset(s2, doc => doc.hello = 'world')
