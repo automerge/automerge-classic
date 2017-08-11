@@ -9,7 +9,7 @@ function equalsOneOf(actual, ...expected) {
       assert.deepEqual(actual, expected[i])
       return // if we get here without an exception, that means success
     } catch (e) {
-      if (e.name !== 'AssertionError' || i === expected.length - 1) throw e
+      if (!e.name.match(/^AssertionError/) || i === expected.length - 1) throw e
     }
   }
 }
