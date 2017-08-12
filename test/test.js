@@ -530,6 +530,23 @@ describe('Automerge', () => {
       assert.deepEqual(s2._conflicts, {})
     })
 
+    it('should handle insertion', () => {
+      for (let i = 1; i < 10; i++) {
+        try {
+          s1 = Automerge.init()
+          s2 = Automerge.init()
+
+          s1 = Automerge.changeset(s1, doc => doc.list = ['one', 'three'])
+          s2 = Automerge.merge(s2, s1)
+          s2 = Automerge.changeset(s2, doc => doc.list.splice(1, 0, 'two'))
+          assert.deepEqual(s2.list, ['one', 'two', 'three'])
+        } catch (err) {
+          err.message += `\nFailed on iteration ${i}`
+          throw err
+        }
+      }
+    })
+
     it('should handle concurrent insertions at different list positions', () => {
       s1 = Automerge.changeset(s1, doc => doc.list = ['one', 'three'])
       s2 = Automerge.merge(s2, s1)
