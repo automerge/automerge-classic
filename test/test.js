@@ -530,6 +530,7 @@ describe('Automerge', () => {
       assert.deepEqual(s2._conflicts, {})
     })
 
+    // Passes
     it('should handle insertion AB', () => {
       s1 = Automerge.init('A')
       s2 = Automerge.init('B')
@@ -540,9 +541,21 @@ describe('Automerge', () => {
       assert.deepEqual(s2.list, ['one', 'two'])
     })
 
+    // Fails
     it('should handle insertion BA', () => {
       s1 = Automerge.init('B')
       s2 = Automerge.init('A')
+
+      s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
+      s2 = Automerge.merge(s2, s1)
+      s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
+      assert.deepEqual(s2.list, ['one', 'two'])
+    })
+
+    // Fails 50% of the time
+    it('should handle insertion', () => {
+      s1 = Automerge.init()
+      s2 = Automerge.init()
 
       s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
       s2 = Automerge.merge(s2, s1)
