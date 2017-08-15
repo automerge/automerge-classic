@@ -530,39 +530,6 @@ describe('Automerge', () => {
       assert.deepEqual(s2._conflicts, {})
     })
 
-    // Passes
-    it('should handle insertion AB', () => {
-      s1 = Automerge.init('A')
-      s2 = Automerge.init('B')
-
-      s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
-      s2 = Automerge.merge(s2, s1)
-      s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
-      assert.deepEqual(s2.list, ['one', 'two'])
-    })
-
-    // Fails
-    it('should handle insertion BA', () => {
-      s1 = Automerge.init('B')
-      s2 = Automerge.init('A')
-
-      s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
-      s2 = Automerge.merge(s2, s1)
-      s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
-      assert.deepEqual(s2.list, ['one', 'two'])
-    })
-
-    // Fails 50% of the time
-    it('should handle insertion', () => {
-      s1 = Automerge.init()
-      s2 = Automerge.init()
-
-      s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
-      s2 = Automerge.merge(s2, s1)
-      s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
-      assert.deepEqual(s2.list, ['one', 'two'])
-    })
-
     it('should handle concurrent insertions at different list positions', () => {
       s1 = Automerge.changeset(s1, doc => doc.list = ['one', 'three'])
       s2 = Automerge.merge(s2, s1)
@@ -642,6 +609,44 @@ describe('Automerge', () => {
         ['to', 'be', 'is', 'to', 'do', 'to', 'do', 'is', 'to', 'be'],
         ['to', 'do', 'is', 'to', 'be', 'to', 'be', 'is', 'to', 'do'])
       // In case you're wondering: http://quoteinvestigator.com/2013/09/16/do-be-do/
+    })
+
+    describe('multiple insertions at the same list position', () => {
+      it('should handle insertion by greater actor ID', () => {
+        s1 = Automerge.init('A')
+        s2 = Automerge.init('B')
+        s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
+        s2 = Automerge.merge(s2, s1)
+        s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
+        assert.deepEqual(s2.list, ['one', 'two'])
+      })
+
+      it('should handle insertion by lesser actor ID', () => {
+        s1 = Automerge.init('B')
+        s2 = Automerge.init('A')
+        s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
+        s2 = Automerge.merge(s2, s1)
+        s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
+        assert.deepEqual(s2.list, ['one', 'two'])
+      })
+
+      it('should handle insertion regardless of actor ID', () => {
+        s1 = Automerge.changeset(s1, doc => doc.list = ['two'])
+        s2 = Automerge.merge(s2, s1)
+        s2 = Automerge.changeset(s2, doc => doc.list.splice(0, 0, 'one'))
+        assert.deepEqual(s2.list, ['one', 'two'])
+      })
+
+      it('should make insertion order consistent with causality', () => {
+        s1 = Automerge.changeset(s1, doc => doc.list = ['four'])
+        s2 = Automerge.merge(s2, s1)
+        s2 = Automerge.changeset(s2, doc => doc.list.unshift('three'))
+        s1 = Automerge.merge(s1, s2)
+        s1 = Automerge.changeset(s1, doc => doc.list.unshift('two'))
+        s2 = Automerge.merge(s2, s1)
+        s2 = Automerge.changeset(s2, doc => doc.list.unshift('one'))
+        assert.deepEqual(s2.list, ['one', 'two', 'three', 'four'])
+      })
     })
   })
 
