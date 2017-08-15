@@ -240,10 +240,14 @@ function lamportCompare(op1, op2) {
   return 0
 }
 
-function insertionsAfter(opSet, objectId, key) {
+function insertionsAfter(opSet, objectId, parentId, childId) {
+  const match = /^(.*):(\d+)$/.exec(childId || '')
+  const childKey = match ? Map({actor: match[1], elem: parseInt(match[2])}) : null
+
   return opSet
-    .getIn(['byObject', objectId, '_following', key], List())
+    .getIn(['byObject', objectId, '_following', parentId], List())
     .filter(op => (op.get('action') === 'ins'))
+    .filter(op => !childKey || lamportCompare(op, childKey) < 0)
     .sort(lamportCompare)
     .reverse() // descending order
     .map(op => op.get('actor') + ':' + op.get('elem'))
@@ -257,7 +261,7 @@ function getNext(opSet, objectId, key) {
   while (true) {
     ancestor = getParent(opSet, objectId, key)
     if (!ancestor) return
-    const siblings = insertionsAfter(opSet, objectId, ancestor).filter(sib => sib < key)
+    const siblings = insertionsAfter(opSet, objectId, ancestor, key)
     if (!siblings.isEmpty()) return siblings.first()
     key = ancestor
   }
