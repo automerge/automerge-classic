@@ -24,6 +24,7 @@
     "karma-firefox-launcher": "^1.0.1",
     "karma-mocha": "^1.3.0",
     "mocha": "^3.4.2",
+    "sinon": "^3.2.1",
     "watchify": "^3.9.0",
     "webpack": "^3.0.0"
   }
