@@ -129,6 +129,13 @@ function applyChangeset(state, changeset) {
   return rootObject(state.set('opSet', opSet), root)
 }
 
+function applyChangesets(store, changesets) {
+  return changesets.reduce(
+    (root, changeset) => applyChangeset(root._state, changeset),
+    store || init()
+  )
+}
+
 function makeChangeset(oldState, newState, message) {
   const actor = oldState.get('actorId')
   const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
@@ -202,10 +209,7 @@ function assign(target, values) {
 }
 
 function load(string, actorId) {
-  return transit.fromJSON(string).reduce(
-    (root, changeset) => applyChangeset(root._state, changeset),
-    init(actorId)
-  )
+  return applyChangesets(init(actorId), transit.fromJSON(string))
 }
 
 function save(store) {
@@ -237,39 +241,18 @@ function getHistory(store) {
   return store._state.getIn(['opSet', 'history']).toJS()
 }
 
-// Network communication API
-
-function getVClock(store) {
-  checkTarget('getVClock', store)
-  if (!store._state.hasIn(['opSet', 'clock'])) {
-    throw new TypeError('This object cannot be used for network sync. ' +
-                        'Are you trying to sync a snapshot from the history?')
-  }
-  return store._state.getIn(['opSet', 'clock']).toJS()
-}
-
-function getDeltasAfter(store, vclock) {
-  checkTarget('getDeltasAfter', store)
-  return OpSet.getMissingChanges(store._state.get('opSet'), fromJS(vclock)).toJS()
-}
-
-function applyDeltas(store, deltas) {
-  checkTarget('applyDeltas', store)
-  return deltas.reduce(
-    (root, delta) => applyChangeset(root._state, fromJS(delta)),
-    store
-  )
-}
 
 function merge(local, remote) {
   checkTarget('merge', local)
   if (local._state.get('actorId') === remote._state.get('actorId')) {
     throw new RangeError('Cannot merge a store with itself')
   }
-  return applyDeltas(local, getDeltasAfter(remote, getVClock(local)))
+
+  const clock = local._state.getIn(['opSet', 'clock'])
+  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
+  return applyChangesets(local, changes)
 }
 
 module.exports = {
-  init, changeset, assign, load, save, equals, inspect, getHistory,
-  getVClock, getDeltasAfter, applyDeltas, merge
+  init, changeset, assign, load, save, equals, inspect, getHistory, merge
 }
