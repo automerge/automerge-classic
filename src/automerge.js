@@ -241,6 +241,9 @@ function getHistory(store) {
   return store._state.getIn(['opSet', 'history']).toJS()
 }
 
+const DocSet = require('./doc_set')
+const Connection = require('./connection')
+DocSet.prototype.applyChangesets = applyChangesets
 
 function merge(local, remote) {
   checkTarget('merge', local)
@@ -254,5 +257,5 @@ function merge(local, remote) {
 }
 
 module.exports = {
-  init, changeset, assign, load, save, equals, inspect, getHistory, merge
+  init, changeset, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge
 }
