@@ -16,7 +16,7 @@ class DocSet {
 
   setDoc (docId, doc) {
     this.docs = this.docs.set(docId, doc)
-    this.handlers.forEach(connection => connection.docChanged(docId, doc))
+    this.handlers.forEach(handler => handler(docId, doc))
   }
 
   applyChanges (docId, changes) {
@@ -25,12 +25,12 @@ class DocSet {
     return doc
   }
 
-  registerHandler (connection) {
-    this.handlers = this.handlers.add(connection)
+  registerHandler (handler) {
+    this.handlers = this.handlers.add(handler)
   }
 
-  unregisterHandler (connection) {
-    this.handlers = this.handlers.remove(connection)
+  unregisterHandler (handler) {
+    this.handlers = this.handlers.remove(handler)
   }
 }
 

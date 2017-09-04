@@ -39,15 +39,16 @@ class Connection {
     this._sendMsg = sendMsg
     this._knownClock = Map()
     this._advertisedClock = Map()
+    this._docChangedHandler = this.docChanged.bind(this)
   }
 
   open () {
     for (let docId of this._docSet.docIds) this.docChanged(docId, this._docSet.getDoc(docId))
-    this._docSet.registerHandler(this)
+    this._docSet.registerHandler(this._docChangedHandler)
   }
 
   close () {
-    this._docSet.unregisterHandler(this)
+    this._docSet.unregisterHandler(this._docChangedHandler)
   }
 
   sendMsg (docId, clock, changes) {
