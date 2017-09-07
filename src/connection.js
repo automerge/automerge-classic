@@ -9,7 +9,10 @@ function lessOrEqual(clock1, clock2) {
     true)
 }
 
-function mergeClock(clockMap, docId, clock) {
+// Updates the vector clock for `docId` in `clockMap` (mapping from docId to vector clock)
+// by merging in the new vector clock `clock`. Returns the updated `clockMap`, in which each node's
+// sequence number has been set to the maximum for that node.
+function clockUnion(clockMap, docId, clock) {
   clock = clockMap.get(docId, Map()).mergeWith((x, y) => Math.max(x, y), clock)
   return clockMap.set(docId, clock)
 }
@@ -53,7 +56,7 @@ class Connection {
 
   sendMsg (docId, clock, changes) {
     const msg = {docId, clock: clock.toJS()}
-    this._advertisedClock = mergeClock(this._advertisedClock, docId, clock)
+    this._advertisedClock = clockUnion(this._advertisedClock, docId, clock)
     if (changes) msg.changes = changes.toJS()
     this._sendMsg(msg)
   }
@@ -65,7 +68,7 @@ class Connection {
     if (this._knownClock.has(docId)) {
       const changes = OpSet.getMissingChanges(doc._state.get('opSet'), this._knownClock.get(docId))
       if (!changes.isEmpty()) {
-        this._knownClock = mergeClock(this._knownClock, docId, clock)
+        this._knownClock = clockUnion(this._knownClock, docId, clock)
         this.sendMsg(docId, clock, changes)
         return
       }
@@ -91,7 +94,7 @@ class Connection {
 
   receiveMsg (msg) {
     if (msg.clock) {
-      this._knownClock = mergeClock(this._knownClock, msg.docId, fromJS(msg.clock))
+      this._knownClock = clockUnion(this._knownClock, msg.docId, fromJS(msg.clock))
     }
     if (msg.changes) {
       return this._docSet.applyChanges(msg.docId, fromJS(msg.changes))
