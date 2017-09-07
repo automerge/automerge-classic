@@ -30,18 +30,18 @@ function clockUnion(clockMap, docId, clock) {
 // call `setDoc()` on the docSet. The connection registers a callback on the docSet, and it figures
 // out whenever there are changes that need to be sent to the remote peer.
 //
-// knownClock is the most recent VClock that we think the peer has (either because they've told us
+// theirClock is the most recent VClock that we think the peer has (either because they've told us
 // that it's their clock, or because it corresponds to a state we have sent to them on this
-// connection). Thus, everything more recent than knownClock should be sent to the peer.
+// connection). Thus, everything more recent than theirClock should be sent to the peer.
 //
-// advertisedClock is the most recent VClock that we've advertised to the peer (i.e. where we've
+// ourClock is the most recent VClock that we've advertised to the peer (i.e. where we've
 // told the peer that we have it).
 class Connection {
   constructor (docSet, sendMsg) {
     this._docSet = docSet
     this._sendMsg = sendMsg
-    this._knownClock = Map()
-    this._advertisedClock = Map()
+    this._theirClock = Map()
+    this._ourClock = Map()
     this._docChangedHandler = this.docChanged.bind(this)
   }
 
@@ -56,7 +56,7 @@ class Connection {
 
   sendMsg (docId, clock, changes) {
     const msg = {docId, clock: clock.toJS()}
-    this._advertisedClock = clockUnion(this._advertisedClock, docId, clock)
+    this._ourClock = clockUnion(this._ourClock, docId, clock)
     if (changes) msg.changes = changes.toJS()
     this._sendMsg(msg)
   }
@@ -65,16 +65,16 @@ class Connection {
     const doc = this._docSet.getDoc(docId)
     const clock = doc._state.getIn(['opSet', 'clock'])
 
-    if (this._knownClock.has(docId)) {
-      const changes = OpSet.getMissingChanges(doc._state.get('opSet'), this._knownClock.get(docId))
+    if (this._theirClock.has(docId)) {
+      const changes = OpSet.getMissingChanges(doc._state.get('opSet'), this._theirClock.get(docId))
       if (!changes.isEmpty()) {
-        this._knownClock = clockUnion(this._knownClock, docId, clock)
+        this._theirClock = clockUnion(this._theirClock, docId, clock)
         this.sendMsg(docId, clock, changes)
         return
       }
     }
 
-    if (!clock.equals(this._advertisedClock.get(docId, Map()))) this.sendMsg(docId, clock)
+    if (!clock.equals(this._ourClock.get(docId, Map()))) this.sendMsg(docId, clock)
   }
 
   // Callback that is called by the docSet whenever a document is changed
@@ -85,7 +85,7 @@ class Connection {
                           'Are you trying to sync a snapshot from the history?')
     }
 
-    if (!lessOrEqual(this._advertisedClock.get(docId, Map()), clock)) {
+    if (!lessOrEqual(this._ourClock.get(docId, Map()), clock)) {
       throw new RangeError('Cannot pass an old state object to a connection')
     }
 
@@ -94,7 +94,7 @@ class Connection {
 
   receiveMsg (msg) {
     if (msg.clock) {
-      this._knownClock = clockUnion(this._knownClock, msg.docId, fromJS(msg.clock))
+      this._theirClock = clockUnion(this._theirClock, msg.docId, fromJS(msg.clock))
     }
     if (msg.changes) {
       return this._docSet.applyChanges(msg.docId, fromJS(msg.changes))
@@ -102,7 +102,7 @@ class Connection {
 
     if (this._docSet.getDoc(msg.docId)) {
       this.maybeSendChanges(msg.docId)
-    } else if (!this._advertisedClock.has(msg.docId)) {
+    } else if (!this._ourClock.has(msg.docId)) {
       // If the remote node has data that we don't, immediately ask for it.
       // TODO should we sometimes exercise restraint in what we ask for?
       this.sendMsg(msg.docId, Map())
