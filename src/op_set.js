@@ -40,15 +40,19 @@ function applyMake(opSet, op) {
   const objectId = op.get('obj')
   if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
 
+  let edit = {action: 'createObj', objectId}
   let object = Map({_init: op, _inbound: Set()})
   if (op.get('action') === 'makeMap') {
+    edit.value = {}
     opSet = opSet.setIn(['cache', objectId], Object.freeze({_objectId: objectId}))
   } else {
+    edit.value = []
     opSet = opSet.setIn(['cache', objectId], Object.freeze([]))
     object = object.set('_elemIds', List())
   }
 
   opSet = opSet.setIn(['byObject', objectId], object)
+  if (opSet.has('diff')) opSet = opSet.update('diff', diff => diff.push(edit))
   return opSet
 }
 
@@ -66,13 +70,15 @@ function applyInsert(opSet, op) {
     .setIn(['byObject', objectId, '_insertion', elemId], op)
 }
 
-function patchList(opSet, objectId, index, action, op) {
+function patchList(opSet, objectId, index, action, op, withDiff) {
   let list = opSet.getIn(['cache', objectId]).slice()
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let value = op ? op.get('value') : null
+  let edit = {action, objectId, index, value}
 
   if (op && op.get('action') === 'link') {
     value = opSet.getIn(['cache', value])
+    edit.link = true
   }
 
   if (action === 'insert') {
@@ -83,21 +89,23 @@ function patchList(opSet, objectId, index, action, op) {
   } else if (action === 'remove') {
     list.splice(index, 1)
     elemIds = elemIds.splice(index, 1)
+    delete edit['value']
   } else throw 'Unknown action type: ' + action
 
+  if (opSet.has('diff') && withDiff) opSet = opSet.update('diff', diff => diff.push(edit))
   return opSet
     .setIn(['cache', objectId], Object.freeze(list))
     .setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
 
-function editListElement(opSet, objectId, elemId) {
+function editListElement(opSet, objectId, elemId, withDiff) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
   if (index >= 0) {
     if (ops.isEmpty()) {
-      return patchList(opSet, objectId, index, 'remove')
+      return patchList(opSet, objectId, index, 'remove', null, withDiff)
     } else {
-      return patchList(opSet, objectId, index, 'set', ops.first())
+      return patchList(opSet, objectId, index, 'set', ops.first(), withDiff)
     }
 
   } else {
@@ -113,23 +121,27 @@ function editListElement(opSet, objectId, elemId) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, 'insert', ops.first())
+    return patchList(opSet, objectId, index + 1, 'insert', ops.first(), withDiff)
   }
 }
 
-function editMapKey(opSet, objectId, key) {
+function editMapKey(opSet, objectId, key, withDiff) {
   const ops = getFieldOps(opSet, objectId, key)
+  let edit
   let conflicts = Object.assign({}, opSet.getIn(['cache', objectId])._conflicts)
   let object = Object.assign(Object.create({_conflicts: conflicts}), opSet.getIn(['cache', objectId]))
 
   if (ops.isEmpty()) {
+    edit = {action: 'remove', objectId, key}
     delete object[key]
     delete conflicts[key]
   } else {
     let value = ops.first().get('value')
+    edit = {action: 'set', objectId, key, value}
 
     if (ops.first().get('action') === 'link') {
       value = opSet.getIn(['cache', value])
+      edit.link = true
     }
     object[key] = value
 
@@ -147,6 +159,7 @@ function editMapKey(opSet, objectId, key) {
   }
 
   Object.freeze(conflicts)
+  if (opSet.has('diff') && withDiff) opSet = opSet.update('diff', diff => diff.push(edit))
   return opSet.setIn(['cache', objectId], Object.freeze(object))
 }
 
@@ -178,9 +191,9 @@ function applyAssign(opSet, op) {
   opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
 
   if (objType === 'makeList') {
-    return editListElement(opSet, objectId, op.get('key'))
+    return editListElement(opSet, objectId, op.get('key'), true)
   } else {
-    return editMapKey(opSet, objectId, op.get('key'))
+    return editMapKey(opSet, objectId, op.get('key'), true)
   }
 }
 
@@ -204,9 +217,9 @@ function applyOp(opSet, op) {
       const objectId = ref.get('obj')
       const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
       if (objType === 'makeList') {
-        opSet = editListElement(opSet, objectId, ref.get('key'))
+        opSet = editListElement(opSet, objectId, ref.get('key'), false)
       } else {
-        opSet = editMapKey(opSet, objectId, ref.get('key'))
+        opSet = editMapKey(opSet, objectId, ref.get('key'), false)
       }
     }
   }

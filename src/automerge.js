@@ -249,6 +249,15 @@ function merge(local, remote) {
   return applyChangesets(local, changes)
 }
 
+function diff(oldState, newState) {
+  checkTarget('diff', oldState)
+  let root, opSet = oldState._state.get('opSet').set('diff', List())
+  const changes = OpSet.getMissingChanges(newState._state.get('opSet'), opSet.get('clock'))
+
+  for (let change of changes) [opSet, root] = OpSet.addChangeset(opSet, change)
+  return opSet.get('diff').toJS()
+}
+
 module.exports = {
-  init, changeset, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge
+  init, changeset, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
 }
