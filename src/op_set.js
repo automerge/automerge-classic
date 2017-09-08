@@ -35,70 +35,182 @@ function transitiveDeps(opSet, baseDeps) {
   }, Map())
 }
 
-// Updates the various indexes that we need in order to search for operations
-function applyOp(opSet, op) {
+// Processes a 'makeMap' or 'makeList' operation
+function applyMake(opSet, op) {
   const objectId = op.get('obj')
-  switch (op.get('action')) {
-    case 'makeMap':
-    case 'makeList':
-      if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
-      return opSet.setIn(['byObject', objectId], Map().set('_init', op).set('_inbound', Set()))
+  if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
 
-    case 'ins':
-      const elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
-      if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
-      if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
+  let object = Map({_init: op, _inbound: Set()})
+  if (op.get('action') === 'makeMap') {
+    opSet = opSet.setIn(['cache', objectId], Object.freeze({_objectId: objectId}))
+  } else {
+    opSet = opSet.setIn(['cache', objectId], Object.freeze([]))
+    object = object.set('_elemIds', List())
+  }
 
-      return opSet
-        .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
-        .updateIn(['byObject', objectId, '_maxElem'], 0, maxElem => Math.max(elem, maxElem))
-        .setIn(['byObject', objectId, '_insertion', elemId], op)
+  opSet = opSet.setIn(['byObject', objectId], object)
+  return opSet
+}
 
-    case 'set':
-    case 'del':
-    case 'link':
-      if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
-      const priorOpsConcurrent = opSet
-        .getIn(['byObject', objectId, op.get('key')], List())
-        .groupBy(other => !!isConcurrent(opSet, other, op))
-      let overwritten = priorOpsConcurrent.get(false, List())
-      let remaining   = priorOpsConcurrent.get(true,  List())
+// Processes an 'ins' operation. Does not require caches to be updated, since the insertion alone
+// produces no application-visible effect; the list element only becomes visible through
+// a subsequent 'set' or 'link' operation on the inserted element.
+function applyInsert(opSet, op) {
+  const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
+  if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+  if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
 
-      // If any links were overwritten, remove them from the index of inbound links
-      overwritten.filter(op => op.get('action') === 'link')
-        .forEach(op => {
-          opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
-        })
+  return opSet
+    .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
+    .updateIn(['byObject', objectId, '_maxElem'], 0, maxElem => Math.max(elem, maxElem))
+    .setIn(['byObject', objectId, '_insertion', elemId], op)
+}
 
-      if (op.get('action') === 'link') {
-        opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
-      }
-      if (op.get('action') !== 'del') {
-        remaining = remaining.push(op)
-      }
-      remaining = remaining.sortBy(op => op.get('actor')).reverse()
-      return opSet.setIn(['byObject', objectId, op.get('key')], remaining)
+function patchList(opSet, objectId, index, action, op) {
+  let list = opSet.getIn(['cache', objectId]).slice()
+  let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+  let value = op ? op.get('value') : null
 
-    default:
-      throw 'Unknown operation type ' + obj.get('action')
+  if (op && op.get('action') === 'link') {
+    value = opSet.getIn(['cache', value])
+  }
+
+  if (action === 'insert') {
+    list.splice(index, 0, value)
+    elemIds = elemIds.splice(index, 0, op.get('key'))
+  } else if (action === 'set') {
+    list[index] = value
+  } else if (action === 'remove') {
+    list.splice(index, 1)
+    elemIds = elemIds.splice(index, 1)
+  } else throw 'Unknown action type: ' + action
+
+  return opSet
+    .setIn(['cache', objectId], Object.freeze(list))
+    .setIn(['byObject', objectId, '_elemIds'], elemIds)
+}
+
+function editListElement(opSet, objectId, elemId) {
+  const ops = getFieldOps(opSet, objectId, elemId)
+  let index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
+  if (index >= 0) {
+    if (ops.isEmpty()) {
+      return patchList(opSet, objectId, index, 'remove')
+    } else {
+      return patchList(opSet, objectId, index, 'set', ops.first())
+    }
+
+  } else {
+    if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
+
+    // find the index of the closest preceding list element
+    let prevId = elemId
+    while (true) {
+      index = -1
+      prevId = getPrevious(opSet, objectId, prevId)
+      if (!prevId) break
+      index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(prevId)
+      if (index >= 0) break
+    }
+
+    return patchList(opSet, objectId, index + 1, 'insert', ops.first())
   }
 }
 
-function invalidateCache(opSet, changeset) {
-  let linkedObjs = changeset.get('ops').map(op => op.get('obj')).toSet()
-  let affectedObjs = Set()
-  while (!linkedObjs.isEmpty()) {
-    affectedObjs = affectedObjs.union(linkedObjs)
-    linkedObjs = linkedObjs
-      .flatMap(obj => opSet.getIn(['byObject', obj, '_inbound'], Set()).map(op => op.get('obj')))
-      .toSet()
-      .subtract(affectedObjs)
+function editMapKey(opSet, objectId, key) {
+  const ops = getFieldOps(opSet, objectId, key)
+  let conflicts = Object.assign({}, opSet.getIn(['cache', objectId])._conflicts)
+  let object = Object.assign(Object.create({_conflicts: conflicts}), opSet.getIn(['cache', objectId]))
+
+  if (ops.isEmpty()) {
+    delete object[key]
+    delete conflicts[key]
+  } else {
+    let value = ops.first().get('value')
+
+    if (ops.first().get('action') === 'link') {
+      value = opSet.getIn(['cache', value])
+    }
+    object[key] = value
+
+    if (ops.size > 1) {
+      conflicts[key] = {}
+      for (let op of ops.shift()) {
+        let conflict = op.get('value')
+        if (op.get('action') === 'link') conflict = opSet.getIn(['cache', conflict])
+        conflicts[key][op.get('actor')] = conflict
+      }
+      Object.freeze(conflicts[key])
+    } else {
+      delete conflicts[key]
+    }
   }
 
-  // Can use Map.removeAll() in Immutable.js 4.0
-  let cache = opSet.get('cache')
-  affectedObjs.forEach(obj => { cache = cache.remove(obj) })
-  return opSet.set('cache', cache)
+  Object.freeze(conflicts)
+  return opSet.setIn(['cache', objectId], Object.freeze(object))
+}
+
+// Processes a 'set', 'del', or 'link' operation
+function applyAssign(opSet, op) {
+  const objectId = op.get('obj')
+  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+
+  const priorOpsConcurrent = opSet
+    .getIn(['byObject', objectId, op.get('key')], List())
+    .groupBy(other => !!isConcurrent(opSet, other, op))
+  let overwritten = priorOpsConcurrent.get(false, List())
+  let remaining   = priorOpsConcurrent.get(true,  List())
+
+  // If any links were overwritten, remove them from the index of inbound links
+  overwritten.filter(op => op.get('action') === 'link')
+    .forEach(op => {
+      opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
+    })
+
+  if (op.get('action') === 'link') {
+    opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
+  }
+  if (op.get('action') !== 'del') {
+    remaining = remaining.push(op)
+  }
+  remaining = remaining.sortBy(op => op.get('actor')).reverse()
+  opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
+
+  if (objType === 'makeList') {
+    return editListElement(opSet, objectId, op.get('key'))
+  } else {
+    return editMapKey(opSet, objectId, op.get('key'))
+  }
+}
+
+function applyOp(opSet, op) {
+  const action = op.get('action')
+  if (action === 'makeMap' || action == 'makeList') {
+    opSet = applyMake(opSet, op)
+  } else if (action === 'ins') {
+    opSet = applyInsert(opSet, op)
+  } else if (action === 'set' || action === 'del' || action === 'link') {
+    opSet = applyAssign(opSet, op)
+  } else {
+    throw 'Unknown operation type ' + action
+  }
+
+  // Update cache entries on the path from the root to the modified object
+  let affected = List.of(op)
+  while (!affected.isEmpty()) {
+    affected = affected.flatMap(ref => opSet.getIn(['byObject', ref.get('obj'), '_inbound'], Set()))
+    for (let ref of affected) {
+      const objectId = ref.get('obj')
+      const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+      if (objType === 'makeList') {
+        opSet = editListElement(opSet, objectId, ref.get('key'))
+      } else {
+        opSet = editMapKey(opSet, objectId, ref.get('key'))
+      }
+    }
+  }
+  return opSet
 }
 
 function materialize(opSet) {
@@ -129,9 +241,7 @@ function applyChangeset(opSet, changeset) {
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
-  opSet = invalidateCache(opSet, changeset)
-    .set('deps', remainingDeps)
-    .setIn(['clock', actor], seq)
+  opSet = opSet.set('deps', remainingDeps).setIn(['clock', actor], seq)
 
   let snapshot
   [opSet, snapshot] = materialize(opSet)
@@ -264,6 +374,27 @@ function getNext(opSet, objectId, key) {
     const siblings = insertionsAfter(opSet, objectId, ancestor, key)
     if (!siblings.isEmpty()) return siblings.first()
     key = ancestor
+  }
+}
+
+// Given the ID of a list element, returns the ID of the immediate predecessor list element,
+// or null if the given list element is at the head.
+function getPrevious(opSet, objectId, key) {
+  const parentId = getParent(opSet, objectId, key)
+  let children = insertionsAfter(opSet, objectId, parentId)
+  if (children.first() === key) {
+    if (parentId === '_head') return null; else return parentId;
+  }
+
+  let prevId
+  for (let child of children) {
+    if (child === key) break
+    prevId = child
+  }
+  while (true) {
+    children = insertionsAfter(opSet, objectId, prevId)
+    if (children.isEmpty()) return prevId
+    prevId = children.last()
   }
 }
 
