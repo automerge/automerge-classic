@@ -63,31 +63,24 @@ function setField(state, objectId, key, value) {
   }
 }
 
-function splice(state, listId, start, deletions, insertions) {
-  // Find start position
-  let i = 0, prev = '_head', next = OpSet.getNext(state.get('opSet'), listId, prev)
-  while (next && i < start) {
-    if (!OpSet.getFieldOps(state.get('opSet'), listId, next).isEmpty()) i += 1
-    prev = next
-    next = OpSet.getNext(state.get('opSet'), listId, prev)
-  }
-  if (i < start && insertions.length > 0) {
-    throw new RangeError('Cannot insert at index ' + start + ', which is past the end of the list')
+function splice(state, objectId, start, deletions, insertions) {
+  let elemIds = state.getIn(['opSet', 'byObject', objectId, '_elemIds'])
+  for (let i = 0; i < deletions; i++) {
+    let elemId = elemIds.get(start)
+    if (elemId) {
+      state = makeOp(state, {action: 'del', obj: objectId, key: elemId})
+      elemIds = state.getIn(['opSet', 'byObject', objectId, '_elemIds'])
+    }
   }
 
   // Apply insertions
-  for (let ins of insertions) {
-    [state, prev] = insertAfter(state, listId, prev)
-    state = setField(state, listId, prev, ins)
+  let prev = (start === 0) ? '_head' : elemIds.get(start - 1)
+  if (!prev && insertions.length > 0) {
+    throw new RangeError('Cannot insert at index ' + start + ', which is past the end of the list')
   }
-
-  // Apply deletions
-  while (next && i < start + deletions) {
-    if (!OpSet.getFieldOps(state.get('opSet'), listId, next).isEmpty()) {
-      state = makeOp(state, { action: 'del', obj: listId, key: next })
-      i += 1
-    }
-    next = OpSet.getNext(state.get('opSet'), listId, next)
+  for (let ins of insertions) {
+    [state, prev] = insertAfter(state, objectId, prev)
+    state = setField(state, objectId, prev, ins)
   }
   return state
 }

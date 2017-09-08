@@ -437,23 +437,16 @@ function getObjectConflicts(opSet, objectId, context) {
     ])
 }
 
-function listElemByIndex(opSet, listId, index, context) {
-  let i = -1, elem = getNext(opSet, listId, '_head')
-  while (elem) {
-    const ops = getFieldOps(opSet, listId, elem)
-    if (!ops.isEmpty()) i += 1
-    if (i === index) return getOpValue(opSet, ops.first(), context)
-    elem = getNext(opSet, listId, elem)
+function listElemByIndex(opSet, objectId, index, context) {
+  const elemId = opSet.getIn(['byObject', objectId, '_elemIds', index])
+  if (elemId) {
+    const ops = getFieldOps(opSet, objectId, elemId)
+    if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
   }
 }
 
-function listLength(opSet, listId) {
-  let length = 0, elem = getNext(opSet, listId, '_head')
-  while (elem) {
-    if (!getFieldOps(opSet, listId, elem).isEmpty()) length += 1
-    elem = getNext(opSet, listId, elem)
-  }
-  return length
+function listLength(opSet, objectId) {
+  return opSet.getIn(['cache', objectId]).length
 }
 
 function listIterator(opSet, listId, mode, context) {
