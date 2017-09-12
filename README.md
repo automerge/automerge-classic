@@ -161,11 +161,21 @@ state2 = Automerge.changeset(state2, 'Delete card', doc => {
 // Haskell' was set to true, and that 'Rewrite everything in Clojure' was
 // deleted:
 
-state1 = Automerge.merge(state1, state2)
+let finalState = Automerge.merge(state1, state2)
 
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: true },
 //      { title: 'Reticulate splines', done: false } ] }
+
+// If you want to know what changed from one version to another, you can get a
+// diff describing the changes (the objectId is a unique identifier for a
+// particular card object):
+
+Automerge.diff(state2, finalState)
+// [ { action: 'set',
+//     objectId: 'ef794659-d8fa-4e89-8605-06dff020513d',
+//     key: 'done',
+//     value: true } ]
 
 // As our final trick, we can inspect the change history. Automerge
 // automatically keeps track of every change, along with the "commit message"
@@ -174,7 +184,7 @@ state1 = Automerge.merge(state1, state2)
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(state1)
+Automerge.getHistory(finalState)
   .map(state => [state.changeset.message, state.snapshot.cards.length])
 // [ [ 'Initialize card list', 0 ],
 //   [ 'Add card', 1 ],
