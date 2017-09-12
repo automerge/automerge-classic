@@ -76,9 +76,15 @@ describe('Automerge', () => {
         assert.deepEqual(s2, {_objectId: '00000000-0000-0000-0000-000000000000', counter: 3})
       })
 
-      /* FIXME: the example in the previous test case actually creates spurious conflicts,
-       * but the deepEqual comparison doesn't detect them */
-      it('should not record conflicts when writing the same field several times within one changeset')
+      it('should not record conflicts when writing the same field several times within one changeset', () => {
+        s1 = Automerge.changeset(s1, 'changeset message', doc => {
+          doc.counter = 1
+          doc.counter += 1
+          doc.counter += 1
+        })
+        assert.strictEqual(s1.counter, 3)
+        assert.deepEqual(s1._conflicts, {})
+      })
 
       it('should sanity-check arguments', () => {
         s1 = Automerge.changeset(s1, doc => doc.nested = {})
