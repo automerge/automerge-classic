@@ -696,4 +696,54 @@ describe('Automerge', () => {
                        ['Empty Bookshelf', 'Add Orwell', 'Add Huxley'])
     })
   })
+
+  describe('.diff()', () => {
+    it('should return an empty diff for the same document', () => {
+      let s = Automerge.changeset(Automerge.init(), doc => doc.birds = [])
+      assert.deepEqual(Automerge.diff(s, s), [])
+    })
+
+    it('should refuse to diff diverged documents', () => {
+      let s1 = Automerge.changeset(Automerge.init(), doc => doc.birds = [])
+      let s2 = Automerge.changeset(s1, doc => doc.birds.push('Robin'))
+      let s3 = Automerge.merge(Automerge.init(), s1)
+      let s4 = Automerge.changeset(s3, doc => doc.birds.push('Wagtail'))
+      assert.throws(() => Automerge.diff(s2, s4), /Cannot diff two states that have diverged/)
+    })
+
+    it('should return list insertions by index', () => {
+      let s1 = Automerge.changeset(Automerge.init(), doc => doc.birds = [])
+      let s2 = Automerge.changeset(s1, doc => doc.birds.push('Robin'))
+      let s3 = Automerge.changeset(s2, doc => doc.birds.push('Wagtail'))
+      assert.deepEqual(Automerge.diff(s1, s2), [
+        {objectId: s1.birds._objectId, action: 'insert', index: 0, value: 'Robin'}
+      ])
+      assert.deepEqual(Automerge.diff(s1, s3), [
+        {objectId: s1.birds._objectId, action: 'insert', index: 0, value: 'Robin'},
+        {objectId: s1.birds._objectId, action: 'insert', index: 1, value: 'Wagtail'}
+      ])
+    })
+
+    it('should return list deletions by index', () => {
+      let s1 = Automerge.changeset(Automerge.init(), doc => doc.birds = ['Robin', 'Wagtail'])
+      let s2 = Automerge.changeset(s1, doc => { doc.birds[1] = 'Pied Wagtail'; doc.birds.shift() })
+      assert.deepEqual(Automerge.diff(s1, s2), [
+        {objectId: s1.birds._objectId, action: 'set',    index: 1, value: 'Pied Wagtail'},
+        {objectId: s1.birds._objectId, action: 'remove', index: 0}
+      ])
+    })
+
+    it('should return object creation and linking information', () => {
+      let s1 = Automerge.init()
+      let s2 = Automerge.changeset(s1, doc => doc.birds = [{name: 'Chaffinch'}])
+      let rootId = '00000000-0000-0000-0000-000000000000'
+      assert.deepEqual(Automerge.diff(s1, s2), [
+        {action: 'createObj', objectId: s2.birds._objectId,    value: []},
+        {action: 'createObj', objectId: s2.birds[0]._objectId, value: {}},
+        {action: 'set',       objectId: s2.birds[0]._objectId, key: 'name',  value: 'Chaffinch'},
+        {action: 'insert',    objectId: s2.birds._objectId,    index: 0,     value: s2.birds[0]._objectId, link: true},
+        {action: 'set',       objectId: rootId,                key: 'birds', value: s2.birds._objectId,    link: true}
+      ])
+    })
+  })
 })

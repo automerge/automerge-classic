@@ -47,7 +47,9 @@ function applyMake(opSet, op) {
     opSet = opSet.setIn(['cache', objectId], Object.freeze({_objectId: objectId}))
   } else {
     edit.value = []
-    opSet = opSet.setIn(['cache', objectId], Object.freeze([]))
+    let array = []
+    Object.defineProperty(array, '_objectId', {value: objectId})
+    opSet = opSet.setIn(['cache', objectId], Object.freeze(array))
     object = object.set('_elemIds', List())
   }
 
@@ -75,6 +77,7 @@ function patchList(opSet, objectId, index, action, op, withDiff) {
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let value = op ? op.get('value') : null
   let edit = {action, objectId, index, value}
+  Object.defineProperty(list, '_objectId', {value: objectId})
 
   if (op && op.get('action') === 'link') {
     value = opSet.getIn(['cache', value])
@@ -301,6 +304,7 @@ function instantiateImmutable(opSet, objectId) {
     })
   } else if (objType === 'makeList') {
     obj = [...listIterator(opSet, objectId, 'values', this)]
+    Object.defineProperty(obj, '_objectId', {value: objectId})
   } else {
     throw 'Unknown object type: ' + objType
   }

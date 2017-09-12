@@ -249,10 +249,26 @@ function merge(local, remote) {
   return applyChangesets(local, changes)
 }
 
+// Returns true if all components of clock1 are less than or equal to those of clock2.
+// Returns false if there is at least one component in which clock1 is greater than clock2
+// (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
+function lessOrEqual(clock1, clock2) {
+  return clock1.keySeq().concat(clock2.keySeq()).reduce(
+    (result, key) => (result && clock1.get(key, 0) <= clock2.get(key, 0)),
+    true)
+}
+
 function diff(oldState, newState) {
   checkTarget('diff', oldState)
+
+  const oldClock = oldState._state.getIn(['opSet', 'clock'])
+  const newClock = newState._state.getIn(['opSet', 'clock'])
+  if (!lessOrEqual(oldClock, newClock)) {
+    throw new RangeError('Cannot diff two states that have diverged')
+  }
+
   let root, opSet = oldState._state.get('opSet').set('diff', List())
-  const changes = OpSet.getMissingChanges(newState._state.get('opSet'), opSet.get('clock'))
+  const changes = OpSet.getMissingChanges(newState._state.get('opSet'), oldClock)
 
   for (let change of changes) [opSet, root] = OpSet.addChangeset(opSet, change)
   return opSet.get('diff').toJS()
