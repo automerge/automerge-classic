@@ -122,10 +122,10 @@ function applyChange(state, change) {
   return rootObject(state.set('opSet', opSet), root)
 }
 
-function applyChanges(store, changes) {
+function applyChanges(doc, changes) {
   return changes.reduce(
     (root, change) => applyChange(root._state, change),
-    store || init()
+    doc || init()
   )
 }
 
@@ -168,19 +168,19 @@ function parseListIndex(key) {
   return key
 }
 
-function change(root, message, callback) {
-  checkTarget('change', root)
-  if (root._objectId !== '00000000-0000-0000-0000-000000000000') {
+function change(doc, message, callback) {
+  checkTarget('change', doc)
+  if (doc._objectId !== '00000000-0000-0000-0000-000000000000') {
     throw new TypeError('The first argument to Automerge.change must be the document root')
   }
-  if (root._change && root._change.mutable) {
+  if (doc._change && doc._change.mutable) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
   if (typeof message === 'function' && callback === undefined) {
     [message, callback] = [callback, message]
   }
 
-  const oldState = root._state
+  const oldState = doc._state
   const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
   return makeChange(oldState, context.state, message)
@@ -205,9 +205,9 @@ function load(string, actorId) {
   return applyChanges(init(actorId), transit.fromJSON(string))
 }
 
-function save(store) {
-  checkTarget('save', store)
-  const history = store._state
+function save(doc) {
+  checkTarget('save', doc)
+  const history = doc._state
     .getIn(['opSet', 'history'])
     .map(state => state.get('change'))
   return transit.toJSON(history)
@@ -224,14 +224,14 @@ function equals(val1, val2) {
   return true
 }
 
-function inspect(store) {
-  checkTarget('inspect', store)
-  return JSON.parse(JSON.stringify(store))
+function inspect(doc) {
+  checkTarget('inspect', doc)
+  return JSON.parse(JSON.stringify(doc))
 }
 
-function getHistory(store) {
-  checkTarget('inspect', store)
-  return store._state.getIn(['opSet', 'history']).toJS()
+function getHistory(doc) {
+  checkTarget('inspect', doc)
+  return doc._state.getIn(['opSet', 'history']).toJS()
 }
 
 const DocSet = require('./doc_set')
@@ -241,7 +241,7 @@ DocSet.prototype._applyChanges = applyChanges
 function merge(local, remote) {
   checkTarget('merge', local)
   if (local._state.get('actorId') === remote._state.get('actorId')) {
-    throw new RangeError('Cannot merge a store with itself')
+    throw new RangeError('Cannot merge an actor with itself')
   }
 
   const clock = local._state.getIn(['opSet', 'clock'])

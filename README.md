@@ -5,20 +5,20 @@
 Automerge is a library of data structures for building collaborative applications in JavaScript.
 
 A common approach to building JavaScript apps involves keeping the state of your application in
-model objects. For example, imagine you are developing a task-tracking app in which each task is
-represented by a card. In vanilla JavaScript you might write the following:
+model objects, such as a JSON document. For example, imagine you are developing a task-tracking app
+in which each task is represented by a card. In vanilla JavaScript you might write the following:
 
 ```js
-var state = {cards: []}
+var doc = {cards: []}
 
 // User adds a card
-state.cards.push({title: 'Reticulate splines', done: false})
+doc.cards.push({title: 'Reticulate splines', done: false})
 
 // User marks a task as done
-state.cards[0].done = true
+doc.cards[0].done = true
 
-// Save the state to disk
-localStorage.setItem('MyToDoList', JSON.stringify(state))
+// Save the document to disk
+localStorage.setItem('MyToDoList', JSON.stringify(doc))
 ```
 
 Automerge is used in a similar way, but the big difference is that it supports **automatic syncing
@@ -75,23 +75,23 @@ and merging**:
 // script tag will set up the Automerge object.
 const Automerge = require('automerge')
 
-// Let's say state1 is the application state on device 1.
+// Let's say doc1 is the application state on device 1.
 // Further down we'll simulate a second device.
-let state1 = Automerge.init()
+let doc1 = Automerge.init()
 
 // That initial state is just an empty object: {}
 // Actually, it's got an automatically generated _objectId property, but we'll
 // leave out the object IDs from this example in order to make it easier to
 // read.
 
-// The state1 object is immutable -- you cannot change it directly (if you try,
+// The doc1 object is immutable -- you cannot change it directly (if you try,
 // you'll either get an exception or your change will be silently ignored,
 // depending on your JavaScript engine). To change it, you need to call
 // Automerge.change() with a callback in which you can mutate the state. You
 // can also include a human-readable description of the change, like a commit
 // message, which is stored in the change history (see below).
 
-state1 = Automerge.change(state1, 'Initialize card list', doc => {
+doc1 = Automerge.change(doc1, 'Initialize card list', doc => {
   doc.cards = []
 })
 
@@ -100,17 +100,17 @@ state1 = Automerge.change(state1, 'Initialize card list', doc => {
 // To change the state, you can use the regular JavaScript array mutation
 // methods such as push(). Internally, Automerge translates this mutable API
 // call into an update of the immutable state object. Note that we must pass in
-// state1, and get back an updated object which we assign to the same variable
-// state1. The original state object is not modified.
+// doc1, and get back an updated object which we assign to the same variable
+// doc1. The original document object is not modified.
 
-state1 = Automerge.change(state1, 'Add card', doc => {
+doc1 = Automerge.change(doc1, 'Add card', doc => {
   doc.cards.push({title: 'Rewrite everything in Clojure', done: false})
 })
 
 // { cards: [ { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // Assigning to an array index is also fine:
-state1 = Automerge.change(state1, 'Add another card', doc => {
+doc1 = Automerge.change(doc1, 'Add another card', doc => {
   doc.cards[1] = {title: 'Reticulate splines', done: false}
 })
 
@@ -120,7 +120,7 @@ state1 = Automerge.change(state1, 'Add another card', doc => {
 
 // Automerge also defines an insertAt() method for inserting a new element at a particular
 // position in a list. You could equally well use splice(), if you prefer.
-state1 = Automerge.change(state1, 'Add a third card', doc => {
+doc1 = Automerge.change(doc1, 'Add a third card', doc => {
   doc.cards.insertAt(0, {title: 'Rewrite everything in Haskell', done: false})
 })
 
@@ -129,15 +129,15 @@ state1 = Automerge.change(state1, 'Add a third card', doc => {
 //      { title: 'Rewrite everything in Clojure', done: false },
 //      { title: 'Reticulate splines', done: false } ] }
 
-// Now let's simulate another device, whose application state is state2. We
-// initialise it separately, and merge state1 into it. After merging, state2 has
-// a copy of all the cards in state1.
+// Now let's simulate another device, whose application state is doc2. We
+// initialise it separately, and merge doc1 into it. After merging, doc2 has
+// a copy of all the cards in doc1.
 
-let state2 = Automerge.init()
-state2 = Automerge.merge(state2, state1)
+let doc2 = Automerge.init()
+doc2 = Automerge.merge(doc2, doc1)
 
 // Now make a change on device 1:
-state1 = Automerge.change(state1, 'Mark card as done', doc => {
+doc1 = Automerge.change(doc1, 'Mark card as done', doc => {
   doc.cards[0].done = true
 })
 
@@ -147,7 +147,7 @@ state1 = Automerge.change(state1, 'Mark card as done', doc => {
 //      { title: 'Reticulate splines', done: false } ] }
 
 // And, unbeknownst to device 1, also make a change on device 2:
-state2 = Automerge.change(state2, 'Delete card', doc => {
+doc2 = Automerge.change(doc2, 'Delete card', doc => {
   delete doc.cards[1]
 })
 
@@ -161,7 +161,7 @@ state2 = Automerge.change(state2, 'Delete card', doc => {
 // Haskell' was set to true, and that 'Rewrite everything in Clojure' was
 // deleted:
 
-let finalState = Automerge.merge(state1, state2)
+let finalDoc = Automerge.merge(doc1, doc2)
 
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: true },
@@ -171,7 +171,7 @@ let finalState = Automerge.merge(state1, state2)
 // diff describing the changes (the objectId is a unique identifier for a
 // particular card object):
 
-Automerge.diff(state2, finalState)
+Automerge.diff(doc2, finalDoc)
 // [ { action: 'set',
 //     objectId: 'ef794659-d8fa-4e89-8605-06dff020513d',
 //     key: 'done',
@@ -184,7 +184,7 @@ Automerge.diff(state2, finalState)
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(finalState)
+Automerge.getHistory(finalDoc)
   .map(state => [state.change.message, state.snapshot.cards.length])
 // [ [ 'Initialize card list', 0 ],
 //   [ 'Add card', 1 ],
