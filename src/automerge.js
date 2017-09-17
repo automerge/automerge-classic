@@ -275,5 +275,5 @@ function diff(oldState, newState) {
 }
 
 module.exports = {
-  init, change, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
+  init, change, changeset: change, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
 }
