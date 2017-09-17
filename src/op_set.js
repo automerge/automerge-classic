@@ -14,12 +14,12 @@ function isConcurrent(opSet, op1, op2) {
   return clock1.get(actor2, 0) < seq2 && clock2.get(actor1, 0) < seq1
 }
 
-// Returns true if all changesets that causally precede the given changeset
+// Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
-function causallyReady(opSet, changeset) {
-  const actor = changeset.get('actor'), seq = changeset.get('seq')
+function causallyReady(opSet, change) {
+  const actor = change.get('actor'), seq = change.get('seq')
   let satisfied = true
-  changeset.get('deps').set(actor, seq - 1).forEach((depSeq, depActor) => {
+  change.get('deps').set(actor, seq - 1).forEach((depSeq, depActor) => {
     if (opSet.getIn(['clock', depActor], 0) < depSeq) satisfied = false
   })
   return satisfied
@@ -236,20 +236,20 @@ function materialize(opSet) {
   return [opSet, snapshot]
 }
 
-function applyChangeset(opSet, changeset) {
-  const actor = changeset.get('actor'), seq = changeset.get('seq')
+function applyChange(opSet, change) {
+  const actor = change.get('actor'), seq = change.get('seq')
   const prior = opSet.getIn(['states', actor], List())
   if (seq <= prior.size) {
-    if (!prior.get(seq - 1).get('changeset').equals(changeset)) {
+    if (!prior.get(seq - 1).get('change').equals(change)) {
       throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
     }
-    return [opSet, undefined] // changeset already applied, return unchanged
+    return [opSet, undefined] // change already applied, return unchanged
   }
 
-  const allDeps = transitiveDeps(opSet, changeset.get('deps').set(actor, seq - 1))
-  opSet = opSet.setIn(['states', actor], prior.push(Map({changeset, allDeps})))
+  const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
+  opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
-  changeset.get('ops').forEach(op => {
+  change.get('ops').forEach(op => {
     opSet = applyOp(opSet, op.merge({actor, seq}))
   })
 
@@ -261,18 +261,18 @@ function applyChangeset(opSet, changeset) {
 
   let snapshot
   [opSet, snapshot] = materialize(opSet)
-  opSet = opSet.update('history', history => history.push(Map({changeset, snapshot})))
+  opSet = opSet.update('history', history => history.push(Map({change, snapshot})))
   return [opSet, snapshot]
 }
 
 function applyQueuedOps(opSet) {
   let queue = List(), snapshot = null
   while (true) {
-    opSet.get('queue').forEach(changeset => {
-      if (causallyReady(opSet, changeset)) {
-        [opSet, snapshot] = applyChangeset(opSet, changeset)
+    opSet.get('queue').forEach(change => {
+      if (causallyReady(opSet, change)) {
+        [opSet, snapshot] = applyChange(opSet, change)
       } else {
-        queue = queue.push(changeset)
+        queue = queue.push(change)
       }
     })
 
@@ -338,8 +338,8 @@ function addLocalOp(opSet, op, actor) {
   return applyOp(opSet.set('local', ops), op.set('actor', actor))
 }
 
-function addChangeset(opSet, changeset) {
-  opSet = opSet.update('queue', queue => queue.push(changeset))
+function addChange(opSet, change) {
+  opSet = opSet.update('queue', queue => queue.push(change))
   let snapshot
   [opSet, snapshot] = applyQueuedOps(opSet)
   if (snapshot) return [opSet, snapshot]
@@ -352,7 +352,7 @@ function getMissingChanges(opSet, haveDeps) {
     .map((states, actor) => states.skip(allDeps.get(actor, 0)))
     .valueSeq()
     .flatten(1)
-    .map(state => state.get('changeset'))
+    .map(state => state.get('change'))
 }
 
 function getFieldOps(opSet, objectId, key) {
@@ -500,7 +500,7 @@ function listIterator(opSet, listId, mode, context) {
 }
 
 module.exports = {
-  init, addLocalOp, addChangeset, materialize, getMissingChanges,
+  init, addLocalOp, addChange, materialize, getMissingChanges,
   getFieldOps, getObjectFields, getObjectField, getObjectConflicts,
   getNext, listElemByIndex, listLength, listIterator
 }

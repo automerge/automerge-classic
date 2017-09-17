@@ -3,7 +3,7 @@ const OpSet = require('./op_set')
 
 function listImmutable(attempt) {
   throw new TypeError('You tried to ' + attempt + ', but this list is read-only. ' +
-                      'Please use Automerge.changeset() to get a writable version.')
+                      'Please use Automerge.change() to get a writable version.')
 }
 
 function listMethods(context, listId) {
@@ -96,7 +96,7 @@ const MapHandler = {
     if (key === '_state') return context.state
     if (key === '_actorId') return context.state.get('actorId')
     if (key === '_conflicts') return OpSet.getObjectConflicts(context.state.get('opSet'), objectId, context).toJS()
-    if (key === '_changeset') return context
+    if (key === '_change') return context
     return OpSet.getObjectField(context.state.get('opSet'), objectId, key, context)
   },
 
@@ -105,7 +105,7 @@ const MapHandler = {
     if (!context.mutable) {
       throw new TypeError('You tried to set property ' + JSON.stringify(key) + ' to ' +
                           JSON.stringify(value) + ', but this object is read-only. ' +
-                          'Please use Automerge.changeset() to get a writable version.')
+                          'Please use Automerge.change() to get a writable version.')
     }
     context.state = context.setField(context.state, objectId, key, value)
     return true
@@ -115,7 +115,7 @@ const MapHandler = {
     const { context, objectId } = target
     if (!context.mutable) {
       throw new TypeError('You tried to delete the property ' + JSON.stringify(key) +
-                          ', but this object is read-only. Please use Automerge.changeset() ' +
+                          ', but this object is read-only. Please use Automerge.change() ' +
                           'to get a writable version.')
     }
     context.state = context.deleteField(context.state, objectId, key)
@@ -148,7 +148,7 @@ const ListHandler = {
     if (key === '_objectId') return objectId
     if (key === '_state') return context.state
     if (key === '_actorId') return context.state.get('actorId')
-    if (key === '_changeset') return context
+    if (key === '_change') return context
     if (key === 'length') return OpSet.listLength(context.state.get('opSet'), objectId)
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return OpSet.listElemByIndex(context.state.get('opSet'), objectId, parseInt(key), context)
@@ -160,7 +160,7 @@ const ListHandler = {
     const [context, objectId] = target
     if (!context.mutable) {
       throw new TypeError('You tried to set index ' + key + ' to ' + JSON.stringify(value) +
-                          ', but this list is read-only. Please use Automerge.changeset() ' +
+                          ', but this list is read-only. Please use Automerge.change() ' +
                           'to get a writable version.')
     }
     context.state = context.setListIndex(context.state, objectId, key, value)
@@ -171,7 +171,7 @@ const ListHandler = {
     const [context, objectId] = target
     if (!context.mutable) {
       throw new TypeError('You tried to delete the list index ' + key + ', but this list is ' +
-                          'read-only. Please use Automerge.changeset() to get a writable version.')
+                          'read-only. Please use Automerge.change() to get a writable version.')
     }
     context.state = context.deleteField(context.state, objectId, key)
     return true

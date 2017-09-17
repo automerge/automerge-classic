@@ -87,11 +87,11 @@ let state1 = Automerge.init()
 // The state1 object is immutable -- you cannot change it directly (if you try,
 // you'll either get an exception or your change will be silently ignored,
 // depending on your JavaScript engine). To change it, you need to call
-// Automerge.changeset() with a callback in which you can mutate the state. You
+// Automerge.change() with a callback in which you can mutate the state. You
 // can also include a human-readable description of the change, like a commit
 // message, which is stored in the change history (see below).
 
-state1 = Automerge.changeset(state1, 'Initialize card list', doc => {
+state1 = Automerge.change(state1, 'Initialize card list', doc => {
   doc.cards = []
 })
 
@@ -103,14 +103,14 @@ state1 = Automerge.changeset(state1, 'Initialize card list', doc => {
 // state1, and get back an updated object which we assign to the same variable
 // state1. The original state object is not modified.
 
-state1 = Automerge.changeset(state1, 'Add card', doc => {
+state1 = Automerge.change(state1, 'Add card', doc => {
   doc.cards.push({title: 'Rewrite everything in Clojure', done: false})
 })
 
 // { cards: [ { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // Assigning to an array index is also fine:
-state1 = Automerge.changeset(state1, 'Add another card', doc => {
+state1 = Automerge.change(state1, 'Add another card', doc => {
   doc.cards[1] = {title: 'Reticulate splines', done: false}
 })
 
@@ -120,7 +120,7 @@ state1 = Automerge.changeset(state1, 'Add another card', doc => {
 
 // Automerge also defines an insertAt() method for inserting a new element at a particular
 // position in a list. You could equally well use splice(), if you prefer.
-state1 = Automerge.changeset(state1, 'Add a third card', doc => {
+state1 = Automerge.change(state1, 'Add a third card', doc => {
   doc.cards.insertAt(0, {title: 'Rewrite everything in Haskell', done: false})
 })
 
@@ -137,7 +137,7 @@ let state2 = Automerge.init()
 state2 = Automerge.merge(state2, state1)
 
 // Now make a change on device 1:
-state1 = Automerge.changeset(state1, 'Mark card as done', doc => {
+state1 = Automerge.change(state1, 'Mark card as done', doc => {
   doc.cards[0].done = true
 })
 
@@ -147,7 +147,7 @@ state1 = Automerge.changeset(state1, 'Mark card as done', doc => {
 //      { title: 'Reticulate splines', done: false } ] }
 
 // And, unbeknownst to device 1, also make a change on device 2:
-state2 = Automerge.changeset(state2, 'Delete card', doc => {
+state2 = Automerge.change(state2, 'Delete card', doc => {
   delete doc.cards[1]
 })
 
@@ -179,13 +179,13 @@ Automerge.diff(state2, finalState)
 
 // As our final trick, we can inspect the change history. Automerge
 // automatically keeps track of every change, along with the "commit message"
-// that you passed to changeset(). When you query that history, it includes both
+// that you passed to change(). When you query that history, it includes both
 // changes you made locally, and also changes that came from other devices. You
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
 Automerge.getHistory(finalState)
-  .map(state => [state.changeset.message, state.snapshot.cards.length])
+  .map(state => [state.change.message, state.snapshot.cards.length])
 // [ [ 'Initialize card list', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],

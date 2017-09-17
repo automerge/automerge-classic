@@ -117,25 +117,25 @@ function rootObject(state, rootObj) {
   return rootObj
 }
 
-function applyChangeset(state, changeset) {
-  const [opSet, root] = OpSet.addChangeset(state.get('opSet'), changeset)
+function applyChange(state, change) {
+  const [opSet, root] = OpSet.addChange(state.get('opSet'), change)
   return rootObject(state.set('opSet', opSet), root)
 }
 
-function applyChangesets(store, changesets) {
-  return changesets.reduce(
-    (root, changeset) => applyChangeset(root._state, changeset),
+function applyChanges(store, changes) {
+  return changes.reduce(
+    (root, change) => applyChange(root._state, change),
     store || init()
   )
 }
 
-function makeChangeset(oldState, newState, message) {
+function makeChange(oldState, newState, message) {
   const actor = oldState.get('actorId')
   const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
   const deps = oldState.getIn(['opSet', 'deps']).remove(actor)
-  const changeset = fromJS({actor, seq, deps, message})
+  const change = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
-  return applyChangeset(oldState, changeset)
+  return applyChange(oldState, change)
 }
 
 ///// Automerge.* API
@@ -152,9 +152,9 @@ function checkTarget(funcName, target, needMutable) {
     throw new TypeError('The first argument to Automerge.' + funcName +
                         ' must be the object to modify, but you passed ' + JSON.stringify(target))
   }
-  if (needMutable && (!target._changeset || !target._changeset.mutable)) {
+  if (needMutable && (!target._change || !target._change.mutable)) {
     throw new TypeError('Automerge.' + funcName + ' requires a writable object as first argument, ' +
-                        'but the one you passed is read-only. Please use Automerge.changeset() ' +
+                        'but the one you passed is read-only. Please use Automerge.change() ' +
                         'to get a writable version.')
   }
 }
@@ -168,13 +168,13 @@ function parseListIndex(key) {
   return key
 }
 
-function changeset(root, message, callback) {
-  checkTarget('changeset', root)
+function change(root, message, callback) {
+  checkTarget('change', root)
   if (root._objectId !== '00000000-0000-0000-0000-000000000000') {
-    throw new TypeError('The first argument to Automerge.changeset must be the document root')
+    throw new TypeError('The first argument to Automerge.change must be the document root')
   }
-  if (root._changeset && root._changeset.mutable) {
-    throw new TypeError('Calls to Automerge.changeset cannot be nested')
+  if (root._change && root._change.mutable) {
+    throw new TypeError('Calls to Automerge.change cannot be nested')
   }
   if (typeof message === 'function' && callback === undefined) {
     [message, callback] = [callback, message]
@@ -183,7 +183,7 @@ function changeset(root, message, callback) {
   const oldState = root._state
   const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return makeChangeset(oldState, context.state, message)
+  return makeChange(oldState, context.state, message)
 }
 
 function assign(target, values) {
@@ -198,18 +198,18 @@ function assign(target, values) {
       state = setField(state, target._objectId, key, values[key])
     }
   }
-  target._changeset.state = state
+  target._change.state = state
 }
 
 function load(string, actorId) {
-  return applyChangesets(init(actorId), transit.fromJSON(string))
+  return applyChanges(init(actorId), transit.fromJSON(string))
 }
 
 function save(store) {
   checkTarget('save', store)
   const history = store._state
     .getIn(['opSet', 'history'])
-    .map(state => state.get('changeset'))
+    .map(state => state.get('change'))
   return transit.toJSON(history)
 }
 
@@ -236,7 +236,7 @@ function getHistory(store) {
 
 const DocSet = require('./doc_set')
 const Connection = require('./connection')
-DocSet.prototype.applyChangesets = applyChangesets
+DocSet.prototype._applyChanges = applyChanges
 
 function merge(local, remote) {
   checkTarget('merge', local)
@@ -246,7 +246,7 @@ function merge(local, remote) {
 
   const clock = local._state.getIn(['opSet', 'clock'])
   const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  return applyChangesets(local, changes)
+  return applyChanges(local, changes)
 }
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
@@ -270,10 +270,10 @@ function diff(oldState, newState) {
   let root, opSet = oldState._state.get('opSet').set('diff', List())
   const changes = OpSet.getMissingChanges(newState._state.get('opSet'), oldClock)
 
-  for (let change of changes) [opSet, root] = OpSet.addChangeset(opSet, change)
+  for (let change of changes) [opSet, root] = OpSet.addChange(opSet, change)
   return opSet.get('diff').toJS()
 }
 
 module.exports = {
-  init, changeset, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
+  init, change, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
 }

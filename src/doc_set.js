@@ -20,7 +20,7 @@ class DocSet {
   }
 
   applyChanges (docId, changes) {
-    const doc = this.applyChangesets(this.docs.get(docId), changes)
+    const doc = this._applyChanges(this.docs.get(docId), changes)
     this.setDoc(docId, doc)
     return doc
   }

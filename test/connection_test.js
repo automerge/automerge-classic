@@ -8,7 +8,7 @@ describe('Automerge.Connection', () => {
   var doc1, nodes
 
   beforeEach(() => {
-    doc1 = Automerge.changeset(Automerge.init(), doc => doc.doc1 = 'doc1')
+    doc1 = Automerge.change(Automerge.init(), doc => doc.doc1 = 'doc1')
     nodes = []
     for (let i=0; i<5; i++) nodes.push(new DocSet())
   })
@@ -107,7 +107,7 @@ describe('Automerge.Connection', () => {
   })
 
   it('should concurrently exchange any missing documents', () => {
-    let doc2 = Automerge.changeset(Automerge.init(), doc => doc.doc2 = 'doc2')
+    let doc2 = Automerge.change(Automerge.init(), doc => doc.doc2 = 'doc2')
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc2', doc2)
 
@@ -148,7 +148,7 @@ describe('Automerge.Connection', () => {
 
   it('should bring an older copy up-to-date with a newer one', () => {
     let doc2 = Automerge.merge(Automerge.init(), doc1)
-    doc2 = Automerge.changeset(doc2, doc => doc.doc1 = 'doc1++')
+    doc2 = Automerge.change(doc2, doc => doc.doc1 = 'doc1++')
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc1', doc2)
 
@@ -180,8 +180,8 @@ describe('Automerge.Connection', () => {
 
   it('should bidirectionally merge divergent document copies', () => {
     let doc2 = Automerge.merge(Automerge.init(), doc1)
-    doc2 = Automerge.changeset(doc2, doc => doc.two = 'two')
-    doc1 = Automerge.changeset(doc1, doc => doc.one = 'one')
+    doc2 = Automerge.change(doc2, doc => doc.two = 'two')
+    doc1 = Automerge.change(doc1, doc => doc.one = 'one')
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc1', doc2)
 
@@ -251,7 +251,7 @@ describe('Automerge.Connection', () => {
   })
 
   it('should tolerate duplicate message deliveries', () => {
-    doc1 = Automerge.changeset(Automerge.init(), doc => doc.list = [])
+    doc1 = Automerge.change(Automerge.init(), doc => doc.list = [])
     let doc2 = Automerge.merge(Automerge.init(), doc1)
     let doc3 = Automerge.merge(Automerge.init(), doc1)
     nodes[1].setDoc('doc1', doc1)
@@ -269,7 +269,7 @@ describe('Automerge.Connection', () => {
 
       // Change made on node 1, propagated to nodes 2 and 3
       () => {
-        doc1 = Automerge.changeset(doc1, doc => doc.list.push('hello'))
+        doc1 = Automerge.change(doc1, doc => doc.list.push('hello'))
         nodes[1].setDoc('doc1', doc1)
       },
       {from: 1, to: 2, deliver: true, match(msg) {

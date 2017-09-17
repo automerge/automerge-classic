@@ -33,14 +33,14 @@ are two ways how the state can change:
 
 1. *Local operations*, which are generally triggered by the user changing some
    piece of application data in the user interface. Such editing by the user is
-   expressed by calling `Automerge.changeset()`, which groups together a block
+   expressed by calling `Automerge.change()`, which groups together a block
    of operations that should be applied as an atomic unit. Within that block, a
    mutable API is used for expressing the changes, but internally these API
    calls are translated into operations on the immutable state. The
-   `changeset()` function returns a new copy of the state with those operations
+   `change()` function returns a new copy of the state with those operations
    included.
 2. *Remote operations*: a user on another device has edited their copy of
-   a document, that changeset was sent to you via the network, and now you want
+   a document, that change was sent to you via the network, and now you want
    to apply it to your own copy of the document. Remote operations are applied
    using `Automerge.applyDeltas()`, which again returns a new copy of the
    state. For testing purposes there is also `Automerge.merge()`, which is
@@ -60,14 +60,14 @@ Each Automerge instance has an *actor ID* — a UUID that is generated randomly
 whenever you do `Automerge.init()` or `Automerge.load()` (unless you explicitly
 pass an actor ID into those functions). Whenever you make a local edit on that
 Automerge instance, the operations are tagged with that actor ID as the origin.
-All changesets made on a Automerge instance are numbered sequentially, starting
+All changes made on a Automerge instance are numbered sequentially, starting
 with 1 and never skipping or reusing sequence numbers. We assume that nobody
-else is using the same actor ID, and thus each changeset is uniquely identified
+else is using the same actor ID, and thus each change is uniquely identified
 by the combination of its originating actor ID and its sequence number. That
-unique identifier for the changeset always remains fixed, even when it is
+unique identifier for the change always remains fixed, even when it is
 applied on remote copies of the document.
 
-An actor ID is a bit similar to a device ID. Each device can generate changesets
+An actor ID is a bit similar to a device ID. Each device can generate changes
 independently from every other device, and so each device needs to have its own
 numbering sequence. You can have several actor IDs for the same device, for
 example if the user might run several instances of the application on the same
@@ -77,42 +77,42 @@ using the same actor ID if possible (at least for the lifetime of an application
 process).
 
 With those sequence numbers in place, we can fairly efficiently keep track of
-all changesets we've seen: for each actor ID, we apply the changesets
+all changes we've seen: for each actor ID, we apply the changes
 originating on that instance in strictly incrementing order; and then we only
 need to store the highest sequence number we've seen for each actor ID. This
 mapping from actor ID to highest sequence number is called a *vector clock*.
 
-With our documents, one changeset sometimes depends on another. For example, if
+With our documents, one change sometimes depends on another. For example, if
 an item is first added and then removed, it doesn't make sense to try to apply
 the removal if you haven't already seen the addition (since you'd be trying to
 remove something that doesn't yet exist). To keep track of these dependencies,
-every changeset includes the vector clock of the originating Automerge instance
+every change includes the vector clock of the originating Automerge instance
 at the time when the local edit was made. Every other Automerge instance that
-wants to apply this changeset needs to check that the prior changesets have
+wants to apply this change needs to check that the prior changes have
 already been applied; it can do this by checking that for all known actor IDs,
 the greatest sequence number it has already applied is no less than the sequence
-number in the changeset's vector clock. If the changeset depends on some other
-changeset that has not yet been seen, the changeset is buffered until the
-prerequisite changeset arrives. This ordering and buffering process is known as
+number in the change's vector clock. If the change depends on some other
+change that has not yet been seen, the change is buffered until the
+prerequisite change arrives. This ordering and buffering process is known as
 *causally ordered delivery* (because it ensures that everybody first sees the
 cause, then the effect, not the other way round).
 
 
-Changeset structure and operation types
----------------------------------------
+Change structure and operation types
+------------------------------------
 
-Every changeset is a JSON document with four properties:
+Every change is a JSON document with four properties:
 
-* `actor`: The actor ID on which the changeset originated (a UUID).
+* `actor`: The actor ID on which the change originated (a UUID).
 * `clock`: The vector clock of the originating Automerge instance at the time
-  the changeset was generated, represented as a map from actor IDs to sequence
+  the change was generated, represented as a map from actor IDs to sequence
   numbers: `{[actorId1]: seq1, [actorId2]: seq2, ...}`. The entry for the actor
-  ID on which the changeset originated, i.e. `changeset.clock[changeset.actor]`,
-  is the sequence number of this particular changeset.
+  ID on which the change originated, i.e. `change.clock[change.actor]`,
+  is the sequence number of this particular change.
 * `message`: An optional human-readable "commit message" that describes the
-  changeset in a meaningful way. It is not interpreted by Automerge, only
+  change in a meaningful way. It is not interpreted by Automerge, only
   stored for introspection, debugging, undo, and similar purposes.
-* `ops`: An array of operations that are grouped into this changeset.
+* `ops`: An array of operations that are grouped into this change.
 
 Each operation in the `ops` array is a JSON object. Automerge currently uses the
 following types of operation:
@@ -196,13 +196,13 @@ following types of operation:
 For example, the following code:
 
 ```js
-Automerge.changeset(Automerge.init(), 'Create document', doc => doc.cards = [ { title: 'hello world' } ])
+Automerge.change(Automerge.init(), 'Create document', doc => doc.cards = [ { title: 'hello world' } ])
 ```
 
-generates the following JSON object describing the changeset:
+generates the following JSON object describing the change:
 
 ```js
-{ actor: 'be3a9238-66c1-4215-9694-8688f1162cea',        // actorId where this changeset originated
+{ actor: 'be3a9238-66c1-4215-9694-8688f1162cea',        // actorId where this change originated
   clock: { 'be3a9238-66c1-4215-9694-8688f1162cea': 1 }, // sequence number 1
   message: 'Create document',                           // human-readable message
   ops:
