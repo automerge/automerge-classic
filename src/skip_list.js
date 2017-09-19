@@ -1,4 +1,4 @@
-const { Map, List } = require('immutable')
+const { Map } = require('immutable')
 
 // Returns a random number from the geometric distribution with p = 0.75.
 // That is, returns k with probability p * (1 - p)^(k - 1).

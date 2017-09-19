@@ -1,6 +1,10 @@
 const assert = require('assert')
 const { SkipList } = require('../src/skip_list')
 
+function iter(array) {
+  return array[Symbol.iterator].bind(array)
+}
+
 describe('SkipList', () => {
   describe('internal structure', () => {
     it('should have a head node when initialized', () => {
@@ -11,7 +15,7 @@ describe('SkipList', () => {
     })
 
     it('should link to a new level-1 node', () => {
-      let s = new SkipList(function* () { yield 1 })
+      let s = new SkipList(iter([1]))
       s = s.insertAfter(null, 'a', 'aaa')
       assert.deepEqual(s._nodes.get(null),
                        {key: null, value: null, level: 1,
@@ -22,9 +26,7 @@ describe('SkipList', () => {
     })
 
     it('should raise the head to the maximum level', () => {
-      let s = new SkipList(function* () {
-        for (let level of [1, 1, 1, 3]) yield level
-      })
+      let s = new SkipList(iter([1, 1, 1, 3]))
       s = s.insertAfter(null, 'a', 'aaa').insertAfter('a', 'b', 'bbb').insertAfter('b', 'd', 'ddd')
       s = s.insertAfter('b', 'c', 'ccc') // this is the level-3 node
 
@@ -47,9 +49,7 @@ describe('SkipList', () => {
     })
 
     it('should keep track of skip distances', () => {
-      let s = new SkipList(function* () {
-        for (let level of [1, 2, 1, 3, 1, 2, 1, 4]) yield level
-      })
+      let s = new SkipList(iter([1, 2, 1, 3, 1, 2, 1, 4]))
       s = s.insertAfter(null, '1', '1').insertAfter('1', '2', '2').insertAfter('2', '3', '3').insertAfter('3', '4', '4')
       s = s.insertAfter('4', '5', '5').insertAfter('5', '6', '6').insertAfter('6', '7', '7').insertAfter('7', '8', '8')
 
@@ -72,9 +72,7 @@ describe('SkipList', () => {
     })
 
     it('should update preceding and succeeding nodes at the appropriate levels', () => {
-      let s = new SkipList(function* () {
-        for (let level of [5, 2, 1, 1, 1, 2, 5, 4]) yield level
-      })
+      let s = new SkipList(iter([5, 2, 1, 1, 1, 2, 5, 4]))
       s = s.insertAfter(null, '1', '1').insertAfter('1', '2', '2').insertAfter('2', '3', '3').insertAfter('3', '4', '4')
       s = s.insertAfter('4', '5', '5').insertAfter('5', '6', '6').insertAfter('6', '7', '7')
       s = s.insertAfter('4', 'x', 'x') // insert x at level 4
