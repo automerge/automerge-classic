@@ -63,6 +63,40 @@ class Node {
     return new Node(this.key, this.value, this.level,
                     prevKey, this.nextKey, prevCount, this.nextCount)
   }
+
+  removeAfter (fromLevel, removedLevel, newKeys, distances) {
+    const nextKey = this.nextKey.slice()
+    const nextCount = this.nextCount.slice()
+
+    for (let level = fromLevel; level < this.level; level++) {
+      if (level < removedLevel) {
+        nextKey[level] = newKeys[level]
+        nextCount[level] = distances[level]
+      } else {
+        nextCount[level] -= 1
+      }
+    }
+
+    return new Node(this.key, this.value, this.level,
+                    this.prevKey, nextKey, this.prevCount, nextCount)
+  }
+
+  removeBefore (fromLevel, removedLevel, newKeys, distances) {
+    const prevKey = this.prevKey.slice()
+    const prevCount = this.prevCount.slice()
+
+    for (let level = fromLevel; level < this.level; level++) {
+      if (level < removedLevel) {
+        prevKey[level] = newKeys[level]
+        prevCount[level] = distances[level]
+      } else {
+        prevCount[level] -= 1
+      }
+    }
+
+    return new Node(this.key, this.value, this.level,
+                    prevKey, this.nextKey, prevCount, this.nextCount)
+  }
 }
 
 class SkipList {
@@ -160,6 +194,40 @@ class SkipList {
                               sucKeys.slice(0, newLevel),
                               preCounts.slice(0, newLevel),
                               sucCounts.slice(0, newLevel)))
+    }), this._randomSource)
+  }
+
+  remove (key) {
+    if (typeof key !== 'string' || !this._nodes.has(key)) {
+      throw new RangeError('The given key cannot be removed because it does not exist')
+    }
+    const removedNode = this._nodes.get(key)
+    const maxLevel = this.headNode.level
+    const { preKeys, preCounts } = this.predecessors(removedNode.prevKey[0], maxLevel)
+    const { sucKeys, sucCounts } = this.successors  (removedNode.nextKey[0], maxLevel)
+    const distances = new Array(maxLevel)
+
+    for (let level = 0; level < maxLevel; level++) {
+      distances[level] = preCounts[level] + sucCounts[level] - 1
+    }
+
+    return makeInstance(this.length - 1, this._nodes.withMutations(nodes => {
+      nodes.remove(key)
+      let preLevel = 0, sucLevel = 0
+
+      for (let level = 1; level <= maxLevel; level++) {
+        const updateLevel = Math.min(level, removedNode.level)
+        if (level === maxLevel || preKeys[level] !== preKeys[preLevel]) {
+          nodes.update(preKeys[preLevel],
+                       node => node.removeAfter(preLevel, updateLevel, sucKeys, distances))
+          preLevel = level
+        }
+        if (sucKeys[sucLevel] && (level === maxLevel || sucKeys[level] !== sucKeys[sucLevel])) {
+          nodes.update(sucKeys[sucLevel],
+                       node => node.removeBefore(sucLevel, updateLevel, preKeys, distances))
+          sucLevel = level
+        }
+      }
     }), this._randomSource)
   }
 

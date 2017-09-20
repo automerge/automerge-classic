@@ -28,6 +28,13 @@ describe('SkipList', () => {
         insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
       assert.strictEqual(s.indexOf('d'), 3)
     })
+
+    it('should adjust based on removed elements', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      s = s.remove('a')
+      assert.strictEqual(s.indexOf('b'), 0)
+      assert.strictEqual(s.indexOf('c'), 1)
+    })
   })
 
   describe('.length', () => {
@@ -39,6 +46,13 @@ describe('SkipList', () => {
     it('should increase by 1 for every insertion', () => {
       let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
       assert.strictEqual(s.length, 3)
+    })
+
+    it('should decrease by 1 for every removal', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      assert.strictEqual(s.length, 3)
+      s = s.remove('b')
+      assert.strictEqual(s.length, 2)
     })
   })
 
@@ -67,18 +81,32 @@ describe('SkipList', () => {
       let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
       assert.strictEqual(s.keyOf(2), 'c')
     })
+
+    it('should not count removed elements', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      s = s.remove('b')
+      assert.strictEqual(s.keyOf(0), 'a')
+      assert.strictEqual(s.keyOf(1), 'c')
+    })
   })
 
   describe('property-based tests', () => {
     function makeSkipListOps(size) {
       const numOps = jsc.random(0, Math.round(Math.log(size + 1) / Math.log(2)))
-      const ops = new Array(numOps)
+      const ops = new Array(numOps), ids = []
       for (let i = 0; i < numOps; i++) {
-        const index = jsc.random(0, i)
-        ops[i] = {
-          id: i.toString(),
-          insertAfter: (index === 0) ? null : (index - 1).toString(),
-          level: jsc.random(1, 7)
+        if (ids.length === 0 || jsc.random(0, 1) === 0) {
+          const index = jsc.random(0, ids.length)
+          ops[i] = {
+            id: i.toString(),
+            insertAfter: (index === ids.length) ? null : ids[index],
+            level: jsc.random(1, 7)
+          }
+          ids.push(i.toString())
+        } else {
+          const index = jsc.random(0, ids.length - 1)
+          ops[i] = {remove: ids[index]}
+          ids.splice(index, 1)
         }
       }
       return ops
@@ -86,12 +114,30 @@ describe('SkipList', () => {
 
     it('should behave like a JS array', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
-        let skipList = new SkipList(iter(ops.map(op => op.level)))
+        let levels = ops.filter(op => op.hasOwnProperty('insertAfter')).map(op => op.level)
+        let skipList = new SkipList(iter(levels))
         let shadow = []
         for (let op of ops) {
-          skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
-          shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
+          if (op.hasOwnProperty('insertAfter')) {
+            skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
+            shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
+          } else {
+            skipList = skipList.remove(op.remove)
+            shadow.splice(shadow.indexOf(op.remove), 1)
+          }
         }
+
+        /*if (skipList.length !== shadow.length) console.log('list lengths must be equal')
+
+        shadow.forEach((id, index) => {
+          if (skipList.indexOf(id) !== index) {
+            console.log('indexOf(' + id + ') = ' + skipList.indexOf(id) + ', should be ' + index)
+          }
+          if (skipList.keyOf(index) !== id) {
+            console.log('keyOf(' + index + ') = ' + skipList.keyOf(index) + ', should be ' + id)
+          }
+        })*/
+
         return (skipList.length === shadow.length) && shadow.every((id, index) =>
           skipList.indexOf(id) === index && skipList.keyOf(index) === id
         )
@@ -188,6 +234,42 @@ describe('SkipList', () => {
                        {key: '7', value: '7', level: 5,
                         prevKey: [ '6',  '6',  'x',  'x',  '1'], prevCount: [1, 1, 3, 3, 7],
                         nextKey: [null, null, null, null, null], nextCount: [1, 1, 1, 1, 1]})
+    })
+
+    it('should handle removal of nodes', () => {
+      let s = new SkipList(iter([1, 2, 1, 3]))
+      s = s.insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
+
+      assert.deepEqual(s._nodes.get(null),
+                       {key: null, value: null, level: 3,
+                        prevKey: [], prevCount: [], nextKey: ['a', 'b', 'd'], nextCount: [1, 2, 4]})
+      assert.deepEqual(s._nodes.get('d'),
+                       {key: 'd', value: 'd', level: 3,
+                        prevKey: [ 'c',  'b', null], prevCount: [1, 2, 4],
+                        nextKey: [null, null, null], nextCount: [1, 1, 1]})
+
+      s = s.remove('b')
+      assert.deepEqual(s._nodes.get(null),
+                       {key: null, value: null, level: 3,
+                        prevKey: [], prevCount: [], nextKey: ['a', 'd', 'd'], nextCount: [1, 3, 3]})
+      assert.deepEqual(s._nodes.get('a'),
+                       {key: 'a', value: 'a', level: 1,
+                        prevKey: [null], prevCount: [1], nextKey: ['c'], nextCount: [1]})
+      assert.deepEqual(s._nodes.get('c'),
+                       {key: 'c', value: 'c', level: 1,
+                        prevKey: ['a'], prevCount: [1], nextKey: ['d'], nextCount: [1]})
+      assert.deepEqual(s._nodes.get('d'),
+                       {key: 'd', value: 'd', level: 3,
+                        prevKey: [ 'c', null, null], prevCount: [1, 3, 3],
+                        nextKey: [null, null, null], nextCount: [1, 1, 1]})
+      assert.strictEqual(s._nodes.get('b'), undefined)
+    })
+
+    it('should allow the only element to be removed', () => {
+      let s = new SkipList(iter([1])).insertAfter(null, '0', '0').remove('0')
+      assert.deepEqual(s._nodes.get(null),
+                       {key: null, value: null, level: 1,
+                        prevKey: [], prevCount: [], nextKey: [null], nextCount: [1]})
     })
   })
 })
