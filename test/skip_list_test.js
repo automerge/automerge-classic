@@ -1,4 +1,5 @@
 const assert = require('assert')
+const jsc = require('jsverify')
 const { SkipList } = require('../src/skip_list')
 
 function iter(array) {
@@ -6,6 +7,98 @@ function iter(array) {
 }
 
 describe('SkipList', () => {
+  describe('.indexOf()', () => {
+    it('should return -1 on an empty list', () => {
+      let s = new SkipList()
+      assert.strictEqual(s.indexOf('hello'), -1)
+    })
+
+    it('should return -1 for a nonexistent key', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a')
+      assert.strictEqual(s.indexOf('b'), -1)
+    })
+
+    it('should return 0 for the first list element', () => {
+      let s = new SkipList().insertAfter(null, 'b', 'b').insertAfter('b', 'c', 'c').insertAfter(null, 'a', 'a')
+      assert.strictEqual(s.indexOf('a'), 0)
+    })
+
+    it('should return length-1 for the last list element', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').
+        insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
+      assert.strictEqual(s.indexOf('d'), 3)
+    })
+  })
+
+  describe('.length', () => {
+    it('should be 0 for an empty list', () => {
+      let s = new SkipList()
+      assert.strictEqual(s.length, 0)
+    })
+
+    it('should increase by 1 for every insertion', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      assert.strictEqual(s.length, 3)
+    })
+  })
+
+  describe('.keyOf()', () => {
+    it('should return null on an empty list', () => {
+      let s = new SkipList()
+      assert.strictEqual(s.keyOf(0), null)
+    })
+
+    it('should return null for an index past the end of the list', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b')
+      assert.strictEqual(s.keyOf(2), null)
+    })
+
+    it('should return the first key for index 0', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      assert.strictEqual(s.keyOf(0), 'a')
+    })
+
+    it('should return the last key for index -1', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      assert.strictEqual(s.keyOf(-1), 'c')
+    })
+
+    it('should return the last key for index length-1', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
+      assert.strictEqual(s.keyOf(2), 'c')
+    })
+  })
+
+  describe('property-based tests', () => {
+    function makeSkipListOps(size) {
+      const numOps = jsc.random(0, Math.round(Math.log(size + 1) / Math.log(2)))
+      const ops = new Array(numOps)
+      for (let i = 0; i < numOps; i++) {
+        const index = jsc.random(0, i)
+        ops[i] = {
+          id: i.toString(),
+          insertAfter: (index === 0) ? null : (index - 1).toString(),
+          level: jsc.random(1, 7)
+        }
+      }
+      return ops
+    }
+
+    it('should behave like a JS array', () => {
+      jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
+        let skipList = new SkipList(iter(ops.map(op => op.level)))
+        let shadow = []
+        for (let op of ops) {
+          skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
+          shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
+        }
+        return (skipList.length === shadow.length) && shadow.every((id, index) =>
+          skipList.indexOf(id) === index && skipList.keyOf(index) === id
+        )
+      }), {tests: 100, size: 50})
+    })
+  })
+
   describe('internal structure', () => {
     it('should have a head node when initialized', () => {
       let s = new SkipList()

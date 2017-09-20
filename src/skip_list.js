@@ -69,7 +69,7 @@ class SkipList {
   constructor (randomSource) {
     const head = new Node(null, null, 1, [], [null], [], [null])
     const random = randomSource ? randomSource() : randomLevel()
-    return makeInstance(Map().set(null, head), random)
+    return makeInstance(0, Map().set(null, head), random)
   }
 
   get headNode () {
@@ -123,6 +123,9 @@ class SkipList {
   // Inserts a new list element immediately after the element with key `predecessor`.
   // If predecessor === null, inserts at the head of the list.
   insertAfter (predecessor, key, value) {
+    if (typeof key !== 'string' || key === '') {
+      throw new RangeError('Key must be a nonempty string')
+    }
     if (!this._nodes.has(predecessor)) {
       throw new RangeError('The referenced predecessor key does not exist')
     }
@@ -136,7 +139,7 @@ class SkipList {
     const { preKeys, preCounts } = this.predecessors(predecessor, maxLevel)
     const { sucKeys, sucCounts } = this.successors(successor, maxLevel)
 
-    return makeInstance(this._nodes.withMutations(nodes => {
+    return makeInstance(this.length + 1, this._nodes.withMutations(nodes => {
       let preLevel = 0, sucLevel = 0
       for (let level = 1; level <= maxLevel; level++) {
         const updateLevel = Math.min(level, newLevel)
@@ -159,13 +162,42 @@ class SkipList {
                               sucCounts.slice(0, newLevel)))
     }), this._randomSource)
   }
+
+  indexOf (key) {
+    if (typeof key !== 'string' || key === '' || !this._nodes.has(key)) return -1
+    let node = this._nodes.get(key), count = 0
+    while (node && node.key) {
+      count += node.prevCount[node.level - 1]
+      node = this._nodes.get(node.prevKey[node.level - 1])
+    }
+    return count - 1
+  }
+
+  keyOf (index) {
+    if (typeof index !== 'number') return null
+    if (index < 0) index = index + this.length
+    if (index < 0 || index >= this.length) return null
+
+    let node = this._nodes.get(null), level = node.level - 1, count = 0
+    while (true) {
+      if (count === index + 1) {
+        return node.key
+      } else if (count + node.nextCount[level] > index + 1) {
+        level -= 1
+      } else {
+        count += node.nextCount[level]
+        node = this._nodes.get(node.nextKey[level])
+      }
+    }
+  }
 }
 
-function makeInstance(nodes, randomSource) {
+function makeInstance(length, nodes, randomSource) {
   const instance = Object.create(SkipList.prototype)
+  instance.length = length
   instance._nodes = nodes
   instance._randomSource = randomSource
-  return instance
+  return Object.freeze(instance)
 }
 
 module.exports = {SkipList}
