@@ -25,6 +25,11 @@ class Node {
     Object.freeze(this)
   }
 
+  setValue (key, value) {
+    return new Node(this.key, value, this.level, this.prevKey, this.nextKey,
+                    this.prevCount, this.nextCount)
+  }
+
   insertAfter (newKey, newLevel, fromLevel, distance) {
     if (newLevel > this.level && this.key !== null) {
       throw new RangeError('Cannot increase the level of a non-head node')
@@ -197,7 +202,18 @@ class SkipList {
     }), this._randomSource)
   }
 
-  remove (key) {
+  insertIndex (index, key, value) {
+    if (typeof index !== 'number' || index < 0) {
+      throw new RangeError('Index must be a non-negative integer')
+    }
+    if (index === 0) {
+      return this.insertAfter(null, key, value)
+    } else {
+      return this.insertAfter(this.keyOf(index - 1), key, value)
+    }
+  }
+
+  removeKey (key) {
     if (typeof key !== 'string' || !this._nodes.has(key)) {
       throw new RangeError('The given key cannot be removed because it does not exist')
     }
@@ -231,6 +247,10 @@ class SkipList {
     }), this._randomSource)
   }
 
+  removeIndex (index) {
+    return this.removeKey(this.keyOf(index))
+  }
+
   indexOf (key) {
     if (typeof key !== 'string' || key === '' || !this._nodes.has(key)) return -1
     let node = this._nodes.get(key), count = 0
@@ -257,6 +277,42 @@ class SkipList {
         node = this._nodes.get(node.nextKey[level])
       }
     }
+  }
+
+  getValue (key) {
+    if (typeof key !== 'string' || key === '') {
+      throw new RangeError('Key must be a nonempty string')
+    }
+    const node = this._nodes.get(key)
+    return node && node.value
+  }
+
+  setValue (key, value) {
+    if (typeof key !== 'string' || key === '') {
+      throw new RangeError('Key must be a nonempty string')
+    }
+    let node = this._nodes.get(key)
+    if (!node) throw new RangeError('The referenced key does not exist')
+
+    node = node.setValue(key, value)
+    return makeInstance(this.length, this._nodes.set(key, node), this._randomSource)
+  }
+
+  *iterator (mode) {
+    let key = this._nodes.get(null).nextKey[0]
+    while (key) {
+      const node = this._nodes.get(key)
+      switch (mode) {
+        case 'keys':    yield key; break;
+        case 'values':  yield node.value; break;
+        case 'entries': yield [key, node.value]; break;
+      }
+      key = node.nextKey[0]
+    }
+  }
+
+  [Symbol.iterator] () {
+    return this.iterator('values')
   }
 }
 

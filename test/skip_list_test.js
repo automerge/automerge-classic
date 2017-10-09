@@ -31,7 +31,7 @@ describe('SkipList', () => {
 
     it('should adjust based on removed elements', () => {
       let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
-      s = s.remove('a')
+      s = s.removeKey('a')
       assert.strictEqual(s.indexOf('b'), 0)
       assert.strictEqual(s.indexOf('c'), 1)
     })
@@ -51,7 +51,7 @@ describe('SkipList', () => {
     it('should decrease by 1 for every removal', () => {
       let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
       assert.strictEqual(s.length, 3)
-      s = s.remove('b')
+      s = s.removeKey('b')
       assert.strictEqual(s.length, 2)
     })
   })
@@ -84,9 +84,87 @@ describe('SkipList', () => {
 
     it('should not count removed elements', () => {
       let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').insertAfter('b', 'c', 'c')
-      s = s.remove('b')
+      s = s.removeKey('b')
       assert.strictEqual(s.keyOf(0), 'a')
       assert.strictEqual(s.keyOf(1), 'c')
+    })
+  })
+
+  describe('.getValue()', () => {
+    it('should return undefined for a nonexistent key', () => {
+      let s = new SkipList()
+      assert.strictEqual(s.getValue('foo'), undefined)
+    })
+
+    it('should return the inserted value when present', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
+      assert.strictEqual(s.getValue('key1'), 'value1')
+      assert.strictEqual(s.getValue('key2'), 'value2')
+    })
+  })
+
+  describe('.setValue()', () => {
+    it('should throw an exception when setting a nonexistent key', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1')
+      assert.throws(() => { s.setValue('key2', 'value2') }, /referenced key does not exist/)
+    })
+
+    it('should update the value for an existing key', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
+      let s2 = s.setValue('key2', 'updated value')
+      assert.strictEqual(s.getValue('key2'), 'value2')
+      assert.strictEqual(s2.getValue('key2'), 'updated value')
+      assert.strictEqual(s2.getValue('key1'), 'value1')
+      assert.strictEqual(s2.length, 2)
+    })
+  })
+
+  describe('.insertIndex()', () => {
+    it('should insert the new key-value pair at the given index', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'aa').insertAfter('a', 'c', 'cc')
+      let s2 = s.insertIndex(1, 'b', 'bb')
+      assert.strictEqual(s2.indexOf('a'), 0)
+      assert.strictEqual(s2.indexOf('b'), 1)
+      assert.strictEqual(s2.indexOf('c'), 2)
+      assert.strictEqual(s2.length, 3)
+    })
+
+    it('should insert at the head if the index is zero', () => {
+      let s = new SkipList().insertIndex(0, 'a', 'aa')
+      assert.strictEqual(s.keyOf(0), 'a')
+      assert.strictEqual(s.length, 1)
+    })
+  })
+
+  describe('.removeIndex()', () => {
+    it('should remove the value at the given index', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'aa').insertAfter('a', 'b', 'bb').insertAfter('b', 'c', 'cc')
+      let s2 = s.removeIndex(1)
+      assert.strictEqual(s2.indexOf('a'), 0)
+      assert.strictEqual(s2.indexOf('b'), -1)
+      assert.strictEqual(s2.indexOf('c'), 1)
+    })
+
+    it('should raise an error if the given index is out of bounds', () => {
+      let s = new SkipList().insertAfter(null, 'a', 'aa').insertAfter('a', 'b', 'bb').insertAfter('b', 'c', 'cc')
+      assert.throws(() => { s.removeIndex(3) }, /key cannot be removed/)
+    })
+  })
+
+  describe('iterators', () => {
+    it('should iterate over values by default', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
+      assert.deepEqual([...s], ['value1', 'value2'])
+    })
+
+    it('should support iterating over keys', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
+      assert.deepEqual([...s.iterator('keys')], ['key1', 'key2'])
+    })
+
+    it('should support iterating over entries', () => {
+      let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
+      assert.deepEqual([...s.iterator('entries')], [['key1', 'value1'], ['key2', 'value2']])
     })
   })
 
@@ -122,7 +200,7 @@ describe('SkipList', () => {
             skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
             shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
           } else {
-            skipList = skipList.remove(op.remove)
+            skipList = skipList.removeKey(op.remove)
             shadow.splice(shadow.indexOf(op.remove), 1)
           }
         }
@@ -248,7 +326,7 @@ describe('SkipList', () => {
                         prevKey: [ 'c',  'b', null], prevCount: [1, 2, 4],
                         nextKey: [null, null, null], nextCount: [1, 1, 1]})
 
-      s = s.remove('b')
+      s = s.removeKey('b')
       assert.deepEqual(s._nodes.get(null),
                        {key: null, value: null, level: 3,
                         prevKey: [], prevCount: [], nextKey: ['a', 'd', 'd'], nextCount: [1, 3, 3]})
@@ -266,7 +344,7 @@ describe('SkipList', () => {
     })
 
     it('should allow the only element to be removed', () => {
-      let s = new SkipList(iter([1])).insertAfter(null, '0', '0').remove('0')
+      let s = new SkipList(iter([1])).insertAfter(null, '0', '0').removeKey('0')
       assert.deepEqual(s._nodes.get(null),
                        {key: null, value: null, level: 1,
                         prevKey: [], prevCount: [], nextKey: [null], nextCount: [1]})
