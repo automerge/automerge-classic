@@ -12,6 +12,7 @@
   "license": "MIT",
   "dependencies": {
     "immutable": "^3.8.1",
+    "serialize-javascript": "^1.4.0",
     "transit-immutable-js": "^0.7.0",
     "transit-js": "^0.8.846",
     "uuid": "^3.1.0"

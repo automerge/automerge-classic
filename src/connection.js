@@ -1,4 +1,6 @@
 const { Map, fromJS } = require('immutable')
+const transit = require('transit-immutable-js')
+const serialize = require('serialize-javascript')
 const OpSet = require('./op_set')
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
@@ -111,6 +113,37 @@ class Connection {
 
     return this._docSet.getDoc(msg.docId)
   }
+
+  setTheirClock (theirClock) {
+    this._theirClock = theirClock
+  }
+
+  setOurClock (ourClock) {
+    this._ourClock = ourClock
+  }
+
+  toJSON () {
+    return {
+      _type: 'Connection',
+      docSet: this._docSet.toJSON(),
+      sendMsg: serialize(this._sendMsg),
+      theirClock: transit.toJSON(this._theirClock),
+      ourClock: transit.toJSON(this._ourClock),
+    }
+  }
+}
+
+Connection.fromJSON = (json) => {
+  if (json._type != 'Connection') return null
+
+  const docSet = DocSet.fromJSON(json.docSet)
+  const sendMsg = eval('(' + json.sendMsg + ')')
+  const connection = new Connection(docSet, sendMsg)
+
+  connection.setTheirClock(transit.fromJSON(json.theirClock))
+  connection.setOurClock(transit.fromJSON(json.ourClock))
+
+  return connection
 }
 
 module.exports = Connection
