@@ -123,10 +123,14 @@ class Connection {
   }
 
   toJSON () {
+    let serializedSendMsg = null
+
+    try { serializedSendMsg = serialize(this._sendMsg) } catch(ex) {}
+
     return {
       _type: 'Connection',
       docSet: this._docSet.toJSON(),
-      sendMsg: serialize(this._sendMsg),
+      sendMsg: serializedSendMsg,
       theirClock: transit.toJSON(this._theirClock),
       ourClock: transit.toJSON(this._ourClock),
     }

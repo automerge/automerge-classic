@@ -38,7 +38,9 @@ class DocSet {
   toJSON () {
     const allHandlers = []
 
-    this.handlers.forEach(handler => allHandlers.push(serialize(handler)))
+    this.handlers.forEach((handler) => {
+      try { allHandlers.push(serialize(handler)) } catch(ex) {}
+    })
 
     return {
       _type: 'DocSet',
