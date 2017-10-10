@@ -40,9 +40,10 @@ function clockUnion(clockMap, docId, clock) {
 // ourClock is the most recent VClock that we've advertised to the peer (i.e. where we've
 // told the peer that we have it).
 class Connection {
-  constructor (docSet, sendMsg) {
+  constructor (docSet, sendMsg, clientId) {
     this._docSet = docSet
     this._sendMsg = sendMsg
+    this._clientId = clientId
     this._theirClock = Map()
     this._ourClock = Map()
     this._docChangedHandler = this.docChanged.bind(this)
@@ -61,7 +62,7 @@ class Connection {
     const msg = {docId, clock: clock.toJS()}
     this._ourClock = clockUnion(this._ourClock, docId, clock)
     if (changes) msg.changes = changes.toJS()
-    this._sendMsg(msg)
+    this._sendMsg(msg, this._clientId)
   }
 
   maybeSendChanges (docId) {
@@ -131,6 +132,7 @@ class Connection {
       _type: 'Connection',
       docSet: this._docSet.toJSON(),
       sendMsg: serializedSendMsg,
+      clientId: this._clientId,
       theirClock: transit.toJSON(this._theirClock),
       ourClock: transit.toJSON(this._ourClock),
     }
@@ -142,7 +144,7 @@ Connection.fromJSON = (json) => {
 
   const docSet = DocSet.fromJSON(json.docSet)
   const sendMsg = eval('(' + json.sendMsg + ')')
-  const connection = new Connection(docSet, sendMsg)
+  const connection = new Connection(docSet, sendMsg, json.clientId)
 
   connection.setTheirClock(transit.fromJSON(json.theirClock))
   connection.setOurClock(transit.fromJSON(json.ourClock))
