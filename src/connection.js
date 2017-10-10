@@ -143,7 +143,7 @@ Connection.fromJSON = (json) => {
   if (json._type != 'Connection') return null
 
   const docSet = DocSet.fromJSON(json.docSet)
-  const sendMsg = eval('(' + json.sendMsg + ')')
+  const sendMsg = eval(json.sendMsg)
   const connection = new Connection(docSet, sendMsg, json.clientId)
 
   connection.setTheirClock(transit.fromJSON(json.theirClock))

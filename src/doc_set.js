@@ -55,10 +55,13 @@ DocSet.fromJSON = (json) => {
 
   const docSet = new DocSet()
 
-  json.handlers.forEach(handler => docSet.registerHandler(eval('(' + handler + ')')))
-
   const docs = transit.fromJSON(json.docs)
   docs.keySeq().forEach(docId => docSet.setDoc(docId, docs.get(docId)))
+
+  json.handlers.forEach((handler) => {
+    const func = eval(handler)
+    docSet.registerHandler(func)
+  })
 
   return docSet
 }
