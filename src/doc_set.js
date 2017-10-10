@@ -1,4 +1,5 @@
 const { Map, Set } = require('immutable')
+const transit = require('transit-immutable-js')
 
 class DocSet {
   constructor () {
@@ -32,6 +33,28 @@ class DocSet {
   unregisterHandler (handler) {
     this.handlers = this.handlers.remove(handler)
   }
+
+  toJSON () {
+    return {
+      _type: 'DocSet',
+      docs: transit.toJSON(this.docs),
+      handlers: transit.toJSON(this.handlers)
+    }
+  }
+}
+
+DocSet.fromJSON = (json) => {
+  if (json._type != 'DocSet') return null
+
+  const docSet = new DocSet()
+
+  const docs = transit.fromJSON(json.docs)
+  const handlers = transit.fromJSON(json.handlers)
+
+  handlers.forEach(handler => docSet.registerHandler(handler))
+  docs.keySeq().forEach(docId => docSet.setDoc(docId, docs.get(docId)))
+
+  return docSet
 }
 
 module.exports = DocSet
