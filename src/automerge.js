@@ -237,6 +237,8 @@ function getHistory(doc) {
 const DocSet = require('./doc_set')
 const Connection = require('./connection')
 DocSet.prototype._applyChanges = applyChanges
+DocSet.prototype._saveDoc = save
+DocSet.prototype._loadDoc = load
 
 function merge(local, remote) {
   checkTarget('merge', local)

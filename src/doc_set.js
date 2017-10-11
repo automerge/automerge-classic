@@ -1,5 +1,4 @@
 const { Map, Set } = require('immutable')
-const transit = require('transit-immutable-js')
 const serialize = require('serialize-javascript')
 
 class DocSet {
@@ -36,7 +35,15 @@ class DocSet {
   }
 
   toJSON () {
+    const allDocs = []
     const allHandlers = []
+
+    this.docs.keySeq().forEach((docId) => {
+      allDocs.push({
+        id: docId,
+        doc: this._saveDoc(this.docs.get(docId))
+      })
+    })
 
     this.handlers.forEach((handler) => {
       try { allHandlers.push(serialize(handler)) } catch(ex) {}
@@ -44,7 +51,7 @@ class DocSet {
 
     return {
       _type: 'DocSet',
-      docs: transit.toJSON(this.docs),
+      docs: allDocs,
       handlers: allHandlers
     }
   }
@@ -55,8 +62,9 @@ DocSet.fromJSON = (json) => {
 
   const docSet = new DocSet()
 
-  const docs = transit.fromJSON(json.docs)
-  docs.keySeq().forEach(docId => docSet.setDoc(docId, docs.get(docId)))
+  json.docs.forEach((item) => {
+    docSet.setDoc(item.id, docSet._loadDoc(item.doc))
+  })
 
   json.handlers.forEach((handler) => {
     const func = eval(handler)

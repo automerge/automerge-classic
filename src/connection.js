@@ -149,6 +149,7 @@ Connection.fromJSON = (json) => {
 
   connection.setTheirClock(transit.fromJSON(json.theirClock))
   connection.setOurClock(transit.fromJSON(json.ourClock))
+  connection.open()
 
   return connection
 }
