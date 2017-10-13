@@ -1,5 +1,4 @@
 const { Map, Set } = require('immutable')
-const serialize = require('serialize-javascript')
 
 class DocSet {
   constructor () {
@@ -36,7 +35,6 @@ class DocSet {
 
   toJSON () {
     const allDocs = []
-    const allHandlers = []
 
     this.docs.keySeq().forEach((docId) => {
       allDocs.push({
@@ -45,19 +43,14 @@ class DocSet {
       })
     })
 
-    this.handlers.forEach((handler) => {
-      try { allHandlers.push(serialize(handler)) } catch(ex) {}
-    })
-
     return {
       _type: 'DocSet',
-      docs: allDocs,
-      handlers: allHandlers
+      docs: allDocs
     }
   }
 }
 
-DocSet.fromJSON = (json) => {
+DocSet.fromJSON = (json, handlers = []) => {
   if (json._type != 'DocSet') return null
 
   const docSet = new DocSet()
@@ -66,9 +59,8 @@ DocSet.fromJSON = (json) => {
     docSet.setDoc(item.id, docSet._loadDoc(item.doc))
   })
 
-  json.handlers.forEach((handler) => {
-    const func = eval(handler)
-    docSet.registerHandler(func)
+  handlers.forEach((handler) => {
+    docSet.registerHandler(handler)
   })
 
   return docSet

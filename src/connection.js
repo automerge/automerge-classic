@@ -1,6 +1,5 @@
 const { Map, fromJS } = require('immutable')
 const transit = require('transit-immutable-js')
-const serialize = require('serialize-javascript')
 const OpSet = require('./op_set')
 const DocSet = require('./doc_set')
 
@@ -125,14 +124,9 @@ class Connection {
   }
 
   toJSON () {
-    let serializedSendMsg = null
-
-    try { serializedSendMsg = serialize(this._sendMsg) } catch(ex) {}
-
     return {
       _type: 'Connection',
       docSet: this._docSet.toJSON(),
-      sendMsg: serializedSendMsg,
       clientId: this._clientId,
       theirClock: transit.toJSON(this._theirClock),
       ourClock: transit.toJSON(this._ourClock),
@@ -140,11 +134,10 @@ class Connection {
   }
 }
 
-Connection.fromJSON = (json) => {
+Connection.fromJSON = (json, sendMsg, docSetHandlers = []) => {
   if (json._type != 'Connection') return null
 
-  const docSet = DocSet.fromJSON(json.docSet)
-  const sendMsg = eval(json.sendMsg)
+  const docSet = DocSet.fromJSON(json.docSet, docSetHandlers)
   const connection = new Connection(docSet, sendMsg, json.clientId)
 
   connection.setTheirClock(transit.fromJSON(json.theirClock))
