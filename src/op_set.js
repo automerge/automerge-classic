@@ -1,4 +1,5 @@
 const { Map, List, Set } = require('immutable')
+const { SkipList } = require('./skip_list')
 const root_id = '00000000-0000-0000-0000-000000000000'
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
@@ -50,7 +51,7 @@ function applyMake(opSet, op) {
     let array = []
     Object.defineProperty(array, '_objectId', {value: objectId})
     opSet = opSet.setIn(['cache', objectId], Object.freeze(array))
-    object = object.set('_elemIds', List())
+    object = object.set('_elemIds', new SkipList())
   }
 
   opSet = opSet.setIn(['byObject', objectId], object)
@@ -86,12 +87,12 @@ function patchList(opSet, objectId, index, action, op, withDiff) {
 
   if (action === 'insert') {
     list.splice(index, 0, value)
-    elemIds = elemIds.splice(index, 0, op.get('key'))
+    elemIds = elemIds.insertIndex(index, op.get('key'))
   } else if (action === 'set') {
     list[index] = value
   } else if (action === 'remove') {
     list.splice(index, 1)
-    elemIds = elemIds.splice(index, 1)
+    elemIds = elemIds.removeIndex(index)
     delete edit['value']
   } else throw 'Unknown action type: ' + action
 
@@ -462,7 +463,7 @@ function getObjectConflicts(opSet, objectId, context) {
 }
 
 function listElemByIndex(opSet, objectId, index, context) {
-  const elemId = opSet.getIn(['byObject', objectId, '_elemIds', index])
+  const elemId = opSet.getIn(['byObject', objectId, '_elemIds']).keyOf(index)
   if (elemId) {
     const ops = getFieldOps(opSet, objectId, elemId)
     if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)

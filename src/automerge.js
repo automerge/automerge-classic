@@ -66,7 +66,7 @@ function setField(state, objectId, key, value) {
 function splice(state, objectId, start, deletions, insertions) {
   let elemIds = state.getIn(['opSet', 'byObject', objectId, '_elemIds'])
   for (let i = 0; i < deletions; i++) {
-    let elemId = elemIds.get(start)
+    let elemId = elemIds.keyOf(start)
     if (elemId) {
       state = makeOp(state, {action: 'del', obj: objectId, key: elemId})
       elemIds = state.getIn(['opSet', 'byObject', objectId, '_elemIds'])
@@ -74,7 +74,7 @@ function splice(state, objectId, start, deletions, insertions) {
   }
 
   // Apply insertions
-  let prev = (start === 0) ? '_head' : elemIds.get(start - 1)
+  let prev = (start === 0) ? '_head' : elemIds.keyOf(start - 1)
   if (!prev && insertions.length > 0) {
     throw new RangeError('Cannot insert at index ' + start + ', which is past the end of the list')
   }
