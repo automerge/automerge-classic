@@ -1,5 +1,7 @@
 const { Map, fromJS } = require('immutable')
+const transit = require('transit-immutable-js')
 const OpSet = require('./op_set')
+const DocSet = require('./doc_set')
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
 // Returns false if there is at least one component in which clock1 is greater than clock2
@@ -38,9 +40,10 @@ function clockUnion(clockMap, docId, clock) {
 // ourClock is the most recent VClock that we've advertised to the peer (i.e. where we've
 // told the peer that we have it).
 class Connection {
-  constructor (docSet, sendMsg) {
+  constructor (docSet, sendMsg, clientId) {
     this._docSet = docSet
     this._sendMsg = sendMsg
+    this._clientId = clientId
     this._theirClock = Map()
     this._ourClock = Map()
     this._docChangedHandler = this.docChanged.bind(this)
@@ -59,7 +62,7 @@ class Connection {
     const msg = {docId, clock: clock.toJS()}
     this._ourClock = clockUnion(this._ourClock, docId, clock)
     if (changes) msg.changes = changes.toJS()
-    this._sendMsg(msg)
+    this._sendMsg(msg, this._clientId)
   }
 
   maybeSendChanges (docId) {
@@ -111,6 +114,37 @@ class Connection {
 
     return this._docSet.getDoc(msg.docId)
   }
+
+  setTheirClock (theirClock) {
+    this._theirClock = theirClock
+  }
+
+  setOurClock (ourClock) {
+    this._ourClock = ourClock
+  }
+
+  toJSON () {
+    return {
+      _type: 'Connection',
+      docSet: this._docSet.toJSON(),
+      clientId: this._clientId,
+      theirClock: transit.toJSON(this._theirClock),
+      ourClock: transit.toJSON(this._ourClock),
+    }
+  }
+}
+
+Connection.fromJSON = (json, sendMsg, docSetHandlers = []) => {
+  if (json._type != 'Connection') return null
+
+  const docSet = DocSet.fromJSON(json.docSet, docSetHandlers)
+  const connection = new Connection(docSet, sendMsg, json.clientId)
+
+  connection.setTheirClock(transit.fromJSON(json.theirClock))
+  connection.setOurClock(transit.fromJSON(json.ourClock))
+  connection.open()
+
+  return connection
 }
 
 module.exports = Connection

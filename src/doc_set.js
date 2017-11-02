@@ -32,6 +32,38 @@ class DocSet {
   unregisterHandler (handler) {
     this.handlers = this.handlers.remove(handler)
   }
+
+  toJSON () {
+    const allDocs = []
+
+    this.docs.keySeq().forEach((docId) => {
+      allDocs.push({
+        id: docId,
+        doc: this._saveDoc(this.docs.get(docId))
+      })
+    })
+
+    return {
+      _type: 'DocSet',
+      docs: allDocs
+    }
+  }
+}
+
+DocSet.fromJSON = (json, handlers = []) => {
+  if (json._type != 'DocSet') return null
+
+  const docSet = new DocSet()
+
+  json.docs.forEach((item) => {
+    docSet.setDoc(item.id, docSet._loadDoc(item.doc))
+  })
+
+  handlers.forEach((handler) => {
+    docSet.registerHandler(handler)
+  })
+
+  return docSet
 }
 
 module.exports = DocSet
