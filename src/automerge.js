@@ -86,14 +86,8 @@ function splice(state, objectId, start, deletions, insertions) {
 }
 
 function setListIndex(state, listId, index, value) {
-  let i = -1, elem = OpSet.getNext(state.get('opSet'), listId, '_head')
-  index = parseListIndex(index)
-  while (elem) {
-    if (!OpSet.getFieldOps(state.get('opSet'), listId, elem).isEmpty()) i += 1
-    if (i === index) break
-    elem = OpSet.getNext(state.get('opSet'), listId, elem)
-  }
-
+  const elemIds = state.getIn(['opSet', 'byObject', listId, '_elemIds'])
+  const elem = elemIds.keyOf(parseListIndex(index))
   if (elem) {
     return setField(state, listId, elem, value)
   } else {
