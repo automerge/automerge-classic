@@ -1,6 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const { SkipList } = require('./skip_list')
-const root_id = '00000000-0000-0000-0000-000000000000'
+const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -41,25 +41,20 @@ function applyMake(opSet, op) {
   const objectId = op.get('obj')
   if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
 
-  let edit = {action: 'createObj', objectId}
+  let edit = {action: 'create', obj: objectId}
   let object = Map({_init: op, _inbound: Set()})
   if (op.get('action') === 'makeMap') {
-    edit.value = {}
-    opSet = opSet.setIn(['cache', objectId], Object.freeze({_objectId: objectId}))
+    edit.type = 'map'
   } else {
-    edit.value = []
-    let array = []
-    Object.defineProperty(array, '_objectId', {value: objectId})
-    opSet = opSet.setIn(['cache', objectId], Object.freeze(array))
+    edit.type = 'list'
     object = object.set('_elemIds', new SkipList())
   }
 
   opSet = opSet.setIn(['byObject', objectId], object)
-  if (opSet.has('diff')) opSet = opSet.update('diff', diff => diff.push(edit))
-  return opSet
+  return [opSet, [edit]]
 }
 
-// Processes an 'ins' operation. Does not require caches to be updated, since the insertion alone
+// Processes an 'ins' operation. Does not produce any diffs since the insertion alone
 // produces no application-visible effect; the list element only becomes visible through
 // a subsequent 'set' or 'link' operation on the inserted element.
 function applyInsert(opSet, op) {
@@ -67,53 +62,46 @@ function applyInsert(opSet, op) {
   if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
 
-  return opSet
+  opSet = opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
     .updateIn(['byObject', objectId, '_maxElem'], 0, maxElem => Math.max(elem, maxElem))
     .setIn(['byObject', objectId, '_insertion', elemId], op)
+  return [opSet, []]
 }
 
-function patchList(opSet, objectId, index, action, op, withDiff) {
-  let list = opSet.getIn(['cache', objectId]).slice()
+function patchList(opSet, objectId, index, action, op) {
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let value = op ? op.get('value') : null
-  let edit = {action, objectId, index, value}
-  Object.defineProperty(list, '_objectId', {value: objectId})
-
+  let edit = {action, type: 'list', obj: objectId, index, value}
   if (op && op.get('action') === 'link') {
-    value = opSet.getIn(['cache', value])
     edit.link = true
   }
 
   if (action === 'insert') {
-    list.splice(index, 0, value)
     elemIds = elemIds.insertIndex(index, op.get('key'))
   } else if (action === 'set') {
-    list[index] = value
+    // update elemIds?
   } else if (action === 'remove') {
-    list.splice(index, 1)
     elemIds = elemIds.removeIndex(index)
     delete edit['value']
   } else throw 'Unknown action type: ' + action
 
-  if (opSet.has('diff') && withDiff) opSet = opSet.update('diff', diff => diff.push(edit))
-  return opSet
-    .setIn(['cache', objectId], Object.freeze(list))
-    .setIn(['byObject', objectId, '_elemIds'], elemIds)
+  opSet = opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
+  return [opSet, [edit]]
 }
 
-function editListElement(opSet, objectId, elemId, withDiff) {
+function updateListElement(opSet, objectId, elemId) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
   if (index >= 0) {
     if (ops.isEmpty()) {
-      return patchList(opSet, objectId, index, 'remove', null, withDiff)
+      return patchList(opSet, objectId, index, 'remove', null)
     } else {
-      return patchList(opSet, objectId, index, 'set', ops.first(), withDiff)
+      return patchList(opSet, objectId, index, 'set', ops.first())
     }
 
   } else {
-    if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
+    if (ops.isEmpty()) return [opSet, []] // deleting a non-existent element = no-op
 
     // find the index of the closest preceding list element
     let prevId = elemId
@@ -125,46 +113,33 @@ function editListElement(opSet, objectId, elemId, withDiff) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, 'insert', ops.first(), withDiff)
+    return patchList(opSet, objectId, index + 1, 'insert', ops.first())
   }
 }
 
-function editMapKey(opSet, objectId, key, withDiff) {
+function updateMapKey(opSet, objectId, key) {
   const ops = getFieldOps(opSet, objectId, key)
-  let edit
-  let conflicts = Object.assign({}, opSet.getIn(['cache', objectId])._conflicts)
-  let object = Object.assign(Object.create({_conflicts: conflicts}), opSet.getIn(['cache', objectId]))
+  let edit = {action: '', type: 'map', obj: objectId, key}
 
   if (ops.isEmpty()) {
-    edit = {action: 'remove', objectId, key}
-    delete object[key]
-    delete conflicts[key]
+    edit.action = 'remove'
   } else {
-    let value = ops.first().get('value')
-    edit = {action: 'set', objectId, key, value}
-
+    edit.action = 'set'
+    edit.value = ops.first().get('value')
     if (ops.first().get('action') === 'link') {
-      value = opSet.getIn(['cache', value])
       edit.link = true
     }
-    object[key] = value
 
     if (ops.size > 1) {
-      conflicts[key] = {}
+      edit.conflicts = []
       for (let op of ops.shift()) {
-        let conflict = op.get('value')
-        if (op.get('action') === 'link') conflict = opSet.getIn(['cache', conflict])
-        conflicts[key][op.get('actor')] = conflict
+        let conflict = {actor: op.get('actor'), value: op.get('value')}
+        if (op.get('action') === 'link') conflict.link = true
+        edit.conflicts.push(conflict)
       }
-      Object.freeze(conflicts[key])
-    } else {
-      delete conflicts[key]
     }
   }
-
-  Object.freeze(conflicts)
-  if (opSet.has('diff') && withDiff) opSet = opSet.update('diff', diff => diff.push(edit))
-  return opSet.setIn(['cache', objectId], Object.freeze(object))
+  return [opSet, [edit]]
 }
 
 // Processes a 'set', 'del', or 'link' operation
@@ -195,46 +170,23 @@ function applyAssign(opSet, op) {
   opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
 
   if (objType === 'makeList') {
-    return editListElement(opSet, objectId, op.get('key'), true)
+    return updateListElement(opSet, objectId, op.get('key'))
   } else {
-    return editMapKey(opSet, objectId, op.get('key'), true)
+    return updateMapKey(opSet, objectId, op.get('key'))
   }
 }
 
 function applyOp(opSet, op) {
   const action = op.get('action')
   if (action === 'makeMap' || action == 'makeList') {
-    opSet = applyMake(opSet, op)
+    return applyMake(opSet, op)
   } else if (action === 'ins') {
-    opSet = applyInsert(opSet, op)
+    return applyInsert(opSet, op)
   } else if (action === 'set' || action === 'del' || action === 'link') {
-    opSet = applyAssign(opSet, op)
+    return applyAssign(opSet, op)
   } else {
     throw 'Unknown operation type ' + action
   }
-
-  // Update cache entries on the path from the root to the modified object
-  let affected = List.of(op)
-  while (!affected.isEmpty()) {
-    affected = affected.flatMap(ref => opSet.getIn(['byObject', ref.get('obj'), '_inbound'], Set()))
-    for (let ref of affected) {
-      const objectId = ref.get('obj')
-      const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-      if (objType === 'makeList') {
-        opSet = editListElement(opSet, objectId, ref.get('key'), false)
-      } else {
-        opSet = editMapKey(opSet, objectId, ref.get('key'), false)
-      }
-    }
-  }
-  return opSet
-}
-
-function materialize(opSet) {
-  const context = {instantiateObject: instantiateImmutable, cache: {}}
-  const snapshot = context.instantiateObject(opSet, root_id)
-  opSet = opSet.update('cache', cache => cache.merge(Map(context.cache)))
-  return [opSet, snapshot]
 }
 
 function applyChange(opSet, change) {
@@ -244,83 +196,52 @@ function applyChange(opSet, change) {
     if (!prior.get(seq - 1).get('change').equals(change)) {
       throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
     }
-    return [opSet, undefined] // change already applied, return unchanged
+    return [opSet, []] // change already applied, return unchanged
   }
 
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
+  let diff, diffs = []
   change.get('ops').forEach(op => {
-    opSet = applyOp(opSet, op.merge({actor, seq}))
+    [opSet, diff] = applyOp(opSet, op.merge({actor, seq}))
+    diffs.push(...diff)
   })
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
-  opSet = opSet.set('deps', remainingDeps).setIn(['clock', actor], seq)
-
-  let snapshot
-  [opSet, snapshot] = materialize(opSet)
-  opSet = opSet.update('history', history => history.push(Map({change, snapshot})))
-  return [opSet, snapshot]
+  opSet = opSet
+    .set('deps', remainingDeps)
+    .setIn(['clock', actor], seq)
+    .update('history', history => history.push(change))
+  return [opSet, diffs]
 }
 
 function applyQueuedOps(opSet) {
-  let queue = List(), snapshot = null
+  let queue = List(), diff, diffs = []
   while (true) {
     opSet.get('queue').forEach(change => {
       if (causallyReady(opSet, change)) {
-        [opSet, snapshot] = applyChange(opSet, change)
+        [opSet, diff] = applyChange(opSet, change)
+        diffs.push(...diff)
       } else {
         queue = queue.push(change)
       }
     })
 
-    if (queue.count() === opSet.get('queue').count()) return [opSet, snapshot]
+    if (queue.count() === opSet.get('queue').count()) return [opSet, diffs]
     opSet = opSet.set('queue', queue)
     queue = List()
   }
-}
-
-function instantiateImmutable(opSet, objectId) {
-  const isRoot = (objectId === root_id)
-  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-
-  // Don't read the root object from cache, because it may reference an outdated state.
-  // The state may change without without invalidating the cache entry for the root object (for
-  // example, adding an item to the queue of operations that are not yet causally ready).
-  if (!isRoot) {
-    if (opSet.hasIn(['cache', objectId])) return opSet.getIn(['cache', objectId])
-    if (this.cache && this.cache[objectId]) return this.cache[objectId]
-  }
-
-  let obj
-  if (isRoot || objType === 'makeMap') {
-    const conflicts = getObjectConflicts(opSet, objectId, this)
-    obj = Object.create({_conflicts: Object.freeze(conflicts.toJS())})
-
-    getObjectFields(opSet, objectId).forEach(field => {
-      obj[field] = getObjectField(opSet, objectId, field, this)
-    })
-  } else if (objType === 'makeList') {
-    obj = [...listIterator(opSet, objectId, 'values', this)]
-    Object.defineProperty(obj, '_objectId', {value: objectId})
-  } else {
-    throw 'Unknown object type: ' + objType
-  }
-
-  Object.freeze(obj)
-  if (this.cache) this.cache[objectId] = obj
-  return obj
 }
 
 function init() {
   return Map()
     .set('states',   Map())
     .set('history',  List())
-    .set('byObject', Map().set(root_id, Map()))
-    .set('cache',    Map())
+    .set('byObject', Map().set(ROOT_ID, Map()))
     .set('clock',    Map())
     .set('deps',     Map())
     .set('local',    List())
@@ -341,10 +262,7 @@ function addLocalOp(opSet, op, actor) {
 
 function addChange(opSet, change) {
   opSet = opSet.update('queue', queue => queue.push(change))
-  let snapshot
-  [opSet, snapshot] = applyQueuedOps(opSet)
-  if (snapshot) return [opSet, snapshot]
-  return materialize(opSet)
+  return applyQueuedOps(opSet)
 }
 
 function getMissingChanges(opSet, haveDeps) {
@@ -471,7 +389,7 @@ function listElemByIndex(opSet, objectId, index, context) {
 }
 
 function listLength(opSet, objectId) {
-  return opSet.getIn(['cache', objectId]).length
+  return opSet.getIn(['byObject', objectId, '_elemIds']).length
 }
 
 function listIterator(opSet, listId, mode, context) {
@@ -501,7 +419,7 @@ function listIterator(opSet, listId, mode, context) {
 }
 
 module.exports = {
-  init, addLocalOp, addChange, materialize, getMissingChanges,
+  init, addLocalOp, addChange, getMissingChanges,
   getObjectFields, getObjectField, getObjectConflicts,
-  getNext, listElemByIndex, listLength, listIterator
+  listElemByIndex, listLength, listIterator, ROOT_ID
 }

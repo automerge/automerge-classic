@@ -2,6 +2,7 @@ const { Map, List, fromJS } = require('immutable')
 const uuid = require('uuid/v4')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
+const FreezeAPI = require('./freeze_api')
 const transit = require('transit-immutable-js')
 
 function isObject(obj) {
@@ -10,7 +11,8 @@ function isObject(obj) {
 
 function makeOp(state, opProps) {
   const opSet = state.get('opSet'), actor = state.get('actorId'), op = fromJS(opProps)
-  return state.set('opSet', OpSet.addLocalOp(opSet, op, actor))
+  let [opSet2, diff] = OpSet.addLocalOp(opSet, op, actor)
+  return state.set('opSet', opSet2)
 }
 
 function insertAfter(state, listId, elemId) {
@@ -105,39 +107,19 @@ function deleteField(state, objectId, key) {
   return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
 
-function rootObject(state, rootObj) {
-  Object.assign(Object.getPrototypeOf(rootObj), {_state: state, _actorId: state.get('actorId')})
-  Object.freeze(Object.getPrototypeOf(rootObj))
-  return rootObj
-}
-
-function applyChange(state, change) {
-  const [opSet, root] = OpSet.addChange(state.get('opSet'), change)
-  return rootObject(state.set('opSet', opSet), root)
-}
-
-function applyChanges(doc, changes) {
-  return changes.reduce(
-    (root, change) => applyChange(root._state, change),
-    doc || init()
-  )
-}
-
-function makeChange(oldState, newState, message) {
-  const actor = oldState.get('actorId')
-  const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = oldState.getIn(['opSet', 'deps']).remove(actor)
+function makeChange(root, newState, message) {
+  const actor = root._state.get('actorId')
+  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
+  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
   const change = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
-  return applyChange(oldState, change)
+  return FreezeAPI.applyChanges(root, List.of(change), true)
 }
 
 ///// Automerge.* API
 
 function init(actorId) {
-  const [opSet, rootObj] = OpSet.materialize(OpSet.init())
-  const state = Map({actorId: actorId || uuid(), opSet})
-  return rootObject(state, rootObj)
+  return FreezeAPI.init(actorId || uuid())
 }
 
 function checkTarget(funcName, target, needMutable) {
@@ -174,10 +156,9 @@ function change(doc, message, callback) {
     [message, callback] = [callback, message]
   }
 
-  const oldState = doc._state
-  const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
+  const context = {state: doc._state, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return makeChange(oldState, context.state, message)
+  return makeChange(doc, context.state, message)
 }
 
 function assign(target, values) {
@@ -196,15 +177,12 @@ function assign(target, values) {
 }
 
 function load(string, actorId) {
-  return applyChanges(init(actorId), transit.fromJSON(string))
+  return FreezeAPI.applyChanges(FreezeAPI.init(actorId), transit.fromJSON(string), false)
 }
 
 function save(doc) {
   checkTarget('save', doc)
-  const history = doc._state
-    .getIn(['opSet', 'history'])
-    .map(state => state.get('change'))
-  return transit.toJSON(history)
+  return transit.toJSON(doc._state.getIn(['opSet', 'history']))
 }
 
 function equals(val1, val2) {
@@ -225,12 +203,19 @@ function inspect(doc) {
 
 function getHistory(doc) {
   checkTarget('inspect', doc)
-  return doc._state.getIn(['opSet', 'history']).toJS()
+  const history = doc._state.getIn(['opSet', 'history'])
+  return history.map((change, index) => {
+    return {
+      get change () {
+        return change.toJS()
+      },
+      get snapshot () {
+        const root = FreezeAPI.init(doc._state.get('actorId'))
+        return FreezeAPI.applyChanges(root, history.slice(0, index + 1), false)
+      }
+    }
+  }).toArray()
 }
-
-const DocSet = require('./doc_set')
-const Connection = require('./connection')
-DocSet.prototype._applyChanges = applyChanges
 
 function merge(local, remote) {
   checkTarget('merge', local)
@@ -240,7 +225,7 @@ function merge(local, remote) {
 
   const clock = local._state.getIn(['opSet', 'clock'])
   const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  return applyChanges(local, changes)
+  return FreezeAPI.applyChanges(local, changes, true)
 }
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
@@ -264,10 +249,16 @@ function diff(oldState, newState) {
   let root, opSet = oldState._state.get('opSet').set('diff', List())
   const changes = OpSet.getMissingChanges(newState._state.get('opSet'), oldClock)
 
-  for (let change of changes) [opSet, root] = OpSet.addChange(opSet, change)
-  return opSet.get('diff').toJS()
+  let diffs = [], diff
+  for (let change of changes) {
+    [opSet, diff] = OpSet.addChange(opSet, change)
+    diffs.push(...diff)
+  }
+  return diffs
 }
 
 module.exports = {
-  init, change, changeset: change, assign, load, save, equals, inspect, getHistory, DocSet, Connection, merge, diff
+  init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  DocSet: require('./doc_set'),
+  Connection: require('./connection')
 }

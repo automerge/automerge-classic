@@ -1,4 +1,6 @@
 const { Map, Set } = require('immutable')
+const uuid = require('uuid/v4')
+const FreezeAPI = require('./freeze_api')
 
 class DocSet {
   constructor () {
@@ -20,7 +22,8 @@ class DocSet {
   }
 
   applyChanges (docId, changes) {
-    const doc = this._applyChanges(this.docs.get(docId), changes)
+    let doc = this.docs.get(docId) || FreezeAPI.init(uuid())
+    doc = FreezeAPI.applyChanges(doc, changes, true)
     this.setDoc(docId, doc)
     return doc
   }
