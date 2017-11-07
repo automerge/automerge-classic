@@ -509,6 +509,33 @@ describe('Automerge', () => {
       }
     })
 
+    it('should handle changes within a conflicting map field', () => {
+      s1 = Automerge.change(s1, doc => doc.field = 'string')
+      s2 = Automerge.change(s2, doc => doc.field = {})
+      s2 = Automerge.change(s2, doc => doc.field.innerKey = 42)
+      s3 = Automerge.merge(s1, s2)
+      equalsOneOf(s3.field, 'string', {_objectId: s2.field._objectId, innerKey: 42})
+      if (s3.field === 'string') {
+        assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: {_objectId: s2.field._objectId, innerKey: 42}}})
+      } else {
+        assert.deepEqual(s3._conflicts, {field: {[s1._actorId]: 'string'}})
+      }
+    })
+
+    it('should handle changes within a conflicting list element', () => {
+      s1 = Automerge.change(s1, doc => doc.list = ['hello'])
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.list[0] = {map1: true})
+      s1 = Automerge.change(s1, doc => doc.list[0].key = 1)
+      s2 = Automerge.change(s2, doc => doc.list[0] = {map2: true})
+      s2 = Automerge.change(s2, doc => doc.list[0].key = 2)
+      s3 = Automerge.merge(s1, s2)
+      equalsOneOf(s3.list,
+        [{_objectId: s1.list[0]._objectId, map1: true, key: 1}],
+        [{_objectId: s2.list[0]._objectId, map2: true, key: 2}]
+      )
+    })
+
     it('should not merge concurrently assigned nested maps', () => {
       s1 = Automerge.change(s1, doc => doc.config = {background: 'blue'})
       s2 = Automerge.change(s2, doc => doc.config = {logo_url: 'logo.png'})

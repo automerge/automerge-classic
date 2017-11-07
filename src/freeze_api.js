@@ -1,6 +1,10 @@
 const { Map, List, Set } = require('immutable')
 const OpSet = require('./op_set')
 
+function isObject(obj) {
+  return typeof obj === 'object' && obj !== null
+}
+
 function updateMapObject(opSet, edit) {
   if (edit.action === 'create') {
     return opSet.setIn(['cache', edit.obj], Object.freeze({_objectId: edit.obj}))
@@ -31,6 +35,36 @@ function updateMapObject(opSet, edit) {
   return opSet.setIn(['cache', edit.obj], Object.freeze(object))
 }
 
+function parentMapObject(opSet, ref) {
+  const oldObject = opSet.getIn(['cache', ref.get('obj')])
+  const conflicts = Object.assign({}, oldObject._conflicts)
+  const object = Object.assign(Object.create({_conflicts: conflicts}), oldObject)
+  const value = opSet.getIn(['cache', ref.get('value')])
+  let changed = false
+
+  if (isObject(object[ref.get('key')]) && object[ref.get('key')]._objectId === ref.get('value')) {
+    object[ref.get('key')] = value
+    changed = true
+  }
+  if (isObject(conflicts[ref.get('key')])) {
+    for (let actor of Object.keys(conflicts[ref.get('key')])) {
+      const conflict = conflicts[ref.get('key')][actor]
+      if (isObject(conflict) && conflict._objectId === ref.get('value')) {
+        conflicts[ref.get('key')] = Object.assign({}, conflicts[ref.get('key')])
+        conflicts[ref.get('key')][actor] = value
+        Object.freeze(conflicts[ref.get('key')])
+        changed = true
+      }
+    }
+  }
+
+  if (changed) {
+    Object.freeze(conflicts)
+    opSet = opSet.setIn(['cache', ref.get('obj')], Object.freeze(object))
+  }
+  return opSet
+}
+
 function updateListObject(opSet, edit) {
   if (edit.action === 'create') {
     let list = []
@@ -52,6 +86,20 @@ function updateListObject(opSet, edit) {
   return opSet.setIn(['cache', edit.obj], Object.freeze(list))
 }
 
+function parentListObject(opSet, ref) {
+  const index = opSet.getIn(['byObject', ref.get('obj'), '_elemIds']).indexOf(ref.get('key'))
+  if (index < 0) return opSet
+
+  let list = opSet.getIn(['cache', ref.get('obj')])
+  if (!isObject(list[index]) || list[index]._objectId !== ref.get('value')) return opSet
+
+  list = list.slice() // shallow clone
+  Object.defineProperty(list, '_objectId', {value: ref.get('obj')})
+  list[index] = opSet.getIn(['cache', ref.get('value')])
+
+  return opSet.setIn(['cache', ref.get('obj')], Object.freeze(list))
+}
+
 function updateCache(opSet, diffs) {
   let affected = Set()
   for (let edit of diffs) {
@@ -68,18 +116,14 @@ function updateCache(opSet, diffs) {
     const parentOps = affected.flatMap(objectId => opSet.getIn(['byObject', objectId, '_inbound'], Set()))
     affected = Set()
     for (let ref of parentOps) {
-      const objectId = ref.get('obj')
-      const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-      affected = affected.add(objectId)
-
+      affected = affected.add(ref.get('obj'))
+      const objType = opSet.getIn(['byObject', ref.get('obj'), '_init', 'action'])
       if (objType === 'makeList') {
-        const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(ref.get('key'))
-        const edit = {action: 'set', obj: objectId, index, value: ref.get('value'), link: true}
-        opSet = updateListObject(opSet, edit)
+        opSet = parentListObject(opSet, ref)
+      } else if (objType === 'makeMap' || ref.get('obj') === OpSet.ROOT_ID) {
+        opSet = parentMapObject(opSet, ref)
       } else {
-        const edit = {action: 'set', obj: objectId, key: ref.get('key'), value: ref.get('value'), link: true}
-        // TODO get conflicts
-        opSet = updateMapObject(opSet, edit)
+        throw 'Unknown object type: ' + objType
       }
     }
   }
@@ -93,7 +137,10 @@ function instantiateImmutable(opSet, objectId) {
   // Don't read the root object from cache, because it may reference an outdated state.
   // The state may change without without invalidating the cache entry for the root object (for
   // example, adding an item to the queue of operations that are not yet causally ready).
-  if (!isRoot && this.cache && this.cache[objectId]) return this.cache[objectId]
+  if (!isRoot) {
+    if (opSet.hasIn(['cache', objectId])) return opSet.getIn(['cache', objectId])
+    if (this.cache && this.cache[objectId]) return this.cache[objectId]
+  }
 
   let obj
   if (isRoot || objType === 'makeMap') {
@@ -141,9 +188,16 @@ function applyChanges(root, changes, incremental) {
     diffs.push(...diff)
   }
 
-  if (incremental) opSet = updateCache(opSet, diffs)
   let newRoot
-  [opSet, newRoot] = materialize(opSet)
+  if (incremental) {
+    opSet = updateCache(opSet, diffs)
+    newRoot = opSet.getIn(['cache', OpSet.ROOT_ID])
+    if (newRoot === root) {
+      newRoot = Object.assign(Object.create({_conflicts: root._conflicts}), root)
+    }
+  } else {
+    [opSet, newRoot] = materialize(opSet)
+  }
   return rootObject(root._state.set('opSet', opSet), newRoot)
 }
 
