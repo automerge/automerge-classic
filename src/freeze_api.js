@@ -147,9 +147,9 @@ function instantiateImmutable(opSet, objectId) {
     const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
     obj = Object.create({_conflicts: Object.freeze(conflicts.toJS())})
 
-    OpSet.getObjectFields(opSet, objectId).forEach(field => {
+    for (let field of OpSet.getObjectFields(opSet, objectId)) {
       obj[field] = OpSet.getObjectField(opSet, objectId, field, this)
-    })
+    }
   } else if (objType === 'makeList') {
     obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
     Object.defineProperty(obj, '_objectId', {value: objectId})

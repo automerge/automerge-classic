@@ -155,10 +155,9 @@ function applyAssign(opSet, op) {
   let remaining   = priorOpsConcurrent.get(true,  List())
 
   // If any links were overwritten, remove them from the index of inbound links
-  overwritten.filter(op => op.get('action') === 'link')
-    .forEach(op => {
-      opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
-    })
+  for (let op of overwritten.filter(op => op.get('action') === 'link')) {
+    opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
+  }
 
   if (op.get('action') === 'link') {
     opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
@@ -203,10 +202,10 @@ function applyChange(opSet, change) {
   opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
   let diff, diffs = []
-  change.get('ops').forEach(op => {
+  for (let op of change.get('ops')) {
     [opSet, diff] = applyOp(opSet, op.merge({actor, seq}))
     diffs.push(...diff)
-  })
+  }
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
@@ -222,14 +221,14 @@ function applyChange(opSet, change) {
 function applyQueuedOps(opSet) {
   let queue = List(), diff, diffs = []
   while (true) {
-    opSet.get('queue').forEach(change => {
+    for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
         [opSet, diff] = applyChange(opSet, change)
         diffs.push(...diff)
       } else {
         queue = queue.push(change)
       }
-    })
+    }
 
     if (queue.count() === opSet.get('queue').count()) return [opSet, diffs]
     opSet = opSet.set('queue', queue)
