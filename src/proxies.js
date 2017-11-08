@@ -214,10 +214,12 @@ function listProxy(context, objectId) {
 }
 
 function instantiateProxy(opSet, objectId) {
-  switch (opSet.getIn(['byObject', objectId, '_init', 'action'])) {
-    case 'makeMap':  return mapProxy(this, objectId)
-    case 'makeList': return listProxy(this, objectId)
-  }
+  const objectType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  if (objectType === 'makeMap') {
+    return mapProxy(this, objectId)
+  } else if (objectType === 'makeList' || objectType === 'makeText') {
+    return listProxy(this, objectId)
+  } else throw 'Unknown object type: ' + objectType
 }
 
 function rootObjectProxy(context) {

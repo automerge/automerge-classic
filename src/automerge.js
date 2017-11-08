@@ -3,6 +3,7 @@ const uuid = require('uuid/v4')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const FreezeAPI = require('./freeze_api')
+const { Text } = require('./text')
 const transit = require('transit-immutable-js')
 
 function isObject(obj) {
@@ -29,7 +30,10 @@ function createNestedObjects(state, value) {
   if (typeof value._objectId === 'string') return [state, value._objectId]
   const objectId = uuid()
 
-  if (Array.isArray(value)) {
+  if (value instanceof Text) {
+    state = makeOp(state, { action: 'makeText', obj: objectId })
+    if (value.length > 0) throw 'assigning non-empty text is not yet supported'
+  } else if (Array.isArray(value)) {
     state = makeOp(state, { action: 'makeList', obj: objectId })
     let elemId = '_head'
     for (let i = 0; i < value.length; i++) {
@@ -98,7 +102,8 @@ function setListIndex(state, listId, index, value) {
 }
 
 function deleteField(state, objectId, key) {
-  if (state.getIn(['opSet', 'byObject', objectId, '_init', 'action']) === 'makeList') {
+  const objType = state.getIn(['opSet', 'byObject', objectId, '_init', 'action'])
+  if (objType === 'makeList' || objType === 'makeText') {
     return splice(state, objectId, parseListIndex(key), 1, [])
   }
   if (!state.hasIn(['opSet', 'byObject', objectId, key])) {
@@ -258,7 +263,7 @@ function diff(oldState, newState) {
 }
 
 module.exports = {
-  init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  init, change, merge, diff, assign, load, save, equals, inspect, getHistory, Text,
   DocSet: require('./doc_set'),
   Connection: require('./connection')
 }

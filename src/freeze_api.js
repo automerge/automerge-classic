@@ -1,5 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const OpSet = require('./op_set')
+const { Text } = require('./text')
 
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null
@@ -108,6 +109,8 @@ function updateCache(opSet, diffs) {
       opSet = updateMapObject(opSet, edit)
     } else if (edit.type === 'list') {
       opSet = updateListObject(opSet, edit)
+    } else if (edit.type === 'text') {
+      opSet = opSet.setIn(['cache', edit.obj], new Text(opSet, edit.obj))
     } else throw 'Unknown object type: ' + edit.type
   }
 
@@ -122,6 +125,8 @@ function updateCache(opSet, diffs) {
         opSet = parentListObject(opSet, ref)
       } else if (objType === 'makeMap' || ref.get('obj') === OpSet.ROOT_ID) {
         opSet = parentMapObject(opSet, ref)
+      } else if (objType === 'makeText') {
+        opSet = opSet.setIn(['cache', ref.get('obj')], new Text(opSet, ref.get('obj')))
       } else {
         throw 'Unknown object type: ' + objType
       }
@@ -153,6 +158,8 @@ function instantiateImmutable(opSet, objectId) {
   } else if (objType === 'makeList') {
     obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
     Object.defineProperty(obj, '_objectId', {value: objectId})
+  } else if (objType === 'makeText') {
+    obj = new Text(opSet, objectId)
   } else {
     throw 'Unknown object type: ' + objType
   }

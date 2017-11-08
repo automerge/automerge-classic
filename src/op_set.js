@@ -36,7 +36,7 @@ function transitiveDeps(opSet, baseDeps) {
   }, Map())
 }
 
-// Processes a 'makeMap' or 'makeList' operation
+// Processes a 'makeMap', 'makeList', or 'makeText' operation
 function applyMake(opSet, op) {
   const objectId = op.get('obj')
   if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
@@ -46,7 +46,7 @@ function applyMake(opSet, op) {
   if (op.get('action') === 'makeMap') {
     edit.type = 'map'
   } else {
-    edit.type = 'list'
+    edit.type = (op.get('action') === 'makeText') ? 'text' : 'list'
     object = object.set('_elemIds', new SkipList())
   }
 
@@ -70,20 +70,23 @@ function applyInsert(opSet, op) {
 }
 
 function patchList(opSet, objectId, index, action, op) {
+  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let value = op ? op.get('value') : null
-  let edit = {action, type: 'list', obj: objectId, index, value}
+  let edit = {action, type: (objType === 'makeText') ? 'text' : 'list', obj: objectId, index}
   if (op && op.get('action') === 'link') {
     edit.link = true
+    value = {obj: op.get('value')}
   }
 
   if (action === 'insert') {
-    elemIds = elemIds.insertIndex(index, op.get('key'))
+    elemIds = elemIds.insertIndex(index, op.get('key'), value)
+    edit.value = op.get('value')
   } else if (action === 'set') {
-    // update elemIds?
+    elemIds = elemIds.setValue(op.get('key'), value)
+    edit.value = op.get('value')
   } else if (action === 'remove') {
     elemIds = elemIds.removeIndex(index)
-    delete edit['value']
   } else throw 'Unknown action type: ' + action
 
   opSet = opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
@@ -92,7 +95,9 @@ function patchList(opSet, objectId, index, action, op) {
 
 function updateListElement(opSet, objectId, elemId) {
   const ops = getFieldOps(opSet, objectId, elemId)
-  let index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
+  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+  let index = elemIds.indexOf(elemId)
+
   if (index >= 0) {
     if (ops.isEmpty()) {
       return patchList(opSet, objectId, index, 'remove', null)
@@ -109,7 +114,7 @@ function updateListElement(opSet, objectId, elemId) {
       index = -1
       prevId = getPrevious(opSet, objectId, prevId)
       if (!prevId) break
-      index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(prevId)
+      index = elemIds.indexOf(prevId)
       if (index >= 0) break
     }
 
@@ -168,7 +173,7 @@ function applyAssign(opSet, op) {
   remaining = remaining.sortBy(op => op.get('actor')).reverse()
   opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
 
-  if (objType === 'makeList') {
+  if (objType === 'makeList' || objType === 'makeText') {
     return updateListElement(opSet, objectId, op.get('key'))
   } else {
     return updateMapKey(opSet, objectId, op.get('key'))
@@ -177,7 +182,7 @@ function applyAssign(opSet, op) {
 
 function applyOp(opSet, op) {
   const action = op.get('action')
-  if (action === 'makeMap' || action == 'makeList') {
+  if (action === 'makeMap' || action === 'makeList' || action === 'makeText') {
     return applyMake(opSet, op)
   } else if (action === 'ins') {
     return applyInsert(opSet, op)
