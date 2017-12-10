@@ -129,12 +129,13 @@ function applyChanges(doc, changes) {
   )
 }
 
-function makeChange(oldState, newState, message) {
+function makeChange(oldState, newState, message, signer) {
   const actor = oldState.get('actorId')
   const seq = oldState.getIn(['opSet', 'clock', actor], 0) + 1
   const deps = oldState.getIn(['opSet', 'deps']).remove(actor)
-  const change = fromJS({actor, seq, deps, message})
+  let change = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
+  if (signer) change = change.set('signature', signer(change))
   return applyChange(oldState, change)
 }
 
@@ -168,7 +169,11 @@ function parseListIndex(key) {
   return key
 }
 
-function change(doc, message, callback) {
+function change(...args) {
+  let doc = args.filter(arg => typeof arg === 'object')[0]
+  let message = args.filter(arg => typeof arg === 'string')[0]
+  let [callback, signer] = args.filter(arg => typeof arg === 'function')
+
   checkTarget('change', doc)
   if (doc._objectId !== '00000000-0000-0000-0000-000000000000') {
     throw new TypeError('The first argument to Automerge.change must be the document root')
@@ -176,14 +181,11 @@ function change(doc, message, callback) {
   if (doc._change && doc._change.mutable) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
-  if (typeof message === 'function' && callback === undefined) {
-    [message, callback] = [callback, message]
-  }
 
   const oldState = doc._state
   const context = {state: oldState, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return makeChange(oldState, context.state, message)
+  return makeChange(oldState, context.state, message, signer)
 }
 
 function assign(target, values) {
