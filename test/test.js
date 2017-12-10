@@ -677,6 +677,17 @@ describe('Automerge', () => {
                         birds: ['oystercatcher', 'mallard']}])
     })
 
+    it('should support signing', () => {
+      let s = Automerge.init()
+      let sign = () => 'test-signing'
+      s = Automerge.change(s, doc => doc.config = {background: 'blue'}, sign)
+      s = Automerge.change(s, doc => doc.birds = ['mallard'], sign)
+      s = Automerge.change(s, doc => doc.birds.unshift('oystercatcher'), sign)
+      assert.deepEqual(
+        Automerge.getHistory(s).map(state => state.change.signature),
+        ['test-signing', 'test-signing', 'test-signing'])
+    })
+
     it('should reuse unmodified portions of past documents', () => {
       let s = Automerge.init()
       s = Automerge.change(s, doc => doc.config = {background: 'blue'})
