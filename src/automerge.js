@@ -251,7 +251,7 @@ function diff(oldState, newState) {
     throw new RangeError('Cannot diff two states that have diverged')
   }
 
-  let root, opSet = oldState._state.get('opSet').set('diff', List())
+  let opSet = oldState._state.get('opSet').set('diff', List())
   const changes = OpSet.getMissingChanges(newState._state.get('opSet'), oldClock)
 
   let diffs = [], diff
@@ -262,8 +262,26 @@ function diff(oldState, newState) {
   return diffs
 }
 
+function getChanges(oldState, newState) {
+  checkTarget('getChanges', oldState)
+
+  const oldClock = oldState._state.getIn(['opSet', 'clock'])
+  const newClock = newState._state.getIn(['opSet', 'clock'])
+  if (!lessOrEqual(oldClock, newClock)) {
+    throw new RangeError('Cannot diff two states that have diverged')
+  }
+
+  return OpSet.getMissingChanges(newState._state.get('opSet'), oldClock).toJS()
+}
+
+function applyChanges(doc, changes) {
+  checkTarget('applyChanges', doc)
+  return FreezeAPI.applyChanges(doc, fromJS(changes), true)
+}
+
 module.exports = {
-  init, change, merge, diff, assign, load, save, equals, inspect, getHistory, Text,
+  init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  getChanges, applyChanges, Text,
   DocSet: require('./doc_set'),
   Connection: require('./connection')
 }
