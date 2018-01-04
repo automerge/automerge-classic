@@ -279,9 +279,14 @@ function applyChanges(doc, changes) {
   return FreezeAPI.applyChanges(doc, fromJS(changes), true)
 }
 
+function getMissingDeps(doc) {
+  checkTarget('getMissingDeps', doc)
+  return OpSet.getMissingDeps(doc._state.get('opSet'))
+}
+
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
-  getChanges, applyChanges, Text,
+  getChanges, applyChanges, getMissingDeps, Text,
   DocSet: require('./doc_set'),
   Connection: require('./connection')
 }
