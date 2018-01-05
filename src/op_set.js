@@ -289,6 +289,19 @@ function getChangesForActor(opSet, forActor, afterSeq) {
     .map(state => state.get('change'))
 }
 
+function getMissingDeps(opSet) {
+  let missing = {}
+  for (let change of opSet.get('queue')) {
+    const deps = change.get('deps').set(change.get('actor'), change.get('seq') - 1)
+    deps.forEach((depSeq, depActor) => {
+      if (opSet.getIn(['clock', depActor], 0) < depSeq) {
+        missing[depActor] = Math.max(depSeq, missing[depActor] || 0)
+      }
+    })
+  }
+  return missing
+}
+
 function getFieldOps(opSet, objectId, key) {
   return opSet.getIn(['byObject', objectId, key], List())
 }
@@ -435,6 +448,6 @@ function listIterator(opSet, listId, mode, context) {
 
 module.exports = {
   init, addLocalOp, addChange, getMissingChanges, getChangesForActor,
-  getObjectFields, getObjectField, getObjectConflicts,
+  getMissingDeps, getObjectFields, getObjectField, getObjectConflicts,
   listElemByIndex, listLength, listIterator, ROOT_ID
 }
