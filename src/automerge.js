@@ -283,5 +283,6 @@ module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
   getChanges, applyChanges, Text,
   DocSet: require('./doc_set'),
+  WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
 }
