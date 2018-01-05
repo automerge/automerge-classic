@@ -274,6 +274,14 @@ function getChanges(oldState, newState) {
   return OpSet.getMissingChanges(newState._state.get('opSet'), oldClock).toJS()
 }
 
+function getChangesForActor(state, actorId) {
+  checkTarget('getChanges', state)
+
+  // I might want to validate the actorId here
+
+  return OpSet.getChangesForActor(state._state.get('opSet'), actorId).toJS()
+}
+
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
   return FreezeAPI.applyChanges(doc, fromJS(changes), true)
@@ -286,7 +294,7 @@ function getMissingDeps(doc) {
 
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
-  getChanges, applyChanges, getMissingDeps, Text,
+  getChanges, getChangesForActor, applyChanges, getMissingDeps, Text,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
