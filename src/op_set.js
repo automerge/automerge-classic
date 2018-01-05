@@ -278,6 +278,17 @@ function getMissingChanges(opSet, haveDeps) {
     .map(state => state.get('change'))
 }
 
+function getChangesForActor(opSet, forActor, afterSeq) {
+  afterSeq = afterSeq || 0
+
+  return opSet.get('states')
+    .filter((states, actor) => actor === forActor)
+    .map((states, actor) => states.skip(afterSeq))
+    .valueSeq()
+    .flatten(1)
+    .map(state => state.get('change'))
+}
+
 function getFieldOps(opSet, objectId, key) {
   return opSet.getIn(['byObject', objectId, key], List())
 }
@@ -423,7 +434,7 @@ function listIterator(opSet, listId, mode, context) {
 }
 
 module.exports = {
-  init, addLocalOp, addChange, getMissingChanges,
+  init, addLocalOp, addChange, getMissingChanges, getChangesForActor,
   getObjectFields, getObjectField, getObjectConflicts,
   listElemByIndex, listLength, listIterator, ROOT_ID
 }
