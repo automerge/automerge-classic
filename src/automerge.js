@@ -3,11 +3,17 @@ const uuid = require('uuid/v4')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const FreezeAPI = require('./freeze_api')
+const ImmutableAPI = require('./immutable_api')
 const { Text } = require('./text')
 const transit = require('transit-immutable-js')
 
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null
+}
+
+// TODO when we move to Immutable.js 4.0.0, this function is provided by Immutable.js itself
+function isImmutable(obj) {
+  return isObject(obj) && !!obj['@@__IMMUTABLE_ITERABLE__@@']
 }
 
 function makeOp(state, opProps) {
@@ -118,13 +124,22 @@ function makeChange(root, newState, message) {
   const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
   const change = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
-  return FreezeAPI.applyChanges(root, List.of(change), true)
+
+  if (isImmutable(root)) {
+    return ImmutableAPI.applyChanges(root, List.of(change), true)
+  } else {
+    return FreezeAPI.applyChanges(root, List.of(change), true)
+  }
 }
 
 ///// Automerge.* API
 
 function init(actorId) {
   return FreezeAPI.init(actorId || uuid())
+}
+
+function initImmutable(actorId) {
+  return ImmutableAPI.init(actorId || uuid())
 }
 
 function checkTarget(funcName, target, needMutable) {
@@ -185,6 +200,10 @@ function load(string, actorId) {
   return FreezeAPI.applyChanges(FreezeAPI.init(actorId), transit.fromJSON(string), false)
 }
 
+function loadImmutable(string, actorId) {
+  return ImmutableAPI.applyChanges(ImmutableAPI.init(actorId), transit.fromJSON(string), false)
+}
+
 function save(doc) {
   checkTarget('save', doc)
   return transit.toJSON(doc._state.getIn(['opSet', 'history']))
@@ -230,7 +249,11 @@ function merge(local, remote) {
 
   const clock = local._state.getIn(['opSet', 'clock'])
   const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  return FreezeAPI.applyChanges(local, changes, true)
+  if (isImmutable(local)) {
+    return ImmutableAPI.applyChanges(local, changes, true)
+  } else {
+    return FreezeAPI.applyChanges(local, changes, true)
+  }
 }
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
@@ -276,11 +299,16 @@ function getChanges(oldState, newState) {
 
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
-  return FreezeAPI.applyChanges(doc, fromJS(changes), true)
+  if (isImmutable(doc)) {
+    return ImmutableAPI.applyChanges(doc, fromJS(changes), true)
+  } else {
+    return FreezeAPI.applyChanges(doc, fromJS(changes), true)
+  }
 }
 
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  initImmutable, loadImmutable,
   getChanges, applyChanges, Text,
   DocSet: require('./doc_set'),
   Connection: require('./connection')
