@@ -1,9 +1,9 @@
 const { Map, Set, fromJS } = require('immutable')
-const uuid = require('uuid/v4')
-const ImmutableAPI = require('./immutable_api')
+const AutoAPI = require('./auto_api')
 
 class WatchableDoc {
   constructor (doc) {
+    if (!doc) throw new Error("doc argument is required")
     this.doc = doc
     this.handlers = Set()
   }
@@ -18,8 +18,8 @@ class WatchableDoc {
   }
 
   applyChanges (changes) {
-    let doc = this.doc || ImmutableAPI.init(uuid())
-    doc = ImmutableAPI.applyChanges(doc, fromJS(changes), true)
+    let doc = this.doc
+    doc = AutoAPI.applyChanges(doc, fromJS(changes), true)
     this.set(doc)
     return doc
   }

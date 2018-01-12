@@ -2,19 +2,11 @@ const { Map, List, fromJS } = require('immutable')
 const uuid = require('uuid/v4')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
+const {isObject, checkTarget, makeChange, merge, applyChanges} = require('./auto_api')
 const FreezeAPI = require('./freeze_api')
 const ImmutableAPI = require('./immutable_api')
 const { Text } = require('./text')
 const transit = require('transit-immutable-js')
-
-function isObject(obj) {
-  return typeof obj === 'object' && obj !== null
-}
-
-// TODO when we move to Immutable.js 4.0.0, this function is provided by Immutable.js itself
-function isImmutable(obj) {
-  return isObject(obj) && !!obj['@@__IMMUTABLE_ITERABLE__@@']
-}
 
 function makeOp(state, opProps) {
   const opSet = state.get('opSet'), actor = state.get('actorId'), op = fromJS(opProps)
@@ -118,20 +110,6 @@ function deleteField(state, objectId, key) {
   return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
 
-function makeChange(root, newState, message) {
-  const actor = root._state.get('actorId')
-  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
-  const change = fromJS({actor, seq, deps, message})
-    .set('ops', newState.getIn(['opSet', 'local']))
-
-  if (isImmutable(root)) {
-    return ImmutableAPI.applyChanges(root, List.of(change), true)
-  } else {
-    return FreezeAPI.applyChanges(root, List.of(change), true)
-  }
-}
-
 ///// Automerge.* API
 
 function init(actorId) {
@@ -140,19 +118,6 @@ function init(actorId) {
 
 function initImmutable(actorId) {
   return ImmutableAPI.init(actorId || uuid())
-}
-
-function checkTarget(funcName, target, needMutable) {
-  if (!target || !target._state || !target._objectId ||
-      !target._state.hasIn(['opSet', 'byObject', target._objectId])) {
-    throw new TypeError('The first argument to Automerge.' + funcName +
-                        ' must be the object to modify, but you passed ' + JSON.stringify(target))
-  }
-  if (needMutable && (!target._change || !target._change.mutable)) {
-    throw new TypeError('Automerge.' + funcName + ' requires a writable object as first argument, ' +
-                        'but the one you passed is read-only. Please use Automerge.change() ' +
-                        'to get a writable version.')
-  }
 }
 
 function parseListIndex(key) {
@@ -241,21 +206,6 @@ function getHistory(doc) {
   }).toArray()
 }
 
-function merge(local, remote) {
-  checkTarget('merge', local)
-  if (local._state.get('actorId') === remote._state.get('actorId')) {
-    throw new RangeError('Cannot merge an actor with itself')
-  }
-
-  const clock = local._state.getIn(['opSet', 'clock'])
-  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  if (isImmutable(local)) {
-    return ImmutableAPI.applyChanges(local, changes, true)
-  } else {
-    return FreezeAPI.applyChanges(local, changes, true)
-  }
-}
-
 // Returns true if all components of clock1 are less than or equal to those of clock2.
 // Returns false if there is at least one component in which clock1 is greater than clock2
 // (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
@@ -303,15 +253,6 @@ function getChangesForActor(state, actorId) {
   // I might want to validate the actorId here
 
   return OpSet.getChangesForActor(state._state.get('opSet'), actorId).toJS()
-}
-
-function applyChanges(doc, changes) {
-  checkTarget('applyChanges', doc)
-  if (isImmutable(doc)) {
-    return ImmutableAPI.applyChanges(doc, fromJS(changes), true)
-  } else {
-    return FreezeAPI.applyChanges(doc, fromJS(changes), true)
-  }
 }
 
 function getMissingDeps(doc) {
