@@ -1,6 +1,6 @@
 const { Map, Set, fromJS } = require('immutable')
 const uuid = require('uuid/v4')
-const FreezeAPI = require('./freeze_api')
+const ImmutableAPI = require('./immutable_api')
 
 class WatchableDoc {
   constructor (doc) {
@@ -18,8 +18,8 @@ class WatchableDoc {
   }
 
   applyChanges (changes) {
-    let doc = this.doc || FreezeAPI.init(uuid())
-    doc = FreezeAPI.applyChanges(doc, fromJS(changes), true)
+    let doc = this.doc || ImmutableAPI.init(uuid())
+    doc = ImmutableAPI.applyChanges(doc, fromJS(changes), true)
     this.set(doc)
     return doc
   }
