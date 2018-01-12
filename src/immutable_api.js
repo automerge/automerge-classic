@@ -161,6 +161,7 @@ function applyChanges(root, changes, incremental) {
   }
   newRoot._state = root._state.set('opSet', opSet)
   newRoot._actorId = root._state.get('actorId')
+  newRoot._objectId = root._objectId
   return newRoot
 }
 
