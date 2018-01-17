@@ -492,6 +492,21 @@ describe('Automerge', () => {
       }
     })
 
+    it('should detect concurrent updates of the same list element', () => {
+      s1 = Automerge.change(s1, doc => doc.birds = ['finch'])
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.birds[0] = 'greenfinch')
+      s2 = Automerge.change(s2, doc => doc.birds[0] = 'goldfinch')
+      s3 = Automerge.merge(s1, s2)
+      if (s1._actorId > s2._actorId) {
+        assert.deepEqual(s3.birds, ['greenfinch'])
+        assert.deepEqual(s3.birds._conflicts, [{[s2._actorId]: 'goldfinch'}])
+      } else {
+        assert.deepEqual(s3.birds, ['goldfinch'])
+        assert.deepEqual(s3.birds._conflicts, [{[s1._actorId]: 'greenfinch'}])
+      }
+    })
+
     it('should handle assignment conflicts of different types', () => {
       s1 = Automerge.change(s1, doc => doc.field = 'string')
       s2 = Automerge.change(s2, doc => doc.field = ['list'])
@@ -530,10 +545,13 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.list[0] = {map2: true})
       s2 = Automerge.change(s2, doc => doc.list[0].key = 2)
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.list,
-        [{_objectId: s1.list[0]._objectId, map1: true, key: 1}],
-        [{_objectId: s2.list[0]._objectId, map2: true, key: 2}]
-      )
+      if (s1._actorId > s2._actorId) {
+        assert.deepEqual(s3.list, [{_objectId: s1.list[0]._objectId, map1: true, key: 1}])
+        assert.deepEqual(s3.list._conflicts, [{[s2._actorId]: {_objectId: s2.list[0]._objectId, map2: true, key: 2}}])
+      } else {
+        assert.deepEqual(s3.list, [{_objectId: s2.list[0]._objectId, map2: true, key: 2}])
+        assert.deepEqual(s3.list._conflicts, [{[s1._actorId]: {_objectId: s1.list[0]._objectId, map1: true, key: 1}}])
+      }
     })
 
     it('should not merge concurrently assigned nested maps', () => {

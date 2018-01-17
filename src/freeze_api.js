@@ -69,21 +69,39 @@ function parentMapObject(opSet, ref) {
 function updateListObject(opSet, edit) {
   if (edit.action === 'create') {
     let list = []
-    Object.defineProperty(list, '_objectId', {value: edit.obj})
+    Object.defineProperty(list, '_objectId',  {value: edit.obj})
+    Object.defineProperty(list, '_conflicts', {value: Object.freeze([])})
     return opSet.setIn(['cache', edit.obj], Object.freeze(list))
   }
 
-  let value = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
-  let list = opSet.getIn(['cache', edit.obj]).slice()
-  Object.defineProperty(list, '_objectId', {value: edit.obj})
+  let conflict = null
+  if (edit.conflicts) {
+    conflict = {}
+    for (let c of edit.conflicts) {
+      conflict[c.actor] = c.link ? opSet.getIn(['cache', c.value]) : c.value
+    }
+    Object.freeze(conflict)
+  }
+
+  let list = opSet.getIn(['cache', edit.obj])
+  const value = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
+  const conflicts = list._conflicts.slice()
+  list = list.slice() // shallow clone
+  Object.defineProperty(list, '_objectId',  {value: edit.obj})
+  Object.defineProperty(list, '_conflicts', {value: conflicts})
 
   if (edit.action === 'insert') {
     list.splice(edit.index, 0, value)
+    conflicts.splice(edit.index, 0, conflict)
   } else if (edit.action === 'set') {
     list[edit.index] = value
+    conflicts[edit.index] = conflict
   } else if (edit.action === 'remove') {
     list.splice(edit.index, 1)
+    conflicts.splice(edit.index, 1)
   } else throw 'Unknown action type: ' + edit.action
+
+  Object.freeze(conflicts)
   return opSet.setIn(['cache', edit.obj], Object.freeze(list))
 }
 
@@ -91,14 +109,35 @@ function parentListObject(opSet, ref) {
   const index = opSet.getIn(['byObject', ref.get('obj'), '_elemIds']).indexOf(ref.get('key'))
   if (index < 0) return opSet
 
+  let changed = false
   let list = opSet.getIn(['cache', ref.get('obj')])
-  if (!isObject(list[index]) || list[index]._objectId !== ref.get('value')) return opSet
-
+  const value = opSet.getIn(['cache', ref.get('value')])
+  const conflicts = list._conflicts.slice()
   list = list.slice() // shallow clone
-  Object.defineProperty(list, '_objectId', {value: ref.get('obj')})
-  list[index] = opSet.getIn(['cache', ref.get('value')])
+  Object.defineProperty(list, '_objectId',  {value: ref.get('obj')})
+  Object.defineProperty(list, '_conflicts', {value: conflicts})
 
-  return opSet.setIn(['cache', ref.get('obj')], Object.freeze(list))
+  if (isObject(list[index]) && list[index]._objectId === ref.get('value')) {
+    list[index] = value
+    changed = true
+  }
+  if (isObject(conflicts[index])) {
+    for (let actor of Object.keys(conflicts[index])) {
+      const conflict = conflicts[index][actor]
+      if (isObject(conflict) && conflict._objectId === ref.get('value')) {
+        conflicts[index] = Object.assign({}, conflicts[index])
+        conflicts[index][actor] = value
+        Object.freeze(conflicts[index])
+        changed = true
+      }
+    }
+  }
+
+  if (changed) {
+    Object.freeze(conflicts)
+    opSet = opSet.setIn(['cache', ref.get('obj')], Object.freeze(list))
+  }
+  return opSet
 }
 
 function updateCache(opSet, diffs) {
@@ -157,7 +196,9 @@ function instantiateImmutable(opSet, objectId) {
     }
   } else if (objType === 'makeList') {
     obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
-    Object.defineProperty(obj, '_objectId', {value: objectId})
+    const conflicts = List(OpSet.listIterator(opSet, objectId, 'conflicts', this)).toJS()
+    Object.defineProperty(obj, '_objectId',  {value: objectId})
+    Object.defineProperty(obj, '_conflicts', {value: Object.freeze(conflicts)})
   } else if (objType === 'makeText') {
     obj = new Text(opSet, objectId)
   } else {

@@ -69,26 +69,38 @@ function applyInsert(opSet, op) {
   return [opSet, []]
 }
 
-function patchList(opSet, objectId, index, action, op) {
+function getConflicts(ops) {
+  const conflicts = []
+  for (let op of ops.shift()) {
+    let conflict = {actor: op.get('actor'), value: op.get('value')}
+    if (op.get('action') === 'link') conflict.link = true
+    conflicts.push(conflict)
+  }
+  return conflicts
+}
+
+function patchList(opSet, objectId, index, action, ops) {
   const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  const firstOp = ops ? ops.first() : null
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
-  let value = op ? op.get('value') : null
+  let value = firstOp ? firstOp.get('value') : null
   let edit = {action, type: (objType === 'makeText') ? 'text' : 'list', obj: objectId, index}
-  if (op && op.get('action') === 'link') {
+  if (firstOp && firstOp.get('action') === 'link') {
     edit.link = true
-    value = {obj: op.get('value')}
+    value = {obj: firstOp.get('value')}
   }
 
   if (action === 'insert') {
-    elemIds = elemIds.insertIndex(index, op.get('key'), value)
-    edit.value = op.get('value')
+    elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
+    edit.value = firstOp.get('value')
   } else if (action === 'set') {
-    elemIds = elemIds.setValue(op.get('key'), value)
-    edit.value = op.get('value')
+    elemIds = elemIds.setValue(firstOp.get('key'), value)
+    edit.value = firstOp.get('value')
   } else if (action === 'remove') {
     elemIds = elemIds.removeIndex(index)
   } else throw 'Unknown action type: ' + action
 
+  if (ops && ops.size > 1) edit.conflicts = getConflicts(ops)
   opSet = opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
   return [opSet, [edit]]
 }
@@ -102,7 +114,7 @@ function updateListElement(opSet, objectId, elemId) {
     if (ops.isEmpty()) {
       return patchList(opSet, objectId, index, 'remove', null)
     } else {
-      return patchList(opSet, objectId, index, 'set', ops.first())
+      return patchList(opSet, objectId, index, 'set', ops)
     }
 
   } else {
@@ -118,7 +130,7 @@ function updateListElement(opSet, objectId, elemId) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, 'insert', ops.first())
+    return patchList(opSet, objectId, index + 1, 'insert', ops)
   }
 }
 
@@ -135,14 +147,7 @@ function updateMapKey(opSet, objectId, key) {
       edit.link = true
     }
 
-    if (ops.size > 1) {
-      edit.conflicts = []
-      for (let op of ops.shift()) {
-        let conflict = {actor: op.get('actor'), value: op.get('value')}
-        if (op.get('action') === 'link') conflict.link = true
-        edit.conflicts.push(conflict)
-      }
-    }
+    if (ops.size > 1) edit.conflicts = getConflicts(ops)
   }
   return [opSet, [edit]]
 }
@@ -436,6 +441,13 @@ function listIterator(opSet, listId, mode, context) {
           case 'values':  return {done: false, value: value}
           case 'entries': return {done: false, value: [index, value]}
           case 'elems':   return {done: false, value: [index, elem]}
+          case 'conflicts':
+            let conflict = null
+            if (ops.size > 1) {
+              conflict = ops.shift().toMap()
+                .mapEntries(([_, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
+            }
+            return {done: false, value: conflict}
         }
       }
     }
