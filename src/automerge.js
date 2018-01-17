@@ -235,6 +235,23 @@ function diff(oldState, newState) {
   return diffs
 }
 
+function getConflicts(doc, list) {
+  checkTarget('getConflicts', doc)
+  const opSet = doc._state.get('opSet')
+  const objectId = list._objectId
+  if (!objectId || opSet.getIn(['byObject', objectId, '_init', 'action']) !== 'makeList') {
+    throw new TypeError('The second argument to Automerge.getConflicts must be a list object')
+  }
+
+  const context = {
+    cache: {},
+    instantiateObject (opSet, objectId) {
+      return opSet.getIn(['cache', objectId])
+    }
+  }
+  return List(OpSet.listIterator(opSet, objectId, 'conflicts', context))
+}
+
 function getChanges(oldState, newState) {
   checkTarget('getChanges', oldState)
 
@@ -262,7 +279,7 @@ function getMissingDeps(doc) {
 
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
-  initImmutable, loadImmutable,
+  initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
