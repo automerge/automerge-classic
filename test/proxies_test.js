@@ -1,20 +1,21 @@
 const assert = require('assert')
 const Automerge = require('../src/Automerge')
 const { equalsOneOf } = require('./helpers')
+const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 describe('Automerge proxy API', () => {
   describe('root object', () => {
     it('should have a fixed object ID', () => {
       Automerge.change(Automerge.init(), doc => {
         assert.strictEqual(doc._type, 'map')
-        assert.strictEqual(doc._objectId, '00000000-0000-0000-0000-000000000000')
+        assert.strictEqual(doc._objectId, ROOT_ID)
       })
     })
 
     it('should know its actor ID', () => {
       Automerge.change(Automerge.init(), doc => {
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(doc._actorId))
-        assert.notEqual(doc._actorId, '00000000-0000-0000-0000-000000000000')
+        assert.notEqual(doc._actorId, ROOT_ID)
         assert.strictEqual(Automerge.init('customActorId')._actorId, 'customActorId')
       })
     })
@@ -77,24 +78,24 @@ describe('Automerge proxy API', () => {
           '{"key1":"value1","_objectId":"00000000-0000-0000-0000-000000000000"}')
         doc.key2 = 'value2'
         assert.deepEqual(JSON.parse(JSON.stringify(doc)), {
-          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+          _objectId: ROOT_ID, key1: 'value1', key2: 'value2'
         })
       })
     })
 
     it('should allow inspection as regular JS objects', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert.deepEqual(doc._inspect, {_objectId: '00000000-0000-0000-0000-000000000000'})
-        assert.deepEqual(Automerge.inspect(doc), {_objectId: '00000000-0000-0000-0000-000000000000'})
+        assert.deepEqual(doc._inspect, {_objectId: ROOT_ID})
+        assert.deepEqual(Automerge.inspect(doc), {_objectId: ROOT_ID})
         doc.key1 = 'value1'
-        assert.deepEqual(doc._inspect, {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
-        assert.deepEqual(Automerge.inspect(doc), {_objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1'})
+        assert.deepEqual(doc._inspect, {_objectId: ROOT_ID, key1: 'value1'})
+        assert.deepEqual(Automerge.inspect(doc), {_objectId: ROOT_ID, key1: 'value1'})
         doc.key2 = 'value2'
         assert.deepEqual(doc._inspect, {
-          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+          _objectId: ROOT_ID, key1: 'value1', key2: 'value2'
         })
         assert.deepEqual(Automerge.inspect(doc), {
-          _objectId: '00000000-0000-0000-0000-000000000000', key1: 'value1', key2: 'value2'
+          _objectId: ROOT_ID, key1: 'value1', key2: 'value2'
         })
       })
     })
@@ -163,7 +164,7 @@ describe('Automerge proxy API', () => {
     it('should support JSON.stringify()', () => {
       Automerge.change(root, doc => {
         assert.deepEqual(JSON.parse(JSON.stringify(doc)), {
-          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+          _objectId: ROOT_ID, list: [1, 2, 3], empty: []
         })
         assert.deepEqual(JSON.stringify(doc.list), '[1,2,3]')
       })
@@ -172,10 +173,10 @@ describe('Automerge proxy API', () => {
     it('should allow inspection as regular JS objects', () => {
       Automerge.change(root, doc => {
         assert.deepEqual(doc._inspect, {
-          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+          _objectId: ROOT_ID, list: [1, 2, 3], empty: []
         })
         assert.deepEqual(Automerge.inspect(doc), {
-          _objectId: '00000000-0000-0000-0000-000000000000', list: [1, 2, 3], empty: []
+          _objectId: ROOT_ID, list: [1, 2, 3], empty: []
         })
       })
     })
