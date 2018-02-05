@@ -6,9 +6,7 @@ const FreezeAPI = require('./freeze_api');
 const { Text } = require('./text');
 const transit = require('transit-immutable-js');
 
-function isObject(obj) {
-  return typeof obj === 'object' && obj !== null;
-}
+const isObject = obj => obj && obj.constructor && obj.constructor === Object;
 
 function makeOp(state, opProps) {
   const opSet = state.get('opSet'),
