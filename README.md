@@ -49,7 +49,7 @@ and merging**:
   Bindings to particular networking technologies are handled by separate libraries. For example, see
   [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge in a
   peer-to-peer model using [WebRTC](https://webrtc.org/).
-* **Immutable state**. A Automerge object is an immutable snapshot of the application state at one
+* **Immutable state**. An Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
   functional reactive programming style of [Redux](http://redux.js.org/) and
@@ -484,7 +484,7 @@ For `type: 'list'` and `type: 'text'`, the possible actions are:
 The project currently has a number of limitations that you should be aware of:
 
 * No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause
-  the application state on other devices to be come corrupted or go out of sync.
+  the application state on other devices to become corrupted or go out of sync.
 * No security: there is currently no encryption, authentication, or access control.
 * Small number of collaborators: Automerge is designed for small-group collaborations. While there
   is no hard limit on the number of devices that can update a document, performance will degrade
