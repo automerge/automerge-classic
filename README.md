@@ -154,7 +154,7 @@ doc1 = Automerge.change(doc1, 'Mark card as done', doc => {
 
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: true },
-//      { title: 'Rewrite everything in Clojure', done: false } }
+//      { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // And, unbeknownst to device 1, also make a change on device 2:
 doc2 = Automerge.change(doc2, 'Delete card', doc => {
