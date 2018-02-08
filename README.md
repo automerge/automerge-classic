@@ -141,7 +141,7 @@ doc1 = Automerge.change(doc1, 'Add another card', doc => {
 //      { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // Now let's simulate another device, whose application state is doc2. We
-// initialise it separately, and merge doc1 into it. After merging, doc2 has
+// initialize it separately, and merge doc1 into it. After merging, doc2 has
 // a copy of all the cards in doc1.
 
 let doc2 = Automerge.init()
