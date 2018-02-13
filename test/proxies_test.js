@@ -1,5 +1,5 @@
 const assert = require('assert')
-const Automerge = require('../src/Automerge')
+const Automerge = require('../src/automerge')
 const { equalsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 

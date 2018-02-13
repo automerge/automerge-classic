@@ -1,5 +1,5 @@
 const assert = require('assert')
-const Automerge = require('../src/Automerge')
+const Automerge = require('../src/automerge')
 const { equalsOneOf } = require('./helpers')
 
 describe('Automerge getChangesForActor API', () => {

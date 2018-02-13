@@ -1,6 +1,6 @@
 const assert = require('assert')
 const sinon = require('sinon')
-const Automerge = require('../src/Automerge')
+const Automerge = require('../src/automerge')
 const Connection = Automerge.Connection
 const DocSet = Automerge.DocSet
 
