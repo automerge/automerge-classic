@@ -10,7 +10,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 
 
-## [0.6.0]
+## [0.7.0] — 2018-01-15
 
 ### Added
 - [#62]: Initial support for Immutable.js API compatibility (read-only for now) ([@ept], [@jeffpeterson])
