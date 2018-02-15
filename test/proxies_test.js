@@ -413,11 +413,11 @@ describe('Automerge proxy API', () => {
       })
 
       it('splice()', () => {
-        root = Automerge.change(root, doc => doc.list.splice(1))
+        root = Automerge.change(root, doc => assert.deepEqual(doc.list.splice(1), [2, 3]))
         assert.deepEqual(root.list, [1])
-        root = Automerge.change(root, doc => doc.list.splice(0, 0, 'a', 'b', 'c'))
+        root = Automerge.change(root, doc => assert.deepEqual(doc.list.splice(0, 0, 'a', 'b', 'c'), []))
         assert.deepEqual(root.list, ['a', 'b', 'c', 1])
-        root = Automerge.change(root, doc => doc.list.splice(1, 2, '-->'))
+        root = Automerge.change(root, doc => assert.deepEqual(doc.list.splice(1, 2, '-->'), ['b', 'c']))
         assert.deepEqual(root.list, ['a', '-->', 1])
       })
 
