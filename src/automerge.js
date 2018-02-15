@@ -2,13 +2,11 @@ const { Map, List, fromJS } = require('immutable')
 const uuid = require('uuid/v4')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
+const {isObject, checkTarget, makeChange, merge, applyChanges} = require('./auto_api')
 const FreezeAPI = require('./freeze_api')
+const ImmutableAPI = require('./immutable_api')
 const { Text } = require('./text')
 const transit = require('transit-immutable-js')
-
-function isObject(obj) {
-  return typeof obj === 'object' && obj !== null
-}
 
 function makeOp(state, opProps) {
   const opSet = state.get('opSet'), actor = state.get('actorId'), op = fromJS(opProps)
@@ -112,32 +110,14 @@ function deleteField(state, objectId, key) {
   return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
 
-function makeChange(root, newState, message) {
-  const actor = root._state.get('actorId')
-  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
-  const change = fromJS({actor, seq, deps, message})
-    .set('ops', newState.getIn(['opSet', 'local']))
-  return FreezeAPI.applyChanges(root, List.of(change), true)
-}
-
 ///// Automerge.* API
 
 function init(actorId) {
   return FreezeAPI.init(actorId || uuid())
 }
 
-function checkTarget(funcName, target, needMutable) {
-  if (!target || !target._state || !target._objectId ||
-      !target._state.hasIn(['opSet', 'byObject', target._objectId])) {
-    throw new TypeError('The first argument to Automerge.' + funcName +
-                        ' must be the object to modify, but you passed ' + JSON.stringify(target))
-  }
-  if (needMutable && (!target._change || !target._change.mutable)) {
-    throw new TypeError('Automerge.' + funcName + ' requires a writable object as first argument, ' +
-                        'but the one you passed is read-only. Please use Automerge.change() ' +
-                        'to get a writable version.')
-  }
+function initImmutable(actorId) {
+  return ImmutableAPI.init(actorId || uuid())
 }
 
 function parseListIndex(key) {
@@ -185,6 +165,10 @@ function load(string, actorId) {
   return FreezeAPI.applyChanges(FreezeAPI.init(actorId), transit.fromJSON(string), false)
 }
 
+function loadImmutable(string, actorId) {
+  return ImmutableAPI.applyChanges(ImmutableAPI.init(actorId), transit.fromJSON(string), false)
+}
+
 function save(doc) {
   checkTarget('save', doc)
   return transit.toJSON(doc._state.getIn(['opSet', 'history']))
@@ -222,17 +206,6 @@ function getHistory(doc) {
   }).toArray()
 }
 
-function merge(local, remote) {
-  checkTarget('merge', local)
-  if (local._state.get('actorId') === remote._state.get('actorId')) {
-    throw new RangeError('Cannot merge an actor with itself')
-  }
-
-  const clock = local._state.getIn(['opSet', 'clock'])
-  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  return FreezeAPI.applyChanges(local, changes, true)
-}
-
 // Returns true if all components of clock1 are less than or equal to those of clock2.
 // Returns false if there is at least one component in which clock1 is greater than clock2
 // (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
@@ -262,6 +235,23 @@ function diff(oldState, newState) {
   return diffs
 }
 
+function getConflicts(doc, list) {
+  checkTarget('getConflicts', doc)
+  const opSet = doc._state.get('opSet')
+  const objectId = list._objectId
+  if (!objectId || opSet.getIn(['byObject', objectId, '_init', 'action']) !== 'makeList') {
+    throw new TypeError('The second argument to Automerge.getConflicts must be a list object')
+  }
+
+  const context = {
+    cache: {},
+    instantiateObject (opSet, objectId) {
+      return opSet.getIn(['cache', objectId])
+    }
+  }
+  return List(OpSet.listIterator(opSet, objectId, 'conflicts', context))
+}
+
 function getChanges(oldState, newState) {
   checkTarget('getChanges', oldState)
 
@@ -282,11 +272,6 @@ function getChangesForActor(state, actorId) {
   return OpSet.getChangesForActor(state._state.get('opSet'), actorId).toJS()
 }
 
-function applyChanges(doc, changes) {
-  checkTarget('applyChanges', doc)
-  return FreezeAPI.applyChanges(doc, fromJS(changes), true)
-}
-
 function getMissingDeps(doc) {
   checkTarget('getMissingDeps', doc)
   return OpSet.getMissingDeps(doc._state.get('opSet'))
@@ -294,6 +279,7 @@ function getMissingDeps(doc) {
 
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
