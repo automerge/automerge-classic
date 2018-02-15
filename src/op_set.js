@@ -1,4 +1,4 @@
-const { Map, List, Set } = require('immutable')
+const { Map, List, Set, Record } = require('immutable')
 const { SkipList } = require('./skip_list')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -246,15 +246,20 @@ function applyQueuedOps(opSet) {
   }
 }
 
+const DefaultOpset = Record({
+  states: Map(),
+  history:  List(),
+  byObject: Map().set(ROOT_ID, Map()),
+  clock:  Map(),
+  deps:   Map(),
+  local:  List(),
+  queue:  List(),
+  cache: null,
+  diff: null
+})();
+
 function init() {
-  return Map()
-    .set('states',   Map())
-    .set('history',  List())
-    .set('byObject', Map().set(ROOT_ID, Map()))
-    .set('clock',    Map())
-    .set('deps',     Map())
-    .set('local',    List())
-    .set('queue',    List())
+  return DefaultOpset
 }
 
 function addLocalOp(opSet, op, actor) {
