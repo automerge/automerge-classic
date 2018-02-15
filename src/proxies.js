@@ -59,7 +59,12 @@ function listMethods(context, listId) {
       if (deleteCount === undefined) {
         deleteCount = OpSet.listLength(context.state.get('opSet'), listId) - start
       }
+      const deleted = []
+      for (let n = 0; n < deleteCount; n++) {
+        deleted.push(OpSet.listElemByIndex(context.state.get('opSet'), listId, start + n, context))
+      }
       context.state = context.splice(context.state, listId, start, deleteCount, values)
+      return deleted
     },
 
     unshift(...values) {
