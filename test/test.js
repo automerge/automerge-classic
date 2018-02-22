@@ -847,5 +847,18 @@ describe('Automerge', () => {
       assert.deepEqual(s3.birds, ['Chaffinch', 'Bullfinch'])
       assert.deepEqual(Automerge.getMissingDeps(s3), {})
     })
+
+    it('should report missing dependencies with out-of-order applyChanges', () => {
+      let s0 = Automerge.init()
+      let s1 = Automerge.change(s0, doc => doc.test = ['a'])
+      let s2 = Automerge.change(s1, doc => doc.test = ['b'])
+      let s3 = Automerge.change(s2, doc => doc.test = ['c'])
+      let changes1to2 = Automerge.getChanges(s1, s2)
+      let changes2to3 = Automerge.getChanges(s2, s3)
+      let s4 = Automerge.init()
+      let s5 = Automerge.applyChanges(s4, changes2to3)
+      let s6 = Automerge.applyChanges(s5, changes1to2)
+      assert.deepEqual(Automerge.getMissingDeps(s6), {[s0._actorId]: 2})
+    })
   })
 })

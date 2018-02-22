@@ -246,6 +246,10 @@ function applyChanges(root, changes, incremental) {
   } else {
     [opSet, newRoot] = materialize(opSet)
   }
+  if (Object.isFrozen(Object.getPrototypeOf(newRoot))) {
+    const newPrototype = Object.assign({}, Object.getPrototypeOf(newRoot))
+    newRoot = Object.assign(Object.create(newPrototype), newRoot)
+  }
   return rootObject(root._state.set('opSet', opSet), newRoot)
 }
 
