@@ -204,7 +204,7 @@ must have distinct actor IDs. Unless you know what you are doing, it is recommen
 with the default, and let `actorId` be auto-generated.
 
 `Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
-write to disk. The string contains an encoding of all of the full change history of the document
+write to disk. The string contains an encoding of the full change history of the document
 (a bit like a git repository).
 
 `Automerge.load(string, actorId)` unserializes an Automerge document from a `string` that was
