@@ -739,6 +739,14 @@ describe('Automerge', () => {
       assert.deepEqual(s1._conflicts, {x: {actor1: 3}})
       assert.deepEqual(s3._conflicts, {x: {actor1: 3}})
     })
+
+    it('should allow a reloaded list to be mutated', () => {
+      let doc = Automerge.change(Automerge.init(), doc => doc.foo = [])
+      doc = Automerge.load(Automerge.save(doc))
+      doc = Automerge.change(doc, 'add', doc => doc.foo.push(1))
+      doc = Automerge.load(Automerge.save(doc))
+      assert.deepEqual(doc.foo, [1])
+    })
   })
 
   describe('history API', () => {

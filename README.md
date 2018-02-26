@@ -16,9 +16,6 @@ doc.cards.push({title: 'Reticulate splines', done: false})
 
 // User marks a task as done
 doc.cards[0].done = true
-
-// Save the document to disk
-localStorage.setItem('MyToDoList', JSON.stringify(doc))
 ```
 
 Automerge is used in a similar way, but the big difference is that it supports **automatic syncing
