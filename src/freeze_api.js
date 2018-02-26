@@ -242,13 +242,10 @@ function applyChanges(root, changes, incremental) {
     newRoot = opSet.getIn(['cache', OpSet.ROOT_ID])
     if (newRoot === root) {
       newRoot = Object.assign(Object.create({_conflicts: root._conflicts}), root)
+      opSet = opSet.setIn(['cache', OpSet.ROOT_ID], newRoot)
     }
   } else {
     [opSet, newRoot] = materialize(opSet)
-  }
-  if (Object.isFrozen(Object.getPrototypeOf(newRoot))) {
-    const newPrototype = Object.assign({}, Object.getPrototypeOf(newRoot))
-    newRoot = Object.assign(Object.create(newPrototype), newRoot)
   }
   return rootObject(root._state.set('opSet', opSet), newRoot)
 }
