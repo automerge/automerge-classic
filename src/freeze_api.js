@@ -242,6 +242,7 @@ function applyChanges(root, changes, incremental) {
     newRoot = opSet.getIn(['cache', OpSet.ROOT_ID])
     if (newRoot === root) {
       newRoot = Object.assign(Object.create({_conflicts: root._conflicts}), root)
+      opSet = opSet.setIn(['cache', OpSet.ROOT_ID], newRoot)
     }
   } else {
     [opSet, newRoot] = materialize(opSet)
