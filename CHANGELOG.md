@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- [#69]: `Automerge.load` generates random actorId if none specified ([@saranrapjs])
 
 
 ## [0.7.0] — 2018-01-15
@@ -98,6 +100,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#69]: https://github.com/automerge/automerge/pull/69
 [#62]: https://github.com/automerge/automerge/pull/62
 [#60]: https://github.com/automerge/automerge/pull/60
 [#57]: https://github.com/automerge/automerge/pull/57
@@ -118,3 +121,4 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@ept]: https://github.com/ept
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
+[@saranrapjs]: https://github.com/saranrapjs

@@ -162,11 +162,11 @@ function assign(target, values) {
 }
 
 function load(string, actorId) {
-  return FreezeAPI.applyChanges(FreezeAPI.init(actorId), transit.fromJSON(string), false)
+  return FreezeAPI.applyChanges(FreezeAPI.init(actorId || uuid()), transit.fromJSON(string), false)
 }
 
 function loadImmutable(string, actorId) {
-  return ImmutableAPI.applyChanges(ImmutableAPI.init(actorId), transit.fromJSON(string), false)
+  return ImmutableAPI.applyChanges(ImmutableAPI.init(actorId || uuid()), transit.fromJSON(string), false)
 }
 
 function save(doc) {
