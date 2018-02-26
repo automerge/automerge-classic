@@ -702,6 +702,45 @@ describe('Automerge', () => {
     })
   })
 
+  describe('saving and laoding', () => {
+    it('should save and restore an empty document', () => {
+      let s = Automerge.load(Automerge.save(Automerge.init()))
+      assert.deepEqual(s, {_objectId: ROOT_ID})
+    })
+
+    it('should generate a new random actor ID', () => {
+      let s1 = Automerge.init()
+      let s2 = Automerge.load(Automerge.save(s1))
+      assert(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(s1._actorId))
+      assert(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(s2._actorId))
+      assert.notEqual(s1._actorId, s2._actorId)
+    })
+
+    it('should allow a custom actor ID to be set', () => {
+      let s = Automerge.load(Automerge.save(Automerge.init()), 'actor3')
+      assert.strictEqual(s._actorId, 'actor3')
+    })
+
+    it('should reconstitute complex datatypes', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.todos = [{title: 'water plants', done: false}])
+      let s2 = Automerge.load(Automerge.save(s1))
+      assert.deepEqual(s2, {_objectId: ROOT_ID, todos: [
+        {title: 'water plants', done: false, _objectId: s1.todos[0]._objectId}
+      ]})
+    })
+
+    it('should reconstitute conflicts', () => {
+      let s1 = Automerge.change(Automerge.init('actor1'), doc => doc.x = 3)
+      let s2 = Automerge.change(Automerge.init('actor2'), doc => doc.x = 5)
+      s1 = Automerge.merge(s1, s2)
+      let s3 = Automerge.load(Automerge.save(s1))
+      assert.strictEqual(s1.x, 5)
+      assert.strictEqual(s3.x, 5)
+      assert.deepEqual(s1._conflicts, {x: {actor1: 3}})
+      assert.deepEqual(s3._conflicts, {x: {actor1: 3}})
+    })
+  })
+
   describe('history API', () => {
     it('should return an empty history for an empty document', () => {
       assert.deepEqual(Automerge.getHistory(Automerge.init()), [])
