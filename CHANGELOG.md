@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2018-02-26
+
 ### Fixed
 - [#69]: `Automerge.load` generates random actorId if none specified ([@saranrapjs])
 - [#64]: `Automerge.applyChanges()` allows changes to be applied out-of-order ([@jimpick], [@ept])
@@ -91,7 +93,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/automerge/automerge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/automerge/automerge/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/automerge/automerge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/automerge/automerge/compare/v0.4.3...v0.5.0
