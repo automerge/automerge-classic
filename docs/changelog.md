@@ -1,3 +1,19 @@
+
+---
+### Automerge document pages
+* [Automerge synopsis](https://github.com/restarian/automerge/blob/brace_document/docs/automerge_synopsis.md)
+* **Changelog**
+* [Conflicting changes](https://github.com/restarian/automerge/blob/brace_document/docs/conflicting_changes.md)
+* [Document lifecycle](https://github.com/restarian/automerge/blob/brace_document/docs/document_lifecycle.md)
+* [Examining document history](https://github.com/restarian/automerge/blob/brace_document/docs/examining_document_history.md)
+* [Example usage](https://github.com/restarian/automerge/blob/brace_document/docs/example_usage.md)
+* [Manipulating and inspecting data](https://github.com/restarian/automerge/blob/brace_document/docs/manipulating_and_inspecting_data.md)
+* [Sending and receiving changes](https://github.com/restarian/automerge/blob/brace_document/docs/sending_and_receiving_changes.md)
+* [Text editing support](https://github.com/restarian/automerge/blob/brace_document/docs/text_editing_support.md)
+* Internal data structures
+  * [Actor IDs, vector clocks and causality](https://github.com/restarian/automerge/blob/brace_document/docs/internal_data_structures/actor_IDs,_vector_clocks_and_causality.md)
+  * [Change structure and operation types](https://github.com/restarian/automerge/blob/brace_document/docs/internal_data_structures/change_structure_and_operation_types.md)
+  * [State, operations and deltas](https://github.com/restarian/automerge/blob/brace_document/docs/internal_data_structures/state,_operations_and_deltas.md)
 # Changelog
 
 Automerge adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) for assigning
