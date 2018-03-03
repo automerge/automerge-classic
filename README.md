@@ -45,7 +45,9 @@ and merging**:
   network you use: client/server, peer-to-peer, Bluetooth, carrier pigeon, whatever, anything goes.
   Bindings to particular networking technologies are handled by separate libraries. For example, see
   [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge in a
-  peer-to-peer model using [WebRTC](https://webrtc.org/).
+  peer-to-peer model using [WebRTC](https://webrtc.org/), and
+  [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that uses
+  [Hypercore](https://github.com/mafintosh/hypercore), part of the [Dat project](https://datproject.org/).
 * **Immutable state**. An Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
@@ -85,8 +87,12 @@ Otherwise, clone this repository, and then you can use the following commands:
 ## Example Usage
 
 The following code samples give a quick overview of how to use Automerge.
-For an example of a real-life application built upon Automerge, check out
-[Trellis](https://github.com/automerge/trellis), a project management tool.
+For examples of real-life applications built upon Automerge, check out:
+
+* [Trellis](https://github.com/automerge/trellis), a project management tool
+  in the style of [Trello](https://trello.com/).
+* [Pixelpusher](https://github.com/automerge/pixelpusher), a pixel art editor
+  ([blog post](https://medium.com/@pvh/pixelpusher-real-time-peer-to-peer-collaboration-with-react-7c7bc8ecbf74)).
 
 ```js
 // This is how you load Automerge in Node. In a browser, simply including the
