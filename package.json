@@ -6,7 +6,8 @@
   "scripts": {
     "browsertest": "karma start karma.conf.js",
     "test": "mocha",
-    "webpack": "webpack --config webpack.config.js"
+    "webpack": "webpack --config webpack.config.js",
+    "make_docs": "brace_document --navlink -r -i docs --force-title --title 'Automerge document pages' --sort depth"
   },
   "author": "",
   "license": "MIT",
@@ -28,5 +29,9 @@
     "sinon": "^3.2.1",
     "watchify": "^3.9.0",
     "webpack": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "brace_document": "^1.0.2",
+    "brace_document_navlink": "^1.0.2"
   }
 }
