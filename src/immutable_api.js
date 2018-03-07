@@ -27,10 +27,10 @@ function instantiateImmutable(opSet, objectId) {
   } else if (objType === 'makeText') {
     obj = new Text(opSet, objectId)
   } else {
-    throw 'Unknown object type: ' + objType
+    throw new Error('Unknown object type: ' + objType)
   }
 
-  obj._objectId = objectId
+  // obj._objectId = objectId
   if (this.cache) this.cache[objectId] = obj
   return obj
 }
@@ -90,7 +90,8 @@ function updateMapObject(opSet, edit) {
 function updateListObject(opSet, edit) {
   if (edit.action === 'create') {
     const list = List()
-    list._objectId = edit.obj
+    //list._objectId = edit.obj
+    //list = Object.assign({}, list, {_objectId: edit.obj})
     return opSet.setIn(['cache', edit.obj], list)
   }
 
@@ -105,7 +106,7 @@ function updateListObject(opSet, edit) {
     list = list.delete(edit.index)
   } else throw 'Unknown action type: ' + edit.action
 
-  list._objectId = edit.obj
+  // list._objectId = edit.obj
   return opSet.setIn(['cache', edit.obj], list)
 }
 
@@ -119,8 +120,11 @@ function updateCache(opSet, diffs) {
       opSet = updateListObject(opSet, edit)
     } else if (edit.type === 'text') {
       opSet = opSet.setIn(['cache', edit.obj], new Text(opSet, edit.obj))
-    } else throw 'Unknown object type: ' + edit.type
+    } else {
+      throw new Error('Unknown object type: ' + edit.type)
+    }
   }
+
 
   // Update cache entries on the path from the root to the modified object
   while (!affected.isEmpty()) {
