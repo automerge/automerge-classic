@@ -3,15 +3,6 @@ const OpSet = require('./op_set')
 const FreezeAPI = require('./freeze_api')
 const ImmutableAPI = require('./immutable_api')
 
-function isObject(obj) {
-  return typeof obj === 'object' && obj !== null
-}
-
-// TODO when we move to Immutable.js 4.0.0, this function is provided by Immutable.js itself
-function isImmutable(obj) {
-  return isObject(obj) && !!obj['@@__IMMUTABLE_ITERABLE__@@']
-}
-
 function checkTarget(funcName, target, needMutable) {
   if (!target || !target._state || !target._objectId ||
       !target._state.hasIn(['opSet', 'byObject', target._objectId])) {
@@ -32,7 +23,7 @@ function makeChange(root, newState, message) {
   const change = fromJS({actor, seq, deps, message})
     .set('ops', newState.getIn(['opSet', 'local']))
 
-  if (isImmutable(root)) {
+  if (ImmutableAPI.isReadObject(root)) {
     return ImmutableAPI.applyChanges(root, List.of(change), true)
   } else {
     return FreezeAPI.applyChanges(root, List.of(change), true)
@@ -41,7 +32,7 @@ function makeChange(root, newState, message) {
 
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
-  if (isImmutable(doc)) {
+  if (ImmutableAPI.isReadObject(doc)) {
     return ImmutableAPI.applyChanges(doc, fromJS(changes), true)
   } else {
     return FreezeAPI.applyChanges(doc, fromJS(changes), true)
@@ -56,7 +47,7 @@ function merge(local, remote) {
 
   const clock = local._state.getIn(['opSet', 'clock'])
   const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
-  if (isImmutable(local)) {
+  if (ImmutableAPI.isReadObject(local)) {
     return ImmutableAPI.applyChanges(local, changes, true)
   } else {
     return FreezeAPI.applyChanges(local, changes, true)
@@ -64,7 +55,7 @@ function merge(local, remote) {
 }
 
 module.exports = {
-  checkTarget, isObject, isImmutable,
+  checkTarget,
   makeChange,
   applyChanges,
   merge,

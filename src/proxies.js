@@ -1,4 +1,3 @@
-const { List, fromJS } = require('immutable')
 const OpSet = require('./op_set')
 
 function listImmutable(attempt) {
