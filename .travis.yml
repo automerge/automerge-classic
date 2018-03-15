@@ -2,6 +2,9 @@ language: node_js
 node_js:
 - '8'
 - '9'
+script:
+- npm test
+- karma start karma.sauce.js
 deploy:
   provider: npm
   email: martin@kleppmann.com
@@ -10,3 +13,9 @@ deploy:
   on:
     tags: true
     repo: automerge/automerge
+env:
+  global:
+    - SAUCE_USERNAME=automerge
+    - secure: AcvrV6Bh2aJ0Djs9+Vr+/XHOI7z6WYkuPtGh9JKVcDI+DMRiXOk8tXac0BaQ8cJ+ZsOqBvAAf/2TN3ft+ByNHKIMeI655fUaVrSBwqZakGliedmxgR5TOGOQwKtYlR3vwKIXtPaUddtqT7cI/qcBZjYs6hqNZOtw1v+yq92fKGFCwgUf6Au0SypL9gAPhLNmQhT4maadNhiZaOFXSneUndgBTgBabJ/75DU+jE1SKRnmjHdXqRZkqgcRhe9Kf0CykbuV6+SfppINkaUyVXn5g1GyN86Wb5gAZkjeCIlzUtFeWlEnkGJdEqLPSxfIPZk91SRHsR7MVU901+C/HOO5dc33zbGatgPw3TZ6Nlzxpbv5lpYke/4qoChoxclRMgIduBW8igOVi3RFveE3kLy8Jo4ftvWJYfwtIpemV57HQ2ym1z2KL6US77G+xLfrot5eXWFKKmfmX+qFxL0IdNRbJP2fw5QXTy5iPugoveExT/pow5ywbsJqdDbbazEQ0mNiizpV3EiTs1T6hx31h6C8eUUUadSyeyJli9tSfWe0t06Cs4Xu099BXNuenN6jv7j7JEPhNQzX0wb1azU6W1TKGm1qfQ2BWzOznR/zPtfVpd3t5fFpREDL48+jmKPOg0THqEAPNnn7UNtmdL/eFRKzi076c4sHaeRFwhXryqwjBlw=
+addons:
+  sauce_connect: true
