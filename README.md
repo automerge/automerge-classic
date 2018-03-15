@@ -2,8 +2,6 @@
 
 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
 
-[![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
-
 Automerge is a library of data structures for building collaborative applications in JavaScript.
 
 A common approach to building JavaScript apps involves keeping the state of your application in
