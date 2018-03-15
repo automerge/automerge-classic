@@ -1,7 +1,7 @@
 const assert = require('assert')
 const sinon = require('sinon')
 const Immutable = require('immutable')
-const Automerge = require('../src/Automerge')
+const Automerge = require('../src/automerge')
 
 describe('Automerge.initImmutable()', () => {
   let beforeDoc, afterDoc, appliedDoc, appliedDoc2, changes
