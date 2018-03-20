@@ -1,4 +1,5 @@
 const assert = require('assert')
+const { is } = require('immutable')
 
 // Assertion that succeeds if the first argument deepEquals at least one of the
 // subsequent arguments (but we don't care which one)
@@ -14,4 +15,8 @@ function equalsOneOf(actual, ...expected) {
   }
 }
 
-module.exports = { equalsOneOf }
+function assertIs(left, right, message) {
+  assert(is(left, right), `expected equality of ${left} and ${right}`)
+}
+
+module.exports = { equalsOneOf, assertIs }

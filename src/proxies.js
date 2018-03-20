@@ -1,5 +1,6 @@
-const { List, fromJS } = require('immutable')
+const { Map, Set, List, Record, fromJS } = require('immutable')
 const OpSet = require('./op_set')
+const { setField, setListIndex, deleteField, splice } = require('./state')
 
 function listImmutable(attempt) {
   throw new TypeError('You tried to ' + attempt + ', but this list is read-only. ' +
@@ -232,4 +233,237 @@ function rootObjectProxy(context) {
   return mapProxy(context, '00000000-0000-0000-0000-000000000000')
 }
 
-module.exports = { rootObjectProxy }
+class immutableListProxy {
+  constructor(context, objectId) {
+    // _context and _objectId are private to Automerge
+    this._context = context
+    this._objectId = objectId
+
+    // size is a public field in the Immutable.js API, and so too here
+    this.size = OpSet.listLength(this._context.state.get('opSet'), this._objectId)
+  }
+
+  // TODO: do we need/want: _inspect, _type, _state, _actorId, _conflicts, _change,
+  // here and/or in properties?
+  // TODO: treatment of context here and in map variant simplifyable?
+  get(index) {
+    return OpSet.listElemByIndex(this._context.state.get('opSet'), this._objectId, index, this._context)
+  }
+
+  // TODO: duplicates immutableMapProxy#getIn
+  getIn(keys) {
+    if (keys.length === 0) {
+      throw new TypeError('Must have at least one key to getIn')
+    }
+    let obj = this
+    for (let key of keys) {
+      obj = obj.get(key)
+      if (obj === undefined) break
+    }
+    return obj
+  }
+
+  // TODO: almost duplicates immutableMapProxy#set (mod setListIndex and constructor)
+  // TODO: find intContext for list set and possibly other call sites.
+  set(index, value) {
+    const newContext = this._context.update('state', (s) => {
+      return setListIndex(s, this._objectId, index, value)
+    })
+    return new immutableListProxy(newContext, this._objectId)
+  }
+
+  // TODO: would duplicate immutableMapProxy#setIn except for last line.
+  setIn(keys, value) {
+    throw new Error('Not yet implemented (and should be unreachable)')
+  }
+
+  delete(index) {
+    return this.splice(index, 1)
+  }
+
+  splice(index, removeNum, ...values) {
+    if (removeNum === undefined) {
+      removeNum = this.size - index
+    }
+    const newContext = this._context.update('state', (s) => {
+      return splice(s, this._objectId, index, removeNum, values)
+    })
+    return new immutableMapProxy(newContext, this._objectId)
+  }
+
+  insert(index, value) {
+    return this.splice(index, 0, value)
+  }
+
+  push(...values) {
+    return this.splice(this.size, 0, ...values)
+  }
+
+  pop() {
+    if (this.size == 0) {
+      return this
+    }
+    return this.splice(this.size - 1, 1)
+  }
+
+  unshift(value) {
+    return this.splice(0, 0, value)
+  }
+
+  shift() {
+    return this.splice(0, 1)
+  }
+}
+
+class immutableMapProxy {
+  constructor(context, objectId) {
+    this._context = context
+    this._objectId = objectId
+  }
+
+  mustGiveKeys(keys, fnName) {
+    if (keys.length === 0) {
+      throw new TypeError(`Must have at least one key to ${fnName}`)
+    }
+  }
+
+  get(key) {
+    // TODO: do we need/want: _inspect, _type, _state, _actorId, _conflicts, _change,
+    // here and/or in properties?
+    return OpSet.getObjectField(this._context.state.get('opSet'), this._objectId, key, this._context)
+  }
+
+  getIn(keys) {
+    if (keys.length === 0) {
+      throw new TypeError('Must have at least one key to getIn')
+    }
+    let obj = this
+    for (let key of keys) {
+      obj = obj.get(key)
+      if (obj === undefined) break
+    }
+    return obj
+  }
+
+  set(key, value) {
+    const intContext = isImmutableProxy(value) ? value._context : this._context
+    const newContext = intContext.update('state', (s) => {
+      return setField(s, this._objectId, key, value)
+    })
+    return new immutableMapProxy(newContext, this._objectId)
+  }
+
+  // TODO: find intContext for list setIn
+  setIn(keys, value) {
+    this.mustGiveKeys(keys, 'setIn')
+
+    let keyedObject = this
+    for (let i=1; i<keys.length; i++) {
+      keyedObject = keyedObject.get(keys[i-1])
+      // If we're missing any containers in the chain, we need to create empty
+      // maps. To do that, we'll first form the new maps as standard immutable
+      // nested values around the original leaf value, and then setIn that new,
+      // larger value with the smaller, existing array of keys as the path.
+      if (!keyedObject) {
+        const keysWithObjects = keys.slice(0, i)
+        const keysWithoutObjects = keys.slice(i)
+        let newValue = value
+        for (let j=keysWithoutObjects.length-1; j>=0; j--) {
+          newValue = new Map().set(keysWithoutObjects[j], newValue)
+        }
+        return this.setIn(keysWithObjects, newValue)
+      }
+    }
+    const intContext = isImmutableProxy(value) ? value._context : this._context
+    const newContext = intContext.update('state', (s) => {
+      const keyedObjectId = keyedObject._objectId
+      const keyedObjectKey = keys[keys.length-1]
+      if (keyedObject instanceof immutableMapProxy) {
+        return setField(s, keyedObjectId, keyedObjectKey, value)
+      } else if (keyedObject instanceof immutableListProxy) {
+        return setListIndex(s, keyedObjectId, keyedObjectKey, value)
+      } else {
+        throw new Error('Unexpected keyedObject (and should be unreachable)')
+      }
+    })
+    return new immutableMapProxy(newContext, this._objectId)
+  }
+
+  update(key, fn) {
+    if (arguments.length != 2) {
+      throw new TypeError('Must use 2-ary form of .update')
+    }
+
+    const oldValue = this.get(key)
+    const newValue = fn(oldValue)
+    return this.set(key, newValue)
+  }
+
+  updateIn(keys, fn) {
+    this.mustGiveKeys(keys, 'updateIn')
+    if (arguments.length != 2) {
+      throw new TypeError('Must use 2-ary form of .update')
+    }
+
+    const oldValue = this.getIn(keys)
+    const newValue = fn(oldValue)
+    return this.setIn(keys, newValue)
+  }
+
+  delete(key) {
+    const newContext = this._context.update('state', (s) => {
+      return deleteField(s, this._objectId, key)
+    })
+    return new immutableMapProxy(newContext, this._objectId)
+  }
+
+  deleteIn(keys) {
+    if (keys.length === 0) {
+      throw new TypeError('Must have at least one key to deleteIn')
+    }
+    let keyedObj = this
+    for (let i=1; i<keys.length; i++) {
+      keyedObj = keyedObj.get(keys[i-1])
+      if (!keyedObj) {
+        return this
+      }
+    }
+    const innerKey = keys[keys.length-1]
+    if (!keyedObj.get(innerKey)) {
+      return this
+    }
+    const newContext = this._context.update('state', (s) => {
+      return deleteField(s, keyedObj._objectId, innerKey)
+    })
+    return new immutableMapProxy(newContext, this._objectId)
+  }
+}
+
+// TODO: different way to factor this to remove combination of this and explicit params?
+function instantiateImmutableProxy(opSet, objectId) {
+  const objectType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  if (objectType === 'makeMap') {
+    return new immutableMapProxy(this, objectId)
+  } else if (objectType === 'makeList') {
+    return new immutableListProxy(this, objectId)
+  } else {
+    debugger
+    throw new Error('Unknown object type: ' + objectType)
+  }
+}
+
+function isImmutableProxy(object) {
+  return ((object instanceof immutableMapProxy) || (object instanceof immutableListProxy))
+}
+
+function rootImmutableProxy(context) {
+  const newContext = context.set('instantiateObject', instantiateImmutableProxy)
+  return new immutableMapProxy(newContext, '00000000-0000-0000-0000-000000000000')
+}
+
+const ImmutableContext = Record({
+  state: undefined,
+  instantiateObject: undefined,
+})
+
+module.exports = { rootObjectProxy, rootImmutableProxy, isImmutableProxy, ImmutableContext }
