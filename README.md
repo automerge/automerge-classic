@@ -3,7 +3,7 @@
 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
 
 [![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
-[![Browser Test Status](https://saucelabs.com/buildstatus/automerge)](https://saucelabs.com/beta/builds/5818b7cb24184e548651e2e9ce853f2f)
+[![Browser Test Status](https://saucelabs.com/buildstatus/automerge)](https://saucelabs.com/open_sauce/user/automerge)
 
 Automerge is a library of data structures for building collaborative applications in JavaScript.
 
@@ -67,7 +67,7 @@ and merging**:
   the details of the algorithm in Automerge are different from the JSON CRDT paper, and we are
   planning to publish more detail about it in the future.
 * **Fairly portable**. We're not yet making an effort to support old platforms, but we have tested
-  Automerge in Node.js, Chrome, Firefox, and [Electron](https://electron.atom.io/).
+  Automerge in Node.js, Chrome, Firefox, Safari, MS Edge, and [Electron](https://electron.atom.io/).
 
 
 ## Setup
