@@ -28,8 +28,12 @@ module.exports = function(config) {
       ['test/*.js']: ['browserify']
     },
     browserify: {debug: true},
+    port: 9876,
+    captureTimeout: 120000,
     sauceLabs: {
-      testName: 'Automerge unit tests'
+      testName: 'Automerge unit tests',
+      startConnect: false, // Sauce Connect is started via setting in .travis.yml
+      tunnelIdentifier: process.env.TRAVIS_JOB_NUMBER
     },
     customLaunchers: customLaunchers,
     browsers: Object.keys(customLaunchers),
