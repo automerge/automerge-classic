@@ -18,6 +18,42 @@ module.exports = function(config) {
       browserName: 'firefox',
       platform: 'Windows 10',
       version: '59.0'
+    },
+    sl_edge: {
+      base: 'SauceLabs',
+      browserName: 'MicrosoftEdge',
+      platform: 'Windows 10',
+      version: '16.16299'
+    },
+    sl_ie: {
+      base: 'SauceLabs',
+      browserName: 'internet explorer',
+      platform: 'Windows 10',
+      version: '11.103'
+    },
+    sl_safari_mac: {
+      base: 'SauceLabs',
+      browserName: 'safari',
+      platform: 'macOS 10.13',
+      version: '11.0'
+    },
+    sl_safari_ios: {
+      base: 'SauceLabs',
+      browserName: 'Safari',
+      appiumVersion: '1.7.2',
+      deviceName: 'iPhone 8 Simulator',
+      deviceOrientation: 'portrait',
+      platformVersion: '11.2',
+      platformName: 'iOS'
+    },
+    sl_chrome_android: {
+      base: 'SauceLabs',
+      appiumVersion: '1.7.2',
+      deviceName: 'Android Emulator',
+      deviceOrientation: 'portrait',
+      browserName: 'Chrome',
+      platformVersion: '6.0',
+      platformName: 'Android'
     }
   }
 
