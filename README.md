@@ -36,7 +36,7 @@ and merging**:
   (Similar to git, which lets you push your own changes, and pull changes from other developers,
   when you are online.)
 
-* If the state was concurrently changed on different devices, Automerge automatically merges the
+* If the state was changed concurrently on different devices, Automerge automatically merges the
   changes together cleanly, so that everybody ends up in the same state, and no changes are lost.
 
   (Different from git: **no merge conflicts to resolve!**)
@@ -44,7 +44,7 @@ and merging**:
 
 ## Features and Design Principles
 
-* **Network-agnostic**. Automerge is a pure data structure library that does not care what kind of
+* **Network-agnostic**. Automerge is a pure data structure library that does not care about what kind of
   network you use: client/server, peer-to-peer, Bluetooth, carrier pigeon, whatever, anything goes.
   Bindings to particular networking technologies are handled by separate libraries. For example, see
   [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge in a
