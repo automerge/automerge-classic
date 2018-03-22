@@ -8,6 +8,11 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- [#77]: Fixed exception when a list element is inserted and updated in the same change callback
+  ([@mmcgrana], [@ept])
+
+
 ## [0.7.1] — 2018-02-26
 
 ### Fixed
@@ -104,6 +109,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#77]: https://github.com/automerge/automerge/pull/77
 [#69]: https://github.com/automerge/automerge/pull/69
 [#64]: https://github.com/automerge/automerge/pull/64
 [#62]: https://github.com/automerge/automerge/pull/62
@@ -125,6 +131,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept
+[@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
 [@saranrapjs]: https://github.com/saranrapjs
