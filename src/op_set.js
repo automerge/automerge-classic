@@ -263,7 +263,9 @@ function addLocalOp(opSet, op, actor) {
 
   // Override any prior assignment operations for the same object and key
   if (action === 'set' || action === 'del' || action === 'link') {
-    ops = ops.filter(prev => prev.get('obj') != objectId || prev.get('key') != key)
+    ops = ops.filter(prev =>
+      prev.get('obj') != objectId || prev.get('key') != key ||
+      (prev.get('action') !== 'set' && prev.get('action') !== 'del' && prev.get('action') !== 'link'))
   }
   ops = ops.push(op)
   return applyOp(opSet.set('local', ops), op.set('actor', actor))
