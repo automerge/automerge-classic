@@ -438,6 +438,14 @@ describe('Automerge', () => {
         assert.deepEqual(s1.noodles, ['udon', 'soba is the best', 'ramen'])
       })
 
+      it('should allow list creation and assignment in the same change callback', () => {
+        s1 = Automerge.change(Automerge.init(), doc => {
+          doc.letters = ['a', 'b', 'c']
+          doc.letters[1] = 'd'
+        })
+        assert.strictEqual(s1.letters[1], 'd')
+      })
+
       it('should handle arbitrary-depth nesting', () => {
         s1 = Automerge.change(s1, doc => doc.maze = [[[[[[[['noodles', ['here']]]]]]]]])
         s1 = Automerge.change(s1, doc => doc.maze[0][0][0][0][0][0][0][1].unshift('found'))
