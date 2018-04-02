@@ -353,11 +353,11 @@ The `getChanges()/applyChanges()` API works as follows:
 newDoc = Automerge.change(currentDoc, doc => {
   // make arbitrary change to the document
 })
-val changes = Automerge.getChanges(currentDoc, newDoc)
+let changes = Automerge.getChanges(currentDoc, newDoc)
 network.broadcast(JSON.stringify(changes))
 
 // On another node
-val changes = JSON.parse(network.receive())
+let changes = JSON.parse(network.receive())
 newDoc = Automerge.applyChanges(currentDoc, changes)
 ```
 

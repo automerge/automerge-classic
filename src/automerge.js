@@ -227,7 +227,7 @@ function diff(oldState, newState) {
   let opSet = oldState._state.get('opSet').set('diff', List())
   const changes = OpSet.getMissingChanges(newState._state.get('opSet'), oldClock)
 
-  let diffs = [], diff
+  let diffs = []
   for (let change of changes) {
     [opSet, diff] = OpSet.addChange(opSet, change)
     diffs.push(...diff)
