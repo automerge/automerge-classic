@@ -139,7 +139,8 @@ const MapHandler = {
   },
 
   ownKeys (target) {
-    return OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).toJS()
+    const keys = OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).filter(key => key !== '_objectId').toJS()
+    return keys
   }
 }
 

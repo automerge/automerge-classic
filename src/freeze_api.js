@@ -8,12 +8,15 @@ function isObject(obj) {
 
 function updateMapObject(opSet, edit) {
   if (edit.action === 'create') {
-    return opSet.setIn(['cache', edit.obj], Object.freeze({_objectId: edit.obj}))
+    return opSet.setIn(['cache', edit.obj],
+      Object.freeze(Object.create(Object.prototype, { _objectId: { value: edit.obj } }))
+    )
   }
 
   const oldObject = opSet.getIn(['cache', edit.obj])
   const conflicts = Object.assign({}, oldObject._conflicts)
   const object = Object.assign(Object.create({_conflicts: conflicts}), oldObject)
+  Object.defineProperty(object, '_objectId', { value: oldObject._objectId })
 
   if (edit.action === 'set') {
     object[edit.key] = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
@@ -40,9 +43,9 @@ function parentMapObject(opSet, ref) {
   const oldObject = opSet.getIn(['cache', ref.get('obj')])
   const conflicts = Object.assign({}, oldObject._conflicts)
   const object = Object.assign(Object.create({_conflicts: conflicts}), oldObject)
+  Object.defineProperty(object, '_objectId', { value: oldObject._objectId })
   const value = opSet.getIn(['cache', ref.get('value')])
   let changed = false
-
   if (isObject(object[ref.get('key')]) && object[ref.get('key')]._objectId === ref.get('value')) {
     object[ref.get('key')] = value
     changed = true
@@ -192,7 +195,7 @@ function instantiateImmutable(opSet, objectId) {
     obj = Object.create({_conflicts: Object.freeze(conflicts.toJS())})
 
     for (let field of OpSet.getObjectFields(opSet, objectId)) {
-      obj[field] = OpSet.getObjectField(opSet, objectId, field, this)
+      Object.defineProperty(obj, field, { value: OpSet.getObjectField(opSet, objectId, field, this), enumerable: !field.startsWith('_') })
     }
   } else if (objType === 'makeList') {
     obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]
@@ -242,10 +245,11 @@ function applyChanges(root, changes, incremental) {
     newRoot = opSet.getIn(['cache', OpSet.ROOT_ID])
     if (newRoot === root) {
       newRoot = Object.assign(Object.create({_conflicts: root._conflicts}), root)
+      Object.defineProperty(newRoot, '_objectId', { value: root._objectId })
       opSet = opSet.setIn(['cache', OpSet.ROOT_ID], newRoot)
     }
   } else {
-    [opSet, newRoot] = materialize(opSet)
+    ;[opSet, newRoot] = materialize(opSet)
   }
   return rootObject(root._state.set('opSet', opSet), newRoot)
 }
