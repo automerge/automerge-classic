@@ -57,8 +57,7 @@ function setField(state, objectId, key, value) {
     throw new TypeError('Map entries starting with underscore are not allowed: ' + key)
   }
 
-  if (typeof value !== 'object' && typeof value !== 'boolean' && typeof value !== 'number' &&
-      typeof value !== 'string') {
+  if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
     throw new TypeError('Unsupported type of value: ' + (typeof value))
   } else if (isObject(value)) {
     const [newState, newId] = createNestedObjects(state, value)
