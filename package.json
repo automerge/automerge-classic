@@ -11,23 +11,23 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "immutable": "^3.8.1",
+    "immutable": "^3.8.2",
     "transit-immutable-js": "^0.7.0",
-    "transit-js": "^0.8.846",
-    "uuid": "^3.1.0"
+    "transit-js": "^0.8.861",
+    "uuid": "^3.2.1"
   },
   "devDependencies": {
-    "browserify": "^14.4.0",
+    "browserify": "^14.5.0",
     "jsverify": "^0.8.3",
-    "karma": "^1.7.0",
-    "karma-browserify": "^5.1.1",
+    "karma": "^1.7.1",
+    "karma-browserify": "^5.2.0",
     "karma-chrome-launcher": "^2.2.0",
-    "karma-firefox-launcher": "^1.0.1",
+    "karma-firefox-launcher": "^1.1.0",
     "karma-mocha": "^1.3.0",
     "karma-sauce-launcher": "^1.2.0",
-    "mocha": "^3.4.2",
-    "sinon": "^3.2.1",
-    "watchify": "^3.9.0",
-    "webpack": "^3.0.0"
+    "mocha": "^3.5.3",
+    "sinon": "^3.3.0",
+    "watchify": "^3.11.0",
+    "webpack": "^3.11.0"
   }
 }
