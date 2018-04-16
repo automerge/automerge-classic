@@ -5,6 +5,9 @@ node_js:
 jobs:
   include:
     - stage: browsertest
+      # Disable browsertest stage on pull requests, since encrypted environment variables
+      # are not available in such untrusted build jobs
+      if: repo = automerge/automerge AND type != pull_request
       node_js: 9
       script: karma start karma.sauce.js
     - stage: deploy
