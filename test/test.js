@@ -158,6 +158,15 @@ describe('Automerge', () => {
           Automerge.change(s1, 'foo', doc => doc['_foo'] = 'x')
         }, /Map entries starting with underscore are not allowed/)
       })
+
+      it('should not allow assignment of unsupported datatypes', () => {
+        Automerge.change(s1, doc => {
+          assert.throws(() => { doc.foo = undefined },         /Unsupported type of value: undefined/)
+          assert.throws(() => { doc.foo = {prop: undefined} }, /Unsupported type of value: undefined/)
+          assert.throws(() => { doc.foo = () => {} },          /Unsupported type of value: function/)
+          assert.throws(() => { doc.foo = Symbol('foo') },     /Unsupported type of value: symbol/)
+        })
+      })
     })
 
     describe('nested maps', () => {
