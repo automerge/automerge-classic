@@ -10,6 +10,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - [#83]: Changed `_objectId` property on Automerge map objects to be non-enumerable ([@EthanRBrown], [@ept])
+- [#84]: Changed `_conflicts`, `_state`, and `_actorId` to be non-enumerable properties ([@ept])
 
 ### Fixed
 - [#77]: Fixed exception when a list element is inserted and updated in the same change callback
@@ -113,6 +114,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#84]: https://github.com/automerge/automerge/pull/84
 [#83]: https://github.com/automerge/automerge/pull/83
 [#78]: https://github.com/automerge/automerge/issues/78
 [#77]: https://github.com/automerge/automerge/pull/77
