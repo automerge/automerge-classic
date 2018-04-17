@@ -11,6 +11,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - [#77]: Fixed exception when a list element is inserted and updated in the same change callback
   ([@mmcgrana], [@ept])
+- [#78]: Better error message when trying to use an unsupported datatype ([@ept])
 
 
 ## [0.7.1] — 2018-02-26
@@ -109,6 +110,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#78]: https://github.com/automerge/automerge/issues/78
 [#77]: https://github.com/automerge/automerge/pull/77
 [#69]: https://github.com/automerge/automerge/pull/69
 [#64]: https://github.com/automerge/automerge/pull/64
