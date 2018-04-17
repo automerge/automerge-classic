@@ -17,7 +17,7 @@ function instantiateImmutable(opSet, objectId) {
   let obj
   if (isRoot || objType === 'makeMap') {
     const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
-    obj = Map().set('_conflicts', conflicts)
+    obj = Map().set('_conflicts', conflicts).set('_objectId', objectId)
 
     for (let field of OpSet.getObjectFields(opSet, objectId)) {
       obj = obj.set(field, OpSet.getObjectField(opSet, objectId, field, this))

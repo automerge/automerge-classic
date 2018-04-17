@@ -128,7 +128,7 @@ const MapHandler = {
   },
 
   has (target, key) {
-    return (key === '_type') || (key === '_state') || (key === '_actorId') || (key === '_conflicts') ||
+    return ['_type', '_state', '_actorId', '_objectId', '_conflicts'].includes(key) ||
       OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).has(key)
   },
 
