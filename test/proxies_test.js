@@ -65,6 +65,13 @@ describe('Automerge proxy API', () => {
       })
     })
 
+    it('should support bulk assignment with Object.assign()', () => {
+      Automerge.change(Automerge.init(), doc => {
+        Object.assign(doc, {key1: 'value1', key2: 'value2'})
+        assert.deepEqual(doc, {key1: 'value1', key2: 'value2'})
+      })
+    })
+
     it('should support JSON.stringify()', () => {
       Automerge.change(Automerge.init(), doc => {
         assert.deepEqual(JSON.stringify(doc), '{}')
