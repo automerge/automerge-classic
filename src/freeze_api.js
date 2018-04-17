@@ -192,10 +192,10 @@ function instantiateImmutable(opSet, objectId) {
   let obj
   if (isRoot || objType === 'makeMap') {
     const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
-    obj = Object.create({_conflicts: Object.freeze(conflicts.toJS())})
+    obj = Object.create({_objectId: objectId, _conflicts: Object.freeze(conflicts.toJS())})
 
     for (let field of OpSet.getObjectFields(opSet, objectId)) {
-      Object.defineProperty(obj, field, { value: OpSet.getObjectField(opSet, objectId, field, this), enumerable: !field.startsWith('_') })
+      obj[field] = OpSet.getObjectField(opSet, objectId, field, this)
     }
   } else if (objType === 'makeList') {
     obj = [...OpSet.listIterator(opSet, objectId, 'values', this)]

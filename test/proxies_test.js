@@ -9,6 +9,7 @@ describe('Automerge proxy API', () => {
       Automerge.change(Automerge.init(), doc => {
         assert.strictEqual(doc._type, 'map')
         assert.strictEqual(doc._objectId, ROOT_ID)
+        assert.strictEqual('_objectId' in doc, true)
       })
     })
 
@@ -17,6 +18,7 @@ describe('Automerge proxy API', () => {
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(doc._actorId))
         assert.notEqual(doc._actorId, ROOT_ID)
         assert.strictEqual(Automerge.init('customActorId')._actorId, 'customActorId')
+        assert.strictEqual('_actorId' in doc, true)
       })
     })
 
