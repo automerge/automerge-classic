@@ -2,21 +2,26 @@
   "name": "automerge",
   "version": "0.7.1",
   "description": "Data structures for building collaborative applications",
-  "main": "src/automerge.js",
+  "main": "dist/automerge.js",
   "scripts": {
     "browsertest": "karma start karma.conf.js",
     "test": "mocha",
-    "webpack": "webpack --config webpack.config.js"
+    "build": "webpack",
+    "prepublishOnly": "webpack"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "babel-polyfill": "^6.26.0",
     "immutable": "^3.8.1",
     "transit-immutable-js": "^0.7.0",
     "transit-js": "^0.8.846",
     "uuid": "^3.1.0"
   },
   "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.4",
+    "babel-preset-env": "^1.6.1",
     "browserify": "^14.4.0",
     "jsverify": "^0.8.3",
     "karma": "^1.7.0",
