@@ -12,6 +12,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "bloomfilter": "0.0.18",
     "immutable": "^3.8.2",
     "transit-immutable-js": "^0.7.0",
     "transit-js": "^0.8.861",

@@ -982,6 +982,10 @@ blob@0.0.4:
   version "0.0.4"
   resolved "https://registry.yarnpkg.com/blob/-/blob-0.0.4.tgz#bcf13052ca54463f30f9fc7e95b9a47630a94921"
 
+bloomfilter@0.0.18:
+  version "0.0.18"
+  resolved "https://registry.yarnpkg.com/bloomfilter/-/bloomfilter-0.0.18.tgz#6d55d34f0a214b235287b4eac9203ac623413dab"
+
 bluebird@^3.3.0, bluebird@^3.4.6, bluebird@^3.5.1:
   version "3.5.1"
   resolved "https://registry.yarnpkg.com/bluebird/-/bluebird-3.5.1.tgz#d9551f9de98f1fcda1e683d17ee91a0602ee2eb9"
