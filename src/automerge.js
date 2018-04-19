@@ -5,6 +5,7 @@ const OpSet = require('./op_set')
 const {isObject, checkTarget, makeChange, merge, applyChanges} = require('./auto_api')
 const FreezeAPI = require('./freeze_api')
 const ImmutableAPI = require('./immutable_api')
+const { LamportTS } = require('./skip_list')
 const { Text } = require('./text')
 const transit = require('transit-immutable-js')
 
@@ -16,12 +17,12 @@ function makeOp(state, opProps) {
 
 function insertAfter(state, listId, elemId) {
   if (!state.hasIn(['opSet', 'byObject', listId])) throw 'List object does not exist'
-  if (!state.hasIn(['opSet', 'byObject', listId, elemId]) && elemId !== '_head') {
+  if (!state.hasIn(['opSet', 'byObject', listId, elemId.toString()]) && elemId !== '_head') {
     throw 'Preceding list element does not exist'
   }
   const elem = state.getIn(['opSet', 'byObject', listId, '_maxElem'], 0) + 1
-  state = makeOp(state, { action: 'ins', obj: listId, key: elemId, elem })
-  return [state, state.get('actorId') + ':' + elem]
+  state = makeOp(state, { action: 'ins', obj: listId, key: elemId.toString(), elem })
+  return [state, new LamportTS({actorId: state.get('actorId'), counter: elem})]
 }
 
 function createNestedObjects(state, value) {
@@ -46,24 +47,28 @@ function createNestedObjects(state, value) {
 }
 
 function setField(state, objectId, key, value) {
-  if (typeof key !== 'string') {
-    throw new TypeError('The key of a map entry must be a string, but ' +
-                        JSON.stringify(key) + ' is a ' + (typeof key))
-  }
-  if (key === '') {
-    throw new TypeError('The key of a map entry must not be an empty string')
-  }
-  if (key.startsWith('_')) {
-    throw new TypeError('Map entries starting with underscore are not allowed: ' + key)
+  const objType = state.getIn(['opSet', 'byObject', objectId, '_init', 'action'])
+  if (objType === 'makeList' || objType === 'makeText') {
+    if (!(key instanceof LamportTS)) {
+      throw new TypeError('The key of a list entry must be a LamportTS, not ' + JSON.stringify(key))
+    }
+  } else {
+    if (typeof key !== 'string' || key === '') {
+      throw new TypeError('The key of a map entry must be a non-empty string, not ' + JSON.stringify(key))
+    }
+    if (key.startsWith('_')) {
+      throw new TypeError('Map entries starting with underscore are not allowed: ' + key)
+    }
   }
 
   if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
     throw new TypeError('Unsupported type of value: ' + (typeof value))
-  } else if (isObject(value)) {
+  }
+  if (isObject(value)) {
     const [newState, newId] = createNestedObjects(state, value)
-    return makeOp(newState, { action: 'link', obj: objectId, key, value: newId })
+    return makeOp(newState, { action: 'link', obj: objectId, key: key.toString(), value: newId })
   } else {
-    return makeOp(state, { action: 'set', obj: objectId, key, value })
+    return makeOp(state, { action: 'set', obj: objectId, key: key.toString(), value })
   }
 }
 
@@ -72,7 +77,7 @@ function splice(state, objectId, start, deletions, insertions) {
   for (let i = 0; i < deletions; i++) {
     let elemId = elemIds.keyOf(start)
     if (elemId) {
-      state = makeOp(state, {action: 'del', obj: objectId, key: elemId})
+      state = makeOp(state, {action: 'del', obj: objectId, key: elemId.toString()})
       elemIds = state.getIn(['opSet', 'byObject', objectId, '_elemIds'])
     }
   }

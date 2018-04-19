@@ -178,7 +178,7 @@ describe('Automerge', () => {
       it('should require property names to be valid', () => {
         assert.throws(() => {
           Automerge.change(s1, 'foo', doc => doc[''] = 'x')
-        }, /must not be an empty string/)
+        }, /must be a non-empty string/)
         assert.throws(() => {
           Automerge.change(s1, 'foo', doc => doc['_foo'] = 'x')
         }, /Map entries starting with underscore are not allowed/)
@@ -309,8 +309,8 @@ describe('Automerge', () => {
 
       it('should validate field names', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
-        assert.throws(() => { Automerge.change(s1, doc => doc.nested[''] = 'x') }, /must not be an empty string/)
-        assert.throws(() => { Automerge.change(s1, doc => doc.nested = {'': 'x'}) }, /must not be an empty string/)
+        assert.throws(() => { Automerge.change(s1, doc => doc.nested[''] = 'x') }, /must be a non-empty string/)
+        assert.throws(() => { Automerge.change(s1, doc => doc.nested = {'': 'x'}) }, /must be a non-empty string/)
         assert.throws(() => { Automerge.change(s1, doc => doc.nested._foo = 'x') }, /Map entries starting with underscore are not allowed/)
         assert.throws(() => { Automerge.change(s1, doc => doc.nested = {_foo: 'x'}) }, /Map entries starting with underscore are not allowed/)
       })

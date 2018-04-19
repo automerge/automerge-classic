@@ -1,5 +1,5 @@
 const { Map, List, Set } = require('immutable')
-const { SkipList } = require('./skip_list')
+const { SkipList, LamportTS } = require('./skip_list')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
@@ -49,7 +49,7 @@ function getPath(opSet, objectId) {
     const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
 
     if (objType === 'makeList' || objType === 'makeText') {
-      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(ref.get('key'))
+      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(LamportTS.parse(ref.get('key')))
       if (index < 0) return null
       path.unshift(index)
     } else {
@@ -114,10 +114,10 @@ function patchList(opSet, objectId, index, action, ops) {
   }
 
   if (action === 'insert') {
-    elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
+    elemIds = elemIds.insertIndex(index, LamportTS.parse(firstOp.get('key')), value)
     edit.value = firstOp.get('value')
   } else if (action === 'set') {
-    elemIds = elemIds.setValue(firstOp.get('key'), value)
+    elemIds = elemIds.setValue(LamportTS.parse(firstOp.get('key')), value)
     edit.value = firstOp.get('value')
   } else if (action === 'remove') {
     elemIds = elemIds.removeIndex(index)
@@ -131,7 +131,7 @@ function patchList(opSet, objectId, index, action, ops) {
 function updateListElement(opSet, objectId, elemId) {
   const ops = getFieldOps(opSet, objectId, elemId)
   const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
-  let index = elemIds.indexOf(elemId)
+  let index = elemIds.indexOf(LamportTS.parse(elemId))
 
   if (index >= 0) {
     if (ops.isEmpty()) {
@@ -149,7 +149,7 @@ function updateListElement(opSet, objectId, elemId) {
       index = -1
       prevId = getPrevious(opSet, objectId, prevId)
       if (!prevId) break
-      index = elemIds.indexOf(prevId)
+      index = elemIds.indexOf(LamportTS.parse(prevId))
       if (index >= 0) break
     }
 
@@ -430,7 +430,7 @@ function getObjectConflicts(opSet, objectId, context) {
 function listElemByIndex(opSet, objectId, index, context) {
   const elemId = opSet.getIn(['byObject', objectId, '_elemIds']).keyOf(index)
   if (elemId) {
-    const ops = getFieldOps(opSet, objectId, elemId)
+    const ops = getFieldOps(opSet, objectId, elemId.toString())
     if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
   }
 }
@@ -454,7 +454,7 @@ function listIterator(opSet, listId, mode, context) {
           case 'keys':    return {done: false, value: index}
           case 'values':  return {done: false, value: value}
           case 'entries': return {done: false, value: [index, value]}
-          case 'elems':   return {done: false, value: [index, elem]}
+          case 'elems':   return {done: false, value: [index, LamportTS.parse(elem)]}
           case 'conflicts':
             let conflict = null
             if (ops.size > 1) {

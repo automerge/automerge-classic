@@ -1,4 +1,4 @@
-const { Map } = require('immutable')
+const { Map, Record } = require('immutable')
 
 // Returns a random number from the geometric distribution with p = 0.75.
 // That is, returns k with probability p * (1 - p)^(k - 1).
@@ -17,6 +17,32 @@ function randomLevel() {
     }
   }
 }
+
+class LamportTS extends Record({counter: 0, actorId: ''}) {
+  toString () {
+    return this.actorId + ':' + this.counter
+  }
+
+  compareTo (other) {
+    if (!(other instanceof LamportTS)) {
+      throw new TypeError('Cannot compare LamportTS to value: ' + other)
+    }
+    if (this.counter < other.counter) return -1
+    if (this.counter > other.counter) return 1
+    if (this.actorId < other.actorId) return -1
+    if (this.actorId > other.actorId) return 1
+    return 0
+  }
+}
+
+LamportTS.parse = function (str) {
+  let match = /^(.*):([0-9]+)$/.exec(str)
+  if (!match) {
+    throw new RangeError('Cannot parse into LamportTS: ' + str)
+  }
+  return new LamportTS({actorId: match[1], counter: parseInt(match[2])})
+}
+
 
 class Node {
   constructor (key, value, level, prevKey, nextKey, prevCount, nextCount) {
@@ -167,8 +193,8 @@ class SkipList {
   // Inserts a new list element immediately after the element with key `predecessor`.
   // If predecessor === null, inserts at the head of the list.
   insertAfter (predecessor, key, value) {
-    if (typeof key !== 'string' || key === '') {
-      throw new RangeError('Key must be a nonempty string')
+    if (!(key instanceof LamportTS)) {
+      throw new RangeError('Key must be a Lamport timestamp')
     }
     if (!this._nodes.has(predecessor)) {
       throw new RangeError('The referenced predecessor key does not exist')
@@ -219,7 +245,7 @@ class SkipList {
   }
 
   removeKey (key) {
-    if (typeof key !== 'string' || !this._nodes.has(key)) {
+    if (!key || !this._nodes.has(key)) {
       throw new RangeError('The given key cannot be removed because it does not exist')
     }
     const removedNode = this._nodes.get(key)
@@ -257,7 +283,7 @@ class SkipList {
   }
 
   indexOf (key) {
-    if (typeof key !== 'string' || key === '' || !this._nodes.has(key)) return -1
+    if (!(key instanceof LamportTS) || !this._nodes.has(key)) return -1
     let node = this._nodes.get(key), count = 0
     while (node && node.key) {
       count += node.prevCount[node.level - 1]
@@ -285,16 +311,16 @@ class SkipList {
   }
 
   getValue (key) {
-    if (typeof key !== 'string' || key === '') {
-      throw new RangeError('Key must be a nonempty string')
+    if (!(key instanceof LamportTS)) {
+      throw new RangeError('Key must be a Lamport timestamp')
     }
     const node = this._nodes.get(key)
     return node && node.value
   }
 
   setValue (key, value) {
-    if (typeof key !== 'string' || key === '') {
-      throw new RangeError('Key must be a nonempty string')
+    if (!(key instanceof LamportTS)) {
+      throw new RangeError('Key must be a Lamport timestamp')
     }
     let node = this._nodes.get(key)
     if (!node) throw new RangeError('The referenced key does not exist')
@@ -339,4 +365,4 @@ function makeInstance(length, nodes, randomSource) {
   return Object.freeze(instance)
 }
 
-module.exports = {SkipList}
+module.exports = {LamportTS, SkipList}

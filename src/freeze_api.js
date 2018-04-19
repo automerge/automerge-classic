@@ -1,5 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const OpSet = require('./op_set')
+const { LamportTS } = require('./skip_list')
 const { Text } = require('./text')
 
 function isObject(obj) {
@@ -111,7 +112,8 @@ function updateListObject(opSet, diffs) {
 }
 
 function parentListObject(opSet, ref) {
-  const index = opSet.getIn(['byObject', ref.get('obj'), '_elemIds']).indexOf(ref.get('key'))
+  const elemIds = opSet.getIn(['byObject', ref.get('obj'), '_elemIds'])
+  const index = elemIds.indexOf(LamportTS.parse(ref.get('key')))
   if (index < 0) return opSet
 
   let changed = false
