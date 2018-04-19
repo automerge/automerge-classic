@@ -1,5 +1,25 @@
 const { Map, Record } = require('immutable')
 
+// The granularity at which list items are grouped together into densely-packed
+// blocks. A node in the list is a block boundary if its level is >= BLOCK_LEVEL.
+// Assuming the default distribution of block levels implemented by randomLevel()
+// below, in which there are expected 4 times as many nodes with level i than
+// there are with level i+1, the expected number of nodes per block is
+// 4^(BLOCK_LEVEL - 1). If BLOCK_LEVEL=5, there are on average 256 nodes per block.
+const BLOCK_LEVEL = 5
+
+// The false-positive probability for Bloom filters (checking whether a given key
+// appears in a block).
+const FALSE_POS = 0.001
+
+// The number of bits to use in a Bloom filter so that it achieves the desired
+// false-positive rate.
+const BLOOM_BITS = Math.ceil(- Math.pow(4, BLOCK_LEVEL - 1) * Math.log(FALSE_POS) / (Math.LN2 * Math.LN2))
+
+// The number of hash functions to use in a Bloom filter so that it achieves the
+// desired false-positive rate.
+const BLOOM_HASHES = - Math.round(Math.log(FALSE_POS) / Math.LN2)
+
 // Returns a random number from the geometric distribution with p = 0.75.
 // That is, returns k with probability p * (1 - p)^(k - 1).
 // For example, returns 1 with probability 3/4, returns 2 with probability 3/16,
@@ -136,10 +156,10 @@ class Node {
 }
 
 class SkipList {
-  constructor (randomSource) {
+  constructor (randomSource, blockLevel) {
     const head = new Node(null, null, 1, [], [null], [], [null])
     const random = randomSource ? randomSource() : randomLevel()
-    return makeInstance(0, Map().set(null, head), random)
+    return makeInstance(0, Map().set(null, head), random, blockLevel || BLOCK_LEVEL)
   }
 
   get headNode () {
@@ -230,7 +250,7 @@ class SkipList {
                               sucKeys.slice(0, newLevel),
                               preCounts.slice(0, newLevel),
                               sucCounts.slice(0, newLevel)))
-    }), this._randomSource)
+    }), this._randomSource, this._blockLevel)
   }
 
   insertIndex (index, key, value) {
@@ -275,7 +295,7 @@ class SkipList {
           sucLevel = level
         }
       }
-    }), this._randomSource)
+    }), this._randomSource, this._blockLevel)
   }
 
   removeIndex (index) {
@@ -326,7 +346,7 @@ class SkipList {
     if (!node) throw new RangeError('The referenced key does not exist')
 
     node = node.setValue(key, value)
-    return makeInstance(this.length, this._nodes.set(key, node), this._randomSource)
+    return makeInstance(this.length, this._nodes.set(key, node), this._randomSource, this._blockLevel)
   }
 
   iterator (mode) {
@@ -357,11 +377,12 @@ class SkipList {
   }
 }
 
-function makeInstance(length, nodes, randomSource) {
+function makeInstance(length, nodes, randomSource, blockLevel) {
   const instance = Object.create(SkipList.prototype)
   instance.length = length
   instance._nodes = nodes
   instance._randomSource = randomSource
+  instance._blockLevel = blockLevel
   return Object.freeze(instance)
 }
 
