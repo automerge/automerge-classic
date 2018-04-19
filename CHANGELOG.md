@@ -8,6 +8,11 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.3] — 2018-04-19
+
+### Changed
+
+- [#85]: Publish Babel-transpiled code to npm to improve compatibility ([@EthanRBrown])
 
 ## [0.7.2] — 2018-04-17
 
@@ -106,7 +111,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/automerge/automerge/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/automerge/automerge/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/automerge/automerge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/automerge/automerge/compare/v0.6.0...v0.7.0
@@ -118,6 +124,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#85]: https://github.com/automerge/automerge/pull/85
 [#84]: https://github.com/automerge/automerge/pull/84
 [#83]: https://github.com/automerge/automerge/pull/83
 [#78]: https://github.com/automerge/automerge/issues/78
