@@ -8,7 +8,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-## [0.7.4] — 2018-04-19
+## 0.7.4, [0.7.5] — 2018-04-19
 
 - Version bump to fix a build tooling issue
 
@@ -113,8 +113,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.4...HEAD
-[0.7.4]: https://github.com/automerge/automerge/compare/v0.7.3...v0.7.4
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/automerge/automerge/compare/v0.7.3...v0.7.5
 [0.7.3]: https://github.com/automerge/automerge/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/automerge/automerge/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/automerge/automerge/compare/v0.7.0...v0.7.1
