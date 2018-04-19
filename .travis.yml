@@ -17,10 +17,10 @@ jobs:
         sauce_connect: true
     - stage: deploy
       node_js: 9
-      script: yarn install
-      skip_cleanup: true
+      script: "yarn install && find && set"
       deploy:
         provider: npm
+        skip_cleanup: true
         email: martin@kleppmann.com
         api_key:
           secure: Z6gZZAaoKfJKPZyzhraqOQwkExo9v3d9/rSpOhZ/ZR4npXoiJiV5YT6G1jIgEcxlac0veoBQIuXm3G1TgtLQD9kcrpAI3GiWPr1i+KAE55ILDS6Q9c42KEAI99vIECGp/qp19qg9gqfsjlOrQ0cbbQz/AK0/XiE5qFJ5Bw4WKytJTGQqr9m6m73Ycq21VytVTH2TyP5AubWN1zmSc/1+/JxAkEVuS7TG1C+FOGuGtn6X4WL64mBjKVhG+ZCXhCXajinhTvSDKBGcvi1EBafwNKqMRbUhEZqy+8c/pYD0ICPj69i9mb+GRQPhq8Sn93KYRNXYQX1vYZVSH6PeYxMQXpNJXxobJjB7YMhBToJmaEUiyw8edhu0koxlmQMVHcARDAGvKxyzi6o6B4grzgiFlcgi2jeyoAH9eo/GvkoLd8tgA7JErelIjzagXUW0lIQ75GmpZcR8ivHTVUDC4EfsvkWmLGW15gmOHrZwaYHuYpYwKJ07F+UKBjnzdAxyIRk6ZJxCdiWsKK/bCRqTtTf1sf8GUjzgc8J3DM4ixO4ad9AaeUigeBWhpwaSVrC8pRKNVxacve5ehihDaGk3S1sINSDSiGIaPSHcyMrdeD9EAGdNmVLkXxT++N0lu3KZEG+guBX216FxIbRoQ7okuRkDZzlXOdRojh28MPEH2+S1Y3k=

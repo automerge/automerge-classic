@@ -7,7 +7,7 @@
     "browsertest": "karma start karma.conf.js",
     "test": "mocha",
     "build": "webpack",
-    "prepublishOnly": "webpack"
+    "prepublishOnly": "./node_modules/.bin/webpack"
   },
   "author": "",
   "license": "MIT",
