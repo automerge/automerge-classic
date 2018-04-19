@@ -397,11 +397,9 @@ function getObjectFields(opSet, objectId) {
     .keySeq()
     .filter(key => isFieldPresent(opSet, objectId, key))
     .toSet()
-    .add('_objectId')
 }
 
 function getObjectField(opSet, objectId, key, context) {
-  if (key === '_objectId') return objectId
   if (!validFieldName(key)) return undefined
   const ops = getFieldOps(opSet, objectId, key)
   if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)

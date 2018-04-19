@@ -8,9 +8,17 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+
+## [0.7.2] — 2018-04-17
+
+### Changed
+- [#83]: Changed `_objectId` property on Automerge map objects to be non-enumerable ([@EthanRBrown], [@ept])
+- [#84]: Changed `_conflicts`, `_state`, and `_actorId` to be non-enumerable properties ([@ept])
+
 ### Fixed
 - [#77]: Fixed exception when a list element is inserted and updated in the same change callback
   ([@mmcgrana], [@ept])
+- [#78]: Better error message when trying to use an unsupported datatype ([@ept])
 
 
 ## [0.7.1] — 2018-02-26
@@ -98,7 +106,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/automerge/automerge/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/automerge/automerge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/automerge/automerge/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/automerge/automerge/compare/v0.5.0...v0.6.0
@@ -109,6 +118,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#84]: https://github.com/automerge/automerge/pull/84
+[#83]: https://github.com/automerge/automerge/pull/83
+[#78]: https://github.com/automerge/automerge/issues/78
 [#77]: https://github.com/automerge/automerge/pull/77
 [#69]: https://github.com/automerge/automerge/pull/69
 [#64]: https://github.com/automerge/automerge/pull/64
@@ -128,6 +140,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#30]: https://github.com/automerge/automerge/pull/30
 
 [@aslakhellesoy]: https://github.com/aslakhellesoy
+[@EthanRBrown]: https://github.com/EthanRBrown
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept

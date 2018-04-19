@@ -11,7 +11,7 @@ describe('Automerge', () => {
     })
 
     it('should initially be an empty map', () => {
-      assert.deepEqual(s1, { _objectId: ROOT_ID })
+      assert.deepEqual(s1, {})
     })
 
     it('should not mutate objects', () => {
@@ -35,13 +35,11 @@ describe('Automerge', () => {
           assert.strictEqual(doc.first, 'one')
           doc.second = 'two'
           assert.deepEqual(doc, {
-            _objectId: ROOT_ID, first: 'one', second: 'two'
+            first: 'one', second: 'two'
           })
         })
-        assert.deepEqual(s1, {_objectId: ROOT_ID})
-        assert.deepEqual(s2, {
-          _objectId: ROOT_ID, first: 'one', second: 'two'
-        })
+        assert.deepEqual(s1, {})
+        assert.deepEqual(s2, {first: 'one', second: 'two'})
       })
 
       it('should prevent mutations outside of a change block', () => {
@@ -73,8 +71,8 @@ describe('Automerge', () => {
           doc.counter += 1
           assert.strictEqual(doc.counter, 3)
         })
-        assert.deepEqual(s1, {_objectId: ROOT_ID})
-        assert.deepEqual(s2, {_objectId: ROOT_ID, counter: 3})
+        assert.deepEqual(s1, {})
+        assert.deepEqual(s2, {counter: 3})
       })
 
       it('should not record conflicts when writing the same field several times within one change', () => {
@@ -108,8 +106,18 @@ describe('Automerge', () => {
           s2 = Automerge.change(s1, doc2 => doc2.two = 2)
           doc1.one = 1
         })
-        assert.deepEqual(s1, {_objectId: ROOT_ID, one: 1})
-        assert.deepEqual(s2, {_objectId: ROOT_ID, two: 2})
+        assert.deepEqual(s1, {one: 1})
+        assert.deepEqual(s2, {two: 2})
+      })
+
+      it('should work with Object.assign merges', () => {
+        s1 = Automerge.change(s1, doc1 => {
+          doc1.stuff = {foo: 'bar', baz: 'blur'}
+        })
+        s1 = Automerge.change(s1, doc1 => {
+          doc1.stuff = Object.assign({}, doc1.stuff, {baz: 'updated!'})
+        })
+        assert.deepEqual(s1, {stuff: {foo: 'bar', baz: 'updated!'}})
       })
     })
 
@@ -119,7 +127,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, 'set zap', doc => doc.zip = 'zap')
         assert.strictEqual(s1.foo, 'bar')
         assert.strictEqual(s1.zip, 'zap')
-        assert.deepEqual(s1, {_objectId: ROOT_ID, foo: 'bar', zip: 'zap'})
+        assert.deepEqual(s1, {foo: 'bar', zip: 'zap'})
       })
 
       it('should handle multi-property assignment', () => {
@@ -128,7 +136,7 @@ describe('Automerge', () => {
         })
         assert.strictEqual(s1.foo, 'bar')
         assert.strictEqual(s1.answer, 42)
-        assert.deepEqual(s1, {_objectId: ROOT_ID, foo: 'bar', answer: 42})
+        assert.deepEqual(s1, {foo: 'bar', answer: 42})
       })
 
       it('should handle root property deletion', () => {
@@ -136,7 +144,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, 'del foo', doc => { delete doc['foo'] })
         assert.strictEqual(s1.foo, undefined)
         assert.strictEqual(s1.something, null)
-        assert.deepEqual(s1, {_objectId: ROOT_ID, something: null})
+        assert.deepEqual(s1, {something: null})
       })
 
       it('should allow the type of a property to be changed', () => {
@@ -158,6 +166,15 @@ describe('Automerge', () => {
           Automerge.change(s1, 'foo', doc => doc['_foo'] = 'x')
         }, /Map entries starting with underscore are not allowed/)
       })
+
+      it('should not allow assignment of unsupported datatypes', () => {
+        Automerge.change(s1, doc => {
+          assert.throws(() => { doc.foo = undefined },         /Unsupported type of value: undefined/)
+          assert.throws(() => { doc.foo = {prop: undefined} }, /Unsupported type of value: undefined/)
+          assert.throws(() => { doc.foo = () => {} },          /Unsupported type of value: function/)
+          assert.throws(() => { doc.foo = Symbol('foo') },     /Unsupported type of value: symbol/)
+        })
+      })
     })
 
     describe('nested maps', () => {
@@ -165,11 +182,6 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => { doc.nested = {} })
         assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s1.nested._objectId))
         assert.notEqual(s1.nested._objectId, ROOT_ID)
-        assert.deepEqual(s1, {
-          _objectId: ROOT_ID,
-          nested: {_objectId: s1.nested._objectId}
-        })
-        assert.deepEqual(s1.nested, {_objectId: s1.nested._objectId})
       })
 
       it('should handle assignment of a nested property', () => {
@@ -180,11 +192,8 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, 'second change', doc => {
           doc.nested.one = 1
         })
-        assert.deepEqual(s1, {
-          _objectId: ROOT_ID,
-          nested: {_objectId: s1.nested._objectId, foo: 'bar', one: 1}
-        })
-        assert.deepEqual(s1.nested, {_objectId: s1.nested._objectId, foo: 'bar', one: 1})
+        assert.deepEqual(s1, {nested: {foo: 'bar', one: 1}})
+        assert.deepEqual(s1.nested, {foo: 'bar', one: 1})
         assert.strictEqual(s1.nested.foo, 'bar')
         assert.strictEqual(s1.nested['foo'], 'bar')
         assert.strictEqual(s1.nested.one, 1)
@@ -195,11 +204,8 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => {
           doc.textStyle = {bold: false, fontSize: 12}
         })
-        assert.deepEqual(s1, {
-          _objectId: ROOT_ID,
-          textStyle: {_objectId: s1.textStyle._objectId, bold: false, fontSize: 12}
-        })
-        assert.deepEqual(s1.textStyle, {_objectId: s1.textStyle._objectId, bold: false, fontSize: 12})
+        assert.deepEqual(s1, {textStyle: {bold: false, fontSize: 12}})
+        assert.deepEqual(s1.textStyle, {bold: false, fontSize: 12})
         assert.strictEqual(s1.textStyle.bold, false)
         assert.strictEqual(s1.textStyle.fontSize, 12)
       })
@@ -212,9 +218,7 @@ describe('Automerge', () => {
         assert.strictEqual(s1.textStyle.typeface, 'Optima')
         assert.strictEqual(s1.textStyle.bold, false)
         assert.strictEqual(s1.textStyle.fontSize, 14)
-        assert.deepEqual(s1.textStyle, {
-          _objectId: s1.textStyle._objectId, typeface: 'Optima', bold: false, fontSize: 14
-        })
+        assert.deepEqual(s1.textStyle, {typeface: 'Optima', bold: false, fontSize: 14})
       })
 
       it('should handle arbitrary-depth nesting', () => {
@@ -224,15 +228,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => {
           doc.a.b.c.d.e.f.i = 'j'
         })
-        assert.deepEqual(s1, {
-          _objectId: ROOT_ID, a: {
-            _objectId: s1.a._objectId, b: {
-              _objectId: s1.a.b._objectId, c: {
-                _objectId: s1.a.b.c._objectId, d: {
-                  _objectId: s1.a.b.c.d._objectId, e: {
-                    _objectId: s1.a.b.c.d.e._objectId, f: {
-                      _objectId: s1.a.b.c.d.e.f._objectId,
-                      g: 'h', i: 'j'}}}}}}})
+        assert.deepEqual(s1, {a: { b: { c: { d: { e: { f: { g: 'h', i: 'j'}}}}}}})
         assert.strictEqual(s1.a.b.c.d.e.f.g, 'h')
         assert.strictEqual(s1.a.b.c.d.e.f.i, 'j')
       })
@@ -245,12 +241,12 @@ describe('Automerge', () => {
           doc.myPet = {species: 'koi', variety: '紅白', colors: {red: true, white: true, black: false}}
         })
         assert.deepEqual(s1.myPet, {
-          _objectId: s1.myPet._objectId, species: 'dog', legs: 4, breed: 'dachshund'
+          species: 'dog', legs: 4, breed: 'dachshund'
         })
         assert.strictEqual(s1.myPet.breed, 'dachshund')
         assert.deepEqual(s2.myPet, {
-          _objectId: s2.myPet._objectId, species: 'koi', variety: '紅白',
-          colors: {_objectId: s2.myPet.colors._objectId, red: true, white: true, black: false}
+          species: 'koi', variety: '紅白',
+          colors: {red: true, white: true, black: false}
         })
         assert.strictEqual(s2.myPet.breed, undefined)
         assert.strictEqual(s2.myPet.variety, '紅白')
@@ -260,7 +256,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.color = '#ff7f00')
         assert.strictEqual(s1.color, '#ff7f00')
         s1 = Automerge.change(s1, doc => doc.color = {red: 255, green: 127, blue: 0})
-        assert.deepEqual(s1.color, {_objectId: s1.color._objectId, red: 255, green: 127, blue: 0})
+        assert.deepEqual(s1.color, {red: 255, green: 127, blue: 0})
         s1 = Automerge.change(s1, doc => doc.color = '#ff7f00')
         assert.strictEqual(s1.color, '#ff7f00')
       })
@@ -282,7 +278,7 @@ describe('Automerge', () => {
         })
         s1 = Automerge.change(s1, 'non-bold', doc => delete doc.textStyle['bold'])
         assert.strictEqual(s1.textStyle.bold, undefined)
-        assert.deepEqual(s1.textStyle, {_objectId: s1.textStyle._objectId, typeface: 'Optima', fontSize: 12})
+        assert.deepEqual(s1.textStyle, {typeface: 'Optima', fontSize: 12})
       })
 
       it('should handle deletion of references to a map', () => {
@@ -291,7 +287,7 @@ describe('Automerge', () => {
         })
         s1 = Automerge.change(s1, doc => delete doc['textStyle'])
         assert.strictEqual(s1.textStyle, undefined)
-        assert.deepEqual(s1, {_objectId: ROOT_ID, title: 'Hello'})
+        assert.deepEqual(s1, {title: 'Hello'})
       })
 
       it('should validate field names', () => {
@@ -308,7 +304,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = [])
         s1 = Automerge.change(s1, doc => doc.noodles.insertAt(0, 'udon', 'soba'))
         s1 = Automerge.change(s1, doc => doc.noodles.insertAt(1, 'ramen'))
-        assert.deepEqual(s1, {_objectId: ROOT_ID, noodles: ['udon', 'ramen', 'soba']})
+        assert.deepEqual(s1, {noodles: ['udon', 'ramen', 'soba']})
         assert.deepEqual(s1.noodles, ['udon', 'ramen', 'soba'])
         assert.strictEqual(s1.noodles[0], 'udon')
         assert.strictEqual(s1.noodles[1], 'ramen')
@@ -318,7 +314,7 @@ describe('Automerge', () => {
 
       it('should handle assignment of a list literal', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
-        assert.deepEqual(s1, {_objectId: ROOT_ID, noodles: ['udon', 'ramen', 'soba']})
+        assert.deepEqual(s1, {noodles: ['udon', 'ramen', 'soba']})
         assert.deepEqual(s1.noodles, ['udon', 'ramen', 'soba'])
         assert.strictEqual(s1.noodles[0], 'udon')
         assert.strictEqual(s1.noodles[1], 'ramen')
@@ -390,15 +386,15 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = [{type: 'ramen', dishes: ['tonkotsu', 'shoyu']}])
         s1 = Automerge.change(s1, doc => doc.noodles.push({type: 'udon', dishes: ['tempura udon']}))
         s1 = Automerge.change(s1, doc => doc.noodles[0].dishes.push('miso'))
-        assert.deepEqual(s1, {_objectId: ROOT_ID, noodles: [
-          {_objectId: s1.noodles[0]._objectId, type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']},
-          {_objectId: s1.noodles[1]._objectId, type: 'udon', dishes: ['tempura udon']}
+        assert.deepEqual(s1, {noodles: [
+          {type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']},
+          {type: 'udon', dishes: ['tempura udon']}
         ]})
         assert.deepEqual(s1.noodles[0], {
-          _objectId: s1.noodles[0]._objectId, type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']
+          type: 'ramen', dishes: ['tonkotsu', 'shoyu', 'miso']
         })
         assert.deepEqual(s1.noodles[1], {
-          _objectId: s1.noodles[1]._objectId, type: 'udon', dishes: ['tempura udon']
+          type: 'udon', dishes: ['tempura udon']
         })
       })
 
@@ -416,7 +412,6 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.japaneseNoodles = doc.noodles)
         s1 = Automerge.change(s1, doc => doc.noodles = ['wonton', 'pho'])
         assert.deepEqual(s1, {
-          _objectId: ROOT_ID,
           noodles: ['wonton', 'pho'],
           japaneseNoodles: ['udon', 'soba', 'ramen']
         })
@@ -431,7 +426,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = ['udon', 'soba', 'ramen'])
         assert.deepEqual(s1.noodles, ['udon', 'soba', 'ramen'])
         s1 = Automerge.change(s1, doc => doc.noodles[1] = {type: 'soba', options: ['hot', 'cold']})
-        assert.deepEqual(s1.noodles, ['udon', {_objectId: s1.noodles[1]._objectId, type: 'soba', options: ['hot', 'cold']}, 'ramen'])
+        assert.deepEqual(s1.noodles, ['udon', {type: 'soba', options: ['hot', 'cold']}, 'ramen'])
         s1 = Automerge.change(s1, doc => doc.noodles[1] = ['hot soba', 'cold soba'])
         assert.deepEqual(s1.noodles, ['udon', ['hot soba', 'cold soba'], 'ramen'])
         s1 = Automerge.change(s1, doc => doc.noodles[1] = 'soba is the best')
@@ -458,7 +453,6 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.theBestNoodles = doc.japaneseNoodles)
         s1 = Automerge.change(s1, doc => doc.theBestNoodles.push('ramen'))
         assert.deepEqual(s1, {
-          _objectId: ROOT_ID,
           japaneseNoodles: ['udon', 'soba', 'ramen'],
           theBestNoodles: ['udon', 'soba', 'ramen']
         })
@@ -484,7 +478,7 @@ describe('Automerge', () => {
       s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.foo, 'bar')
       assert.strictEqual(s3.hello, 'world')
-      assert.deepEqual(s3, {_objectId: ROOT_ID, foo: 'bar', hello: 'world' })
+      assert.deepEqual(s3, {foo: 'bar', hello: 'world' })
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -493,10 +487,10 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = 'two')
       s3 = Automerge.merge(s1, s2)
       if (s1._actorId > s2._actorId) {
-        assert.deepEqual(s3, {_objectId: ROOT_ID, field: 'one'})
+        assert.deepEqual(s3, {field: 'one'})
         assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: 'two'}})
       } else {
-        assert.deepEqual(s3, {_objectId: ROOT_ID, field: 'two'})
+        assert.deepEqual(s3, {field: 'two'})
         assert.deepEqual(s3._conflicts, {field: {[s1._actorId]: 'one'}})
       }
     })
@@ -521,12 +515,12 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = ['list'])
       s3 = Automerge.change(s3, doc => doc.field = {thing: 'map'})
       s1 = Automerge.merge(Automerge.merge(s1, s2), s3)
-      equalsOneOf(s1.field, 'string', ['list'], {_objectId: s3.field._objectId, thing: 'map'})
+      equalsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
       if (s1.field === 'string') {
-        assert.deepEqual(s1._conflicts, {field: {[s2._actorId]: ['list'], [s3._actorId]: {_objectId: s3.field._objectId, thing: 'map'}}})
+        assert.deepEqual(s1._conflicts, {field: {[s2._actorId]: ['list'], [s3._actorId]: {thing: 'map'}}})
       } else if (Automerge.equals(s1.field, ['list'])) {
-        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s3._actorId]: {_objectId: s3.field._objectId, thing: 'map'}}})
-      } else if (Automerge.equals(s1.field, {_objectId: s3.field._objectId, thing: 'map'})) {
+        assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s3._actorId]: {thing: 'map'}}})
+      } else if (Automerge.equals(s1.field, {thing: 'map'})) {
         assert.deepEqual(s1._conflicts, {field: {[s1._actorId]: 'string', [s2._actorId]: ['list']}})
       } else {
         assert.fail(s1.field, 'string or list or map', 'not one of the expected values')
@@ -538,9 +532,9 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = {})
       s2 = Automerge.change(s2, doc => doc.field.innerKey = 42)
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.field, 'string', {_objectId: s2.field._objectId, innerKey: 42})
+      equalsOneOf(s3.field, 'string', {innerKey: 42})
       if (s3.field === 'string') {
-        assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: {_objectId: s2.field._objectId, innerKey: 42}}})
+        assert.deepEqual(s3._conflicts, {field: {[s2._actorId]: {innerKey: 42}}})
       } else {
         assert.deepEqual(s3._conflicts, {field: {[s1._actorId]: 'string'}})
       }
@@ -555,11 +549,11 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.list[0].key = 2)
       s3 = Automerge.merge(s1, s2)
       if (s1._actorId > s2._actorId) {
-        assert.deepEqual(s3.list, [{_objectId: s1.list[0]._objectId, map1: true, key: 1}])
-        assert.deepEqual(s3.list._conflicts, [{[s2._actorId]: {_objectId: s2.list[0]._objectId, map2: true, key: 2}}])
+        assert.deepEqual(s3.list, [{map1: true, key: 1}])
+        assert.deepEqual(s3.list._conflicts, [{[s2._actorId]: {map2: true, key: 2}}])
       } else {
-        assert.deepEqual(s3.list, [{_objectId: s2.list[0]._objectId, map2: true, key: 2}])
-        assert.deepEqual(s3.list._conflicts, [{[s1._actorId]: {_objectId: s1.list[0]._objectId, map1: true, key: 1}}])
+        assert.deepEqual(s3.list, [{map2: true, key: 2}])
+        assert.deepEqual(s3.list._conflicts, [{[s1._actorId]: {map1: true, key: 1}}])
       }
     })
 
@@ -568,13 +562,13 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.config = {logo_url: 'logo.png'})
       s3 = Automerge.merge(s1, s2)
       equalsOneOf(s3.config,
-        {_objectId: s1.config._objectId, background: 'blue'},
-        {_objectId: s2.config._objectId, logo_url: 'logo.png'}
+        {background: 'blue'},
+        {logo_url: 'logo.png'}
       )
       if (s3.config.background === 'blue') {
-        assert.deepEqual(s3._conflicts.config, {[s2._actorId]: {_objectId: s2.config._objectId, logo_url: 'logo.png'}})
+        assert.deepEqual(s3._conflicts.config, {[s2._actorId]: {logo_url: 'logo.png'}})
       } else {
-        assert.deepEqual(s3._conflicts.config, {[s1._actorId]: {_objectId: s1.config._objectId, background: 'blue'}})
+        assert.deepEqual(s3._conflicts.config, {[s1._actorId]: {background: 'blue'}})
       }
     })
 
@@ -583,10 +577,10 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = 'two')
       s3 = Automerge.merge(s1, s2)
       s3 = Automerge.change(s3, doc => doc.field = 'three')
-      assert.deepEqual(s3, {_objectId: ROOT_ID, field: 'three'})
+      assert.deepEqual(s3, {field: 'three'})
       assert.deepEqual(s3._conflicts, {})
       s2 = Automerge.merge(s2, s3)
-      assert.deepEqual(s2, {_objectId: ROOT_ID, field: 'three'})
+      assert.deepEqual(s2, {field: 'three'})
       assert.deepEqual(s2._conflicts, {})
     })
 
@@ -596,10 +590,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.list.splice(1, 0, 'two'))
       s2 = Automerge.change(s2, doc => doc.list.push('four'))
       s3 = Automerge.merge(s1, s2)
-      assert.deepEqual(s3, {
-        _objectId: ROOT_ID,
-        list: ['one', 'two', 'three', 'four']
-      })
+      assert.deepEqual(s3, {list: ['one', 'two', 'three', 'four']})
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -621,9 +612,9 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => delete doc['bestBird'])
       s2 = Automerge.change(s2, doc => doc.bestBird = 'magpie')
       s3 = Automerge.merge(s1, s2)
-      assert.deepEqual(s1, {_objectId: ROOT_ID})
-      assert.deepEqual(s2, {_objectId: ROOT_ID, bestBird: 'magpie'})
-      assert.deepEqual(s3, {_objectId: ROOT_ID, bestBird: 'magpie'})
+      assert.deepEqual(s1, {})
+      assert.deepEqual(s2, {bestBird: 'magpie'})
+      assert.deepEqual(s3, {bestBird: 'magpie'})
       assert.deepEqual(s3._conflicts, {})
     })
 
@@ -648,15 +639,13 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => delete doc.animals['birds'])
       s3 = Automerge.merge(s1, s2)
       assert.deepEqual(s1.animals, {
-        _objectId: s1.animals._objectId,
         birds: {
-          _objectId: s1.animals.birds._objectId,
           pink: 'flamingo', brown: 'sparrow', black: 'starling'
         },
         mammals: ['badger']
       })
-      assert.deepEqual(s2.animals, {_objectId: s1.animals._objectId, mammals: ['badger']})
-      assert.deepEqual(s3.animals, {_objectId: s1.animals._objectId, mammals: ['badger']})
+      assert.deepEqual(s2.animals, {mammals: ['badger']})
+      assert.deepEqual(s3.animals, {mammals: ['badger']})
     })
 
     it('should not interleave sequence insertions at the same position', () => {
@@ -713,7 +702,7 @@ describe('Automerge', () => {
   describe('saving and laoding', () => {
     it('should save and restore an empty document', () => {
       let s = Automerge.load(Automerge.save(Automerge.init()))
-      assert.deepEqual(s, {_objectId: ROOT_ID})
+      assert.deepEqual(s, {})
     })
 
     it('should generate a new random actor ID', () => {
@@ -732,9 +721,7 @@ describe('Automerge', () => {
     it('should reconstitute complex datatypes', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.todos = [{title: 'water plants', done: false}])
       let s2 = Automerge.load(Automerge.save(s1))
-      assert.deepEqual(s2, {_objectId: ROOT_ID, todos: [
-        {title: 'water plants', done: false, _objectId: s1.todos[0]._objectId}
-      ]})
+      assert.deepEqual(s2, {todos: [{title: 'water plants', done: false}]})
     })
 
     it('should reconstitute conflicts', () => {
@@ -768,13 +755,10 @@ describe('Automerge', () => {
       s = Automerge.change(s, doc => doc.birds = ['mallard'])
       s = Automerge.change(s, doc => doc.birds.unshift('oystercatcher'))
       assert.deepEqual(Automerge.getHistory(s).map(state => state.snapshot), [
-                       {_objectId: ROOT_ID,
-                        config: {_objectId: s.config._objectId, background: 'blue'}},
-                       {_objectId: ROOT_ID,
-                        config: {_objectId: s.config._objectId, background: 'blue'},
+                       {config: {background: 'blue'}},
+                       {config: {background: 'blue'},
                         birds: ['mallard']},
-                       {_objectId: ROOT_ID,
-                        config: {_objectId: s.config._objectId, background: 'blue'},
+                       {config: {background: 'blue'},
                         birds: ['oystercatcher', 'mallard']}])
     })
 
@@ -896,7 +880,7 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.birds.push('Bullfinch'))
       let changes = Automerge.getChanges(Automerge.init(), s2)
       let s3 = Automerge.applyChanges(Automerge.init(), [changes[1]])
-      assert.deepEqual(s3, {_objectId: ROOT_ID})
+      assert.deepEqual(s3, {})
       assert.deepEqual(Automerge.getMissingDeps(s3), {[s1._actorId]: 1})
       s3 = Automerge.applyChanges(s3, [changes[0]])
       assert.deepEqual(s3.birds, ['Chaffinch', 'Bullfinch'])

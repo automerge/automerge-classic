@@ -211,9 +211,9 @@ describe('Automerge.Connection', () => {
     ])
 
     assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {_objectId: doc1._objectId, doc1: 'doc1', one: 'one', two: 'two'})
+                     {doc1: 'doc1', one: 'one', two: 'two'})
     assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {_objectId: doc1._objectId, doc1: 'doc1', one: 'one', two: 'two'})
+                     {doc1: 'doc1', one: 'one', two: 'two'})
   })
 
   it('should forward incoming changes to other connections', () => {
@@ -302,8 +302,8 @@ describe('Automerge.Connection', () => {
       }}
     ])
 
-    assert.deepEqual(nodes[1].getDoc('doc1'), {_objectId: doc1._objectId, list: ['hello']})
-    assert.deepEqual(nodes[2].getDoc('doc1'), {_objectId: doc1._objectId, list: ['hello']})
-    assert.deepEqual(nodes[3].getDoc('doc1'), {_objectId: doc1._objectId, list: ['hello']})
+    assert.deepEqual(nodes[1].getDoc('doc1'), {list: ['hello']})
+    assert.deepEqual(nodes[2].getDoc('doc1'), {list: ['hello']})
+    assert.deepEqual(nodes[3].getDoc('doc1'), {list: ['hello']})
   })
 })
