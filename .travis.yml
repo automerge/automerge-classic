@@ -17,7 +17,7 @@ jobs:
         sauce_connect: true
     - stage: deploy
       node_js: 9
-      script: "yarn install && find && set"
+      script: yarn install
       deploy:
         provider: npm
         skip_cleanup: true
