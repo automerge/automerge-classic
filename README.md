@@ -72,18 +72,16 @@ and merging**:
 
 ## Setup
 
-If you're in Node.js, you can install Automerge through npm:
-
-    $ npm install --save automerge
-
+If you're using npm, `npm install automerge`.
+If you're using yarn, `yarn add automerge`.
 Then you can import it with `require('automerge')` as in the example below.
 
 Otherwise, clone this repository, and then you can use the following commands:
 
-* `npm install` — installs dependencies.
-* `npm test` — runs the test suite in Node.
-* `npm run browsertest` — runs the test suite in web browsers.
-* `npm run webpack` — creates a bundled JS file `dist/automerge.js` for web browsers.
+* `yarn install` — installs dependencies.
+* `yarn test` — runs the test suite in Node.
+* `yarn run browsertest` — runs the test suite in web browsers.
+* `yarn build` — creates a bundled JS file `dist/automerge.js` for web browsers.
   It includes the dependencies and is set up so that you can load through a script tag.
 
 
