@@ -1,7 +1,7 @@
 var path = require('path');
 
 module.exports = {
-  entry: ['babel-polyfill', './src/automerge.js'],
+  entry: ['idempotent-babel-polyfill', './src/automerge.js'],
   output: {
     filename: 'automerge.js',
     library: 'Automerge',
