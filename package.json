@@ -12,7 +12,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "babel-polyfill": "^6.26.0",
+    "idempotent-babel-polyfill": "^0.1.1",
     "immutable": "^3.8.2",
     "transit-immutable-js": "^0.7.0",
     "transit-js": "^0.8.861",
