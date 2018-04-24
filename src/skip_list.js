@@ -307,22 +307,17 @@ class SkipList {
     // NOTE: this method used to be a generator; it has been converted to a regular
     // method (that mimics the interface of a generator) to avoid having to include
     // generator polyfills in the distribution build.
-    let key = this._nodes.get(null).nextKey[0]
+    const nodes = this._nodes
+    let key = nodes.get(null).nextKey[0]
     return {
-      next: () => {
-        if(!key) return { value: undefined, done: true }
-        const node = this._nodes.get(key)
+      next () {
+        if (!key) return { value: undefined, done: true }
+        const node = nodes.get(key)
         let rval = undefined
         switch (mode) {
-          case 'keys':
-            rval = { value: key, done: false }
-            break
-          case 'values':
-            rval = { value: this._nodes.get(key).value, done: false }
-            break
-          case 'entries':
-            rval = { value: [key, node.value], done: false }
-            break
+          case 'keys':    rval = {value: key,               done: false}; break
+          case 'values':  rval = {value: node.value,        done: false}; break
+          case 'entries': rval = {value: [key, node.value], done: false}; break
         }
         key = node.nextKey[0]
         return rval
