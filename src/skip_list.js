@@ -4,12 +4,17 @@ const { Map } = require('immutable')
 // That is, returns k with probability p * (1 - p)^(k - 1).
 // For example, returns 1 with probability 3/4, returns 2 with probability 3/16,
 // returns 3 with probability 3/64, and so on.
-function* randomLevel() {
-  while (true) {
-    const rand = Math.floor(Math.random() * 4294967296)
-    let level = 1
-    while (rand < 1 << (32 - 2 * level) && level < 16) level += 1
-    yield level
+function randomLevel() {
+  // NOTE: this function used to be a generator; it has been converted to a regular
+  // function (that mimics the interface of a generator) to avoid having to include
+  // generator polyfills in the distribution build.
+  return {
+    next() {
+      const rand = Math.floor(Math.random() * 4294967296)
+      let level = 1
+      while (rand < 1 << (32 - 2 * level) && level < 16) level += 1
+      return { value: level, done: false }
+    }
   }
 }
 
@@ -298,16 +303,26 @@ class SkipList {
     return makeInstance(this.length, this._nodes.set(key, node), this._randomSource)
   }
 
-  *iterator (mode) {
-    let key = this._nodes.get(null).nextKey[0]
-    while (key) {
-      const node = this._nodes.get(key)
-      switch (mode) {
-        case 'keys':    yield key; break;
-        case 'values':  yield node.value; break;
-        case 'entries': yield [key, node.value]; break;
-      }
-      key = node.nextKey[0]
+  iterator (mode) {
+    // NOTE: this method used to be a generator; it has been converted to a regular
+    // method (that mimics the interface of a generator) to avoid having to include
+    // generator polyfills in the distribution build.
+    const nodes = this._nodes
+    let key = nodes.get(null).nextKey[0]
+    return {
+      next () {
+        if (!key) return { value: undefined, done: true }
+        const node = nodes.get(key)
+        let rval = undefined
+        switch (mode) {
+          case 'keys':    rval = {value: key,               done: false}; break
+          case 'values':  rval = {value: node.value,        done: false}; break
+          case 'entries': rval = {value: [key, node.value], done: false}; break
+        }
+        key = node.nextKey[0]
+        return rval
+      },
+      [Symbol.iterator]: () => this.iterator(mode),
     }
   }
 
