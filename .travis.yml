@@ -2,7 +2,6 @@ language: node_js
 node_js:
 - '8'
 - '9'
-- '10'
 script: 'yarn test && yarn build && TEST_DIST=1 yarn test'
 jobs:
   include:
