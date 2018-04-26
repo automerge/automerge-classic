@@ -1,7 +1,7 @@
 const assert = require('assert')
 const sinon = require('sinon')
 const Immutable = require('immutable')
-const Automerge = require('../src/automerge')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
 describe('Automerge.initImmutable()', () => {
   let beforeDoc, afterDoc, appliedDoc, appliedDoc2, changes
@@ -14,12 +14,17 @@ describe('Automerge.initImmutable()', () => {
     appliedDoc2 = Automerge.applyChanges(appliedDoc, changes)
   })
 
-  it('Uses Immutable.Map', () => {
-    assert(beforeDoc instanceof Immutable.Map)
-    assert(afterDoc instanceof Immutable.Map)
-    assert(appliedDoc instanceof Immutable.Map)
-    assert(appliedDoc2 instanceof Immutable.Map)
-  })
+  if (process.env.TEST_DIST !== '1') {
+    // This test is disabled when running the tests against ../dist/automerge.js, because
+    // the Immutable object we import above is a different instance of the Immutable.js
+    // library compared to the one that is bundled inside ../dist/automerge.js.
+    it('Uses Immutable.Map', () => {
+      assert(beforeDoc instanceof Immutable.Map)
+      assert(afterDoc instanceof Immutable.Map)
+      assert(appliedDoc instanceof Immutable.Map)
+      assert(appliedDoc2 instanceof Immutable.Map)
+    })
+  }
 
   it('applies changes', () => {
     assert.equal(Automerge.save(appliedDoc), Automerge.save(afterDoc))

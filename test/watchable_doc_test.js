@@ -1,6 +1,6 @@
 const assert = require('assert')
 const sinon = require('sinon')
-const Automerge = require('../src/automerge')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const WatchableDoc = Automerge.WatchableDoc
 
 describe('Automerge.WatchableDoc', () => {

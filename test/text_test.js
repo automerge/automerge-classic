@@ -1,5 +1,5 @@
 const assert = require('assert')
-const Automerge = require('../src/automerge')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { equalsOneOf } = require('./helpers')
 
 describe('Automerge.Text', () => {
