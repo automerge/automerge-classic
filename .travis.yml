@@ -18,7 +18,7 @@ jobs:
       addons:
         sauce_connect: true
     - stage: deploy
-      node_js: 9
+      node_js: 10
       script: yarn install
       deploy:
         provider: npm
