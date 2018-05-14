@@ -258,17 +258,8 @@ function init() {
 }
 
 function addLocalOp(opSet, op, actor) {
-  const objectId = op.get('obj'), action = op.get('action'), key = op.get('key')
-  let ops = opSet.get('local')
-
-  // Override any prior assignment operations for the same object and key
-  if (action === 'set' || action === 'del' || action === 'link') {
-    ops = ops.filter(prev =>
-      prev.get('obj') != objectId || prev.get('key') != key ||
-      (prev.get('action') !== 'set' && prev.get('action') !== 'del' && prev.get('action') !== 'link'))
-  }
-  ops = ops.push(op)
-  return applyOp(opSet.set('local', ops), op.set('actor', actor))
+  opSet = opSet.update('local', ops => ops.push(op))
+  return applyOp(opSet, op.set('actor', actor))
 }
 
 function addChange(opSet, change) {
