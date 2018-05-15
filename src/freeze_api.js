@@ -6,41 +6,38 @@ function isObject(obj) {
   return typeof obj === 'object' && obj !== null
 }
 
-function updateMapObject(opSet, edit) {
-  if (edit.action === 'create') {
-    const object = {}
-    Object.defineProperty(object, '_objectId',  {value: edit.obj})
-    Object.defineProperty(object, '_conflicts', {value: Object.freeze({})})
-    Object.freeze(object)
-    return opSet.setIn(['cache', edit.obj], object)
-  }
-
-  const oldObject = opSet.getIn(['cache', edit.obj])
-  const conflicts = Object.assign({}, oldObject._conflicts)
+function updateMapObject(opSet, diffs) {
+  const objectId = diffs[0].obj
+  const oldObject = opSet.getIn(['cache', objectId])
+  const conflicts = Object.assign({}, isObject(oldObject) ? oldObject._conflicts : undefined)
   const object = Object.assign({}, oldObject)
-  Object.defineProperty(object, '_objectId',  {value: oldObject._objectId})
+  Object.defineProperty(object, '_objectId',  {value: objectId})
   Object.defineProperty(object, '_conflicts', {value: conflicts})
 
-  if (edit.action === 'set') {
-    object[edit.key] = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
-    if (edit.conflicts) {
-      conflicts[edit.key] = {}
-      for (let conflict of edit.conflicts) {
-        const value = conflict.link ? opSet.getIn(['cache', conflict.value]) : conflict.value
-        conflicts[edit.key][conflict.actor] = value
+  for (let edit of diffs) {
+    if (edit.action === 'create') {
+      // do nothing
+    } else if (edit.action === 'set') {
+      object[edit.key] = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
+      if (edit.conflicts) {
+        conflicts[edit.key] = {}
+        for (let conflict of edit.conflicts) {
+          const value = conflict.link ? opSet.getIn(['cache', conflict.value]) : conflict.value
+          conflicts[edit.key][conflict.actor] = value
+        }
+        Object.freeze(conflicts[edit.key])
+      } else {
+        delete conflicts[edit.key]
       }
-      Object.freeze(conflicts[edit.key])
-    } else {
+    } else if (edit.action === 'remove') {
+      delete object[edit.key]
       delete conflicts[edit.key]
-    }
-  } else if (edit.action === 'remove') {
-    delete object[edit.key]
-    delete conflicts[edit.key]
-  } else throw 'Unknown action type: ' + edit.action
+    } else throw 'Unknown action type: ' + edit.action
+  }
 
   Object.freeze(conflicts)
-  if (edit.obj !== OpSet.ROOT_ID) Object.freeze(object)
-  return opSet.setIn(['cache', edit.obj], object)
+  if (objectId !== OpSet.ROOT_ID) Object.freeze(object)
+  return opSet.setIn(['cache', objectId], object)
 }
 
 function parentMapObject(opSet, ref) {
@@ -76,43 +73,41 @@ function parentMapObject(opSet, ref) {
   return opSet
 }
 
-function updateListObject(opSet, edit) {
-  if (edit.action === 'create') {
-    let list = []
-    Object.defineProperty(list, '_objectId',  {value: edit.obj})
-    Object.defineProperty(list, '_conflicts', {value: Object.freeze([])})
-    return opSet.setIn(['cache', edit.obj], Object.freeze(list))
-  }
-
-  let conflict = null
-  if (edit.conflicts) {
-    conflict = {}
-    for (let c of edit.conflicts) {
-      conflict[c.actor] = c.link ? opSet.getIn(['cache', c.value]) : c.value
-    }
-    Object.freeze(conflict)
-  }
-
-  let list = opSet.getIn(['cache', edit.obj])
-  const value = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
-  const conflicts = list._conflicts.slice()
-  list = list.slice() // shallow clone
-  Object.defineProperty(list, '_objectId',  {value: edit.obj})
+function updateListObject(opSet, diffs) {
+  const objectId = diffs[0].obj
+  const oldList = opSet.getIn(['cache', objectId])
+  const list = oldList ? oldList.slice() : [] // slice() makes a shallow clone
+  const conflicts = (oldList && oldList._conflicts) ? oldList._conflicts.slice() : []
+  Object.defineProperty(list, '_objectId',  {value: objectId})
   Object.defineProperty(list, '_conflicts', {value: conflicts})
 
-  if (edit.action === 'insert') {
-    list.splice(edit.index, 0, value)
-    conflicts.splice(edit.index, 0, conflict)
-  } else if (edit.action === 'set') {
-    list[edit.index] = value
-    conflicts[edit.index] = conflict
-  } else if (edit.action === 'remove') {
-    list.splice(edit.index, 1)
-    conflicts.splice(edit.index, 1)
-  } else throw 'Unknown action type: ' + edit.action
+  for (let edit of diffs) {
+    const value = edit.link ? opSet.getIn(['cache', edit.value]) : edit.value
+    let conflict = null
+    if (edit.conflicts) {
+      conflict = {}
+      for (let c of edit.conflicts) {
+        conflict[c.actor] = c.link ? opSet.getIn(['cache', c.value]) : c.value
+      }
+      Object.freeze(conflict)
+    }
+
+    if (edit.action === 'create') {
+      // do nothing
+    } else if (edit.action === 'insert') {
+      list.splice(edit.index, 0, value)
+      conflicts.splice(edit.index, 0, conflict)
+    } else if (edit.action === 'set') {
+      list[edit.index] = value
+      conflicts[edit.index] = conflict
+    } else if (edit.action === 'remove') {
+      list.splice(edit.index, 1)
+      conflicts.splice(edit.index, 1)
+    } else throw 'Unknown action type: ' + edit.action
+  }
 
   Object.freeze(conflicts)
-  return opSet.setIn(['cache', edit.obj], Object.freeze(list))
+  return opSet.setIn(['cache', objectId], Object.freeze(list))
 }
 
 function parentListObject(opSet, ref) {
@@ -151,16 +146,22 @@ function parentListObject(opSet, ref) {
 }
 
 function updateCache(opSet, diffs) {
-  let affected = Set()
-  for (let edit of diffs) {
-    affected = affected.add(edit.obj)
-    if (edit.type === 'map') {
-      opSet = updateMapObject(opSet, edit)
-    } else if (edit.type === 'list') {
-      opSet = updateListObject(opSet, edit)
-    } else if (edit.type === 'text') {
-      opSet = opSet.setIn(['cache', edit.obj], new Text(opSet, edit.obj))
-    } else throw 'Unknown object type: ' + edit.type
+  let affected = Set(), lastIndex = -1
+  // Group consecutive runs of diffs for the same object into a single cache update
+  for (let i = 0; i < diffs.length; i++) {
+    if ((i === diffs.length - 1) || (diffs[i + 1].obj !== diffs[i].obj)) {
+      const slice = diffs.slice(lastIndex + 1, i + 1)
+      lastIndex = i
+      if (!affected.includes(slice[0].obj)) affected = affected.add(slice[0].obj)
+
+      if (slice[0].type === 'map') {
+        opSet = updateMapObject(opSet, slice)
+      } else if (slice[0].type === 'list') {
+        opSet = updateListObject(opSet, slice)
+      } else if (slice[0].type === 'text') {
+        opSet = opSet.setIn(['cache', slice[0].obj], new Text(opSet, slice[0].obj))
+      } else throw 'Unknown object type: ' + slice[0].type
+    }
   }
 
   // Update cache entries on the path from the root to the modified object
