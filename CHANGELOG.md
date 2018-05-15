@@ -8,6 +8,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.8] — 2018-05-15
+
+- [#91]: Improve performance of changes that modify many list or map elements ([@ept])
+
 ## [0.7.7] — 2018-04-24
 
 - [#87]: Remove babel-polyfill from transpiled library ([@EthanRBrown])
@@ -117,7 +121,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.7...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.8...HEAD
+[0.7.8]: https://github.com/automerge/automerge/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/automerge/automerge/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/automerge/automerge/compare/v0.7.3...v0.7.6
 [0.7.3]: https://github.com/automerge/automerge/compare/v0.7.2...v0.7.3
@@ -132,6 +137,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#91]: https://github.com/automerge/automerge/pull/91
 [#87]: https://github.com/automerge/automerge/pull/87
 [#85]: https://github.com/automerge/automerge/pull/85
 [#84]: https://github.com/automerge/automerge/pull/84
