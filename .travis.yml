@@ -19,13 +19,16 @@ jobs:
         sauce_connect: true
     - stage: deploy
       node_js: 10
+      # The script is run before the deploy. As the Travis npm deploy job does not automatically
+      # install dependencies, we need to do `yarn install` here first, so that the prepublishOnly
+      # script can build the transpiled JavaScript. The deploy stage is run only on tagged commits.
       script: yarn install
       deploy:
         provider: npm
         skip_cleanup: true
         email: martin@kleppmann.com
         api_key:
-          secure: Z6gZZAaoKfJKPZyzhraqOQwkExo9v3d9/rSpOhZ/ZR4npXoiJiV5YT6G1jIgEcxlac0veoBQIuXm3G1TgtLQD9kcrpAI3GiWPr1i+KAE55ILDS6Q9c42KEAI99vIECGp/qp19qg9gqfsjlOrQ0cbbQz/AK0/XiE5qFJ5Bw4WKytJTGQqr9m6m73Ycq21VytVTH2TyP5AubWN1zmSc/1+/JxAkEVuS7TG1C+FOGuGtn6X4WL64mBjKVhG+ZCXhCXajinhTvSDKBGcvi1EBafwNKqMRbUhEZqy+8c/pYD0ICPj69i9mb+GRQPhq8Sn93KYRNXYQX1vYZVSH6PeYxMQXpNJXxobJjB7YMhBToJmaEUiyw8edhu0koxlmQMVHcARDAGvKxyzi6o6B4grzgiFlcgi2jeyoAH9eo/GvkoLd8tgA7JErelIjzagXUW0lIQ75GmpZcR8ivHTVUDC4EfsvkWmLGW15gmOHrZwaYHuYpYwKJ07F+UKBjnzdAxyIRk6ZJxCdiWsKK/bCRqTtTf1sf8GUjzgc8J3DM4ixO4ad9AaeUigeBWhpwaSVrC8pRKNVxacve5ehihDaGk3S1sINSDSiGIaPSHcyMrdeD9EAGdNmVLkXxT++N0lu3KZEG+guBX216FxIbRoQ7okuRkDZzlXOdRojh28MPEH2+S1Y3k=
+          secure: sSjL1FXauDBJ6GpShVCdu3eV2vdSJZXMf3nfuGFDZY7b56EqsWlW3m+hMJk46KmzgIUrNKOm4jEmN2XIye41Dw6wDXApw7IjTFHlzNXFfwMlAK+FvpIOQA7tkH9MP7Z3tSoWW902WmlZG9kN/rhFChIP8Q0VbJb7G2SC8L8x+1D5bxQFkT54ACzJ4rP1301jDq4UIjpcsARXG+ZO9pPMcx2tSXcyocwIFocz8mUVv1pHeup+HsfbpVB7S1zoOiiZlVdNrxF+FbX1MLbmSw/cFSq1guvtR7OBJr/Zhj5HfulHPeNjz+iWM2GeK2NOowPeNL53bzff21muvmq93S2/j5g9dRxg5PDiD2blUjoqwUXuRwDONqsXQ+wNqJcwC7LxZUm0fABg3Flj6bL2SPwq0Zwv1iUKjQUd1mMiEfMS2gZ8wPK3OiNB9+fXx2Xmp0T/ukdY841r1YFecrG1SpghuRpmH3f7OJZ5RR7uHNprvd7y7mHYh4fCdMm3jKisYoaC6wyc6UvJvO3aSyrimdfGDcvNnSQvVvZtT98tzMh2KnQB+uYLHgOGT0FIAT5LWqJfkvnm2xv2KLrzWRJvyZinG9E73FMrlgzvCCqGP9oop6KkYXUY841ykGfneRR3yKz3r1WNMpLlFwhm+Jthp9WBuTERLUM8qur9yU3G1IEE3Wc=
         on:
           tags: true
           repo: automerge/automerge
