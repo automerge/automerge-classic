@@ -1,5 +1,5 @@
 const assert = require('assert')
-const uuid = process.env.TEST_DIST === '1' ? require('../dist/uuid') : require('../src/uuid')
+const uuid = require('../src/uuid')
 
 describe('uuid', () => {
   afterEach(() => {
