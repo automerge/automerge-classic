@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const uuid = require('uuid/v4')
+const uuid = require('./uuid')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const {isObject, checkTarget, makeChange, merge, applyChanges} = require('./auto_api')

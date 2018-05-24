@@ -1,5 +1,5 @@
 const { Map, Set } = require('immutable')
-const uuid = require('uuid/v4')
+const uuid = require('./uuid')
 const FreezeAPI = require('./freeze_api')
 
 class DocSet {
