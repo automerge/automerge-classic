@@ -1,5 +1,7 @@
 const assert = require('assert')
-const uuid = require('../src/uuid')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+
+const uuid = Automerge.uuid
 
 describe('uuid', () => {
   afterEach(() => {
