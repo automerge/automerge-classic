@@ -2,6 +2,7 @@ language: node_js
 node_js:
 - '8'
 - '9'
+- '10'
 script: 'yarn test && yarn build && TEST_DIST=1 yarn test'
 jobs:
   include:
@@ -17,7 +18,7 @@ jobs:
       addons:
         sauce_connect: true
     - stage: deploy
-      node_js: 9
+      node_js: 10
       # The script is run before the deploy. As the Travis npm deploy job does not automatically
       # install dependencies, we need to do `yarn install` here first, so that the prepublishOnly
       # script can build the transpiled JavaScript. The deploy stage is run only on tagged commits.
