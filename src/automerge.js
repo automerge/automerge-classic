@@ -191,7 +191,7 @@ function inspect(doc) {
 }
 
 function getHistory(doc) {
-  checkTarget('inspect', doc)
+  checkTarget('getHistory', doc)
   const history = doc._state.getIn(['opSet', 'history'])
   return history.map((change, index) => {
     return {
