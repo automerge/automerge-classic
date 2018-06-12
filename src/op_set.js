@@ -36,6 +36,29 @@ function transitiveDeps(opSet, baseDeps) {
   }, Map())
 }
 
+// Returns the path from the root object to the given objectId, as an array of string keys
+// (for ancestor maps) and integer indexes (for ancestor lists). If there are several paths
+// to the same object, returns one of the paths arbitrarily. If the object is not reachable
+// from the root, returns null.
+function getPath(opSet, objectId) {
+  let path = []
+  while (objectId !== ROOT_ID) {
+    const ref = opSet.getIn(['byObject', objectId, '_inbound'], Set()).first()
+    if (!ref) return null
+    objectId = ref.get('obj')
+    const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+
+    if (objType === 'makeList' || objType === 'makeText') {
+      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(ref.get('key'))
+      if (index < 0) return null
+      path.unshift(index)
+    } else {
+      path.unshift(ref.get('key'))
+    }
+  }
+  return path
+}
+
 // Processes a 'makeMap', 'makeList', or 'makeText' operation
 function applyMake(opSet, op) {
   const objectId = op.get('obj')
@@ -80,11 +103,11 @@ function getConflicts(ops) {
 }
 
 function patchList(opSet, objectId, index, action, ops) {
-  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   const firstOp = ops ? ops.first() : null
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let value = firstOp ? firstOp.get('value') : null
-  let edit = {action, type: (objType === 'makeText') ? 'text' : 'list', obj: objectId, index}
+  let edit = {action, type, obj: objectId, index, path: getPath(opSet, objectId)}
   if (firstOp && firstOp.get('action') === 'link') {
     edit.link = true
     value = {obj: firstOp.get('value')}
@@ -136,7 +159,7 @@ function updateListElement(opSet, objectId, elemId) {
 
 function updateMapKey(opSet, objectId, key) {
   const ops = getFieldOps(opSet, objectId, key)
-  let edit = {action: '', type: 'map', obj: objectId, key}
+  let edit = {action: '', type: 'map', obj: objectId, key, path: getPath(opSet, objectId)}
 
   if (ops.isEmpty()) {
     edit.action = 'remove'
