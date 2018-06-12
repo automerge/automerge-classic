@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const uuid = require('uuid/v4')
+const uuid = require('./uuid')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
 const {isObject, checkTarget, makeChange, merge, applyChanges} = require('./auto_api')
@@ -280,7 +280,7 @@ function getMissingDeps(doc) {
 module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
   initImmutable, loadImmutable, getConflicts,
-  getChanges, getChangesForActor, applyChanges, getMissingDeps, Text,
+  getChanges, getChangesForActor, applyChanges, getMissingDeps, Text, uuid,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
