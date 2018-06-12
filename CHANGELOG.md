@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- [#93]: Allow the UUID implementation to be replaced for testing purposes ([@kpruden])
+
 ## [0.7.9] — 2018-05-25
 
 - [#90]: Compatibility with Node 10 ([@aslakhellesoy])
@@ -142,6 +144,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#93]: https://github.com/automerge/automerge/pull/93
 [#91]: https://github.com/automerge/automerge/pull/91
 [#90]: https://github.com/automerge/automerge/pull/90
 [#87]: https://github.com/automerge/automerge/pull/87
@@ -172,6 +175,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept
+[@kpruden]: https://github.com/kpruden
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
