@@ -8,14 +8,20 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.10] — 2018-06-12
+
+### Added
 - [#93]: Allow the UUID implementation to be replaced for testing purposes ([@kpruden])
+- [#74]: Automerge.diff() now includes the path from the root to the modified object ([@ept])
 
 ## [0.7.9] — 2018-05-25
 
+### Fixed
 - [#90]: Compatibility with Node 10 ([@aslakhellesoy])
 
 ## [0.7.8] — 2018-05-15
 
+### Fixed
 - [#91]: Improve performance of changes that modify many list or map elements ([@ept])
 
 ## [0.7.7] — 2018-04-24
@@ -127,7 +133,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.9...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.10...HEAD
+[0.7.10]: https://github.com/automerge/automerge/compare/v0.7.9...v0.7.10
 [0.7.9]: https://github.com/automerge/automerge/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/automerge/automerge/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/automerge/automerge/compare/v0.7.6...v0.7.7
@@ -153,6 +160,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#83]: https://github.com/automerge/automerge/pull/83
 [#78]: https://github.com/automerge/automerge/issues/78
 [#77]: https://github.com/automerge/automerge/pull/77
+[#74]: https://github.com/automerge/automerge/pull/74
 [#69]: https://github.com/automerge/automerge/pull/69
 [#64]: https://github.com/automerge/automerge/pull/64
 [#62]: https://github.com/automerge/automerge/pull/62
