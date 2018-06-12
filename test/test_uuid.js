@@ -18,7 +18,6 @@ describe('uuid', () => {
     let counter
 
     function customUuid() {
-      console.log('customUuid called!');
       return `custom-uuid-${counter++}`
     }
 
@@ -26,7 +25,6 @@ describe('uuid', () => {
     beforeEach(() => counter = 0)
 
     it('invokes the custom factory', () => {
-      console.log('in test!');
       assert.equal(uuid(), 'custom-uuid-0');
       assert.equal(uuid(), 'custom-uuid-1');
     })
