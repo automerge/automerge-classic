@@ -105,7 +105,7 @@ function deleteField(state, objectId, key) {
     return splice(state, objectId, parseListIndex(key), 1, [])
   }
   if (!state.hasIn(['opSet', 'byObject', objectId, key])) {
-    throw new RangeError('Field name does not exist: ' + key)
+    return state;
   }
   return makeOp(state, { action: 'del', obj: objectId, key: key })
 }
