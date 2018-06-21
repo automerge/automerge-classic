@@ -8,6 +8,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- [#97]: `delete` operator no longer throws an exception if the property doesn't exist
+  ([@salzhrani], [@EthanRBrown])
+
 ## [0.7.10] — 2018-06-12
 
 ### Added
@@ -151,6 +155,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#97]: https://github.com/automerge/automerge/issues/97
 [#93]: https://github.com/automerge/automerge/pull/93
 [#91]: https://github.com/automerge/automerge/pull/91
 [#90]: https://github.com/automerge/automerge/pull/90
@@ -187,4 +192,5 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
+[@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
