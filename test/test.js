@@ -48,8 +48,9 @@ describe('Automerge', () => {
           // Chrome and Firefox silently ignore modifications of a frozen object
           s2.foo = 'lemon'
           assert.strictEqual(s2.foo, 'bar')
-          delete s2['foo']
+          const deleted = delete s2['foo']
           assert.strictEqual(s2.foo, 'bar')
+          assert.strictEqual(deleted, false)
           Automerge.change(s2, doc => {
             s2.foo = 'bar'
             assert.strictEqual(s2.foo, 'bar')
@@ -145,6 +146,22 @@ describe('Automerge', () => {
         assert.strictEqual(s1.foo, undefined)
         assert.strictEqual(s1.something, null)
         assert.deepEqual(s1, {something: null})
+      })
+
+      it('should follow JS delete behavior', () => {
+        s1 = Automerge.change(s1, 'set foo', doc => { doc.foo = 'bar' })
+        let deleted
+        s1 = Automerge.change(s1, 'del foo', doc => {
+          deleted = delete doc['foo']
+        })
+        assert.strictEqual(deleted, true);
+        let deleted2
+        assert.doesNotThrow(() => {
+          s1 = Automerge.change(s1, 'del foo', doc => {
+            deleted2 = delete doc['baz']
+          })
+        })
+        assert.strictEqual(deleted2, true)
       })
 
       it('should allow the type of a property to be changed', () => {
