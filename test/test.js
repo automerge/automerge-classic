@@ -154,10 +154,10 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, 'del foo', doc => {
           deleted = delete doc['foo']
         })
-        assert.strictEqual(deleted, true);
+        assert.strictEqual(deleted, true)
         let deleted2
         assert.doesNotThrow(() => {
-          s1 = Automerge.change(s1, 'del foo', doc => {
+          s1 = Automerge.change(s1, 'del baz', doc => {
             deleted2 = delete doc['baz']
           })
         })
