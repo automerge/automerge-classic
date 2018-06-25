@@ -56,10 +56,11 @@ function makeChange(root, newState, message) {
 
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
+  const incremental = (doc._state.getIn(['opSet', 'history']).size > 0)
   if (isImmutable(doc)) {
-    return ImmutableAPI.applyChanges(doc, fromJS(changes), true)
+    return ImmutableAPI.applyChanges(doc, fromJS(changes), incremental)
   } else {
-    return FreezeAPI.applyChanges(doc, fromJS(changes), true)
+    return FreezeAPI.applyChanges(doc, fromJS(changes), incremental)
   }
 }
 
