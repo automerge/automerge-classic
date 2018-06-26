@@ -8,9 +8,12 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.7.11] — 2018-06-26
+
 ### Fixed
 - [#97]: `delete` operator no longer throws an exception if the property doesn't exist
   ([@salzhrani], [@EthanRBrown])
+- [#104]: Fix an error when loading the webpack-packaged version of Automerge in Node.js ([@ept])
 
 ## [0.7.10] — 2018-06-12
 
@@ -137,7 +140,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.10...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.7.11...HEAD
+[0.7.11]: https://github.com/automerge/automerge/compare/v0.7.10...v0.7.11
 [0.7.10]: https://github.com/automerge/automerge/compare/v0.7.9...v0.7.10
 [0.7.9]: https://github.com/automerge/automerge/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/automerge/automerge/compare/v0.7.7...v0.7.8
@@ -155,6 +159,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#104]: https://github.com/automerge/automerge/issues/104
 [#97]: https://github.com/automerge/automerge/issues/97
 [#93]: https://github.com/automerge/automerge/pull/93
 [#91]: https://github.com/automerge/automerge/pull/91
