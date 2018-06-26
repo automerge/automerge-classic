@@ -3,7 +3,7 @@ node_js:
 - '8'
 - '9'
 - '10'
-script: 'yarn test && yarn build && TEST_DIST=1 yarn test'
+script: 'yarn test && yarn build && TEST_DIST=1 yarn test && node -e "const Automerge = require(\"./dist/automerge\")"'
 jobs:
   include:
     - stage: browsertest
