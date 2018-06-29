@@ -67,7 +67,10 @@ function addElement(elems, elem) {
   return elems.withMutations(elems => {
     elems.setIn(['byId', elem.id], elem)
     elems.setIn(['byObj', elem.obj, elem.key, elem.id], elem)
-    if (elem.ref) elems.setIn(['byRef', elem.ref], elem)
+    if (elem.ref) {
+      if (!elems.hasIn(['byObj', elem.ref])) elems.setIn(['byObj', elem.ref], Map())
+      elems.setIn(['byRef', elem.ref], elem)
+    }
   })
 }
 
@@ -98,7 +101,7 @@ function removeElementByRef(elems, ref) {
 function isAncestor(elems, anc, desc) {
   let id = desc
   while (id) {
-    if (id === anc) return true
+    if (is(id, anc)) return true
     id = elems.getIn(['byRef', id, 'obj'])
   }
   return false
@@ -129,7 +132,73 @@ function applySequential(elems, oper) {
 }
 
 function interpSequential(opers) {
+  opers = opers.sort((op1, op2) => op1.id.compareTo(op2.id))
   return opers.reduce(applySequential, new ElementSet())
+}
+
+function nextOps(ops, actorId) {
+  const elems = interpSequential(ops)
+  const counter = ops.reduce((max, op) => Math.max(max, op.id.counter), 0)
+  let lastId = new LamportTS({actorId, counter})
+
+  function nextId() {
+    lastId = new LamportTS({actorId, counter: lastId.counter + 1})
+    return lastId
+  }
+
+  function rand() {
+    return Math.floor(Math.random() * 1e5)
+  }
+
+  return Set.fromKeys(elems.byObj).add(null).flatMap(obj => {
+    const prevX = Set.fromKeys(elems.getIn(['byObj', obj, 'x']))
+    const prevY = Set.fromKeys(elems.getIn(['byObj', obj, 'y']))
+
+    let ops = List.of(
+      new AssignOp({id: nextId(), obj, key: 'x', val: rand(), prev: prevX}),
+      new AssignOp({id: nextId(), obj, key: 'y', val: rand(), prev: prevY}),
+      new MakeChildOp({id: nextId(), obj, key: 'x', prev: prevX}),
+      new MakeChildOp({id: nextId(), obj, key: 'y', prev: prevY})
+    )
+
+    if (!prevX.isEmpty()) ops = ops.push(new RemoveOp({id: nextId(), prev: prevX}))
+    if (!prevY.isEmpty()) ops = ops.push(new RemoveOp({id: nextId(), prev: prevY}))
+
+    const moves = Set.fromKeys(elems.byObj).remove(null).flatMap(ref => {
+      return List.of(
+        new MoveOp({id: nextId(), obj, key: 'x', ref, prev: prevX}),
+        new MoveOp({id: nextId(), obj, key: 'y', ref, prev: prevY})
+      )
+    })
+    return ops.concat(moves)
+  })
+}
+
+// Returns several variants of ops1 that have been extended with varying numbers
+// of elements from ops2.
+function mixOps(ops1, ops2) {
+  const ids1 = ops1.map(op => op.id).toSet()
+  return List().withMutations(list => {
+    list.push(ops1)
+    for (let i = 0; i < ops2.size; i++) {
+      if (!ids1.includes(ops2.get(i).id)) {
+        ops1 = ops1.push(ops2.get(i))
+        list.push(ops1)
+      }
+    }
+  })
+}
+
+function generateOps(ops1, actor1, ops2, actor2) {
+  if (ops1.size >= 3) return List.of(ops1)
+
+  return nextOps(ops1, actor1).flatMap(op1 => {
+    return nextOps(ops2, actor2).flatMap(op2 => {
+      return mixOps(ops1.push(op1), ops2.push(op2)).flatMap(ops => {
+        return generateOps(ops, actor1, ops2.push(op2), actor2)
+      })
+    })
+  })
 }
 
 describe('sequential interpretation', () => {
@@ -193,5 +262,10 @@ describe('sequential interpretation', () => {
         }}
       }}
     })
+  })
+
+  it('should generate ops', () => {
+    const ops = generateOps(List(), uuid(), List(), uuid())
+    console.log(ops.size)
   })
 })
