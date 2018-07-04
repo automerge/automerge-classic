@@ -3,14 +3,15 @@ const uuid = require('uuid/v4')
 const assert = require('assert')
 const jsc = require('jsverify')
 
-const ElementSet   = Record({byId: new Map(), byObj: new Map(), byRef: new Map()})
+const ElementSet   = Record({byId: Map(), byObj: Map(), byRef: Map()})
 const ChildElement = Record({id: null, obj: null, key: null, ref: null})
 const ValueElement = Record({id: null, obj: null, key: null, val: null})
 
-const AssignOp    = Record({action: 'assign',    id: null, obj: null, key: null, val: null, prev: new Set()})
-const MakeChildOp = Record({action: 'makeChild', id: null, obj: null, key: null,            prev: new Set()})
-const MoveOp      = Record({action: 'move',      id: null, obj: null, key: null, ref: null, prev: new Set()})
-const RemoveOp    = Record({action: 'remove',    id: null,                                  prev: new Set()})
+const OperationSet = Record({byId: Map(), byObj: Map(), byRef: Map(), byPrev: Map(), moveValid: Map()})
+const AssignOp     = Record({action: 'assign',    id: null, obj: null, key: null, val: null, prev: Set()})
+const MakeChildOp  = Record({action: 'makeChild', id: null, obj: null, key: null,            prev: Set()})
+const MoveOp       = Record({action: 'move',      id: null, obj: null, key: null, ref: null, prev: Set()})
+const RemoveOp     = Record({action: 'remove',    id: null,                                  prev: Set()})
 
 
 class LamportTS extends Record({counter: 0, actorId: ''}) {
@@ -131,9 +132,104 @@ function applySequential(elems, oper) {
   }
 }
 
-function interpSequential(opers) {
-  opers = opers.sort((op1, op2) => op1.id.compareTo(op2.id))
-  return opers.reduce(applySequential, new ElementSet())
+function interpSequential(ops) {
+  ops = ops.sort((op1, op2) => op1.id.compareTo(op2.id))
+  return ops.reduce(applySequential, new ElementSet())
+}
+
+function addOperation(ops, op) {
+  if (ops.hasIn(['byId', op.id])) {
+    throw new RangeError(`Operation with ID ${op.id} already exists`)
+  }
+
+  const moveValid = (op.action === 'move') ? isMoveValid(ops, op) : true
+  ops = ops.withMutations(ops => {
+    ops.setIn(['byId', op.id], op)
+
+    for (const ref of op.prev) {
+      ops.setIn(['byPrev', ref, op.id], op)
+    }
+    if (op.action !== 'remove') {
+      ops.setIn(['byObj', op.obj, op.key, op.id], op)
+    }
+    if (op.action === 'makeChild') {
+      ops.setIn(['byRef', op.id, op.id], op)
+      if (!ops.hasIn(['byObj', op.id])) ops.setIn(['byObj', op.id], Map())
+    }
+    if (op.action === 'move') {
+      ops.setIn(['byRef', op.ref, op.id], op)
+      ops.setIn(['moveValid', op.id], moveValid)
+    }
+  })
+
+  if (op.action === 'move') {
+    const moveIds = Set.fromKeys(ops.moveValid)
+      .sort((k1, k2) => k1.compareTo(k2))
+      .skipWhile(k => k.compareTo(op.id) <= 0)
+    for (const id of moveIds) {
+      ops = ops.setIn(['moveValid', id], isMoveValid(ops, ops.byId.get(id)))
+    }
+  }
+  return ops
+}
+
+function opSet(ops) {
+  return ops.reduce(addOperation, new OperationSet())
+}
+
+function isMoveValid(ops, op) {
+  if (op.action !== 'move') {
+    throw new RangeError('isMoveValid must be called with a move operation')
+  }
+
+  let parentId = op.obj
+  while (parentId) {
+    if (is(parentId, op.ref)) return false
+
+    const refIds = Set.fromKeys(ops.byRef.get(parentId, Map()))
+      .filter(k => k.compareTo(op.id) < 0)
+      .filter(k => ops.moveValid.get(k) || ops.byId.get(k).action === 'makeChild')
+      .sort((k1, k2) => k2.compareTo(k1))
+
+    if (refIds.isEmpty()) {
+      throw new RangeError(`isMoveValid: object ${parentId} has no parent`)
+    }
+    parentId = ops.getIn(['byRef', parentId, refIds.first(), 'obj'])
+
+    // Check if reference has been removed/overwritten
+    const deletions = ops.byPrev.get(refIds.first(), Map())
+      .filter((oper, id) => id.compareTo(op.id) < 0)
+      .filter((oper, id) => oper.action !== 'move' || ops.moveValid.get(id))
+    if (!deletions.isEmpty()) return true
+  }
+  return true
+}
+
+function currentState(ops) {
+  return Set().withMutations(elems => {
+    ops.byObj.forEach((byKey, obj) => {
+      byKey.forEach((byId, key) => {
+        byId.forEach((op, id) => {
+          const deleted = ops.byPrev.get(id, Map())
+            .some(op => op.action !== 'move' || ops.moveValid.get(op.id))
+          const valid = (op.action !== 'move' || ops.moveValid.get(op.id))
+
+          if (op.action === 'assign' && !deleted) {
+            elems.add(new ValueElement({id: op.id, obj: op.obj, key: op.key, val: op.val}))
+          }
+          if ((op.action === 'makeChild' || op.action === 'move') && valid && !deleted) {
+            const ref = (op.action === 'makeChild') ? op.id : op.ref
+            const moves = ops.byRef.get(ref, Map())
+              .filter(op => op.id.compareTo(id) > 0)
+              .filter(op => ops.moveValid.get(op.id) || op.action === 'makeChild')
+            if (moves.isEmpty()) {
+              elems.add(new ChildElement({id: op.id, obj: op.obj, key: op.key, ref}))
+            }
+          }
+        })
+      })
+    })
+  })
 }
 
 function nextOps(ops, actorId) {
@@ -201,9 +297,10 @@ function generateOps(ops1, actor1, ops2, actor2) {
   })
 }
 
-describe('sequential interpretation', () => {
+describe('move operation prototype', () => {
   it('should be empty if there are no ops', () => {
     assert.deepEqual(materialize(interpSequential([])), {})
+    assert(is(currentState(new OperationSet()), Set()))
   })
 
   it('should assign a field to the root object', () => {
@@ -212,6 +309,9 @@ describe('sequential interpretation', () => {
       new AssignOp({id: new LamportTS({actorId, counter: 0}), obj: null, key: 'a', val: 42})
     ]
     assert.deepEqual(materialize(interpSequential(ops)), {a: {[ops[0].id]: 42}})
+    assert(is(currentState(opSet(ops)), Set.of(
+      new ValueElement({id: ops[0].id, obj: null, key: 'a', val: 42})
+    )))
   })
 
   it('should create a nested object', () => {
@@ -227,6 +327,10 @@ describe('sequential interpretation', () => {
         bar: {[assignId]: 42}
       }}
     })
+    assert(is(currentState(opSet(ops)), Set.of(
+      new ChildElement({id: childId, obj: null, key: 'foo', ref: childId}),
+      new ValueElement({id: assignId, obj: childId, key: 'bar', val: 42})
+    )))
   })
 
   it('should allow a move operation to overwrite a field value', () => {
@@ -240,6 +344,9 @@ describe('sequential interpretation', () => {
       new MoveOp({id: moveId, obj: null, key: 'bar', ref: childId, prev: Set.of(assignId)})
     ]
     assert.deepEqual(materialize(interpSequential(ops)), {bar: {[moveId]: {}}})
+    assert(is(currentState(opSet(ops)), Set.of(
+      new ChildElement({id: moveId, obj: null, key: 'bar', ref: childId})
+    )))
   })
 
   it('should arbitrate between conflicting move operations', () => {
@@ -262,10 +369,15 @@ describe('sequential interpretation', () => {
         }}
       }}
     })
+    assert(is(currentState(opSet(ops)), Set.of(
+      new ChildElement({id: childB, obj: null, key: 'B', ref: childB}),
+      new ChildElement({id: moveA, obj: childB, key: 'A', ref: childA}),
+      new ValueElement({id: assignC, obj: childA, key: 'C', val: 42})
+    )))
   })
 
   it('should generate ops', () => {
-    const ops = generateOps(List(), uuid(), List(), uuid())
-    console.log(ops.size)
+    //const ops = generateOps(List(), uuid(), List(), uuid())
+    //console.log(ops.size)
   })
 })
