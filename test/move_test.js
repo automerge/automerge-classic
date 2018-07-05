@@ -81,9 +81,11 @@ function removeElementsByIds(elems, ids) {
   return elems.withMutations(elems => {
     for (const id of ids) {
       const elem = elems.getIn(['byId', id])
-      elems.deleteIn(['byId', id])
-      elems.deleteIn(['byObj', elem.obj, elem.key, elem.id])
-      if (elem.ref) elems = elems.deleteIn(['byRef', elem.ref])
+      if (elem) {
+        elems.deleteIn(['byId', id])
+        elems.deleteIn(['byObj', elem.obj, elem.key, elem.id])
+        if (elem.ref) elems = elems.deleteIn(['byRef', elem.ref])
+      }
     }
   })
 }
@@ -133,7 +135,7 @@ function applySequential(elems, oper) {
 }
 
 function interpSequential(ops) {
-  ops = ops.sort((op1, op2) => op1.id.compareTo(op2.id))
+  ops = ops.slice().sort((op1, op2) => op1.id.compareTo(op2.id))
   return ops.reduce(applySequential, new ElementSet())
 }
 
@@ -191,9 +193,7 @@ function isMoveValid(ops, op) {
       .filter(k => ops.moveValid.get(k) || ops.byId.get(k).action === 'makeChild')
       .sort((k1, k2) => k2.compareTo(k1))
 
-    if (refIds.isEmpty()) {
-      throw new RangeError(`isMoveValid: object ${parentId} has no parent`)
-    }
+    if (refIds.isEmpty()) return true
     parentId = ops.getIn(['byRef', parentId, refIds.first(), 'obj'])
 
     // Check if reference has been removed/overwritten
@@ -242,17 +242,13 @@ function nextOps(ops, actorId) {
     return lastId
   }
 
-  function rand() {
-    return Math.floor(Math.random() * 1e5)
-  }
-
-  return Set.fromKeys(elems.byObj).add(null).flatMap(obj => {
+  return Set.fromKeys(elems.byObj).add(null).toList().flatMap(obj => {
     const prevX = Set.fromKeys(elems.getIn(['byObj', obj, 'x']))
     const prevY = Set.fromKeys(elems.getIn(['byObj', obj, 'y']))
 
     let ops = List.of(
-      new AssignOp({id: nextId(), obj, key: 'x', val: rand(), prev: prevX}),
-      new AssignOp({id: nextId(), obj, key: 'y', val: rand(), prev: prevY}),
+      new AssignOp({id: nextId(), obj, key: 'x', val: jsc.random(0, 1e5), prev: prevX}),
+      new AssignOp({id: nextId(), obj, key: 'y', val: jsc.random(0, 1e5), prev: prevY}),
       new MakeChildOp({id: nextId(), obj, key: 'x', prev: prevX}),
       new MakeChildOp({id: nextId(), obj, key: 'y', prev: prevY})
     )
@@ -376,8 +372,79 @@ describe('move operation prototype', () => {
     )))
   })
 
-  it('should generate ops', () => {
-    //const ops = generateOps(List(), uuid(), List(), uuid())
-    //console.log(ops.size)
+  it('should handle operations in an arbitrary order', () => {
+    const child1 = new LamportTS({actorId: 'actor1', counter: 4})
+    const child2 = new LamportTS({actorId: 'actor1', counter: 17})
+    const moveId = new LamportTS({actorId: 'actor1', counter: 57})
+    const ops = [
+      new MakeChildOp({id: child1, obj: null, key: 'y'}),
+      new MoveOp({id: moveId, obj: child2, key: 'y', ref: child1}),
+      new MakeChildOp({id: child2, obj: child1, key: 'y'})
+    ]
+    // The problem here is that when the move operation is received, the parent-child relationship
+    // between child1 and child2 is not yet established. The move operation only becomes invalid
+    // through the subsequent MakeChildOp. This would not happen if we require causally ordered
+    // delivery; alternatively, we might have to keep some additional metadata to detect this case.
+    console.log(opSet(ops))
+    console.log(currentState(opSet(ops)))
+    console.log(interpSequential(ops).byId.toSet())
+    assert(is(currentState(opSet(ops)), interpSequential(ops).byId.toSet()))
+  })
+
+  describe('property-based tests', () => {
+
+    function generateRandomOps(size) {
+      const numOps = jsc.random(0, Math.round(Math.log(size + 1) / Math.log(2)))
+      const ops1 = [], ops2 = []
+      while (ops1.length < numOps) {
+        switch (jsc.random(0, 3)) {
+          case 0: { // new operation by actor 1
+            const choice = nextOps(ops1, 'actor1')
+            ops1.push(choice.get(jsc.random(0, choice.size - 1)))
+            break
+          }
+
+          case 1: { // new operation by actor 2
+            const choice = nextOps(ops2, 'actor2')
+            ops2.push(choice.get(jsc.random(0, choice.size - 1)))
+            break
+          }
+
+          case 2: { // send one operation from actor 1 to actor 2
+            const ids2 = Set(ops2.map(op => op.id))
+            const choice = ops1.filter(op => !ids2.includes(op.id))
+            if (choice.length > 0) {
+              ops2.push(choice[jsc.random(0, choice.length - 1)])
+            }
+            break
+          }
+
+          case 3: { // send one operation from actor 2 to actor 1
+            const ids1 = Set(ops1.map(op => op.id))
+            const choice = ops2.filter(op => !ids1.includes(op.id))
+            if (choice.length > 0) {
+              ops1.push(choice[jsc.random(0, choice.length - 1)])
+            }
+            break
+          }
+        }
+      }
+
+      // Randomly permute the list of operations
+      for (let i = numOps - 1; i > 0; i--) {
+        const j = jsc.random(0, i)
+        ;[ops1[i], ops1[j]] = [ops1[j], ops1[i]]
+      }
+      return ops1
+    }
+
+    it('should behave like the sequential interpretation', () => {
+      jsc.assert(jsc.forall(jsc.bless({generator: generateRandomOps}), function (ops) {
+        console.log('ops: ', ops)
+        console.log('commutative: ', currentState(opSet(ops)))
+        console.log('sequential:  ', interpSequential(ops).byId.toSet())
+        return is(currentState(opSet(ops)), interpSequential(ops).byId.toSet())
+      }), {tests: 1000, size: 50})
+    })
   })
 })
