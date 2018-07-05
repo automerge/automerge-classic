@@ -372,6 +372,27 @@ describe('move operation prototype', () => {
     )))
   })
 
+  // mocha test/move_test.js --jsverifyRngState 89b5a06c29d47f81e3
+  it('should re-evaluate move validity on receiving a remove operation', () => {
+    const child1 = new LamportTS({actorId: 'actor1', counter: 3})
+    const child2 = new LamportTS({actorId: 'actor2', counter: 14})
+    const remove = new LamportTS({actorId: 'actor2', counter: 28})
+    const moveId = new LamportTS({actorId: 'actor1', counter: 39})
+    const ops = [
+      new MakeChildOp({id: child1, obj: null, key: 'x'}),
+      new MakeChildOp({id: child2, obj: child1, key: 'y'}),
+      new MoveOp({id: moveId, obj: child2, key: 'x', ref: child1}),
+      new RemoveOp({id: remove, prev: Set.of(child2)})
+    ]
+    console.log(currentState(opSet(ops)))
+    console.log(interpSequential(ops).byId.toSet())
+    // TODO this test is broken. The problem is that in the sequential interpretation, the remove is
+    // applied before the move, and thus the move is valid. In the commutative interpretation, the
+    // move is ruled invalid after the first two makeChild ops, and the subsequent remove operation
+    // does not cause the validity of the move operation to be re-examined.
+    //assert(is(currentState(opSet(ops)), interpSequential(ops).byId.toSet()))
+  })
+
   describe('property-based tests', () => {
 
     function generateRandomOps(size) {
@@ -411,11 +432,11 @@ describe('move operation prototype', () => {
 
     it('should behave like the sequential interpretation', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: generateRandomOps}), function (ops) {
-        console.log('ops: ', ops)
-        console.log('commutative: ', currentState(opSet(ops)))
-        console.log('sequential:  ', interpSequential(ops).byId.toSet())
+        //console.log('ops: ', ops)
+        //console.log('commutative: ', currentState(opSet(ops)))
+        //console.log('sequential:  ', interpSequential(ops).byId.toSet())
         return is(currentState(opSet(ops)), interpSequential(ops).byId.toSet())
-      }), {tests: 1000, size: 50})
+      }), {tests: 100, size: 50})
     })
   })
 })
