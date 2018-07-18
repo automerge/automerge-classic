@@ -9,7 +9,8 @@ const leb = require('leb') // https://en.wikipedia.org/wiki/LEB128
 // omit it if possible. But I don't know how to configure webpack accordingly.
 // Some discussion here: https://github.com/inexorabletash/text-encoding/issues/44
 const { TextEncoder, TextDecoder } = require('text-encoding')
-const utf8encoder = new TextEncoder()
+const UTF8Encoder = new TextEncoder()
+const UTF8Decoder = new TextDecoder('utf-8')
 
 
 // A byte array to which new data (also given as a byte array) can be appended.
@@ -135,7 +136,7 @@ class RLEEncoder extends Encoder {
   flush () {
     if (this.count > 1) {
       this.writeRepeatedValue()
-    } else if (this.values.length > 1) {
+    } else if (this.values.length > 0) {
       this.writeIndividualValues(this.values)
     }
     this.values = []
@@ -196,7 +197,7 @@ class DeltaEncoder extends RLEEncoder {
   }
 }
 
-// A decoder for data encoded by DeltaEncoder
+// A decoder for data encoded by DeltaEncoder.
 class DeltaDecoder extends RLEDecoder {
   constructor (buf, length) {
     super(leb.decodeInt32, buf, length)
@@ -210,6 +211,48 @@ class DeltaDecoder extends RLEDecoder {
 }
 
 
+// An encoder for strings that uses two underlying encoders: one for the UTF8 character data, and
+// one for the length of each string. This structure has the advantage that if most of the strings
+// have a 1-byte UTF8 encoding, the underlying byte array is essentially just the concatenation of
+// the strings, and the lengths are encoded very compactly (due to run-length encoding).
+class StringEncoder {
+  constructor () {
+    this.strings = new Encoder()
+    this.lengths = new RLEEncoder(leb.encodeUInt32)
+  }
+
+  writeValue (value) {
+    const utf8 = UTF8Encoder.encode(value)
+    this.strings.write(utf8)
+    this.lengths.writeValue(utf8.byteLength)
+  }
+
+  flush () {
+    this.strings.flush()
+    this.lengths.flush()
+  }
+}
+
+// A decoder for data encoded by StringEncoder.
+class StringDecoder {
+  constructor (stringsBuf, stringsLen, lengthsBuf, lengthsLen) {
+    this.strings = new Decoder(null, stringsBuf, stringsLen)
+    this.lengths = new RLEDecoder(leb.decodeUInt32, lengthsBuf, lengthsLen)
+  }
+
+  hasMore () {
+    return this.lengths.hasMore()
+  }
+
+  readValue () {
+    const length = this.lengths.readValue()
+    const slice = this.strings.buf.subarray(this.strings.offset, this.strings.offset + length)
+    this.strings.offset += length
+    return UTF8Decoder.decode(slice)
+  }
+}
+
+
 module.exports = {
-  RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder
+  RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, StringEncoder, StringDecoder
 }

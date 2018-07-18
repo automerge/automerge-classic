@@ -1,5 +1,5 @@
 const assert = require('assert')
-const { RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder } = require('../src/encoding')
+const { RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, StringEncoder, StringDecoder } = require('../src/encoding')
 const leb = require('leb')
 
 describe('Binary encoding', () => {
@@ -8,6 +8,14 @@ describe('Binary encoding', () => {
       const encoder = new RLEEncoder(leb.encodeInt32)
       encoder.flush()
       assert.strictEqual(encoder.offset, 0)
+    })
+
+    it('encodes a single value', () => {
+      const encoder = new RLEEncoder(leb.encodeInt32)
+      encoder.writeValue(4)
+      encoder.flush()
+      assert.strictEqual(encoder.offset, 2)
+      assert.deepEqual(encoder.buf.subarray(0, 2), [127, 4])
     })
 
     it('encodes a repeated value with a counter', () => {
@@ -45,6 +53,12 @@ describe('Binary encoding', () => {
       const encoder = new RLEEncoder(leb.encodeInt32)
       encoder.flush()
       const decoder = new RLEDecoder(leb.decodeInt32, encoder.buf, encoder.offset)
+      assert.strictEqual(decoder.hasMore(), false)
+    })
+
+    it('decodes a single value', () => {
+      const decoder = new RLEDecoder(leb.decodeInt32, new Uint8Array([127, 4]))
+      assert.strictEqual(decoder.hasMore(), true); assert.strictEqual(decoder.readValue(), 4)
       assert.strictEqual(decoder.hasMore(), false)
     })
 
@@ -142,6 +156,42 @@ describe('Binary encoding', () => {
           assert.strictEqual(decoder.hasMore(), true)
           assert.strictEqual(decoder.readValue(), j)
         }
+      }
+      assert.strictEqual(decoder.hasMore(), false)
+    })
+  })
+
+  describe('StringEncoder / StringDecoder', () => {
+    it('encodes a sequence of no values', () => {
+      const encoder = new StringEncoder()
+      encoder.flush()
+      assert.strictEqual(encoder.strings.offset, 0)
+      assert.strictEqual(encoder.lengths.offset, 0)
+      const decoder = new StringDecoder(encoder.strings.buf, encoder.strings.offset,
+                                        encoder.lengths.buf, encoder.lengths.offset)
+      assert.strictEqual(decoder.hasMore(), false)
+    })
+
+    it('encodes a sequence of characters', () => {
+      const encoder = new StringEncoder()
+      for (let str of ['H', 'e', 'l', 'l', 'o', ' ', '😄']) encoder.writeValue(str)
+      encoder.flush()
+      assert.strictEqual(encoder.strings.offset, 10)
+      assert.deepEqual(encoder.strings.buf.subarray(0, 10),
+                       [0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0xf0, 0x9f, 0x98, 0x84])
+      assert.strictEqual(encoder.lengths.offset, 4)
+      assert.deepEqual(encoder.lengths.buf.subarray(0, 4), [6, 1, 127, 4])
+    })
+
+    it('performs a round-trip on a sequence of characters', () => {
+      const encoder = new StringEncoder()
+      for (let str of ['H', 'e', 'l', 'l', 'o', ' ', '😄']) encoder.writeValue(str)
+      encoder.flush()
+      const decoder = new StringDecoder(encoder.strings.buf, encoder.strings.offset,
+                                        encoder.lengths.buf, encoder.lengths.offset)
+      for (let str of ['H', 'e', 'l', 'l', 'o', ' ', '😄']) {
+        assert.strictEqual(decoder.hasMore(), true)
+        assert.strictEqual(decoder.readValue(), str)
       }
       assert.strictEqual(decoder.hasMore(), false)
     })
