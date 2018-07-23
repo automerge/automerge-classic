@@ -102,6 +102,7 @@ const MapHandler = {
     if (key === '_actorId') return context.state.get('actorId')
     if (key === '_conflicts') return OpSet.getObjectConflicts(context.state.get('opSet'), objectId, context).toJS()
     if (key === '_change') return context
+    if (key === '_get') return context._get
     return OpSet.getObjectField(context.state.get('opSet'), objectId, key, context)
   },
 
@@ -219,7 +220,7 @@ function listProxy(context, objectId) {
 }
 
 function instantiateProxy(opSet, objectId) {
-  const objectType = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  const objectType = OpSet.ROOT_ID === objectId ? 'makeMap' : opSet.getIn(['byObject', objectId, '_init', 'action'])
   if (objectType === 'makeMap') {
     return mapProxy(this, objectId)
   } else if (objectType === 'makeList' || objectType === 'makeText') {
@@ -229,7 +230,8 @@ function instantiateProxy(opSet, objectId) {
 
 function rootObjectProxy(context) {
   context.instantiateObject = instantiateProxy
-  return mapProxy(context, '00000000-0000-0000-0000-000000000000')
+  context._get = (objId) => instantiateProxy.call(context, context.state.get('opSet'), objId)
+  return mapProxy(context, OpSet.ROOT_ID)
 }
 
 module.exports = { rootObjectProxy }
