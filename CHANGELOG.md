@@ -7,6 +7,9 @@ All notable changes to Automerge will be documented in this file, which
 is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+### Added
+- [#106]: New `doc._get(UUID)` method allows looking up an object by its `_objectId` inside
+  an `Automerge.change()` callback ([@mattkrick])
 
 ## [0.7.11] — 2018-06-26
 
@@ -159,6 +162,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#106]: https://github.com/automerge/automerge/issues/106
 [#104]: https://github.com/automerge/automerge/issues/104
 [#97]: https://github.com/automerge/automerge/issues/97
 [#93]: https://github.com/automerge/automerge/pull/93
@@ -194,6 +198,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept
 [@kpruden]: https://github.com/kpruden
+[@mattkrick]: https://github.com/mattkrick
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
