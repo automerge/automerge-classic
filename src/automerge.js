@@ -281,6 +281,7 @@ module.exports = {
   init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
   initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text, uuid,
+  getMissingChanges: OpSet.getMissingChanges,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
