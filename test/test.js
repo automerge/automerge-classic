@@ -139,6 +139,26 @@ describe('Automerge', () => {
       })
     })
 
+    describe('emptyChange()', () => {
+      it('should append an empty change to the history', () => {
+        s1 = Automerge.change(s1, 'first change', doc => doc.field = 123)
+        s2 = Automerge.emptyChange(s1, 'empty change')
+        assert.notStrictEqual(s2, s1)
+        assert.deepEqual(s2, s1)
+        assert.deepEqual(Automerge.getHistory(s2).map(state => state.change.message),
+                         ['first change', 'empty change'])
+      })
+
+      it('should reference dependencies', () => {
+        s1 = Automerge.change(s1, doc => doc.field = 123)
+        s2 = Automerge.merge(Automerge.init(), s1)
+        s2 = Automerge.change(s2, doc => doc.other = 'hello')
+        s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
+        const history = Automerge.getHistory(s1)
+        assert.deepEqual(history[history.length - 1].change.deps, {[s2._actorId]: 1})
+      })
+    })
+
     describe('root object', () => {
       it('should handle single-property assignment', () => {
         s1 = Automerge.change(s1, 'set bar', doc => doc.foo = 'bar')

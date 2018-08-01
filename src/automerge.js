@@ -169,6 +169,14 @@ function change(doc, message, callback) {
   }
 }
 
+function emptyChange(doc, message) {
+  checkTarget('emptyChange', doc)
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  return makeChange(doc, doc._state, message)
+}
+
 function assign(target, values) {
   checkTarget('assign', target, true)
   if (!isObject(values)) throw new TypeError('The second argument to Automerge.assign must be an ' +
@@ -294,7 +302,7 @@ function getMissingDeps(doc) {
 }
 
 module.exports = {
-  init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  init, change, emptyChange, merge, diff, assign, load, save, equals, inspect, getHistory,
   initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text, uuid,
   getMissingChanges: OpSet.getMissingChanges,
