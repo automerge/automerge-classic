@@ -140,6 +140,9 @@ function change(doc, message, callback) {
   if (typeof message === 'function' && callback === undefined) {
     [message, callback] = [callback, message]
   }
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
 
   const context = {state: doc._state, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
