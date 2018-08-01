@@ -86,6 +86,11 @@ describe('Automerge', () => {
         assert.deepEqual(s1._conflicts, {})
       })
 
+      it('should return the unchanged state object if nothing changed', () => {
+        s2 = Automerge.change(s1, doc => {})
+        assert.strictEqual(s2, s1)
+      })
+
       it('should sanity-check arguments', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
         assert.throws(() => { Automerge.change({},        doc => doc.foo = 'bar') }, /must be the object to modify/)

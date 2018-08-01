@@ -146,7 +146,13 @@ function change(doc, message, callback) {
 
   const context = {state: doc._state, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return makeChange(doc, context.state, message)
+
+  // If the callback didn't change anything, return the original document object unchanged
+  if (context.state.getIn(['opSet', 'local']).isEmpty()) {
+    return doc
+  } else {
+    return makeChange(doc, context.state, message)
+  }
 }
 
 function assign(target, values) {
