@@ -72,11 +72,13 @@ function setField(state, objectId, key, value) {
     const [newState, newId] = createNestedObjects(state, value)
     return makeOp(newState, { action: 'link', obj: objectId, key, value: newId })
   } else {
-    const oldValue = OpSet.getObjectField(state.get('opSet'), objectId, key, cachedContext())
-    if (value !== oldValue) {
-      return makeOp(state, { action: 'set', obj: objectId, key, value })
-    } else {
+    // If the assigned field value is the same as the existing value, do nothing
+    const fieldOps = OpSet.getFieldOps(state.get('opSet'), objectId, key)
+    if (fieldOps.size === 1 && fieldOps.get(0).get('action') === 'set' &&
+        fieldOps.get(0).get('value') === value) {
       return state
+    } else {
+      return makeOp(state, { action: 'set', obj: objectId, key, value })
     }
   }
 }
