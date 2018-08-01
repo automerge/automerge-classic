@@ -12,6 +12,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   an `Automerge.change()` callback ([@mattkrick])
 - [#109]: Export `OpSet.getMissingChanges` on the Automerge object ([@mattkrick])
 
+### Changed
+- [#110]: Require that the change message in `Automerge.change()` must be a string ([@ept])
+
 ## [0.7.11] — 2018-06-26
 
 ### Fixed
@@ -163,6 +166,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#110]: https://github.com/automerge/automerge/pull/110
 [#109]: https://github.com/automerge/automerge/pull/109
 [#106]: https://github.com/automerge/automerge/issues/106
 [#104]: https://github.com/automerge/automerge/issues/104
