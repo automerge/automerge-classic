@@ -91,6 +91,12 @@ describe('Automerge', () => {
         assert.strictEqual(s2, s1)
       })
 
+      it('should ignore field updates that write the existing value', () => {
+        s1 = Automerge.change(s1, doc => doc.field = 123)
+        s2 = Automerge.change(s1, doc => doc.field = 123)
+        assert.strictEqual(s2, s1)
+      })
+
       it('should sanity-check arguments', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
         assert.throws(() => { Automerge.change({},        doc => doc.foo = 'bar') }, /must be the object to modify/)

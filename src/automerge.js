@@ -14,6 +14,15 @@ function makeOp(state, opProps) {
   return state.set('opSet', opSet2)
 }
 
+function cachedContext() {
+  return {
+    cache: {},
+    instantiateObject (opSet, objectId) {
+      return opSet.getIn(['cache', objectId])
+    }
+  }
+}
+
 function insertAfter(state, listId, elemId) {
   if (!state.hasIn(['opSet', 'byObject', listId])) throw 'List object does not exist'
   if (!state.hasIn(['opSet', 'byObject', listId, elemId]) && elemId !== '_head') {
@@ -63,7 +72,12 @@ function setField(state, objectId, key, value) {
     const [newState, newId] = createNestedObjects(state, value)
     return makeOp(newState, { action: 'link', obj: objectId, key, value: newId })
   } else {
-    return makeOp(state, { action: 'set', obj: objectId, key, value })
+    const oldValue = OpSet.getObjectField(state.get('opSet'), objectId, key, cachedContext())
+    if (value !== oldValue) {
+      return makeOp(state, { action: 'set', obj: objectId, key, value })
+    } else {
+      return state
+    }
   }
 }
 
@@ -251,14 +265,7 @@ function getConflicts(doc, list) {
   if (!objectId || opSet.getIn(['byObject', objectId, '_init', 'action']) !== 'makeList') {
     throw new TypeError('The second argument to Automerge.getConflicts must be a list object')
   }
-
-  const context = {
-    cache: {},
-    instantiateObject (opSet, objectId) {
-      return opSet.getIn(['cache', objectId])
-    }
-  }
-  return List(OpSet.listIterator(opSet, objectId, 'conflicts', context))
+  return List(OpSet.listIterator(opSet, objectId, 'conflicts', cachedContext()))
 }
 
 function getChanges(oldState, newState) {
