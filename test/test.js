@@ -167,7 +167,9 @@ describe('Automerge', () => {
         s2 = Automerge.change(s2, doc => doc.other = 'hello')
         s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
         const history = Automerge.getHistory(s1)
-        assert.deepEqual(history[history.length - 1].change.deps, {[s2._actorId]: 1})
+        const emptyChange = history[history.length - 1].change
+        assert.deepEqual(emptyChange.deps, {[s2._actorId]: 1})
+        assert.deepEqual(emptyChange.ops, [])
       })
     })
 
