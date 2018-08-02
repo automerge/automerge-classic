@@ -11,9 +11,13 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - [#106]: New `doc._get(UUID)` method allows looking up an object by its `_objectId` inside
   an `Automerge.change()` callback ([@mattkrick])
 - [#109]: Export `OpSet.getMissingChanges` on the Automerge object ([@mattkrick])
+- [#111]: New `Automerge.emptyChange()` allows a "change" record to be created without actually
+  changing the document ([@ept])
 
 ### Changed
 - [#110]: Require that the change message in `Automerge.change()` must be a string ([@ept])
+- [#111]: If `Automerge.change()` does not modify the document, the function now returns the
+  original document object untouched ([@ept])
 
 ## [0.7.11] — 2018-06-26
 
@@ -166,6 +170,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#111]: https://github.com/automerge/automerge/pull/111
 [#110]: https://github.com/automerge/automerge/pull/110
 [#109]: https://github.com/automerge/automerge/pull/109
 [#106]: https://github.com/automerge/automerge/issues/106

@@ -86,6 +86,29 @@ describe('Automerge', () => {
         assert.deepEqual(s1._conflicts, {})
       })
 
+      it('should return the unchanged state object if nothing changed', () => {
+        s2 = Automerge.change(s1, doc => {})
+        assert.strictEqual(s2, s1)
+      })
+
+      it('should ignore field updates that write the existing value', () => {
+        s1 = Automerge.change(s1, doc => doc.field = 123)
+        s2 = Automerge.change(s1, doc => doc.field = 123)
+        assert.strictEqual(s2, s1)
+      })
+
+      it('should not ignore field updates that resolve a conflict', () => {
+        s2 = Automerge.merge(Automerge.init(), s1)
+        s1 = Automerge.change(s1, doc => doc.field = 123)
+        s2 = Automerge.change(s2, doc => doc.field = 321)
+        s1 = Automerge.merge(s1, s2)
+        assert.deepEqual(Object.keys(s1._conflicts), ['field'])
+        const resolved = Automerge.change(s1, doc => doc.field = s1.field)
+        assert.notStrictEqual(resolved, s1)
+        assert.deepEqual(resolved, {field: s1.field})
+        assert.deepEqual(resolved._conflicts, {})
+      })
+
       it('should sanity-check arguments', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
         assert.throws(() => { Automerge.change({},        doc => doc.foo = 'bar') }, /must be the object to modify/)
@@ -125,6 +148,28 @@ describe('Automerge', () => {
           doc1.stuff = Object.assign({}, doc1.stuff, {baz: 'updated!'})
         })
         assert.deepEqual(s1, {stuff: {foo: 'bar', baz: 'updated!'}})
+      })
+    })
+
+    describe('emptyChange()', () => {
+      it('should append an empty change to the history', () => {
+        s1 = Automerge.change(s1, 'first change', doc => doc.field = 123)
+        s2 = Automerge.emptyChange(s1, 'empty change')
+        assert.notStrictEqual(s2, s1)
+        assert.deepEqual(s2, s1)
+        assert.deepEqual(Automerge.getHistory(s2).map(state => state.change.message),
+                         ['first change', 'empty change'])
+      })
+
+      it('should reference dependencies', () => {
+        s1 = Automerge.change(s1, doc => doc.field = 123)
+        s2 = Automerge.merge(Automerge.init(), s1)
+        s2 = Automerge.change(s2, doc => doc.other = 'hello')
+        s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
+        const history = Automerge.getHistory(s1)
+        const emptyChange = history[history.length - 1].change
+        assert.deepEqual(emptyChange.deps, {[s2._actorId]: 1})
+        assert.deepEqual(emptyChange.ops, [])
       })
     })
 

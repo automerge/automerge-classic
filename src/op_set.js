@@ -474,6 +474,6 @@ function listIterator(opSet, listId, mode, context) {
 
 module.exports = {
   init, addLocalOp, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
-  getObjectFields, getObjectField, getObjectConflicts,
+  getObjectFields, getObjectField, getObjectConflicts, getFieldOps,
   listElemByIndex, listLength, listIterator, ROOT_ID
 }

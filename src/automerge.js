@@ -14,6 +14,15 @@ function makeOp(state, opProps) {
   return state.set('opSet', opSet2)
 }
 
+function cachedContext() {
+  return {
+    cache: {},
+    instantiateObject (opSet, objectId) {
+      return opSet.getIn(['cache', objectId])
+    }
+  }
+}
+
 function insertAfter(state, listId, elemId) {
   if (!state.hasIn(['opSet', 'byObject', listId])) throw 'List object does not exist'
   if (!state.hasIn(['opSet', 'byObject', listId, elemId]) && elemId !== '_head') {
@@ -63,7 +72,14 @@ function setField(state, objectId, key, value) {
     const [newState, newId] = createNestedObjects(state, value)
     return makeOp(newState, { action: 'link', obj: objectId, key, value: newId })
   } else {
-    return makeOp(state, { action: 'set', obj: objectId, key, value })
+    // If the assigned field value is the same as the existing value, do nothing
+    const fieldOps = OpSet.getFieldOps(state.get('opSet'), objectId, key)
+    if (fieldOps.size === 1 && fieldOps.get(0).get('action') === 'set' &&
+        fieldOps.get(0).get('value') === value) {
+      return state
+    } else {
+      return makeOp(state, { action: 'set', obj: objectId, key, value })
+    }
   }
 }
 
@@ -146,7 +162,21 @@ function change(doc, message, callback) {
 
   const context = {state: doc._state, mutable: true, setField, splice, setListIndex, deleteField}
   callback(rootObjectProxy(context))
-  return makeChange(doc, context.state, message)
+
+  // If the callback didn't change anything, return the original document object unchanged
+  if (context.state.getIn(['opSet', 'local']).isEmpty()) {
+    return doc
+  } else {
+    return makeChange(doc, context.state, message)
+  }
+}
+
+function emptyChange(doc, message) {
+  checkTarget('emptyChange', doc)
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  return makeChange(doc, doc._state, message)
 }
 
 function assign(target, values) {
@@ -245,14 +275,7 @@ function getConflicts(doc, list) {
   if (!objectId || opSet.getIn(['byObject', objectId, '_init', 'action']) !== 'makeList') {
     throw new TypeError('The second argument to Automerge.getConflicts must be a list object')
   }
-
-  const context = {
-    cache: {},
-    instantiateObject (opSet, objectId) {
-      return opSet.getIn(['cache', objectId])
-    }
-  }
-  return List(OpSet.listIterator(opSet, objectId, 'conflicts', context))
+  return List(OpSet.listIterator(opSet, objectId, 'conflicts', cachedContext()))
 }
 
 function getChanges(oldState, newState) {
@@ -281,7 +304,7 @@ function getMissingDeps(doc) {
 }
 
 module.exports = {
-  init, change, merge, diff, assign, load, save, equals, inspect, getHistory,
+  init, change, emptyChange, merge, diff, assign, load, save, equals, inspect, getHistory,
   initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text, uuid,
   getMissingChanges: OpSet.getMissingChanges,
