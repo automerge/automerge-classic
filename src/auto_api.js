@@ -25,6 +25,19 @@ function checkTarget(funcName, target, needMutable) {
   }
 }
 
+function applyNewChange(root, opSet, ops, message) {
+  const actor = root._state.get('actorId')
+  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
+  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
+  const change = List.of(Map({actor, seq, deps, message, ops}))
+
+  if (isImmutable(root)) {
+    return ImmutableAPI.applyChanges(root, opSet, change, true)
+  } else {
+    return FreezeAPI.applyChanges(root, opSet, change, true)
+  }
+}
+
 function makeChange(root, newState, message) {
   // If there are multiple assignment operations for the same object and key,
   // keep only the most recent
@@ -42,25 +55,30 @@ function makeChange(root, newState, message) {
     }
   })
 
-  const actor = root._state.get('actorId')
-  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
-  const change = fromJS({actor, seq, deps, message, ops})
+  const opSet = root._state.get('opSet')
+    .update('undoStack', stack => stack.push(newState.getIn(['opSet', 'undoLocal'])))
+  return applyNewChange(root, opSet, ops, message)
+}
 
-  if (isImmutable(root)) {
-    return ImmutableAPI.applyChanges(root, List.of(change), true)
-  } else {
-    return FreezeAPI.applyChanges(root, List.of(change), true)
+function makeUndo(root, message) {
+  const undoOps = root._state.getIn(['opSet', 'undoStack']).last()
+  if (!undoOps) {
+    throw new RangeError('Cannot undo: there is nothing to be undone')
   }
+
+  const opSet = root._state.get('opSet')
+    .update('undoStack', stack => stack.pop())
+  return applyNewChange(root, opSet, undoOps, message)
 }
 
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
   const incremental = (doc._state.getIn(['opSet', 'history']).size > 0)
+  const opSet = doc._state.get('opSet')
   if (isImmutable(doc)) {
-    return ImmutableAPI.applyChanges(doc, fromJS(changes), incremental)
+    return ImmutableAPI.applyChanges(doc, opSet, fromJS(changes), incremental)
   } else {
-    return FreezeAPI.applyChanges(doc, fromJS(changes), incremental)
+    return FreezeAPI.applyChanges(doc, opSet, fromJS(changes), incremental)
   }
 }
 
@@ -70,18 +88,18 @@ function merge(local, remote) {
     throw new RangeError('Cannot merge an actor with itself')
   }
 
-  const clock = local._state.getIn(['opSet', 'clock'])
-  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
+  const opSet = local._state.get('opSet')
+  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), opSet.get('clock'))
   if (isImmutable(local)) {
-    return ImmutableAPI.applyChanges(local, changes, true)
+    return ImmutableAPI.applyChanges(local, opSet, changes, true)
   } else {
-    return FreezeAPI.applyChanges(local, changes, true)
+    return FreezeAPI.applyChanges(local, opSet, changes, true)
   }
 }
 
 module.exports = {
   checkTarget, isObject, isImmutable,
-  makeChange,
+  makeChange, makeUndo,
   applyChanges,
   merge,
 }
