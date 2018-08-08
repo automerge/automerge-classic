@@ -767,7 +767,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('undo and redo', () => {
+  describe('Automerge.undo()', () => {
     it('should allow undo if there have been local changes', () => {
       let s1 = Automerge.init()
       assert.strictEqual(Automerge.canUndo(s1), false)
@@ -899,6 +899,183 @@ describe('Automerge', () => {
                        [{action: 'set', obj: s1.list._objectId, key: elemId, value: 'B'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
+    })
+  })
+
+  describe('Automerge.redo()', () => {
+    it('should allow redo if the last change was an undo', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['peregrine falcon'])
+      assert.strictEqual(Automerge.canRedo(s1), false)
+      assert.throws(() => Automerge.redo(s1), /the last change was not an undo/)
+      s1 = Automerge.undo(s1)
+      assert.strictEqual(Automerge.canRedo(s1), true)
+      s1 = Automerge.redo(s1)
+      assert.strictEqual(Automerge.canRedo(s1), false)
+      assert.throws(() => Automerge.redo(s1), /the last change was not an undo/)
+    })
+
+    it('should allow several undos to be matched by several redos', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.birds = [])
+      s1 = Automerge.change(s1, doc => doc.birds.push('peregrine falcon'))
+      s1 = Automerge.change(s1, doc => doc.birds.push('sparrowhawk'))
+      assert.deepEqual(s1, {birds: ['peregrine falcon', 'sparrowhawk']})
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {birds: ['peregrine falcon']})
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {birds: []})
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {birds: ['peregrine falcon']})
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {birds: ['peregrine falcon', 'sparrowhawk']})
+    })
+
+    it('should allow winding history backwards and forwards repeatedly', () => {
+      let s1 = Automerge.init()
+      s1 = Automerge.change(s1, doc => doc['sparrows'] = 1)
+      s1 = Automerge.change(s1, doc => doc['skylarks'] = 1)
+      s1 = Automerge.change(s1, doc => doc['sparrows'] = 2)
+      s1 = Automerge.change(s1, doc => delete doc['skylarks'])
+      const states = [{}, {sparrows: 1}, {sparrows: 1, skylarks: 1}, {sparrows: 2, skylarks: 1}, {sparrows: 2}]
+      for (let iteration = 0; iteration < 3; iteration++) {
+        for (let undo = states.length - 2; undo >= 0; undo--) {
+          s1 = Automerge.undo(s1)
+          assert.deepEqual(s1, states[undo])
+        }
+        for (let redo = 1; redo < states.length; redo++) {
+          s1 = Automerge.redo(s1)
+          assert.deepEqual(s1, states[redo])
+        }
+      }
+    })
+
+    it('should undo/redo an initial field assignment', () => {
+      let s1 = Automerge.init()
+      s1 = Automerge.change(s1, doc => doc.hello = 'world')
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'set', obj: ROOT_ID, key: 'hello', value: 'world'}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).size, 0)
+      assert.deepEqual(s1, {hello: 'world'})
+    })
+
+    it('should undo/redo a field update', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.value = 3)
+      s1 = Automerge.change(s1, doc => doc.value = 4)
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {value: 3})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'set', obj: ROOT_ID, key: 'value', value: 4}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {value: 4})
+    })
+
+    it('should undo/redo a field deletion', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.value = 123)
+      s1 = Automerge.change(s1, doc => delete doc.value)
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {value: 123})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'del', obj: ROOT_ID, key: 'value'}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {})
+    })
+
+    it('should undo/redo object creation and linking', () => {
+      let s1 = Automerge.init()
+      s1 = Automerge.change(s1, doc => doc.settings = {background: 'white', text: 'black'})
+      let s2 = Automerge.undo(s1)
+      assert.deepEqual(s2, {})
+      assert.deepEqual(s2._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'link', obj: ROOT_ID, key: 'settings', value: s1.settings._objectId}])
+      s2 = Automerge.redo(s2)
+      assert.deepEqual(s2, {settings: {background: 'white', text: 'black'}})
+    })
+
+    it('should undo/redo link deletion', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.fish = ['trout', 'sea bass'])
+      s1 = Automerge.change(s1, doc => doc.birds = ['heron', 'magpie'])
+      s1 = Automerge.change(s1, doc => delete doc['fish'])
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {fish: ['trout', 'sea bass'], birds: ['heron', 'magpie']})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'del', obj: ROOT_ID, key: 'fish'}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {birds: ['heron', 'magpie']})
+    })
+
+    it('should undo/redo a list element insertion', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
+      s1 = Automerge.change(s1, doc => doc.list.push('D'))
+      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(3)
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {list: ['A', 'B', 'C']})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'set', obj: s1.list._objectId, key: elemId, value: 'D'}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
+    })
+
+    it('should undo/redo a list element deletion', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
+      s1 = Automerge.change(s1, doc => doc.list.deleteAt(1))
+      s1 = Automerge.undo(s1)
+      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(1)
+      assert.deepEqual(s1, {list: ['A', 'B', 'C']})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'del', obj: s1.list._objectId, key: elemId}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {list: ['A', 'C']})
+    })
+
+    it('should redo assignments by other actors that precede the undo', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.value = 1)
+      s1 = Automerge.change(s1, doc => doc.value = 2)
+      let s2 = Automerge.merge(Automerge.init(), s1)
+      s2 = Automerge.change(s2, doc => doc.value = 3)
+      s1 = Automerge.merge(s1, s2)
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {value: 1})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'set', obj: ROOT_ID, key: 'value', value: 3}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {value: 3})
+    })
+
+    it('should overwrite assignments by other actors that follow the undo', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.value = 1)
+      s1 = Automerge.change(s1, doc => doc.value = 2)
+      s1 = Automerge.undo(s1)
+      let s2 = Automerge.merge(Automerge.init(), s1)
+      s2 = Automerge.change(s2, doc => doc.value = 3)
+      s1 = Automerge.merge(s1, s2)
+      assert.deepEqual(s1, {value: 3})
+      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+                       [{action: 'set', obj: ROOT_ID, key: 'value', value: 2}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {value: 2})
+    })
+
+    it('should merge with concurrent changes to other fields', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc['trout'] = 2)
+      s1 = Automerge.change(s1, doc => doc['trout'] = 3)
+      s1 = Automerge.undo(s1)
+      let s2 = Automerge.merge(Automerge.init(), s1)
+      s2 = Automerge.change(s2, doc => doc['salmon'] = 1)
+      s1 = Automerge.merge(s1, s2)
+      assert.deepEqual(s1, {trout: 2, salmon: 1})
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {trout: 3, salmon: 1})
+    })
+
+    it('should apply undos by growing the history', () => {
+      let s1 = Automerge.change(Automerge.init(), 'set 1', doc => doc.value = 1)
+      s1 = Automerge.change(s1, 'set 2', doc => doc.value = 2)
+      s1 = Automerge.undo(s1, 'undo')
+      s1 = Automerge.redo(s1, 'redo!')
+      assert.deepEqual(Automerge.getHistory(s1).map(state => [state.change.seq, state.change.message]),
+                       [[1, 'set 1'], [2, 'set 2'], [3, 'undo'], [4, 'redo!']])
     })
   })
 

@@ -55,20 +55,59 @@ function makeChange(root, newState, message) {
     }
   })
 
+  const undoPos = root._state.getIn(['opSet', 'undoPos'])
   const opSet = root._state.get('opSet')
-    .update('undoStack', stack => stack.push(newState.getIn(['opSet', 'undoLocal'])))
+    .update('undoStack', stack => {
+      return stack
+        .slice(0, undoPos)
+        .push(newState.getIn(['opSet', 'undoLocal']))
+    })
+    .set('undoPos', undoPos + 1)
+    .set('redoStack', List())
   return applyNewChange(root, opSet, ops, message)
 }
 
 function makeUndo(root, message) {
-  const undoOps = root._state.getIn(['opSet', 'undoStack']).last()
-  if (!undoOps) {
+  const undoPos = root._state.getIn(['opSet', 'undoPos'])
+  const undoOps = root._state.getIn(['opSet', 'undoStack', undoPos - 1])
+  if (undoPos < 1 || !undoOps) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
 
-  const opSet = root._state.get('opSet')
-    .update('undoStack', stack => stack.pop())
+  let opSet = root._state.get('opSet')
+  let redoOps = List().withMutations(redoOps => {
+    for (let op of undoOps) {
+      if (!['set', 'del', 'link'].includes(op.get('action'))) {
+        throw new RangeError('Unexpected operation type in undo history: ' + op)
+      }
+
+      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
+      if (fieldOps.isEmpty()) {
+        redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
+      } else {
+        for (let fieldOp of fieldOps) {
+          redoOps.push(fieldOp.remove('actor').remove('seq'))
+        }
+      }
+    }
+  })
+
+  opSet = opSet
+    .set('undoPos', undoPos - 1)
+    .update('redoStack', stack => stack.push(redoOps))
   return applyNewChange(root, opSet, undoOps, message)
+}
+
+function makeRedo(root, message) {
+  const redoOps = root._state.getIn(['opSet', 'redoStack']).last()
+  if (!redoOps) {
+    throw new RangeError('Cannot redo: the last change was not an undo')
+  }
+
+  const opSet = root._state.get('opSet')
+    .update('undoPos', undoPos => undoPos + 1)
+    .update('redoStack', stack => stack.pop())
+  return applyNewChange(root, opSet, redoOps, message)
 }
 
 function applyChanges(doc, changes) {
@@ -99,7 +138,7 @@ function merge(local, remote) {
 
 module.exports = {
   checkTarget, isObject, isImmutable,
-  makeChange, makeUndo,
+  makeChange, makeUndo, makeRedo,
   applyChanges,
   merge,
 }

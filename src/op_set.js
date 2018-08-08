@@ -277,8 +277,10 @@ function init() {
     .set('clock',    Map())
     .set('deps',     Map())
     .set('local',    List())
+    .set('undoPos',   0)
     .set('undoLocal', List())
     .set('undoStack', List())
+    .set('redoStack', List())
     .set('queue',    List())
 }
 

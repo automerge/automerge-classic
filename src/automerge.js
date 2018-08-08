@@ -2,7 +2,7 @@ const { Map, List, fromJS } = require('immutable')
 const uuid = require('./uuid')
 const { rootObjectProxy } = require('./proxies')
 const OpSet = require('./op_set')
-const {isObject, checkTarget, makeChange, makeUndo, merge, applyChanges} = require('./auto_api')
+const {isObject, checkTarget, makeChange, makeUndo, makeRedo, merge, applyChanges} = require('./auto_api')
 const FreezeAPI = require('./freeze_api')
 const ImmutableAPI = require('./immutable_api')
 const { Text } = require('./text')
@@ -324,7 +324,7 @@ function getMissingDeps(doc) {
 
 function canUndo(doc) {
   checkTarget('canUndo', doc)
-  return !doc._state.getIn(['opSet', 'undoStack']).isEmpty()
+  return doc._state.getIn(['opSet', 'undoPos']) > 0
 }
 
 function undo(doc, message) {
@@ -335,12 +335,25 @@ function undo(doc, message) {
   return makeUndo(doc, message)
 }
 
+function canRedo(doc) {
+  checkTarget('canRedo', doc)
+  return !doc._state.getIn(['opSet', 'redoStack']).isEmpty()
+}
+
+function redo(doc, message) {
+  checkTarget('redo', doc)
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  return makeRedo(doc, message)
+}
+
 module.exports = {
   init, change, emptyChange, merge, diff, assign, load, save, equals, inspect, getHistory,
   initImmutable, loadImmutable, getConflicts,
   getChanges, getChangesForActor, applyChanges, getMissingDeps, Text, uuid,
   getMissingChanges: OpSet.getMissingChanges,
-  canUndo, undo,
+  canUndo, undo, canRedo, redo,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
