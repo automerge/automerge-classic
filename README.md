@@ -221,7 +221,7 @@ what you are doing, it is recommended that you omit the `actorId` argument.
 `Automerge.change(doc, message, callback)` enables you to modify an Automerge document `doc`.
 The `doc` object is not modified directly, since it is immutable; instead, `Automerge.change()`
 returns an updated copy of the document. The `callback` function is called with a mutable copy of
-`doc`, as shown below. The `message` argument allows you to attach arbitrary additional data to the
+`doc`, as shown below. The `message` argument allows you to attach an arbitrary string to the
 change, which is not interpreted by Automerge, but saved as part of the change history. The `message`
 argument is optional; if you want to omit it, you can simply call `Automerge.change(doc, callback)`.
 
@@ -420,6 +420,42 @@ in the user interface.
 
 The next time you assign to a conflicting property, the conflict is automatically considered to
 be resolved, and the property disappears from the `_conflicts` object.
+
+### Undo and Redo
+
+Automerge makes it easy to support an undo/redo feature in your application. Note that undo is
+a somewhat tricky concept in a collaborative application! Here, "undo" is taken as meaning "what the
+user expects to happen when they hit Ctrl-Z/Cmd-Z". In particular, the undo feature undoes the most
+recent change *by the local user*; it cannot currently be used to revert changes made by other
+users.
+
+Moreover, undo is not the same as jumping back to a previous version of a document; see
+[the next section](#examining-document-history) on how to examine document history. Undo works by
+applying the inverse operation of the local user's most recent change, and redo works by applying
+the inverse of the inverse. Both undo and redo create new changes, so from other users' point of
+view, an undo or redo looks the same as any other kind of change.
+
+To check whether undo is currently available, use the function `Automerge.canUndo(doc)`. It returns
+true if the local user has made any changes since the document was created or loaded. You can then
+call `Automerge.undo(doc)` to perform an undo. The functions `canRedo()` and `redo()` do the
+inverse:
+
+```js
+let doc = Automerge.change(Automerge.init(), doc => { doc.birds = [] })
+doc = Automerge.change(doc, doc => { doc.birds.push('blackbird') })
+doc = Automerge.change(doc, doc => { doc.birds.push('robin') })
+// now doc is {birds: ['blackbird', 'robin']}
+
+Automerge.canUndo(doc)    // returns true
+doc = Automerge.undo(doc) // now doc is {birds: ['blackbird']}
+doc = Automerge.undo(doc) // now doc is {birds: []}
+doc = Automerge.redo(doc) // now doc is {birds: ['blackbird']}
+doc = Automerge.redo(doc) // now doc is {birds: ['blackbird', 'robin']}
+```
+
+You can pass an optional `message` as second argument to `Automerge.undo(doc, message)` and
+`Automerge.redo(doc, message)`. This string is used as "commit message" that describes the
+undo/redo change, and it appears in the change history (see next section).
 
 ### Examining document history
 
