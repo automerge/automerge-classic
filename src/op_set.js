@@ -277,11 +277,17 @@ function init() {
     .set('clock',    Map())
     .set('deps',     Map())
     .set('local',    List())
+    .set('undoPos',   0)
+    .set('undoLocal', List())
+    .set('undoStack', List())
+    .set('redoStack', List())
     .set('queue',    List())
 }
 
-function addLocalOp(opSet, op, actor) {
-  opSet = opSet.update('local', ops => ops.push(op))
+function addLocalOp(opSet, op, actor, undoOps) {
+  opSet = opSet
+    .update('local', ops => ops.push(op))
+    .update('undoLocal', ops => ops.concat(undoOps || List()))
   return applyOp(opSet, op.set('actor', actor))
 }
 

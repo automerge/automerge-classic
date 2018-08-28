@@ -19,7 +19,7 @@ function listMethods(context, listId) {
       for (let [index, elem] of OpSet.listIterator(context.state.get('opSet'), listId, 'elems', context)) {
         if (end && index >= end) break
         if (index >= (start || 0)) {
-          context.state = context.setField(context.state, listId, elem, value)
+          context.state = context.setField(context.state, listId, elem, value, true)
         }
       }
       return this
@@ -113,7 +113,7 @@ const MapHandler = {
                           JSON.stringify(value) + ', but this object is read-only. ' +
                           'Please use Automerge.change() to get a writable version.')
     }
-    context.state = context.setField(context.state, objectId, key, value)
+    context.state = context.setField(context.state, objectId, key, value, true)
     return true
   },
 

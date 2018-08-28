@@ -25,6 +25,19 @@ function checkTarget(funcName, target, needMutable) {
   }
 }
 
+function applyNewChange(root, opSet, ops, message) {
+  const actor = root._state.get('actorId')
+  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
+  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
+  const change = List.of(Map({actor, seq, deps, message, ops}))
+
+  if (isImmutable(root)) {
+    return ImmutableAPI.applyChanges(root, opSet, change, true)
+  } else {
+    return FreezeAPI.applyChanges(root, opSet, change, true)
+  }
+}
+
 function makeChange(root, newState, message) {
   // If there are multiple assignment operations for the same object and key,
   // keep only the most recent
@@ -42,25 +55,69 @@ function makeChange(root, newState, message) {
     }
   })
 
-  const actor = root._state.get('actorId')
-  const seq = root._state.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = root._state.getIn(['opSet', 'deps']).remove(actor)
-  const change = fromJS({actor, seq, deps, message, ops})
+  const undoPos = root._state.getIn(['opSet', 'undoPos'])
+  const opSet = root._state.get('opSet')
+    .update('undoStack', stack => {
+      return stack
+        .slice(0, undoPos)
+        .push(newState.getIn(['opSet', 'undoLocal']))
+    })
+    .set('undoPos', undoPos + 1)
+    .set('redoStack', List())
+  return applyNewChange(root, opSet, ops, message)
+}
 
-  if (isImmutable(root)) {
-    return ImmutableAPI.applyChanges(root, List.of(change), true)
-  } else {
-    return FreezeAPI.applyChanges(root, List.of(change), true)
+function makeUndo(root, message) {
+  const undoPos = root._state.getIn(['opSet', 'undoPos'])
+  const undoOps = root._state.getIn(['opSet', 'undoStack', undoPos - 1])
+  if (undoPos < 1 || !undoOps) {
+    throw new RangeError('Cannot undo: there is nothing to be undone')
   }
+
+  let opSet = root._state.get('opSet')
+  let redoOps = List().withMutations(redoOps => {
+    for (let op of undoOps) {
+      if (!['set', 'del', 'link'].includes(op.get('action'))) {
+        throw new RangeError('Unexpected operation type in undo history: ' + op)
+      }
+
+      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
+      if (fieldOps.isEmpty()) {
+        redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
+      } else {
+        for (let fieldOp of fieldOps) {
+          redoOps.push(fieldOp.remove('actor').remove('seq'))
+        }
+      }
+    }
+  })
+
+  opSet = opSet
+    .set('undoPos', undoPos - 1)
+    .update('redoStack', stack => stack.push(redoOps))
+  return applyNewChange(root, opSet, undoOps, message)
+}
+
+function makeRedo(root, message) {
+  const redoOps = root._state.getIn(['opSet', 'redoStack']).last()
+  if (!redoOps) {
+    throw new RangeError('Cannot redo: the last change was not an undo')
+  }
+
+  const opSet = root._state.get('opSet')
+    .update('undoPos', undoPos => undoPos + 1)
+    .update('redoStack', stack => stack.pop())
+  return applyNewChange(root, opSet, redoOps, message)
 }
 
 function applyChanges(doc, changes) {
   checkTarget('applyChanges', doc)
   const incremental = (doc._state.getIn(['opSet', 'history']).size > 0)
+  const opSet = doc._state.get('opSet')
   if (isImmutable(doc)) {
-    return ImmutableAPI.applyChanges(doc, fromJS(changes), incremental)
+    return ImmutableAPI.applyChanges(doc, opSet, fromJS(changes), incremental)
   } else {
-    return FreezeAPI.applyChanges(doc, fromJS(changes), incremental)
+    return FreezeAPI.applyChanges(doc, opSet, fromJS(changes), incremental)
   }
 }
 
@@ -70,18 +127,18 @@ function merge(local, remote) {
     throw new RangeError('Cannot merge an actor with itself')
   }
 
-  const clock = local._state.getIn(['opSet', 'clock'])
-  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), clock)
+  const opSet = local._state.get('opSet')
+  const changes = OpSet.getMissingChanges(remote._state.get('opSet'), opSet.get('clock'))
   if (isImmutable(local)) {
-    return ImmutableAPI.applyChanges(local, changes, true)
+    return ImmutableAPI.applyChanges(local, opSet, changes, true)
   } else {
-    return FreezeAPI.applyChanges(local, changes, true)
+    return FreezeAPI.applyChanges(local, opSet, changes, true)
   }
 }
 
 module.exports = {
   checkTarget, isObject, isImmutable,
-  makeChange,
+  makeChange, makeUndo, makeRedo,
   applyChanges,
   merge,
 }

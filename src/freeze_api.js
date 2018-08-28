@@ -242,8 +242,8 @@ function init(actorId) {
   return rootObject(state, rootObj)
 }
 
-function applyChanges(root, changes, incremental) {
-  let opSet = root._state.get('opSet'), diffs = []
+function applyChanges(root, opSet, changes, incremental) {
+  let diffs = []
   for (let change of changes) {
     let [newOpSet, diff] = OpSet.addChange(opSet, change)
     diffs.push(...diff)

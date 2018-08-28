@@ -23,7 +23,7 @@ class DocSet {
 
   applyChanges (docId, changes) {
     let doc = this.docs.get(docId) || FreezeAPI.init(uuid())
-    doc = FreezeAPI.applyChanges(doc, changes, true)
+    doc = FreezeAPI.applyChanges(doc, doc._state.get('opSet'), changes, true)
     this.setDoc(docId, doc)
     return doc
   }
