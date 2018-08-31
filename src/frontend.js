@@ -1,3 +1,5 @@
+const { rootObjectProxy } = require('./proxies_fe')
+
 const OBJECT_ID = Symbol('_objectId')
 const CONFLICTS = Symbol('_conflicts')
 const CACHE     = Symbol('_cache')
@@ -230,24 +232,14 @@ function parentListObject(objectId, cache, updated) {
 }
 
 /**
- * Applies the list of changes `diff` to the cached objects in `cache`.
- * `updated` is an initially empty object that is mutated to contain the
- * updated objects. `inbound` is the mapping from child objectId to parent
- * objectId; it is updated according to the changes.
+ * After some set of objects in `updated` (a map from object ID to mutable
+ * object) have been updated, updates their parent objects to point to the new
+ * object versions, all the way to the root object. `cache` contains the
+ * previous (immutable) version of all objects, and `inbound` is the mapping
+ * from child objectId to parent objectId. Any objects that were not modified
+ * continue to refer to the existing version in `cache`.
  */
-function updateObjects(diffs, cache, updated, inbound) {
-  for (let diff of diffs) {
-    if (diff.type === 'map') {
-      updateMapObject(diff, cache, updated, inbound)
-    } else if (diff.type === 'list') {
-      updateListObject(diff, cache, updated, inbound)
-    } else if (diff.type === 'text') {
-      throw new RangeError('TODO: Automerge.Text is not yet supported')
-    } else {
-      throw new RangeError('Unknown object type: ' + diff.type)
-    }
-  }
-
+function updateParentObjects(cache, updated, inbound) {
   let affected = updated
   while (Object.keys(affected).length > 0) {
     let parents = {}
@@ -267,6 +259,153 @@ function updateObjects(diffs, cache, updated, inbound) {
   }
 }
 
+/**
+ * Takes a set of objects that have been updated (in `updated`) and an updated
+ * mapping from child objectId to parent objectId (in `inbound`), and returns
+ * a new immutable document root object based on `doc` that reflects those
+ * updates.
+ */
+function updateRootObject(doc, updated, inbound) {
+  let newDoc = updated[ROOT_ID]
+  if (!newDoc) {
+    throw new Error('Root object was not modified by patch')
+  }
+  Object.defineProperty(newDoc, CACHE,   {value: updated})
+  Object.defineProperty(newDoc, INBOUND, {value: inbound})
+
+  for (let objectId of Object.keys(doc[CACHE])) {
+    if (updated[objectId]) {
+      Object.freeze(updated[objectId])
+      Object.freeze(updated[objectId][CONFLICTS])
+    } else {
+      updated[objectId] = doc[CACHE][objectId]
+    }
+  }
+
+  Object.freeze(updated)
+  Object.freeze(inbound)
+  return newDoc
+}
+
+
+/**
+ * An instance of this class is passed to `rootObjectProxy()`. The methods are
+ * called by proxy object mutation functions to query the current object state
+ * and to apply the requested changes.
+ */
+class Context {
+  constructor (doc) {
+    this.cache = doc[CACHE]
+    this.updated = {}
+    this.inbound = Object.assign({}, doc[INBOUND])
+  }
+
+  /**
+   * Returns an object (not proxied) from the cache or updated set, as appropriate.
+   */
+  getObject(objectId) {
+    const object = this.updated[objectId] || this.cache[objectId]
+    if (!object) throw new RangeError(`Target object does not exist: ${objectId}`)
+    return object
+  }
+
+  /**
+   * Returns the value associated with the property named `key` on the object
+   * with ID `objectId`. If the value is an object, returns a proxy for it.
+   */
+  getObjectField(objectId, key) {
+    const object = this.getObject(objectId)
+    if (isObject(object[key])) {
+      // The instantiateObject function is added to the context object by rootObjectProxy()
+      return this.instantiateObject(object[key][OBJECT_ID])
+    } else {
+      return object[key]
+    }
+  }
+
+  /**
+   * Returns an operation that, if applied, will reset the property `key` of
+   * the object with ID `objectId` back to its current value.
+   */
+  mapKeyUndo(objectId, key) {
+    const object = this.getObject(objectId)
+    if (object[key] === undefined) {
+      return {action: 'del', obj: objectId, key}
+    } else if (isObject(object[key])) {
+      return {action: 'link', obj: objectId, key, value: object[key][OBJECT_ID]}
+    } else {
+      // TODO if the current state is a conflict, undo should reinstate that conflict
+      return {action: 'set', obj: objectId, key, value: object[key]}
+    }
+  }
+
+  /**
+   * Updates the map object with ID `objectId`, setting the property with name
+   * `key` to `value`. `topLevel` should be true for an assignment that is made
+   * directly by the user, and it should be false for an assignment that is part
+   * of recursive object creation when assigning an object literal (this
+   * distinction affects how undo history is created).
+   */
+  setMapKey(objectId, key, value, topLevel) {
+    if (typeof key !== 'string') {
+      throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
+    }
+    if (key === '') {
+      throw new RangeError('The key of a map entry must not be an empty string')
+    }
+    if (key.startsWith('_')) {
+      throw new RangeError(`Map entries starting with underscore are not allowed: ${key}`)
+    }
+
+    const object = this.getObject(objectId)
+    let undo = topLevel ? this.mapKeyUndo(objectId, key) : undefined
+
+    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+
+    } else if (isObject(value)) {
+      const newId = this.createNestedObjects(value)
+      const diff = {action: 'set', type: 'map', obj: objectId, key, value: newId, link: true}
+      this.addOp({action: 'link', obj: objectId, key, value: newId}, undo)
+      updateMapObject(diff, this.cache, this.updated, this.inbound)
+
+    } else if (object[key] !== value || object[CONFLICTS][key]) {
+      // If the assigned field value is the same as the existing value, and
+      // the assignment does not resolve a conflict, do nothing
+      const diff = {action: 'set', type: 'map', obj: objectId, key, value}
+      this.addOp({action: 'set', obj: objectId, key, value}, undo)
+      updateMapObject(diff, this.cache, this.updated, this.inbound)
+    }
+  }
+
+  /**
+   * Updates the map object with ID `objectId`, deleting the property `key`.
+   */
+  deleteMapKey(objectId, key) {
+    const object = this.getObject(objectId)
+    if (object[key] !== undefined) {
+      const undo = this.mapKeyUndo(objectId, key)
+      const diff = {action: 'remove', type: 'map', obj: objectId, key}
+      this.addOp({action: 'del', obj: objectId, key}, undo)
+      updateMapObject(diff, this.cache, this.updated, this.inbound)
+    }
+  }
+
+  /**
+   * Updates the list object with ID `objectId`, deleting `deletions` list
+   * elements starting from list index `start`, and inserting the list of new
+   * elements `insertions` at that position.
+   */
+  splice(objectId, start, deletions, insertions) {
+  }
+
+  setListIndex(objectId, index, value) {
+  }
+}
+
+/**
+ * Creates an empty document object with no changes.
+ */
 function init() {
   let root = {}, cache = {[ROOT_ID]: root}
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
@@ -276,36 +415,73 @@ function init() {
   return Object.freeze(root)
 }
 
-function applyDiffs(root, diffs) {
-  let inbound = Object.assign({}, root[INBOUND])
-  let updated = {}
-  updateObjects(diffs, root[CACHE], updated, inbound)
-
-  let newRoot = updated[ROOT_ID]
-  if (!newRoot) {
-    throw new Error('Root object was not modified by diffs')
+/**
+ * Changes a document `doc` according to actions taken by the local user.
+ * `message` is an optional descriptive string that is attached to the change.
+ * The actual change is made within the callback function `callback`, which is
+ * given a mutable version of the document as argument.
+ */
+function change(doc, message, callback) {
+  if (doc[OBJECT_ID] !== ROOT_ID) {
+    throw new TypeError('The first argument to Automerge.change must be the document root')
   }
-  Object.defineProperty(newRoot, CACHE,   {value: updated})
-  Object.defineProperty(newRoot, INBOUND, {value: inbound})
+  if (doc._change && doc._change.mutable) {
+    throw new TypeError('Calls to Automerge.change cannot be nested')
+  }
+  if (typeof message === 'function' && callback === undefined) {
+    ;[message, callback] = [callback, message]
+  }
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
 
-  for (let objectId of Object.keys(root[CACHE])) {
-    if (updated[objectId]) {
-      Object.freeze(updated[objectId])
-      Object.freeze(updated[objectId][CONFLICTS])
+  let context = new Context(doc)
+  callback(rootObjectProxy(context))
+
+  // If the callback didn't change anything, return the original document object unchanged
+  if (Object.keys(context.updated).length === 0) {
+    return doc
+  } else {
+    updateParentObjects(doc[CACHE], context.updated, context.inbound)
+    return updateRootObject(doc, context.updated, context.inbound)
+  }
+}
+
+/**
+ * Applies `patch` to the document root object `doc`. This patch must come
+ * from the backend; it may be the result of a local change or a remote change.
+ */
+function applyPatch(doc, patch) {
+  let inbound = Object.assign({}, doc[INBOUND])
+  let updated = {}
+
+  for (let diff of patch.diffs) {
+    if (diff.type === 'map') {
+      updateMapObject(diff, doc[CACHE], updated, inbound)
+    } else if (diff.type === 'list') {
+      updateListObject(diff, doc[CACHE], updated, inbound)
+    } else if (diff.type === 'text') {
+      throw new RangeError('TODO: Automerge.Text is not yet supported')
     } else {
-      updated[objectId] = root[CACHE][objectId]
+      throw new RangeError('Unknown object type: ' + diff.type)
     }
   }
 
-  Object.freeze(updated)
-  Object.freeze(inbound)
-  return newRoot
+  updateParentObjects(doc[CACHE], updated, inbound)
+  return updateRootObject(doc, updated, inbound)
 }
 
+/**
+ * Fetches the conflicts on `object`, which may be any object in a document.
+ * If the object is a map, returns an object mapping keys to conflict sets
+ * (only for those keys that actually have conflicts). If the object is a list,
+ * returns a list that contains null for non-conflicting indexes and a conflict
+ * set otherwise.
+ */
 function getConflicts(object) {
   return object[CONFLICTS]
 }
 
 module.exports = {
-  init, applyDiffs, getConflicts
+  init, change, applyPatch, getConflicts
 }

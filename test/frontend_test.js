@@ -12,7 +12,7 @@ describe('Frontend', () => {
     const diffs = [
       {obj: ROOT_ID, type: 'map', action: 'set', key: 'bird', value: 'magpie'}
     ]
-    const doc = Frontend.applyDiffs(Frontend.init(), diffs)
+    const doc = Frontend.applyPatch(Frontend.init(), {diffs})
     assert.deepEqual(doc, {bird: 'magpie'})
   })
 
@@ -21,7 +21,7 @@ describe('Frontend', () => {
     const diffs = [
       {obj: ROOT_ID, type: 'map', action: 'set', key: 'favoriteBird', value: 'wagtail', conflicts: [{actor, value: 'robin'}]}
     ]
-    const doc = Frontend.applyDiffs(Frontend.init(), diffs)
+    const doc = Frontend.applyPatch(Frontend.init(), {diffs})
     assert.deepEqual(doc, {favoriteBird: 'wagtail'})
     assert.deepEqual(Frontend.getConflicts(doc), {favoriteBird: {[actor]: 'robin'}})
   })
@@ -33,7 +33,7 @@ describe('Frontend', () => {
       {obj: birds,   type: 'map', action: 'set', key: 'wrens', value: 3},
       {obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true}
     ]
-    const doc = Frontend.applyDiffs(Frontend.init(), diffs)
+    const doc = Frontend.applyPatch(Frontend.init(), {diffs})
     assert.deepEqual(doc, {birds: {wrens: 3}})
   })
 
@@ -47,8 +47,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: birds, type: 'map', action: 'set', key: 'sparrows', value: 15}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {birds: {wrens: 3}})
     assert.deepEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
   })
@@ -66,8 +66,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: birds2, type: 'map', action: 'set', key: 'blackbirds', value: 2}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {favoriteBirds: {wrens: 3}})
     assert.deepEqual(doc2, {favoriteBirds: {wrens: 3}})
     assert.deepEqual(Frontend.getConflicts(doc1), {favoriteBirds: {[actor]: {blackbirds: 1}}})
@@ -87,8 +87,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: birds, type: 'map', action: 'set', key: 'sparrows', value: 15}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {birds: {wrens: 3}, mammals: {badgers: 1}})
     assert.deepEqual(doc2, {birds: {wrens: 3, sparrows: 15}, mammals: {badgers: 1}})
     assert.strictEqual(doc1.mammals, doc2.mammals)
@@ -102,8 +102,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: ROOT_ID, type: 'map', action: 'remove', key: 'magpies'}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {magpies: 2, sparrows: 15})
     assert.deepEqual(doc2, {sparrows: 15})
   })
@@ -115,7 +115,7 @@ describe('Frontend', () => {
       {obj: birds,   type: 'list', action: 'insert', index: 0, value: 'chaffinch', elemId: `${actor}:1`},
       {obj: ROOT_ID, type: 'map',  action: 'set',    key: 'birds', value: birds, link: true}
     ]
-    const doc = Frontend.applyDiffs(Frontend.init(), diffs)
+    const doc = Frontend.applyPatch(Frontend.init(), {diffs})
     assert.deepEqual(doc, {birds: ['chaffinch']})
   })
 
@@ -129,8 +129,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: birds,   type: 'list', action: 'set',    index: 0, value: 'greenfinch'}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {birds: ['chaffinch']})
     assert.deepEqual(doc2, {birds: ['greenfinch']})
   })
@@ -152,8 +152,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: item2, type: 'map', action: 'set', key: 'numSeen', value: 2}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {birds: [{species: 'lapwing', numSeen: 2}]})
     assert.deepEqual(doc2, {birds: [{species: 'lapwing', numSeen: 2}]})
     assert.strictEqual(doc1.birds[0], doc2.birds[0])
@@ -172,8 +172,8 @@ describe('Frontend', () => {
     const diffs2 = [
       {obj: birds,   type: 'list', action: 'remove', index: 0}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {birds: ['chaffinch', 'goldfinch']})
     assert.deepEqual(doc2, {birds: ['goldfinch']})
   })
@@ -195,8 +195,8 @@ describe('Frontend', () => {
       {obj: counts,  type: 'map',  action: 'set', key: 'magpies', value: 3},
       {obj: detail1, type: 'map',  action: 'set', key: 'species', value: 'Eurasian magpie'}
     ]
-    const doc1 = Frontend.applyDiffs(Frontend.init(), diffs1)
-    const doc2 = Frontend.applyDiffs(doc1, diffs2)
+    const doc1 = Frontend.applyPatch(Frontend.init(), {diffs: diffs1})
+    const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
     assert.deepEqual(doc1, {counts: {magpies: 2}, details: [{species: 'magpie', family: 'corvidae'}]})
     assert.deepEqual(doc2, {counts: {magpies: 3}, details: [{species: 'Eurasian magpie', family: 'corvidae'}]})
   })
