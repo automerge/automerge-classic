@@ -1,14 +1,38 @@
 const { rootObjectProxy } = require('./proxies_fe')
+const uuid = require('./uuid')
 
-const OBJECT_ID = Symbol('_objectId')
-const CONFLICTS = Symbol('_conflicts')
-const CACHE     = Symbol('_cache')
-const INBOUND   = Symbol('_inbound')
-const ELEM_IDS  = Symbol('_elemIds')
+// Properties of the document root object
+const ACTOR_ID  = Symbol('_actorId')   // the actor ID of the local replica (string)
+const CACHE     = Symbol('_cache')     // map from objectId to immutable object
+const INBOUND   = Symbol('_inbound')   // map from child objectId to parent objectId
+const REQUESTS  = Symbol('_requests')  // list of changes applied locally but not yet confirmed by backend
+const MAX_REQ   = Symbol('_maxReq')    // maximum request ID generated so far
+
+// Properties of all Automerge objects
+const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (string)
+const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type) of conflicts
+
+// Properties of Automerge list objects
+const ELEM_IDS  = Symbol('_elemIds')   // list containing the element ID of each list element
+const MAX_ELEM  = Symbol('_maxElem')   // maximum element counter value in this list (number)
+
 const ROOT_ID   = '00000000-0000-0000-0000-000000000000'
 
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null
+}
+
+/**
+ * Takes a string in the form that is used to identify list elements (an actor
+ * ID concatenated with a counter, separated by a colon) and returns a
+ * two-element array, `[counter, actorId]`.
+ */
+function parseElemId(elemId) {
+  const match = /^(.*):(\d+)$/.exec(elemId || '')
+  if (!match) {
+    throw new RangeError(`Not a valid elemId: ${elemId}`)
+  }
+  return [parseInt(match[2]), match[1]]
 }
 
 /**
@@ -141,9 +165,11 @@ function cloneListObject(originalList, objectId) {
   let list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   let conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
   let elemIds   = (originalList && originalList[ELEM_IDS] ) ? originalList[ELEM_IDS].slice()  : []
+  let maxElem   = (originalList && originalList[MAX_ELEM] ) ? originalList[MAX_ELEM]          : 0
+  Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
   Object.defineProperty(list, ELEM_IDS,  {value: elemIds})
-  Object.defineProperty(list, OBJECT_ID, {value: objectId})
+  Object.defineProperty(list, MAX_ELEM,  {value: maxElem, writable: true})
   return list
 }
 
@@ -175,6 +201,7 @@ function updateListObject(diff, cache, updated, inbound) {
   if (diff.action === 'create') {
     // do nothing
   } else if (diff.action === 'insert') {
+    list[MAX_ELEM] = Math.max(list[MAX_ELEM], parseElemId(diff.elemId)[0])
     list.splice(diff.index, 0, value)
     conflicts.splice(diff.index, 0, conflict)
     elemIds.splice(diff.index, 0, diff.elemId)
@@ -265,13 +292,16 @@ function updateParentObjects(cache, updated, inbound) {
  * a new immutable document root object based on `doc` that reflects those
  * updates.
  */
-function updateRootObject(doc, updated, inbound) {
+function updateRootObject(doc, updated, inbound, requests, maxReq) {
   let newDoc = updated[ROOT_ID]
   if (!newDoc) {
     throw new Error('Root object was not modified by patch')
   }
-  Object.defineProperty(newDoc, CACHE,   {value: updated})
-  Object.defineProperty(newDoc, INBOUND, {value: inbound})
+  Object.defineProperty(newDoc, ACTOR_ID, {value: doc[ACTOR_ID]})
+  Object.defineProperty(newDoc, CACHE,    {value: updated})
+  Object.defineProperty(newDoc, INBOUND,  {value: inbound})
+  Object.defineProperty(newDoc, REQUESTS, {value: requests})
+  Object.defineProperty(newDoc, MAX_REQ,  {value: maxReq})
 
   for (let objectId of Object.keys(doc[CACHE])) {
     if (updated[objectId]) {
@@ -284,6 +314,7 @@ function updateRootObject(doc, updated, inbound) {
 
   Object.freeze(updated)
   Object.freeze(inbound)
+  Object.freeze(requests)
   return newDoc
 }
 
@@ -295,9 +326,32 @@ function updateRootObject(doc, updated, inbound) {
  */
 class Context {
   constructor (doc) {
+    this.actorId = doc[ACTOR_ID]
     this.cache = doc[CACHE]
     this.updated = {}
     this.inbound = Object.assign({}, doc[INBOUND])
+    this.ops = []
+    this.diffs = []
+  }
+
+  /**
+   * Adds an operation object to the list of changes made in the current context.
+   */
+  addOp(operation) {
+    this.ops.push(operation)
+  }
+
+  /**
+   * Applies a diff object to the current document state.
+   */
+  apply(diff) {
+    this.diffs.push(diff)
+
+    if (diff.type === 'map') {
+      updateMapObject(diff, this.cache, this.updated, this.inbound)
+    } else if (diff.type === 'list') {
+      updateListObject(diff, this.cache, this.updated, this.inbound)
+    }
   }
 
   /**
@@ -324,29 +378,38 @@ class Context {
   }
 
   /**
-   * Returns an operation that, if applied, will reset the property `key` of
-   * the object with ID `objectId` back to its current value.
+   * Recursively creates Automerge versions of all the objects and nested
+   * objects in `value`, and returns the object ID of the root object. If any
+   * object is an existing Automerge object, its existing ID is returned.
    */
-  mapKeyUndo(objectId, key) {
-    const object = this.getObject(objectId)
-    if (object[key] === undefined) {
-      return {action: 'del', obj: objectId, key}
-    } else if (isObject(object[key])) {
-      return {action: 'link', obj: objectId, key, value: object[key][OBJECT_ID]}
+  createNestedObjects(value) {
+    if (typeof value[OBJECT_ID] === 'string') return value[OBJECT_ID]
+    const objectId = uuid()
+
+    if (Array.isArray(value)) {
+      // Create a new list object
+      this.apply({action: 'create', type: 'list', obj: objectId})
+      this.addOp({action: 'makeList', obj: objectId})
+      this.splice(objectId, 0, 0, value)
+
     } else {
-      // TODO if the current state is a conflict, undo should reinstate that conflict
-      return {action: 'set', obj: objectId, key, value: object[key]}
+      // Create a new map object
+      this.apply({action: 'create', type: 'map', obj: objectId})
+      this.addOp({action: 'makeMap', obj: objectId})
+
+      for (let key of Object.keys(value)) {
+        this.setMapKey(objectId, key, value[key])
+      }
     }
+
+    return objectId
   }
 
   /**
    * Updates the map object with ID `objectId`, setting the property with name
-   * `key` to `value`. `topLevel` should be true for an assignment that is made
-   * directly by the user, and it should be false for an assignment that is part
-   * of recursive object creation when assigning an object literal (this
-   * distinction affects how undo history is created).
+   * `key` to `value`.
    */
-  setMapKey(objectId, key, value, topLevel) {
+  setMapKey(objectId, key, value) {
     if (typeof key !== 'string') {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
     }
@@ -358,23 +421,19 @@ class Context {
     }
 
     const object = this.getObject(objectId)
-    let undo = topLevel ? this.mapKeyUndo(objectId, key) : undefined
-
     if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
       throw new TypeError(`Unsupported type of value: ${typeof value}`)
 
     } else if (isObject(value)) {
-      const newId = this.createNestedObjects(value)
-      const diff = {action: 'set', type: 'map', obj: objectId, key, value: newId, link: true}
-      this.addOp({action: 'link', obj: objectId, key, value: newId}, undo)
-      updateMapObject(diff, this.cache, this.updated, this.inbound)
+      const childId = this.createNestedObjects(value)
+      this.apply({action: 'set', type: 'map', obj: objectId, key, value: childId, link: true})
+      this.addOp({action: 'link', obj: objectId, key, value: childId})
 
     } else if (object[key] !== value || object[CONFLICTS][key]) {
       // If the assigned field value is the same as the existing value, and
       // the assignment does not resolve a conflict, do nothing
-      const diff = {action: 'set', type: 'map', obj: objectId, key, value}
-      this.addOp({action: 'set', obj: objectId, key, value}, undo)
-      updateMapObject(diff, this.cache, this.updated, this.inbound)
+      this.apply({action: 'set', type: 'map', obj: objectId, key, value})
+      this.addOp({action: 'set', obj: objectId, key, value})
     }
   }
 
@@ -384,10 +443,61 @@ class Context {
   deleteMapKey(objectId, key) {
     const object = this.getObject(objectId)
     if (object[key] !== undefined) {
-      const undo = this.mapKeyUndo(objectId, key)
-      const diff = {action: 'remove', type: 'map', obj: objectId, key}
-      this.addOp({action: 'del', obj: objectId, key}, undo)
-      updateMapObject(diff, this.cache, this.updated, this.inbound)
+      this.apply({action: 'remove', type: 'map', obj: objectId, key})
+      this.addOp({action: 'del', obj: objectId, key})
+    }
+  }
+
+  /**
+   * Inserts a new list element `value` at position `index` into the list with
+   * ID `objectId`.
+   */
+  insertListItem(objectId, index, value) {
+    const list = this.getObject(objectId)
+    if (index < 0 || index > list.length) {
+      throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
+    }
+    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    }
+
+    list[MAX_ELEM] += 1
+    const prevId = (index === 0) ? '_head' : list[ELEM_IDS][index - 1]
+    const elemId = `${this.actorId}:${list[MAX_ELEM]}`
+    this.addOp({action: 'ins', obj: objectId, key: prevId, elem: list[MAX_ELEM]})
+
+    if (isObject(value)) {
+      const childId = this.createNestedObjects(value)
+      this.apply({action: 'insert', type: 'list', obj: objectId, index, value: childId, link: true, elemId})
+      this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
+    } else {
+      this.apply({action: 'insert', type: 'list', obj: objectId, index, value, elemId})
+      this.addOp({action: 'set', obj: objectId, key: elemId, value})
+    }
+  }
+
+  /**
+   * Updates the list with ID `objectId`, replacing the current value at
+   * position `index` with the new value `value`.
+   */
+  setListIndex(objectId, index, value) {
+    const list = this.getObject(objectId)
+    if (index < 0 || index >= list.length) {
+      throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
+    }
+    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    }
+
+    const elemId = list[ELEM_IDS][index]
+
+    if (isObject(value)) {
+      const childId = this.createNestedObjects(value)
+      this.apply({action: 'set', type: 'list', obj: objectId, index, value: childId, link: true})
+      this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
+    } else {
+      this.apply({action: 'set', type: 'list', obj: objectId, index, value})
+      this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
   }
 
@@ -397,21 +507,41 @@ class Context {
    * elements `insertions` at that position.
    */
   splice(objectId, start, deletions, insertions) {
-  }
+    let list = this.getObject(objectId)
 
-  setListIndex(objectId, index, value) {
+    if (deletions > 0) {
+      if (start < 0 || start > list.length - deletions) {
+        throw new RangeError(`${deletions} deletions starting at index ${start} are out of bounds for list of length ${list.length}`)
+      }
+
+      for (let i = 0; i < deletions; i++) {
+        this.apply({action: 'remove', type: 'list', obj: objectId, index: start})
+        this.addOp({action: 'del', obj: objectId, key: list[ELEM_IDS][start]})
+
+        // Must refresh object after the first updateListObject call, since the
+        // object previously may have been immutable
+        if (i === 0) list = this.getObject(objectId)
+      }
+    }
+
+    for (let i = 0; i < insertions.length; i++) {
+      this.insertListItem(objectId, start + i, insertions[i])
+    }
   }
 }
 
 /**
  * Creates an empty document object with no changes.
  */
-function init() {
+function init(actorId) {
   let root = {}, cache = {[ROOT_ID]: root}
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
+  Object.defineProperty(root, ACTOR_ID,  {value: actorId || uuid()})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
   Object.defineProperty(root, INBOUND,   {value: Object.freeze({})})
+  Object.defineProperty(root, REQUESTS,  {value: Object.freeze([])})
+  Object.defineProperty(root, MAX_REQ,   {value: 0})
   return Object.freeze(root)
 }
 
@@ -438,12 +568,18 @@ function change(doc, message, callback) {
   let context = new Context(doc)
   callback(rootObjectProxy(context))
 
-  // If the callback didn't change anything, return the original document object unchanged
   if (Object.keys(context.updated).length === 0) {
+    // If the callback didn't change anything, return the original document object unchanged
     return doc
   } else {
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
-    return updateRootObject(doc, context.updated, context.inbound)
+
+    const maxReq = doc[MAX_REQ] + 1
+    const requests = doc[REQUESTS].slice()
+    const request = {requestId: maxReq, before: doc, ops: context.ops, diffs: context.diffs}
+    requests.push(Object.freeze(request))
+
+    return updateRootObject(doc, context.updated, context.inbound, requests, maxReq)
   }
 }
 
@@ -461,14 +597,28 @@ function applyPatch(doc, patch) {
     } else if (diff.type === 'list') {
       updateListObject(diff, doc[CACHE], updated, inbound)
     } else if (diff.type === 'text') {
-      throw new RangeError('TODO: Automerge.Text is not yet supported')
+      throw new TypeError('TODO: Automerge.Text is not yet supported')
     } else {
-      throw new RangeError('Unknown object type: ' + diff.type)
+      throw new TypeError(`Unknown object type: ${diff.type}`)
     }
   }
 
   updateParentObjects(doc[CACHE], updated, inbound)
-  return updateRootObject(doc, updated, inbound)
+  return updateRootObject(doc, updated, inbound, doc[REQUESTS], doc[MAX_REQ])
+}
+
+/**
+ * Returns the Automerge object ID of the given object.
+ */
+function getObjectId(object) {
+  return object[OBJECT_ID]
+}
+
+/**
+ * Returns the Automerge actor ID of the given document.
+ */
+function getActorId(doc) {
+  return doc[ACTOR_ID]
 }
 
 /**
@@ -482,6 +632,13 @@ function getConflicts(object) {
   return object[CONFLICTS]
 }
 
+/**
+ * Returns the list of change requests pending on the document `doc`.
+ */
+function getRequests(doc) {
+  return doc[REQUESTS]
+}
+
 module.exports = {
-  init, change, applyPatch, getConflicts
+  init, change, applyPatch, getObjectId, getActorId, getConflicts, getRequests
 }

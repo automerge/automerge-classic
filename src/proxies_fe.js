@@ -11,11 +11,9 @@ function listMethods(context, listId) {
     },
 
     fill(value, start, end) {
-      for (let [index, elem] of OpSet.listIterator(context.state.get('opSet'), listId, 'elems', context)) {
-        if (end && index >= end) break
-        if (index >= (start || 0)) {
-          context.setField(listId, elem, value, true) // TODO setField doesn't exist any more
-        }
+      let list = context.getObject(listId)
+      for (let index = (start || 0); index < (end || list.length); index++) {
+        context.setListIndex(listId, index, value)
       }
       return this
     },
@@ -26,32 +24,34 @@ function listMethods(context, listId) {
     },
 
     pop() {
-      const length = OpSet.listLength(context.state.get('opSet'), listId)
-      if (length == 0) return
-      const last = OpSet.listElemByIndex(context.state.get('opSet'), listId, length - 1, context)
+      let list = context.getObject(listId)
+      if (list.length == 0) return
+      const last = context.getObjectField(listId, list.length - 1)
       context.splice(listId, length - 1, 1, [])
       return last
     },
 
     push(...values) {
-      const length = OpSet.listLength(context.state.get('opSet'), listId)
-      context.splice(listId, length, 0, values)
-      return OpSet.listLength(context.state.get('opSet'), listId)
+      let list = context.getObject(listId)
+      context.splice(listId, list.length, 0, values)
+      // need to getObject() again because the list object above may be immutable
+      return context.getObject(listId).length
     },
 
     shift() {
-      const first = OpSet.listElemByIndex(context.state.get('opSet'), listId, 0, context)
+      const first = context.getObjectField(listId, 0)
       context.splice(listId, 0, 1, [])
       return first
     },
 
     splice(start, deleteCount, ...values) {
+      let list = context.getObject(listId)
       if (deleteCount === undefined) {
-        deleteCount = OpSet.listLength(context.state.get('opSet'), listId) - start
+        deleteCount = list.length - start
       }
       const deleted = []
       for (let n = 0; n < deleteCount; n++) {
-        deleted.push(OpSet.listElemByIndex(context.state.get('opSet'), listId, start + n, context))
+        deleted.push(context.getObjectField(listId, start + n))
       }
       context.splice(listId, start, deleteCount, values)
       return deleted
@@ -59,12 +59,8 @@ function listMethods(context, listId) {
 
     unshift(...values) {
       context.splice(listId, 0, 0, values)
-      return OpSet.listLength(context.state.get('opSet'), listId)
+      return context.getObject(listId).length
     }
-  }
-
-  for (let iterator of ['entries', 'keys', 'values']) {
-    methods[iterator] = () => OpSet.listIterator(context.state.get('opSet'), listId, iterator, context)
   }
 
   // Read-only methods that can delegate to the JavaScript built-in implementations
@@ -72,8 +68,8 @@ function listMethods(context, listId) {
                       'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
-      const array = [...OpSet.listIterator(context.state.get('opSet'), listId, 'values', context)]
-      return array[method].call(array, ...args)
+      const list = context.getObject(listId)
+      return list[method].call(list, ...args)
     }
   }
 
@@ -93,7 +89,7 @@ const MapHandler = {
 
   set (target, key, value) {
     const { context, objectId } = target
-    context.setMapKey(objectId, key, value, true)
+    context.setMapKey(objectId, key, value)
     return true
   },
 
@@ -104,35 +100,31 @@ const MapHandler = {
   },
 
   has (target, key) {
-    return ['_type', '_state', '_actorId', '_objectId', '_conflicts'].includes(key) ||
-      OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).has(key)
+    return ['_type', '_objectId', '_change', '_get'].includes(key) ||
+      (key in context.getObject(target.objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).has(key)) {
-      return {configurable: true, enumerable: true}
-    }
+    const object = context.getObject(target.objectId)
+    return Object.getOwnPropertyDescriptor(object, key)
   },
 
   ownKeys (target) {
-    return OpSet.getObjectFields(target.context.state.get('opSet'), target.objectId).toJS()
+    return Object.keys(context.getObject(target.objectId))
   }
 }
 
 const ListHandler = {
   get (target, key) {
     const [context, objectId] = target
-    if (!context.state.hasIn(['opSet', 'byObject', objectId])) throw 'Target object does not exist: ' + objectId
-    if (key === Symbol.iterator) return () => OpSet.listIterator(context.state.get('opSet'), objectId, 'values', context)
+    if (key === Symbol.iterator) return context.getObject(objectId)[Symbol.iterator]
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_type') return 'list'
     if (key === '_objectId') return objectId
-    if (key === '_state') return context.state
-    if (key === '_actorId') return context.state.get('actorId')
     if (key === '_change') return context
-    if (key === 'length') return OpSet.listLength(context.state.get('opSet'), objectId)
+    if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return OpSet.listElemByIndex(context.state.get('opSet'), objectId, parseInt(key), context)
+      return context.getObjectField(objectId, parseInt(key))
     }
     return listMethods(context, objectId)[key]
   },
@@ -152,28 +144,21 @@ const ListHandler = {
   has (target, key) {
     const [context, objectId] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return parseInt(key) < OpSet.listLength(context.state.get('opSet'), objectId)
+      return parseInt(key) < context.getObject(objectId).length
     }
-    return (key === 'length') || (key === '_type') || (key === '_objectId') ||
-      (key === '_state') || (key === '_actorId')
+    return ['length', '_type', '_objectId', '_change'].includes(key)
   },
 
   getOwnPropertyDescriptor (target, key) {
     const [context, objectId] = target
-    if (key === 'length') return {}
-    if (key === '_objectId' || (typeof key === 'string' && /^[0-9]+$/.test(key))) {
-      if (parseInt(key) < OpSet.listLength(context.state.get('opSet'), objectId)) {
-        return {configurable: true, enumerable: true}
-      }
-    }
+    const object = context.getObject(objectId)
+    return Object.getOwnPropertyDescriptor(object, key)
   },
 
   ownKeys (target) {
     const [context, objectId] = target
-    const length = OpSet.listLength(context.state.get('opSet'), objectId)
-    let keys = ['length', '_objectId']
-    for (let i = 0; i < length; i++) keys.push(i.toString())
-    return keys
+    const object = context.getObject(objectId)
+    return Object.keys(object)
   }
 }
 
