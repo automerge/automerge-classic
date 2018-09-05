@@ -636,7 +636,10 @@ function getConflicts(object) {
  * Returns the list of change requests pending on the document `doc`.
  */
 function getRequests(doc) {
-  return doc[REQUESTS]
+  return doc[REQUESTS].map(req => {
+    const { requestId, ops } = req
+    return { requestId, ops }
+  })
 }
 
 module.exports = {

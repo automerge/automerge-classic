@@ -20,9 +20,7 @@ describe('Frontend', () => {
       assert.deepEqual(doc, {bird: 'magpie'})
       assert.deepEqual(Frontend.getRequests(doc), [{
         requestId: 1,
-        before: Frontend.init(),
-        ops: [{obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}],
-        diffs: [{obj: ROOT_ID, type: 'map', action: 'set', key: 'bird', value: 'magpie'}]
+        ops: [{obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}]
       }])
     })
 
@@ -32,16 +30,10 @@ describe('Frontend', () => {
       assert.deepEqual(doc, {birds: {wrens: 3}})
       assert.deepEqual(Frontend.getRequests(doc), [{
         requestId: 1,
-        before: Frontend.init(),
         ops: [
           {obj: birds,   action: 'makeMap'},
           {obj: birds,   action: 'set',  key: 'wrens', value: 3},
           {obj: ROOT_ID, action: 'link', key: 'birds', value: birds}
-        ],
-        diffs: [
-          {obj: birds,   type: 'map', action: 'create'},
-          {obj: birds,   type: 'map', action: 'set', key: 'wrens', value: 3},
-          {obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true}
         ]
       }])
     })
@@ -54,9 +46,7 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
       assert.deepEqual(Frontend.getRequests(doc2)[1], {
         requestId: 2,
-        before: doc1,
-        ops: [{obj: birds, action: 'set', key: 'sparrows', value: 15}],
-        diffs: [{obj: birds, type: 'map', action: 'set', key: 'sparrows', value: 15}]
+        ops: [{obj: birds, action: 'set', key: 'sparrows', value: 15}]
       })
     })
 
@@ -67,9 +57,7 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {sparrows: 15})
       assert.deepEqual(Frontend.getRequests(doc2)[1], {
         requestId: 2,
-        before: doc1,
-        ops: [{obj: ROOT_ID, action: 'del', key: 'magpies'}],
-        diffs: [{obj: ROOT_ID, type: 'map', action: 'remove', key: 'magpies'}]
+        ops: [{obj: ROOT_ID, action: 'del', key: 'magpies'}]
       })
     })
 
@@ -79,17 +67,11 @@ describe('Frontend', () => {
       assert.deepEqual(doc, {birds: ['chaffinch']})
       assert.deepEqual(Frontend.getRequests(doc), [{
         requestId: 1,
-        before: Frontend.init(),
         ops: [
           {obj: birds,   action: 'makeList'},
           {obj: birds,   action: 'ins',  key: '_head', elem: 1},
           {obj: birds,   action: 'set',  key: `${actor}:1`, value: 'chaffinch'},
           {obj: ROOT_ID, action: 'link', key: 'birds', value: birds}
-        ],
-        diffs: [
-          {obj: birds,   type: 'list', action: 'create'},
-          {obj: birds,   type: 'list', action: 'insert', index: 0, value: 'chaffinch', elemId: `${actor}:1`},
-          {obj: ROOT_ID, type: 'map',  action: 'set',    key: 'birds', value: birds, link: true}
         ]
       }])
     })
@@ -102,9 +84,7 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {birds: ['greenfinch']})
       assert.deepEqual(Frontend.getRequests(doc2)[1], {
         requestId: 2,
-        before: doc1,
-        ops: [{obj: birds, action: 'set', key: `${actor}:1`, value: 'greenfinch'}],
-        diffs: [{obj: birds, type: 'list', action: 'set', index: 0, value: 'greenfinch'}]
+        ops: [{obj: birds, action: 'set', key: `${actor}:1`, value: 'greenfinch'}]
       })
     })
 
@@ -116,9 +96,7 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {birds: ['goldfinch']})
       assert.deepEqual(Frontend.getRequests(doc2)[1], {
         requestId: 2,
-        before: doc1,
-        ops: [{obj: birds, action: 'del', key: `${actor}:1`}],
-        diffs: [{obj: birds, type: 'list', action: 'remove', index: 0}]
+        ops: [{obj: birds, action: 'del', key: `${actor}:1`}]
       })
     })
   })
