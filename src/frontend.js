@@ -2,7 +2,7 @@ const { rootObjectProxy } = require('./proxies_fe')
 const uuid = require('./uuid')
 
 // Properties of the document root object
-const ACTOR_ID  = Symbol('_actorId')   // the actor ID of the local replica (string)
+const OPTIONS   = Symbol('_options')   // object containing options passed to init()
 const CACHE     = Symbol('_cache')     // map from objectId to immutable object
 const INBOUND   = Symbol('_inbound')   // map from child objectId to parent objectId
 const REQUESTS  = Symbol('_requests')  // list of changes applied locally but not yet confirmed by backend
@@ -317,7 +317,7 @@ function updateRootObject(doc, updated, inbound, requests, maxReq) {
   if (!newDoc) {
     throw new Error('Root object was not modified by patch')
   }
-  Object.defineProperty(newDoc, ACTOR_ID, {value: doc[ACTOR_ID]})
+  Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, REQUESTS, {value: requests})
@@ -436,7 +436,7 @@ function transformRequest(request, patch) {
  */
 class Context {
   constructor (doc) {
-    this.actorId = doc[ACTOR_ID]
+    this.actorId = doc[OPTIONS].actorId
     this.cache = doc[CACHE]
     this.updated = {}
     this.inbound = Object.assign({}, doc[INBOUND])
@@ -638,10 +638,18 @@ class Context {
 /**
  * Creates an empty document object with no changes.
  */
-function init(actorId) {
+function init(options) {
+  if (typeof options === 'string') {
+    options = {actorId: options}
+  } else if (typeof options === 'undefined') {
+    options = {actorId: uuid()}
+  } else if (!isObject(options)) {
+    throw new TypeError(`Unsupported value for init() options: ${options}`)
+  }
+
   let root = {}, cache = {[ROOT_ID]: root}
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
-  Object.defineProperty(root, ACTOR_ID,  {value: actorId || uuid()})
+  Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
   Object.defineProperty(root, INBOUND,   {value: Object.freeze({})})
@@ -735,7 +743,7 @@ function getObjectId(object) {
  * Returns the Automerge actor ID of the given document.
  */
 function getActorId(doc) {
-  return doc[ACTOR_ID]
+  return doc[OPTIONS].actorId
 }
 
 /**
