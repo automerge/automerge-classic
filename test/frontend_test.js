@@ -101,6 +101,88 @@ describe('Frontend', () => {
     })
   })
 
+  describe('backend concurrency', () => {
+    it('should remove pending requests once handled', () => {
+      let doc1 = Frontend.change(Frontend.init(), doc => doc.blackbirds = 24)
+      let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
+      assert.deepEqual(Frontend.getRequests(doc2), [
+        {requestId: 1, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]},
+        {requestId: 2, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+      ])
+
+      const diffs1 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'blackbirds', value: 24}]
+      doc2 = Frontend.applyPatch(doc2, {requestId: 1, diffs: diffs1})
+      assert.deepEqual(doc2, {blackbirds: 24, partridges: 1})
+      assert.deepEqual(Frontend.getRequests(doc2), [
+        {requestId: 2, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+      ])
+
+      const diffs2 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'partridges', value: 1}]
+      doc2 = Frontend.applyPatch(doc2, {requestId: 2, diffs: diffs2})
+      assert.deepEqual(doc2, {blackbirds: 24, partridges: 1})
+      assert.deepEqual(Frontend.getRequests(doc2), [])
+    })
+
+    it('should leave the request queue unchanged on remote patches', () => {
+      let doc = Frontend.change(Frontend.init(), doc => doc.blackbirds = 24)
+      assert.deepEqual(Frontend.getRequests(doc), [
+        {requestId: 1, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+      ])
+
+      const diffs1 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'pheasants', value: 2}]
+      doc = Frontend.applyPatch(doc, {diffs: diffs1})
+      assert.deepEqual(doc, {blackbirds: 24, pheasants: 2})
+      assert.deepEqual(Frontend.getRequests(doc), [
+        {requestId: 1, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+      ])
+
+      const diffs2 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'blackbirds', value: 24}]
+      doc = Frontend.applyPatch(doc, {requestId: 1, diffs: diffs2})
+      assert.deepEqual(doc, {blackbirds: 24, pheasants: 2})
+      assert.deepEqual(Frontend.getRequests(doc), [])
+    })
+
+    it('should not allow request patches to be applied out-of-order', () => {
+      let doc1 = Frontend.change(Frontend.init(), doc => doc.blackbirds = 24)
+      let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
+
+      const diffs = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'partridges', value: 1}]
+      assert.throws(() => { Frontend.applyPatch(doc2, {requestId: 2, diffs}) }, /Mismatched requestId/)
+    })
+
+    it('should transform concurrent insertions', () => {
+      let doc1 = Frontend.change(Frontend.init(), doc => doc.birds = ['goldfinch'])
+      const birds = Frontend.getObjectId(doc1.birds), actor = Frontend.getActorId(doc1)
+      const diffs1 = [
+        {obj: birds,   type: 'list', action: 'create'},
+        {obj: birds,   type: 'list', action: 'insert', index: 0, value: 'goldfinch', elemId: `${actor}:1`},
+        {obj: ROOT_ID, type: 'map',  action: 'set',    key: 'birds', value: birds, link: true}
+      ]
+      doc1 = Frontend.applyPatch(doc1, {requestId: 1, diffs: diffs1})
+      assert.deepEqual(doc1, {birds: ['goldfinch']})
+      assert.deepEqual(Frontend.getRequests(doc1), [])
+
+      const doc2 = Frontend.change(doc1, doc => {
+        doc.birds.insertAt(0, 'chaffinch')
+        doc.birds.insertAt(2, 'greenfinch')
+      })
+      assert.deepEqual(doc2, {birds: ['chaffinch', 'goldfinch', 'greenfinch']})
+
+      const diffs3 = [{obj: birds, type: 'list', action: 'insert', index: 1, value: 'bullfinch', elemId: `${uuid()}:2`}]
+      const doc3 = Frontend.applyPatch(doc2, {diffs: diffs3})
+      // TODO this is not correct: order of 'bullfinch' and 'greenfinch' should depend on thier elemIds
+      assert.deepEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'bullfinch', 'greenfinch']})
+
+      const diffs4 = [
+        {obj: birds, type: 'list', action: 'insert', index: 0, value: 'chaffinch',  elemId: `${actor}:2`},
+        {obj: birds, type: 'list', action: 'insert', index: 2, value: 'greenfinch', elemId: `${actor}:3`}
+      ]
+      const doc4 = Frontend.applyPatch(doc3, {requestId: 2, diffs: diffs4})
+      assert.deepEqual(doc4, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
+      assert.deepEqual(Frontend.getRequests(doc4), [])
+    })
+  })
+
   describe('applying patches', () => {
     it('should set root object properties', () => {
       const diffs = [

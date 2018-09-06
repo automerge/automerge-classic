@@ -287,10 +287,30 @@ function updateParentObjects(cache, updated, inbound) {
 }
 
 /**
+ * Applies the change `diff` to the appropriate object in `updated`. `cache`
+ * and `updated` are indexed by objectId; the existing read-only object is
+ * taken from `cache`, and the updated writable object is written to
+ * `updated`. `inbound` is a mapping from child objectId to parent objectId;
+ * it is updated according to the change.
+ */
+function applyDiff(diff, cache, updated, inbound) {
+  if (diff.type === 'map') {
+    updateMapObject(diff, cache, updated, inbound)
+  } else if (diff.type === 'list') {
+    updateListObject(diff, cache, updated, inbound)
+  } else if (diff.type === 'text') {
+    throw new TypeError('TODO: Automerge.Text is not yet supported')
+  } else {
+    throw new TypeError(`Unknown object type: ${diff.type}`)
+  }
+}
+
+/**
  * Takes a set of objects that have been updated (in `updated`) and an updated
  * mapping from child objectId to parent objectId (in `inbound`), and returns
  * a new immutable document root object based on `doc` that reflects those
- * updates.
+ * updates. The request queue `requests` and the request counter `maxReq` are
+ * attached to the new root object.
  */
 function updateRootObject(doc, updated, inbound, requests, maxReq) {
   let newDoc = updated[ROOT_ID]
@@ -314,8 +334,98 @@ function updateRootObject(doc, updated, inbound, requests, maxReq) {
 
   Object.freeze(updated)
   Object.freeze(inbound)
-  Object.freeze(requests)
   return newDoc
+}
+
+/**
+ * Applies the changes described in `patch` to the document with root object
+ * `doc`. The request queue `requests` and the request counter `maxReq` are
+ * attached to the new root object.
+ */
+function applyPatchToDoc(doc, patch, requests, maxReq) {
+  let inbound = Object.assign({}, doc[INBOUND])
+  let updated = {}
+
+  for (let diff of patch.diffs) {
+    applyDiff(diff, doc[CACHE], updated, inbound)
+  }
+
+  updateParentObjects(doc[CACHE], updated, inbound)
+  return updateRootObject(doc, updated, inbound, requests, maxReq)
+}
+
+/**
+ * Mutates the request object `request` (representing a change made locally but
+ * not yet applied by the backend), transforming it past the remote `patch`.
+ * The transformed version of `request` can be applied after `patch` has been
+ * applied, and its effect is the same as when the original version of `request`
+ * is applied to the base document without `patch`.
+ *
+ * This function implements a simple form of Operational Transformation.
+ * However, the implementation here is actually incomplete and incorrect.
+ * Fortunately, it's actually not a big problem if the transformation here is
+ * not quite right, because the transformed request is only used transiently
+ * while waiting for a response from the backend. When the backend responds, the
+ * transformation result is discarded and replaced with the backend's version.
+ *
+ * One scenario that is not handled correctly is insertion at the same index:
+ * request = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
+ * patch = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
+ *
+ * Correct behaviour (i.e. consistent with the CRDT) would be to order the two
+ * insertions by their elemIds; any subsequent insertions with consecutive
+ * indexes may also need to be adjusted accordingly (to keep an insertion
+ * sequence by a particular actor uninterrupted).
+ *
+ * Another scenario that is not handled correctly:
+ * requests = [
+ *   {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1, value: 'a'}]},
+ *   {diffs: [{obj: someList, type: 'list', action: 'set',    index: 1, value: 'b'}]}
+ * ]
+ * patch = {diffs: [{obj: someList, type: 'list', action: 'remove', index: 1}]}
+ *
+ * The first request's insertion is correctly left unchanged, but the 'set' action
+ * is incorrectly turned into an 'insert' because we don't realise that it is
+ * assigning the previously inserted list item (not the deleted item).
+ *
+ * A third scenario is concurrent assignment to the same list element or map key;
+ * this should create a conflict.
+ */
+function transformRequest(request, patch) {
+  let transformed = []
+
+  local_loop:
+  for (let local of request.diffs) {
+    local = Object.assign({}, local)
+
+    for (let remote of patch.diffs) {
+      // If the incoming patch modifies list indexes (because it inserts or removes),
+      // adjust the indexes in local diffs accordingly
+      if (local.obj === remote.obj && local.type === 'list' &&
+          ['insert', 'set', 'remove'].includes(local.action)) {
+        // TODO not correct: for two concurrent inserts with the same index, the order
+        // needs to be determined by the elemIds to maintain consistency with the CRDT
+        if (remote.action === 'insert' && remote.index <=  local.index) local.index += 1
+        if (remote.action === 'remove' && remote.index <   local.index) local.index -= 1
+        if (remote.action === 'remove' && remote.index === local.index) {
+          if (local.action === 'set') local.action = 'insert'
+          if (local.action === 'remove') continue local_loop // drop this diff
+        }
+      }
+
+      // If the incoming patch assigns a list element or map key, and a local diff updates
+      // the same key, make a conflict (since the two assignments are definitely concurrent).
+      // The assignment with the highest actor ID determines the default resolution.
+      if (local.obj === remote.obj && local.action === 'set' && remote.action === 'set' &&
+          ((local.type === 'list' && local.index === remote.index) ||
+           (local.type === 'map'  && local.key   === remote.key  ))) {
+        // TODO
+      }
+    }
+    transformed.push(local)
+  }
+
+  request.diffs = transformed
 }
 
 
@@ -346,12 +456,7 @@ class Context {
    */
   apply(diff) {
     this.diffs.push(diff)
-
-    if (diff.type === 'map') {
-      updateMapObject(diff, this.cache, this.updated, this.inbound)
-    } else if (diff.type === 'list') {
-      updateListObject(diff, this.cache, this.updated, this.inbound)
-    }
+    applyDiff(diff, this.cache, this.updated, this.inbound)
   }
 
   /**
@@ -572,12 +677,14 @@ function change(doc, message, callback) {
     // If the callback didn't change anything, return the original document object unchanged
     return doc
   } else {
+    // TODO: If there are multiple assignment operations for the same object and key,
+    // we should keep only the most recent (this applies to both ops and diffs)
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
 
     const maxReq = doc[MAX_REQ] + 1
     const requests = doc[REQUESTS].slice()
     const request = {requestId: maxReq, before: doc, ops: context.ops, diffs: context.diffs}
-    requests.push(Object.freeze(request))
+    requests.push(request)
 
     return updateRootObject(doc, context.updated, context.inbound, requests, maxReq)
   }
@@ -586,25 +693,35 @@ function change(doc, message, callback) {
 /**
  * Applies `patch` to the document root object `doc`. This patch must come
  * from the backend; it may be the result of a local change or a remote change.
+ * If it is the result of a local change, the `requestId` field from the change
+ * request should be included in the patch, so that we can match them up here.
  */
 function applyPatch(doc, patch) {
-  let inbound = Object.assign({}, doc[INBOUND])
-  let updated = {}
-
-  for (let diff of patch.diffs) {
-    if (diff.type === 'map') {
-      updateMapObject(diff, doc[CACHE], updated, inbound)
-    } else if (diff.type === 'list') {
-      updateListObject(diff, doc[CACHE], updated, inbound)
-    } else if (diff.type === 'text') {
-      throw new TypeError('TODO: Automerge.Text is not yet supported')
-    } else {
-      throw new TypeError(`Unknown object type: ${diff.type}`)
+  let baseDoc, remainingRequests
+  if (patch.requestId !== undefined) {
+    if (doc[REQUESTS].length === 0) {
+      throw new RangeError(`No matching request for requestId ${patch.requestId}`)
     }
+    if (doc[REQUESTS][0].requestId !== patch.requestId) {
+      throw new RangeError(`Mismatched requestId: patch ${patch.requestId} does not match next request ${doc[REQUESTS][0].requestId}`)
+    }
+    baseDoc = doc[REQUESTS][0].before
+    remainingRequests = doc[REQUESTS].slice(1).map(req => Object.assign({}, req))
+  } else if (doc[REQUESTS].length > 0) {
+    baseDoc = doc[REQUESTS][0].before
+    remainingRequests = doc[REQUESTS].slice().map(req => Object.assign({}, req))
+  } else {
+    baseDoc = doc
+    remainingRequests = []
   }
 
-  updateParentObjects(doc[CACHE], updated, inbound)
-  return updateRootObject(doc, updated, inbound, doc[REQUESTS], doc[MAX_REQ])
+  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, doc[MAX_REQ])
+  for (let request of remainingRequests) {
+    request.before = newDoc
+    transformRequest(request, patch)
+    newDoc = applyPatchToDoc(request.before, request, remainingRequests, doc[MAX_REQ])
+  }
+  return newDoc
 }
 
 /**
