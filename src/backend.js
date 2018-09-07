@@ -153,6 +153,43 @@ function applyChanges(state, changes, incremental) {
   }
 }
 
+// Returns true if all components of clock1 are less than or equal to those of clock2.
+// Returns false if there is at least one component in which clock1 is greater than clock2
+// (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
+function lessOrEqual(clock1, clock2) {
+  return clock1.keySeq().concat(clock2.keySeq()).reduce(
+    (result, key) => (result && clock1.get(key, 0) <= clock2.get(key, 0)),
+    true)
+}
+
+function getChanges(oldState, newState) {
+  const oldClock = oldState.getIn(['opSet', 'clock'])
+  const newClock = newState.getIn(['opSet', 'clock'])
+  if (!lessOrEqual(oldClock, newClock)) {
+    throw new RangeError('Cannot diff two states that have diverged')
+  }
+
+  return OpSet.getMissingChanges(newState.get('opSet'), oldClock).toJS()
+}
+
+function getChangesForActor(state, actorId) {
+  // I might want to validate the actorId here
+  return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS()
+}
+
+function getMissingDeps(state) {
+  return OpSet.getMissingDeps(state.get('opSet'))
+}
+
+function merge(local, remote) {
+  if (local.get('actorId') === remote.get('actorId')) {
+    throw new RangeError('Cannot merge an actor with itself')
+  }
+
+  const changes = OpSet.getMissingChanges(remote.get('opSet'), local.getIn(['opSet', 'clock']))
+  return applyChanges(local, changes, true)
+}
+
 module.exports = {
-  init, applyChanges
+  init, applyChanges, getChanges, getChangesForActor, getMissingDeps, merge
 }
