@@ -1172,11 +1172,11 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => doc.birds.push('Robin'))
       let s3 = Automerge.change(s2, doc => doc.birds.push('Wagtail'))
       assert.deepEqual(Automerge.diff(s1, s2), [
-        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 0, value: 'Robin'}
+        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 0, value: 'Robin', elemId: `${s1._actorId}:1`}
       ])
       assert.deepEqual(Automerge.diff(s1, s3), [
-        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 0, value: 'Robin'},
-        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 1, value: 'Wagtail'}
+        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 0, value: 'Robin', elemId: `${s1._actorId}:1`},
+        {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'insert', index: 1, value: 'Wagtail', elemId: `${s1._actorId}:2`}
       ])
     })
 
@@ -1197,7 +1197,7 @@ describe('Automerge', () => {
         {action: 'create', type: 'list', obj: s2.birds._objectId},
         {action: 'create', type: 'map',  obj: s2.birds[0]._objectId},
         {action: 'set',    type: 'map',  obj: s2.birds[0]._objectId, path: null, key: 'name',  value: 'Chaffinch'},
-        {action: 'insert', type: 'list', obj: s2.birds._objectId,    path: null, index: 0,     value: s2.birds[0]._objectId, link: true},
+        {action: 'insert', type: 'list', obj: s2.birds._objectId,    path: null, index: 0,     value: s2.birds[0]._objectId, link: true, elemId: `${s2._actorId}:1`},
         {action: 'set',    type: 'map',  obj: rootId,                path: [],   key: 'birds', value: s2.birds._objectId,    link: true}
       ])
     })
@@ -1209,6 +1209,7 @@ describe('Automerge', () => {
         action: 'insert',
         type:   'list',
         obj:    s2.birds[0].habitat._objectId,
+        elemId: `${s2._actorId}:2`,
         path:   ['birds', 0, 'habitat'],
         index:  1,
         value:  'gardens'

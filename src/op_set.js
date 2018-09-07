@@ -102,7 +102,7 @@ function getConflicts(ops) {
   return conflicts
 }
 
-function patchList(opSet, objectId, index, action, ops) {
+function patchList(opSet, objectId, index, elemId, action, ops) {
   const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   const firstOp = ops ? ops.first() : null
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -115,6 +115,7 @@ function patchList(opSet, objectId, index, action, ops) {
 
   if (action === 'insert') {
     elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
+    edit.elemId = elemId
     edit.value = firstOp.get('value')
   } else if (action === 'set') {
     elemIds = elemIds.setValue(firstOp.get('key'), value)
@@ -135,9 +136,9 @@ function updateListElement(opSet, objectId, elemId) {
 
   if (index >= 0) {
     if (ops.isEmpty()) {
-      return patchList(opSet, objectId, index, 'remove', null)
+      return patchList(opSet, objectId, index, elemId, 'remove', null)
     } else {
-      return patchList(opSet, objectId, index, 'set', ops)
+      return patchList(opSet, objectId, index, elemId, 'set', ops)
     }
 
   } else {
@@ -153,7 +154,7 @@ function updateListElement(opSet, objectId, elemId) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, 'insert', ops)
+    return patchList(opSet, objectId, index + 1, elemId, 'insert', ops)
   }
 }
 
