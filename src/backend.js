@@ -139,7 +139,7 @@ function init(actorId) {
 
 function applyChanges(state, changes, incremental) {
   let diffs = [], opSet = state.get('opSet')
-  for (let change of changes) {
+  for (let change of fromJS(changes)) {
     let [newOpSet, diff] = OpSet.addChange(opSet, change)
     diffs.push(...diff)
     opSet = newOpSet
