@@ -147,7 +147,12 @@ function applyChanges(state, changes, incremental) {
 
   state = state.set('opSet', opSet)
   if (incremental) {
-    return [state, {diffs}]
+    let patch = {diffs}
+    if (changes.length === 1) {
+      patch.actor = changes[0].actor
+      patch.seq   = changes[0].seq
+    }
+    return [state, patch]
   } else {
     return [state, materialize(opSet)]
   }

@@ -11,7 +11,7 @@ describe('Backend', () => {
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
-      assert.deepEqual(patch1, {diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, diffs: [
         {action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'magpie'}
       ]})
     })
@@ -25,7 +25,7 @@ describe('Backend', () => {
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
       const [s2, patch2] = Backend.applyChanges(s1, [change2], true)
-      assert.deepEqual(patch2, {diffs: [
+      assert.deepEqual(patch2, {actor: 'actor2', seq: 1, diffs: [
         {action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'blackbird',
           conflicts: [{actor: 'actor1', value: 'magpie'}]}
       ]})
@@ -41,7 +41,7 @@ describe('Backend', () => {
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
       const [s2, patch2] = Backend.applyChanges(s1, [change2], true)
-      assert.deepEqual(patch2, {diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, diffs: [
         {action: 'remove', obj: ROOT_ID, path: [], type: 'map', key: 'bird'}
       ]})
     })
@@ -54,7 +54,7 @@ describe('Backend', () => {
         {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
-      assert.deepEqual(patch1, {diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, diffs: [
         {action: 'create', obj: birds,   type: 'map'},
         {action: 'set',    obj: birds,   type: 'map', path: null, key: 'wrens', value: 3},
         {action: 'set',    obj: ROOT_ID, type: 'map', path: [],   key: 'birds', value: birds, link: true}
@@ -73,7 +73,7 @@ describe('Backend', () => {
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
       const [s2, patch2] = Backend.applyChanges(s1, [change2], true)
-      assert.deepEqual(patch2, {diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, diffs: [
         {action: 'set', obj: birds, type: 'map', path: ['birds'], key: 'sparrows', value: 15}
       ]})
     })
@@ -87,7 +87,7 @@ describe('Backend', () => {
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
-      assert.deepEqual(patch1, {diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, diffs: [
         {action: 'create', obj: birds,   type: 'list'},
         {action: 'insert', obj: birds,   type: 'list', path: null, index: 0, value: 'chaffinch', elemId: `${actor}:1`},
         {action: 'set',    obj: ROOT_ID, type: 'map',  path: [],   key: 'birds', value: birds, link: true}
@@ -107,7 +107,7 @@ describe('Backend', () => {
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
       const [s2, patch2] = Backend.applyChanges(s1, [change2], true)
-      assert.deepEqual(patch2, {diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, diffs: [
         {action: 'set', obj: birds, type: 'list', path: ['birds'], index: 0, value: 'greenfinch'}
       ]})
     })
@@ -125,7 +125,7 @@ describe('Backend', () => {
       ]}
       const [s1, patch1] = Backend.applyChanges(Backend.init(), [change1], true)
       const [s2, patch2] = Backend.applyChanges(s1, [change2], true)
-      assert.deepEqual(patch2, {diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, diffs: [
         {action: 'remove', obj: birds, type: 'list', path: ['birds'], index: 0}
       ]})
     })
