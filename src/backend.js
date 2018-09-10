@@ -120,17 +120,6 @@ class MaterializationContext {
   }
 }
 
-/**
- * Constructs a patch that instantiates the current state of the entire object
- * tree described by `opSet`.
- */
-function materialize(opSet) {
-  let diffs = []
-  let context = new MaterializationContext(opSet)
-  context.instantiateObject(opSet, OpSet.ROOT_ID)
-  context.makePatch(OpSet.ROOT_ID, diffs)
-  return {diffs}
-}
 
 /**
  * Returns an empty node state.
@@ -144,16 +133,23 @@ function init(actorId) {
 }
 
 /**
+ * Returns the current dependencies map in the form required by patch objects.
+ */
+function getDeps(state) {
+  let actorId = state.get('actorId'), opSet = state.get('opSet')
+  return opSet.get('deps')
+    .set(actorId, opSet.getIn(['clock', actorId]))
+    .toJS()
+}
+
+/**
  * Applies a list of `changes` to the node state `state`. Returns a two-element
  * array `[state, patch]` where `state` is the updated node state, and `patch`
- * describes the changes that need to be made to the application object to
- * reflect this change. The parameter `incremental` determines what kind of
- * patch is produced: if `false`, the patch constructs the entire document tree
- * from scratch; if `true`, the patch contains only those differences made in
- * the provided `changes`.
+ * describes the changes that need to be made to the document object to reflect
+ * this change.
  */
-function applyChanges(state, changes, incremental) {
-  let diffs = [], actorId = state.get('actorId'), opSet = state.get('opSet')
+function applyChanges(state, changes) {
+  let diffs = [], opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
     let [newOpSet, diff] = OpSet.addChange(opSet, change)
     diffs.push(...diff)
@@ -161,12 +157,9 @@ function applyChanges(state, changes, incremental) {
   }
 
   state = state.set('opSet', opSet)
-  let patch = incremental ? {diffs} : materialize(opSet)
-  patch.deps = opSet.get('deps')
-    .set(actorId, opSet.getIn(['clock', actorId]))
-    .toJS()
+  let patch = {diffs, deps: getDeps(state)}
 
-  if (changes.length === 1 && incremental) {
+  if (changes.length === 1) {
     patch.actor = changes[0].actor
     patch.seq   = changes[0].seq
   }
@@ -179,6 +172,18 @@ function applyChanges(state, changes, incremental) {
 */
 function applyChange(state, change) {
   return applyChanges(state, [change], true)
+}
+
+/**
+ * Returns a patch that, when applied to an empty document, constructs the
+ * document tree in the state described by the node state `state`.
+ */
+function getPatch(state) {
+  let diffs = [], opSet = state.get('opSet')
+  let context = new MaterializationContext(opSet)
+  context.instantiateObject(opSet, OpSet.ROOT_ID)
+  context.makePatch(OpSet.ROOT_ID, diffs)
+  return {diffs, deps: getDeps(state)}
 }
 
 /**
@@ -221,5 +226,5 @@ function merge(local, remote) {
 }
 
 module.exports = {
-  init, applyChanges, applyChange, getChanges, getChangesForActor, getMissingDeps, merge
+  init, applyChanges, applyChange, getPatch, getChanges, getChangesForActor, getMissingDeps, merge
 }
