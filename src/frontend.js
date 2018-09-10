@@ -7,6 +7,7 @@ const CACHE     = Symbol('_cache')     // map from objectId to immutable object
 const INBOUND   = Symbol('_inbound')   // map from child objectId to parent objectId
 const REQUESTS  = Symbol('_requests')  // list of changes applied locally but not yet confirmed by backend
 const MAX_SEQ   = Symbol('_maxSeq')    // maximum sequence number generated so far
+const DEPS      = Symbol('_deps')      // map from actorId to max sequence number received from that actor
 
 // Properties of all Automerge objects
 const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (string)
@@ -309,10 +310,10 @@ function applyDiff(diff, cache, updated, inbound) {
  * Takes a set of objects that have been updated (in `updated`) and an updated
  * mapping from child objectId to parent objectId (in `inbound`), and returns
  * a new immutable document root object based on `doc` that reflects those
- * updates. The request queue `requests` and the sequence number `maxSeq` are
- * attached to the new root object.
+ * updates. The request queue `requests`, the sequence number `maxSeq` and the
+ * dependencies map `deps` are attached to the new root object.
  */
-function updateRootObject(doc, updated, inbound, requests, maxSeq) {
+function updateRootObject(doc, updated, inbound, requests, maxSeq, deps) {
   let newDoc = updated[ROOT_ID]
   if (!newDoc) {
     throw new Error('Root object was not modified by patch')
@@ -322,6 +323,7 @@ function updateRootObject(doc, updated, inbound, requests, maxSeq) {
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, REQUESTS, {value: requests})
   Object.defineProperty(newDoc, MAX_SEQ,  {value: maxSeq})
+  Object.defineProperty(newDoc, DEPS,     {value: deps})
 
   for (let objectId of Object.keys(doc[CACHE])) {
     if (updated[objectId]) {
@@ -339,10 +341,10 @@ function updateRootObject(doc, updated, inbound, requests, maxSeq) {
 
 /**
  * Applies the changes described in `patch` to the document with root object
- * `doc`. The request queue `requests` and the request counter `maxSeq` are
- * attached to the new root object.
+ * `doc`. The request queue `requests`, the sequence number `maxSeq` and the
+ * dependencies map `deps` are attached to the new root object.
  */
-function applyPatchToDoc(doc, patch, requests, maxSeq) {
+function applyPatchToDoc(doc, patch, requests, maxSeq, deps) {
   let inbound = Object.assign({}, doc[INBOUND])
   let updated = {}
 
@@ -351,7 +353,7 @@ function applyPatchToDoc(doc, patch, requests, maxSeq) {
   }
 
   updateParentObjects(doc[CACHE], updated, inbound)
-  return updateRootObject(doc, updated, inbound, requests, maxSeq)
+  return updateRootObject(doc, updated, inbound, requests, maxSeq, deps)
 }
 
 /**
@@ -655,6 +657,7 @@ function init(options) {
   Object.defineProperty(root, INBOUND,   {value: Object.freeze({})})
   Object.defineProperty(root, REQUESTS,  {value: Object.freeze([])})
   Object.defineProperty(root, MAX_SEQ,   {value: 0})
+  Object.defineProperty(root, DEPS,      {value: Object.freeze({})})
   return Object.freeze(root)
 }
 
@@ -689,12 +692,16 @@ function change(doc, message, callback) {
     // we should keep only the most recent (this applies to both ops and diffs)
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
 
-    const maxSeq = doc[MAX_SEQ] + 1
-    const requests = doc[REQUESTS].slice()
-    const request = {seq: maxSeq, before: doc, ops: context.ops, diffs: context.diffs}
+    const actor = doc[OPTIONS].actorId
+    const seq = doc[MAX_SEQ] + 1
+    const deps = Object.assign({}, doc[DEPS])
+    delete deps[actor]
+
+    const requests = doc[REQUESTS].slice() // shallow clone
+    const request = {actor, seq, deps, before: doc, ops: context.ops, diffs: context.diffs}
     requests.push(request)
 
-    return updateRootObject(doc, context.updated, context.inbound, requests, maxSeq)
+    return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS])
   }
 }
 
@@ -723,11 +730,15 @@ function applyPatch(doc, patch) {
     remainingRequests = []
   }
 
-  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, doc[MAX_SEQ])
+  const actor = doc[OPTIONS].actorId
+  const deps = patch.deps || {}
+  const maxSeq = deps[actor] || doc[MAX_SEQ]
+  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, maxSeq, patch.deps)
+
   for (let request of remainingRequests) {
     request.before = newDoc
     transformRequest(request, patch)
-    newDoc = applyPatchToDoc(request.before, request, remainingRequests, doc[MAX_SEQ])
+    newDoc = applyPatchToDoc(request.before, request, remainingRequests, maxSeq, patch.deps)
   }
   return newDoc
 }
@@ -762,9 +773,8 @@ function getConflicts(object) {
  */
 function getRequests(doc) {
   return doc[REQUESTS].map(req => {
-    const { seq, ops } = req
-    const actor = doc[OPTIONS].actorId
-    return { actor, seq, deps: {}, ops } // TODO fill in deps for real! not just empty object!
+    const { actor, seq, deps, ops } = req
+    return { actor, seq, deps, ops }
   })
 }
 

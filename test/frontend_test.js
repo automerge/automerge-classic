@@ -93,6 +93,20 @@ describe('Frontend', () => {
   })
 
   describe('backend concurrency', () => {
+    it('should use dependencies and sequence number from the backend', () => {
+      const local = uuid(), remote1 = uuid(), remote2 = uuid()
+      const patch1 = {deps: {[local]: 4, [remote1]: 11, [remote2]: 41}, diffs: [
+        {action: 'set', obj: ROOT_ID, type: 'map', key: 'blackbirds', value: 24}
+      ]}
+      let doc1 = Frontend.applyPatch(Frontend.init(local), patch1)
+      let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
+      assert.deepEqual(Frontend.getRequests(doc2), [
+        {actor: local, seq: 5, deps: {[remote1]: 11, [remote2]: 41}, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+        ]}
+      ])
+    })
+
     it('should remove pending requests once handled', () => {
       const actor = uuid()
       let doc1 = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)
