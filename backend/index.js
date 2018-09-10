@@ -1,6 +1,6 @@
 const { Map, List, fromJS } = require('immutable')
-const OpSet = require('./op_set')
-const { Text } = require('./text')
+const OpSet = require('../src/op_set')
+const { Text } = require('../src/text')
 
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null

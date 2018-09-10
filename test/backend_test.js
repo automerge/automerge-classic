@@ -1,5 +1,5 @@
 const assert = require('assert')
-const Backend = require('../src/backend')
+const Backend = require('../backend')
 const uuid = require('../src/uuid')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
