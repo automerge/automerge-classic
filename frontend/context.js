@@ -140,10 +140,10 @@ class Context {
       throw new TypeError(`Unsupported type of value: ${typeof value}`)
     }
 
-    list[MAX_ELEM] += 1
+    const maxElem = list[MAX_ELEM] + 1
     const prevId = (index === 0) ? '_head' : list[ELEM_IDS][index - 1]
-    const elemId = `${this.actorId}:${list[MAX_ELEM]}`
-    this.addOp({action: 'ins', obj: objectId, key: prevId, elem: list[MAX_ELEM]})
+    const elemId = `${this.actorId}:${maxElem}`
+    this.addOp({action: 'ins', obj: objectId, key: prevId, elem: maxElem})
 
     if (isObject(value)) {
       const childId = this.createNestedObjects(value)
@@ -153,6 +153,7 @@ class Context {
       this.apply({action: 'insert', type: 'list', obj: objectId, index, value, elemId})
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
+    this.getObject(objectId)[MAX_ELEM] = maxElem
   }
 
   /**
@@ -161,6 +162,10 @@ class Context {
    */
   setListIndex(objectId, index, value) {
     const list = this.getObject(objectId)
+    if (index === list.length) {
+      this.insertListItem(objectId, index, value)
+      return
+    }
     if (index < 0 || index >= list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
@@ -194,8 +199,8 @@ class Context {
       }
 
       for (let i = 0; i < deletions; i++) {
-        this.apply({action: 'remove', type: 'list', obj: objectId, index: start})
         this.addOp({action: 'del', obj: objectId, key: list[ELEM_IDS][start]})
+        this.apply({action: 'remove', type: 'list', obj: objectId, index: start})
 
         // Must refresh object after the first updateListObject call, since the
         // object previously may have been immutable

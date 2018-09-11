@@ -1,5 +1,3 @@
-const { SkipList } = require('./skip_list')
-
 class Text {
   constructor (opSet, objectId) {
     return makeInstance(opSet, objectId)

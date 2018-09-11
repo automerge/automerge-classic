@@ -1,4 +1,4 @@
-const { isObject } = require('../src/common')
+const { ROOT_ID, isObject } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 
 /**
@@ -54,6 +54,9 @@ function updateInbound(objectId, refsBefore, refsAfter, inbound) {
  * is undefined, creates an empty object with ID `objectId`.
  */
 function cloneMapObject(originalObject, objectId) {
+  if (originalObject && originalObject[OBJECT_ID] !== objectId) {
+    throw new RangeError(`cloneMapObject ID mismatch: ${originalObject[OBJECT_ID]} !== ${objectId}`)
+  }
   let object = Object.assign({}, originalObject)
   let conflicts = Object.assign({}, originalObject ? originalObject[CONFLICTS] : undefined)
   Object.defineProperty(object, CONFLICTS, {value: conflicts})
@@ -141,6 +144,9 @@ function parentMapObject(objectId, cache, updated) {
  * undefined, creates an empty list with ID `objectId`.
  */
 function cloneListObject(originalList, objectId) {
+  if (originalList && originalList[OBJECT_ID] !== objectId) {
+    throw new RangeError(`cloneListObject ID mismatch: ${originalList[OBJECT_ID]} !== ${objectId}`)
+  }
   let list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   let conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
   let elemIds   = (originalList && originalList[ELEM_IDS] ) ? originalList[ELEM_IDS].slice()  : []
@@ -284,6 +290,16 @@ function applyDiff(diff, cache, updated, inbound) {
   }
 }
 
+/**
+ * Creates a writable copy of the immutable document root object `root`.
+ */
+function cloneRootObject(root) {
+  if (root[OBJECT_ID] !== ROOT_ID) {
+    throw new RangeError(`Not the root object: ${root[OBJECT_ID]}`)
+  }
+  return cloneMapObject(root, ROOT_ID)
+}
+
 module.exports = {
-  applyDiff, updateParentObjects
+  applyDiff, updateParentObjects, cloneRootObject
 }

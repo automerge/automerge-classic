@@ -3,23 +3,34 @@
 
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
+function parseListIndex(key) {
+  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
+  if (typeof key !== 'number') {
+    throw new TypeError('A list index must be a number, but you passed ' + JSON.stringify(key))
+  }
+  if (key < 0 || isNaN(key) || key === Infinity || key === -Infinity) {
+    throw new RangeError('A list index must be positive, but you passed ' + key)
+  }
+  return key
+}
+
 function listMethods(context, listId) {
   const methods = {
     deleteAt(index, numDelete) {
-      context.splice(listId, index, numDelete || 1, [])
+      context.splice(listId, parseListIndex(index), numDelete || 1, [])
       return this
     },
 
     fill(value, start, end) {
       let list = context.getObject(listId)
-      for (let index = (start || 0); index < (end || list.length); index++) {
+      for (let index = parseListIndex(start || 0); index < parseListIndex(end || list.length); index++) {
         context.setListIndex(listId, index, value)
       }
       return this
     },
 
     insertAt(index, ...values) {
-      context.splice(listId, index, 0, values)
+      context.splice(listId, parseListIndex(index), 0, values)
       return this
     },
 
@@ -27,7 +38,7 @@ function listMethods(context, listId) {
       let list = context.getObject(listId)
       if (list.length == 0) return
       const last = context.getObjectField(listId, list.length - 1)
-      context.splice(listId, length - 1, 1, [])
+      context.splice(listId, list.length - 1, 1, [])
       return last
     },
 
@@ -39,6 +50,8 @@ function listMethods(context, listId) {
     },
 
     shift() {
+      let list = context.getObject(listId)
+      if (list.length == 0) return
       const first = context.getObjectField(listId, 0)
       context.splice(listId, 0, 1, [])
       return first
@@ -46,6 +59,7 @@ function listMethods(context, listId) {
 
     splice(start, deleteCount, ...values) {
       let list = context.getObject(listId)
+      start = parseListIndex(start)
       if (deleteCount === undefined) {
         deleteCount = list.length - start
       }
@@ -100,17 +114,21 @@ const MapHandler = {
   },
 
   has (target, key) {
-    return ['_type', '_objectId', '_change', '_get'].includes(key) ||
-      (key in context.getObject(target.objectId))
+    const { context, objectId } = target
+    return ['_type', '_objectId', '_change', '_get'].includes(key) || (key in context.getObject(objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
-    const object = context.getObject(target.objectId)
-    return Object.getOwnPropertyDescriptor(object, key)
+    const { context, objectId } = target
+    const object = context.getObject(objectId)
+    if (key in object) {
+      return {configurable: true, enumerable: true}
+    }
   },
 
   ownKeys (target) {
-    return Object.keys(context.getObject(target.objectId))
+    const { context, objectId } = target
+    return Object.keys(context.getObject(objectId))
   }
 }
 
@@ -124,41 +142,50 @@ const ListHandler = {
     if (key === '_change') return context
     if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return context.getObjectField(objectId, parseInt(key))
+      return context.getObjectField(objectId, parseListIndex(key))
     }
     return listMethods(context, objectId)[key]
   },
 
   set (target, key, value) {
     const [context, objectId] = target
-    context.setListIndex(objectId, key, value)
+    context.setListIndex(objectId, parseListIndex(key), value)
     return true
   },
 
   deleteProperty (target, key) {
     const [context, objectId] = target
-    context.deleteField(objectId, key)
+    context.splice(objectId, parseListIndex(key), 1, [])
     return true
   },
 
   has (target, key) {
     const [context, objectId] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return parseInt(key) < context.getObject(objectId).length
+      return parseListIndex(key) < context.getObject(objectId).length
     }
     return ['length', '_type', '_objectId', '_change'].includes(key)
   },
 
   getOwnPropertyDescriptor (target, key) {
+    if (key === 'length') return {}
+    if (key === '_objectId') return {configurable: true, enumerable: false}
+
     const [context, objectId] = target
     const object = context.getObject(objectId)
-    return Object.getOwnPropertyDescriptor(object, key)
+
+    if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
+      const index = parseListIndex(key)
+      if (index < object.length) return {configurable: true, enumerable: true}
+    }
   },
 
   ownKeys (target) {
     const [context, objectId] = target
     const object = context.getObject(objectId)
-    return Object.keys(object)
+    let keys = ['length', '_objectId']
+    keys.push(...Object.keys(object))
+    return keys
   }
 }
 

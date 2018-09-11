@@ -1,7 +1,7 @@
-const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, OBJECT_ID, CONFLICTS } = require('./constants')
+const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS } = require('./constants')
 const { ROOT_ID, isObject } = require('../src/common')
 const uuid = require('../src/uuid')
-const { applyDiff, updateParentObjects } = require('./apply_patch')
+const { applyDiff, updateParentObjects, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
 
@@ -9,20 +9,24 @@ const { Context } = require('./context')
  * Takes a set of objects that have been updated (in `updated`) and an updated
  * mapping from child objectId to parent objectId (in `inbound`), and returns
  * a new immutable document root object based on `doc` that reflects those
- * updates. The request queue `requests`, the sequence number `maxSeq` and the
- * dependencies map `deps` are attached to the new root object.
+ * updates. The request queue `requests`, the sequence number `maxSeq`, the
+ * dependencies map `deps`, and the optional backend state `state` are
+ * attached to the new root object.
  */
-function updateRootObject(doc, updated, inbound, requests, maxSeq, deps) {
+function updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state) {
   let newDoc = updated[ROOT_ID]
   if (!newDoc) {
-    throw new Error('Root object was not modified by patch')
+    newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
+    updated[ROOT_ID] = newDoc
   }
+  Object.defineProperty(newDoc, '_actorId', {value: doc[OPTIONS].actorId})
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, REQUESTS, {value: requests})
   Object.defineProperty(newDoc, MAX_SEQ,  {value: maxSeq})
   Object.defineProperty(newDoc, DEPS,     {value: deps})
+  Object.defineProperty(newDoc, STATE,    {value: state})
 
   for (let objectId of Object.keys(doc[CACHE])) {
     if (updated[objectId]) {
@@ -39,11 +43,37 @@ function updateRootObject(doc, updated, inbound, requests, maxSeq, deps) {
 }
 
 /**
- * Applies the changes described in `patch` to the document with root object
- * `doc`. The request queue `requests`, the sequence number `maxSeq` and the
- * dependencies map `deps` are attached to the new root object.
+ * Adds a new change request to the list of requests `doc[REQUESTS]`, and returns
+ * an updated document root object. The details of the change are taken from the
+ * context object `context`, and `message` is an optional human-readable string
+ * describing the change.
  */
-function applyPatchToDoc(doc, patch, requests, maxSeq, deps) {
+function makeChange(doc, context, message) {
+  const actor = doc[OPTIONS].actorId
+  const seq = doc[MAX_SEQ] + 1
+  const deps = Object.assign({}, doc[DEPS])
+  delete deps[actor]
+
+  if (doc[OPTIONS].backend) {
+    const request = {actor, seq, deps, message, ops: context.ops}
+    const [state, patch] = doc[OPTIONS].backend.applyChange(doc[STATE], request)
+    return applyPatchToDoc(doc, patch, [], seq, patch.deps, state)
+
+  } else {
+    const request = {actor, seq, deps, message, before: doc, ops: context.ops, diffs: context.diffs}
+    const requests = doc[REQUESTS].slice() // shallow clone
+    requests.push(request)
+    return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS])
+  }
+}
+
+/**
+ * Applies the changes described in `patch` to the document with root object
+ * `doc`. The request queue `requests`, the sequence number `maxSeq`, the
+ * dependencies map `deps`, and the optional backend state `state` are
+ * attached to the new root object.
+ */
+function applyPatchToDoc(doc, patch, requests, maxSeq, deps, state) {
   let inbound = Object.assign({}, doc[INBOUND])
   let updated = {}
 
@@ -52,7 +82,7 @@ function applyPatchToDoc(doc, patch, requests, maxSeq, deps) {
   }
 
   updateParentObjects(doc[CACHE], updated, inbound)
-  return updateRootObject(doc, updated, inbound, requests, maxSeq, deps)
+  return updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state)
 }
 
 /**
@@ -136,12 +166,17 @@ function init(options) {
   if (typeof options === 'string') {
     options = {actorId: options}
   } else if (typeof options === 'undefined') {
-    options = {actorId: uuid()}
+    options = {}
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported value for init() options: ${options}`)
   }
+  if (options.actorId === undefined) {
+    options.actorId = uuid()
+  }
 
   let root = {}, cache = {[ROOT_ID]: root}
+  let state = options.backend ? options.backend.init(options.actorId) : undefined
+  Object.defineProperty(root, '_actorId', {value: options.actorId})
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
@@ -150,6 +185,7 @@ function init(options) {
   Object.defineProperty(root, REQUESTS,  {value: Object.freeze([])})
   Object.defineProperty(root, MAX_SEQ,   {value: 0})
   Object.defineProperty(root, DEPS,      {value: Object.freeze({})})
+  Object.defineProperty(root, STATE,     {value: state})
   return Object.freeze(root)
 }
 
@@ -183,18 +219,21 @@ function change(doc, message, callback) {
     // TODO: If there are multiple assignment operations for the same object and key,
     // we should keep only the most recent (this applies to both ops and diffs)
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
-
-    const actor = doc[OPTIONS].actorId
-    const seq = doc[MAX_SEQ] + 1
-    const deps = Object.assign({}, doc[DEPS])
-    delete deps[actor]
-
-    const requests = doc[REQUESTS].slice() // shallow clone
-    const request = {actor, seq, deps, before: doc, ops: context.ops, diffs: context.diffs}
-    requests.push(request)
-
-    return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS])
+    return makeChange(doc, context, message)
   }
+}
+
+/**
+ * Triggers a new change request on the document `doc` without actually
+ * modifying its data. `message` is an optional descriptive string attached to
+ * the change. This function can be useful for acknowledging the receipt of
+ * some message (as it's incorported into the `deps` field of the change).
+ */
+function emptyChange(doc, message) {
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  return makeChange(doc, new Context(doc), message)
 }
 
 /**
@@ -225,8 +264,15 @@ function applyPatch(doc, patch) {
   const actor = doc[OPTIONS].actorId
   const deps = patch.deps || {}
   const maxSeq = deps[actor] || doc[MAX_SEQ]
-  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, maxSeq, patch.deps)
 
+  if (doc[OPTIONS].backend) {
+    if (!patch.state) {
+      throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
+    }
+    return applyPatchToDoc(doc, patch, [], maxSeq, patch.deps, patch.state)
+  }
+
+  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, maxSeq, patch.deps)
   for (let request of remainingRequests) {
     request.before = newDoc
     transformRequest(request, patch)
@@ -265,11 +311,24 @@ function getConflicts(object) {
  */
 function getRequests(doc) {
   return doc[REQUESTS].map(req => {
-    const { actor, seq, deps, ops } = req
-    return { actor, seq, deps, ops }
+    const { actor, seq, deps, message, ops } = req
+    const change = { actor, seq, deps }
+    if (message !== undefined) {
+      change.message = message
+    }
+    change.ops = ops
+    return change
   })
 }
 
+/**
+ * Returns the backend state associated with the document `doc` (only used if
+ * a backend implementation is passed to `init()`).
+ */
+function getBackendState(doc) {
+  return doc[STATE]
+}
+
 module.exports = {
-  init, change, applyPatch, getObjectId, getActorId, getConflicts, getRequests
+  init, change, emptyChange, applyPatch, getObjectId, getActorId, getConflicts, getRequests, getBackendState
 }

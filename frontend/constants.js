@@ -5,10 +5,11 @@ const INBOUND   = Symbol('_inbound')   // map from child objectId to parent obje
 const REQUESTS  = Symbol('_requests')  // list of changes applied locally but not yet confirmed by backend
 const MAX_SEQ   = Symbol('_maxSeq')    // maximum sequence number generated so far
 const DEPS      = Symbol('_deps')      // map from actorId to max sequence number received from that actor
+const STATE     = Symbol('_state')     // backend state object (if an immediate backend is provided)
 
 // Properties of all Automerge objects
-const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (string)
-const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type) of conflicts
+const OBJECT_ID = '_objectId'          // the object ID of the current object (string)
+const CONFLICTS = '_conflicts'         // map or list (depending on object type) of conflicts
 
 // Properties of Automerge list objects
 const ELEM_IDS  = Symbol('_elemIds')   // list containing the element ID of each list element

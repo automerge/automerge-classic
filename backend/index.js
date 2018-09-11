@@ -1,6 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const OpSet = require('../src/op_set')
-const { Text } = require('../src/text')
+const OpSet = require('./op_set')
 
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null
@@ -171,7 +170,7 @@ function applyChanges(state, changes) {
  * `applyChanges()`.
 */
 function applyChange(state, change) {
-  return applyChanges(state, [change], true)
+  return applyChanges(state, [change])
 }
 
 /**
@@ -222,7 +221,7 @@ function merge(local, remote) {
   }
 
   const changes = OpSet.getMissingChanges(remote.get('opSet'), local.getIn(['opSet', 'clock']))
-  return applyChanges(local, changes, true)
+  return applyChanges(local, changes)
 }
 
 module.exports = {

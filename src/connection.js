@@ -1,5 +1,4 @@
 const { Map, fromJS } = require('immutable')
-const OpSet = require('./op_set')
 
 // Returns true if all components of clock1 are less than or equal to those of clock2.
 // Returns false if there is at least one component in which clock1 is greater than clock2
