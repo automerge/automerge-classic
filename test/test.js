@@ -61,7 +61,8 @@ describe('Automerge', () => {
           assert.throws(() => { delete s2['foo'] }, /Cannot delete property/)
           assert.throws(() => { Automerge.change(s2, doc => s2.foo = 'bar') }, /Cannot assign to read only property/)
         }
-        assert.throws(() => { Object.assign(s2, {x: 4}) }, /object is not extensible|attempted to assign to readonly property/i)
+        assert.throws(() => { Object.assign(s2, {x: 4}) })
+        assert.notStrictEqual(s2.x, 4)
       })
 
       it('should allow repeated reading and writing of values', () => {
