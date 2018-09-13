@@ -43,6 +43,31 @@ function updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state) 
 }
 
 /**
+ * Filters a list of operations `ops` such that, if there are multiple assignment
+ * operations for the same object and key, we keep only the most recent. Returns
+ * the filtered list of operations.
+ */
+function ensureSingleAssignment(ops) {
+  let assignments = {}, result = []
+
+  for (let i = ops.length - 1; i >= 0; i--) {
+    const op = ops[i], { obj, key, action } = op
+    if (['set', 'del', 'link'].includes(action)) {
+      if (!assignments[obj]) {
+        assignments[obj] = {[key]: true}
+        result.push(op)
+      } else if (!assignments[obj][key]) {
+        assignments[obj][key] = true
+        result.push(op)
+      }
+    } else {
+      result.push(op)
+    }
+  }
+  return result.reverse()
+}
+
+/**
  * Adds a new change request to the list of requests `doc[REQUESTS]`, and returns
  * an updated document root object. The details of the change are taken from the
  * context object `context`, and `message` is an optional human-readable string
@@ -54,13 +79,15 @@ function makeChange(doc, context, message) {
   const deps = Object.assign({}, doc[DEPS])
   delete deps[actor]
 
+  const ops = ensureSingleAssignment(context.ops)
+
   if (doc[OPTIONS].backend) {
-    const request = {actor, seq, deps, message, ops: context.ops}
+    const request = {actor, seq, deps, message, ops}
     const [state, patch] = doc[OPTIONS].backend.applyChange(doc[STATE], request)
     return applyPatchToDoc(doc, patch, [], seq, patch.deps, state)
 
   } else {
-    const request = {actor, seq, deps, message, before: doc, ops: context.ops, diffs: context.diffs}
+    const request = {actor, seq, deps, message, before: doc, ops, diffs: context.diffs}
     const requests = doc[REQUESTS].slice() // shallow clone
     requests.push(request)
     return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS])
@@ -134,23 +161,12 @@ function transformRequest(request, patch) {
       // adjust the indexes in local diffs accordingly
       if (local.obj === remote.obj && local.type === 'list' &&
           ['insert', 'set', 'remove'].includes(local.action)) {
-        // TODO not correct: for two concurrent inserts with the same index, the order
-        // needs to be determined by the elemIds to maintain consistency with the CRDT
         if (remote.action === 'insert' && remote.index <=  local.index) local.index += 1
         if (remote.action === 'remove' && remote.index <   local.index) local.index -= 1
         if (remote.action === 'remove' && remote.index === local.index) {
           if (local.action === 'set') local.action = 'insert'
           if (local.action === 'remove') continue local_loop // drop this diff
         }
-      }
-
-      // If the incoming patch assigns a list element or map key, and a local diff updates
-      // the same key, make a conflict (since the two assignments are definitely concurrent).
-      // The assignment with the highest actor ID determines the default resolution.
-      if (local.obj === remote.obj && local.action === 'set' && remote.action === 'set' &&
-          ((local.type === 'list' && local.index === remote.index) ||
-           (local.type === 'map'  && local.key   === remote.key  ))) {
-        // TODO
       }
     }
     transformed.push(local)
@@ -216,8 +232,6 @@ function change(doc, message, callback) {
     // If the callback didn't change anything, return the original document object unchanged
     return doc
   } else {
-    // TODO: If there are multiple assignment operations for the same object and key,
-    // we should keep only the most recent (this applies to both ops and diffs)
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
     return makeChange(doc, context, message)
   }

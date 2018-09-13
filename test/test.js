@@ -77,7 +77,7 @@ describe('Automerge', () => {
         assert.deepEqual(s2, {counter: 3})
       })
 
-      it('should not record conflicts when writing the same field several times within one change'/*, () => {
+      it('should not record conflicts when writing the same field several times within one change', () => {
         s1 = Automerge.change(s1, 'change message', doc => {
           doc.counter = 1
           doc.counter += 1
@@ -85,7 +85,7 @@ describe('Automerge', () => {
         })
         assert.strictEqual(s1.counter, 3)
         assert.deepEqual(s1._conflicts, {})
-      }*/)
+      })
 
       it('should return the unchanged state object if nothing changed', () => {
         s2 = Automerge.change(s1, doc => {})
