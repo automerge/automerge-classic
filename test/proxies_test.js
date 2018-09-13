@@ -223,14 +223,14 @@ describe('Automerge proxy API', () => {
         })
       })
 
-      it('entries()' /*, () => {
+      it('entries()', () => {
         Automerge.change(root, doc => {
           let copy = []
           for (let x of doc.list.entries()) copy.push(x)
           assert.deepEqual(copy, [[0, 1], [1, 2], [2, 3]])
           assert.deepEqual([...doc.list.entries()], [[0, 1], [1, 2], [2, 3]])
         })
-      }*/)
+      })
 
       it('every()', () => {
         Automerge.change(root, doc => {
@@ -308,14 +308,14 @@ describe('Automerge proxy API', () => {
         })
       })
 
-      it('keys()' /*, () => {
+      it('keys()', () => {
         Automerge.change(root, doc => {
           let keys = []
           for (let x of doc.list.keys()) keys.push(x)
           assert.deepEqual(keys, [0, 1, 2])
           assert.deepEqual([...doc.list.keys()], [0, 1, 2])
         })
-      }*/)
+      })
 
       it('lastIndexOf()', () => {
         Automerge.change(root, doc => {
@@ -384,14 +384,14 @@ describe('Automerge proxy API', () => {
         })
       })
 
-      it('values()'/*, () => {
+      it('values()', () => {
         Automerge.change(root, doc => {
           let values = []
           for (let x of doc.list.values()) values.push(x)
           assert.deepEqual(values, [1, 2, 3])
           assert.deepEqual([...doc.list.values()], [1, 2, 3])
         })
-      }*/)
+      })
     })
 
     describe('should support standard mutation methods', () => {

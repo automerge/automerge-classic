@@ -75,6 +75,11 @@ function listMethods(context, listId) {
     }
   }
 
+  for (let iterator of ['entries', 'keys', 'values']) {
+    let list = context.getObject(listId)
+    methods[iterator] = () => list[iterator]()
+  }
+
   // Read-only methods that can delegate to the JavaScript built-in implementations
   for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach', 'includes',
                       'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
