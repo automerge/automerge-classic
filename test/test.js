@@ -116,7 +116,7 @@ describe('Automerge', () => {
         assert.throws(() => { Automerge.change(s1.nested, doc => doc.foo = 'bar') }, /must be the document root/)
       })
 
-      it('should not allow nested change blocks'/*, () => {
+      it('should not allow nested change blocks', () => {
         assert.throws(() => {
           Automerge.change(s1, doc1 => {
             Automerge.change(doc1, doc2 => {
@@ -124,7 +124,7 @@ describe('Automerge', () => {
             })
           })
         }, /Calls to Automerge.change cannot be nested/)
-      }*/)
+      })
 
       it('should not allow objects as change message', () => {
         assert.throws(() => {
@@ -1183,14 +1183,14 @@ describe('Automerge', () => {
       ])
     })
 
-    it('should return list deletions by index'/*, () => {
+    it('should return list deletions by index', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Robin', 'Wagtail'])
       let s2 = Automerge.change(s1, doc => { doc.birds[1] = 'Pied Wagtail'; doc.birds.shift() })
       assert.deepEqual(Automerge.diff(s1, s2), [
         {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'set',    index: 1, value: 'Pied Wagtail'},
         {obj: s1.birds._objectId, path: ['birds'], type: 'list', action: 'remove', index: 0}
       ])
-    }*/)
+    })
 
     it('should return object creation and linking information', () => {
       let s1 = Automerge.init()

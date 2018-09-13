@@ -1,7 +1,5 @@
-// Frontend-only (OpSet-free) version of proxies.js
-// TODO unify the two versions!
-
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+const { ROOT_ID } = require('../src/common')
+const { CHANGE } = require('./constants')
 
 function parseListIndex(key) {
   if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
@@ -96,7 +94,7 @@ const MapHandler = {
     if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(context, objectId)))
     if (key === '_type') return 'map'
     if (key === '_objectId') return objectId
-    if (key === '_change') return context
+    if (key === CHANGE) return context
     if (key === '_get') return context._get
     return context.getObjectField(objectId, key)
   },
@@ -115,7 +113,7 @@ const MapHandler = {
 
   has (target, key) {
     const { context, objectId } = target
-    return ['_type', '_objectId', '_change', '_get'].includes(key) || (key in context.getObject(objectId))
+    return ['_type', '_objectId', CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
@@ -139,7 +137,7 @@ const ListHandler = {
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_type') return 'list'
     if (key === '_objectId') return objectId
-    if (key === '_change') return context
+    if (key === CHANGE) return context
     if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return context.getObjectField(objectId, parseListIndex(key))
@@ -164,7 +162,7 @@ const ListHandler = {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
-    return ['length', '_type', '_objectId', '_change'].includes(key)
+    return ['length', '_type', '_objectId', CHANGE].includes(key)
   },
 
   getOwnPropertyDescriptor (target, key) {

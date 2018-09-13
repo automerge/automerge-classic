@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS } = require('./constants')
+const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
 const { ROOT_ID, isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { applyDiff, updateParentObjects, cloneRootObject } = require('./apply_patch')
@@ -199,7 +199,7 @@ function change(doc, message, callback) {
   if (doc[OBJECT_ID] !== ROOT_ID) {
     throw new TypeError('The first argument to Automerge.change must be the document root')
   }
-  if (doc._change && doc._change.mutable) {
+  if (doc[CHANGE]) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
   if (typeof message === 'function' && callback === undefined) {
