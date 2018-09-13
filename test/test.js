@@ -110,6 +110,25 @@ describe('Automerge', () => {
         assert.deepEqual(resolved._conflicts, {})
       })
 
+      it('should ignore list element updates that write the existing value', () => {
+        s1 = Automerge.change(s1, doc => doc.list = [123])
+        s2 = Automerge.change(s1, doc => doc.list[0] = 123)
+        assert.strictEqual(s2, s1)
+      })
+
+      it('should not ignore list element updates that resolve a conflict', () => {
+        s1 = Automerge.change(s1, doc => doc.list = [1])
+        s2 = Automerge.merge(Automerge.init(), s1)
+        s1 = Automerge.change(s1, doc => doc.list[0] = 123)
+        s2 = Automerge.change(s2, doc => doc.list[0] = 321)
+        s1 = Automerge.merge(s1, s2)
+        equalsOneOf(s1.list._conflicts[0], {[s1._actorId]: 123}, {[s2._actorId]: 321})
+        const resolved = Automerge.change(s1, doc => doc.list[0] = s1.list[0])
+        assert.deepEqual(resolved, s1)
+        assert.notStrictEqual(resolved, s1)
+        assert.deepEqual(resolved.list._conflicts, [null])
+      })
+
       it('should sanity-check arguments', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
         assert.throws(() => { Automerge.change({},        doc => doc.foo = 'bar') }, /must be the document root/)

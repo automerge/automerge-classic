@@ -166,7 +166,7 @@ class Context {
       this.insertListItem(objectId, index, value)
       return
     }
-    if (index < 0 || index >= list.length) {
+    if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
     if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
@@ -179,7 +179,9 @@ class Context {
       const childId = this.createNestedObjects(value)
       this.apply({action: 'set', type: 'list', obj: objectId, index, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
-    } else {
+    } else if (list[index] !== value || list[CONFLICTS][index]) {
+      // If the assigned list element value is the same as the existing value, and
+      // the assignment does not resolve a conflict, do nothing
       this.apply({action: 'set', type: 'list', obj: objectId, index, value})
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
