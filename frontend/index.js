@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
+const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { applyDiff, updateParentObjects, cloneRootObject } = require('./apply_patch')
@@ -258,18 +258,17 @@ function emptyChange(doc, message) {
  */
 function applyPatch(doc, patch) {
   let baseDoc, remainingRequests
-  if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
-    if (doc[REQUESTS].length === 0) {
-      throw new RangeError(`No matching request for sequence number ${patch.seq}`)
+  if (doc[REQUESTS].length > 0) {
+    if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
+      if (doc[REQUESTS][0].seq !== patch.seq) {
+        throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${doc[REQUESTS][0].seq}`)
+      }
+      baseDoc = doc[REQUESTS][0].before
+      remainingRequests = doc[REQUESTS].slice(1).map(req => Object.assign({}, req))
+    } else {
+      baseDoc = doc[REQUESTS][0].before
+      remainingRequests = doc[REQUESTS].slice().map(req => Object.assign({}, req))
     }
-    if (doc[REQUESTS][0].seq !== patch.seq) {
-      throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${doc[REQUESTS][0].seq}`)
-    }
-    baseDoc = doc[REQUESTS][0].before
-    remainingRequests = doc[REQUESTS].slice(1).map(req => Object.assign({}, req))
-  } else if (doc[REQUESTS].length > 0) {
-    baseDoc = doc[REQUESTS][0].before
-    remainingRequests = doc[REQUESTS].slice().map(req => Object.assign({}, req))
   } else {
     baseDoc = doc
     remainingRequests = []
@@ -343,6 +342,11 @@ function getBackendState(doc) {
   return doc[STATE]
 }
 
+function getElementIds(list) {
+  return list[ELEM_IDS]
+}
+
 module.exports = {
-  init, change, emptyChange, applyPatch, getObjectId, getActorId, getConflicts, getRequests, getBackendState
+  init, change, emptyChange, applyPatch,
+  getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds
 }

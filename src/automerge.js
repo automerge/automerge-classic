@@ -110,29 +110,25 @@ function getConflicts(doc, list) {
 }
 
 function canUndo(doc) {
-  checkTarget('canUndo', doc)
-  return doc._state.getIn(['opSet', 'undoPos']) > 0
+  return Backend.canUndo(Frontend.getBackendState(doc))
 }
 
 function undo(doc, message) {
-  checkTarget('undo', doc)
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
-  }
-  return makeUndo(doc, message)
+  const oldState = Frontend.getBackendState(doc)
+  const [newState, patch] = Backend.undo(oldState, message)
+  patch.state = newState
+  return Frontend.applyPatch(doc, patch)
 }
 
 function canRedo(doc) {
-  checkTarget('canRedo', doc)
-  return !doc._state.getIn(['opSet', 'redoStack']).isEmpty()
+  return Backend.canRedo(Frontend.getBackendState(doc))
 }
 
 function redo(doc, message) {
-  checkTarget('redo', doc)
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
-  }
-  return makeRedo(doc, message)
+  const oldState = Frontend.getBackendState(doc)
+  const [newState, patch] = Backend.redo(oldState, message)
+  patch.state = newState
+  return Frontend.applyPatch(doc, patch)
 }
 
 module.exports = {
@@ -140,6 +136,7 @@ module.exports = {
   equals, inspect, getHistory, getConflicts,
   Text, uuid,
   canUndo, undo, canRedo, redo,
+  Frontend, Backend
   //DocSet: require('./doc_set'),
   //WatchableDoc: require('./watchable_doc'),
   //Connection: require('./connection')

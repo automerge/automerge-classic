@@ -787,8 +787,11 @@ describe('Automerge', () => {
     })
   })
 
-  /*
   describe('Automerge.undo()', () => {
+    function getUndoStack(doc) {
+      return Automerge.Frontend.getBackendState(doc).getIn(['opSet', 'undoStack'])
+    }
+
     it('should allow undo if there have been local changes', () => {
       let s1 = Automerge.init()
       assert.strictEqual(Automerge.canUndo(s1), false)
@@ -804,7 +807,7 @@ describe('Automerge', () => {
       let s1 = Automerge.init()
       s1 = Automerge.change(s1, doc => doc.hello = 'world')
       assert.deepEqual(s1, {hello: 'world'})
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'del', obj: ROOT_ID, key: 'hello'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {})
@@ -814,7 +817,7 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.value = 3)
       s1 = Automerge.change(s1, doc => doc.value = 4)
       assert.deepEqual(s1, {value: 4})
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'value', value: 3}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {value: 3})
@@ -873,7 +876,7 @@ describe('Automerge', () => {
       let s1 = Automerge.init()
       s1 = Automerge.change(s1, doc => doc.settings = {background: 'white', text: 'black'})
       assert.deepEqual(s1, {settings: {background: 'white', text: 'black'}})
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'del', obj: ROOT_ID, key: 'settings'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {})
@@ -883,7 +886,7 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => { doc.k1 = 'v1'; doc.k2 = 'v2' })
       s1 = Automerge.change(s1, doc => delete doc.k2)
       assert.deepEqual(s1, {k1: 'v1'})
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'k2', value: 'v2'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {k1: 'v1', k2: 'v2'})
@@ -894,7 +897,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.birds = ['heron', 'magpie'])
       let s2 = Automerge.change(s1, doc => delete doc['fish'])
       assert.deepEqual(s2, {birds: ['heron', 'magpie']})
-      assert.deepEqual(s2._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s2).last().toJS(),
                        [{action: 'link', obj: ROOT_ID, key: 'fish', value: s1.fish._objectId}])
       s2 = Automerge.undo(s2)
       assert.deepEqual(s2, {fish: ['trout', 'sea bass'], birds: ['heron', 'magpie']})
@@ -904,8 +907,8 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.push('D'))
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
-      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(3)
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      const elemId = Automerge.Frontend.getElementIds(s1.list)[3]
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'del', obj: s1.list._objectId, key: elemId}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
@@ -913,10 +916,10 @@ describe('Automerge', () => {
 
     it('should undo list element deletion by re-assigning the old value', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
-      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(1)
+      const elemId = Automerge.Frontend.getElementIds(s1.list)[1]
       s1 = Automerge.change(s1, doc => doc.list.splice(1, 1))
       assert.deepEqual(s1, {list: ['A', 'C']})
-      assert.deepEqual(s1._state.getIn(['opSet', 'undoStack']).last().toJS(),
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
                        [{action: 'set', obj: s1.list._objectId, key: elemId, value: 'B'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
@@ -924,6 +927,10 @@ describe('Automerge', () => {
   })
 
   describe('Automerge.redo()', () => {
+    function getRedoStack(doc) {
+      return Automerge.Frontend.getBackendState(doc).getIn(['opSet', 'redoStack'])
+    }
+
     it('should allow redo if the last change was an undo', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['peregrine falcon'])
       assert.strictEqual(Automerge.canRedo(s1), false)
@@ -974,10 +981,10 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.hello = 'world')
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'hello', value: 'world'}])
       s1 = Automerge.redo(s1)
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).size, 0)
+      assert.deepEqual(getRedoStack(s1).size, 0)
       assert.deepEqual(s1, {hello: 'world'})
     })
 
@@ -986,7 +993,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.value = 4)
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {value: 3})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'value', value: 4}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {value: 4})
@@ -997,7 +1004,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => delete doc.value)
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {value: 123})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'del', obj: ROOT_ID, key: 'value'}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {})
@@ -1008,7 +1015,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.settings = {background: 'white', text: 'black'})
       let s2 = Automerge.undo(s1)
       assert.deepEqual(s2, {})
-      assert.deepEqual(s2._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s2).last().toJS(),
                        [{action: 'link', obj: ROOT_ID, key: 'settings', value: s1.settings._objectId}])
       s2 = Automerge.redo(s2)
       assert.deepEqual(s2, {settings: {background: 'white', text: 'black'}})
@@ -1020,7 +1027,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => delete doc['fish'])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {fish: ['trout', 'sea bass'], birds: ['heron', 'magpie']})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'del', obj: ROOT_ID, key: 'fish'}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {birds: ['heron', 'magpie']})
@@ -1029,10 +1036,10 @@ describe('Automerge', () => {
     it('should undo/redo a list element insertion', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.push('D'))
-      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(3)
+      const elemId = Automerge.Frontend.getElementIds(s1.list)[3]
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'set', obj: s1.list._objectId, key: elemId, value: 'D'}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
@@ -1042,9 +1049,9 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.deleteAt(1))
       s1 = Automerge.undo(s1)
-      const elemId = s1._state.getIn(['opSet', 'byObject', s1.list._objectId, '_elemIds']).keyOf(1)
+      const elemId = Automerge.Frontend.getElementIds(s1.list)[1]
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'del', obj: s1.list._objectId, key: elemId}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'C']})
@@ -1058,7 +1065,7 @@ describe('Automerge', () => {
       s1 = Automerge.merge(s1, s2)
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {value: 1})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'value', value: 3}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {value: 3})
@@ -1072,7 +1079,7 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.value = 3)
       s1 = Automerge.merge(s1, s2)
       assert.deepEqual(s1, {value: 3})
-      assert.deepEqual(s1._state.getIn(['opSet', 'redoStack']).last().toJS(),
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
                        [{action: 'set', obj: ROOT_ID, key: 'value', value: 2}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {value: 2})
@@ -1099,7 +1106,6 @@ describe('Automerge', () => {
                        [[1, 'set 1'], [2, 'set 2'], [3, 'undo'], [4, 'redo!']])
     })
   })
-  */
 
   describe('saving and loading', () => {
     it('should save and restore an empty document', () => {

@@ -137,8 +137,7 @@ function init(actorId) {
 function getDeps(state) {
   let actorId = state.get('actorId'), opSet = state.get('opSet')
   return opSet.get('deps')
-    .set(actorId, opSet.getIn(['clock', actorId]))
-    .toJS()
+    .set(actorId, opSet.getIn(['clock', actorId], 0))
 }
 
 /**
@@ -150,13 +149,14 @@ function getDeps(state) {
 function applyChanges(state, changes) {
   let diffs = [], opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
-    let [newOpSet, diff] = OpSet.addChange(opSet, change)
+    const undoable = (change.get('actor') === state.get('actorId'))
+    let [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
     diffs.push(...diff)
     opSet = newOpSet
   }
 
   state = state.set('opSet', opSet)
-  let patch = {diffs, deps: getDeps(state)}
+  let patch = {diffs, deps: getDeps(state).toJS()}
 
   if (changes.length === 1) {
     patch.actor = changes[0].actor
@@ -174,6 +174,24 @@ function applyChange(state, change) {
 }
 
 /**
+ * Creates and applies a new change by the local actor, containing the list of
+ * operations `ops` and the optional `message`. Returns a two-element array
+ * `[state, patch]` where `state` is the updated node state, and `patch`
+ * describes the changes that need to be made to the document object.
+ */
+function makeChange(state, ops, message) {
+  const actor = state.get('actorId')
+  const seq = state.getIn(['opSet', 'clock', actor], 0) + 1
+  const deps = getDeps(state)
+  let change = Map({actor, seq, deps, ops})
+  if (message) change = change.set('message', message)
+
+  const [opSet, diffs] = OpSet.addChange(state.get('opSet'), change, false)
+  let patch = {actor, seq, deps: deps.toJS(), diffs}
+  return [state.set('opSet', opSet), patch]
+}
+
+/**
  * Returns a patch that, when applied to an empty document, constructs the
  * document tree in the state described by the node state `state`.
  */
@@ -182,7 +200,7 @@ function getPatch(state) {
   let context = new MaterializationContext(opSet)
   context.instantiateObject(opSet, OpSet.ROOT_ID)
   context.makePatch(OpSet.ROOT_ID, diffs)
-  return {diffs, deps: getDeps(state)}
+  return {diffs, deps: getDeps(state).toJS()}
 }
 
 /**
@@ -224,6 +242,60 @@ function merge(local, remote) {
   return applyChanges(local, changes)
 }
 
+function canUndo(state) {
+  return state.getIn(['opSet', 'undoPos']) > 0
+}
+
+function undo(state, message) {
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  const undoPos = state.getIn(['opSet', 'undoPos'])
+  const undoOps = state.getIn(['opSet', 'undoStack', undoPos - 1])
+  if (undoPos < 1 || !undoOps) {
+    throw new RangeError('Cannot undo: there is nothing to be undone')
+  }
+  let opSet = state.get('opSet')
+  let redoOps = List().withMutations(redoOps => {
+    for (let op of undoOps) {
+      if (!['set', 'del', 'link'].includes(op.get('action'))) {
+        throw new RangeError(`Unexpected operation type in undo history: ${op}`)
+      }
+      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
+      if (fieldOps.isEmpty()) {
+        redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
+      } else {
+        for (let fieldOp of fieldOps) {
+          redoOps.push(fieldOp.remove('actor').remove('seq'))
+        }
+      }
+    }
+  })
+  opSet = opSet
+    .set('undoPos', undoPos - 1)
+    .update('redoStack', stack => stack.push(redoOps))
+  return makeChange(state.set('opSet', opSet), undoOps, message)
+}
+
+function canRedo(state) {
+  return !state.getIn(['opSet', 'redoStack']).isEmpty()
+}
+
+function redo(state, message) {
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  const redoOps = state.getIn(['opSet', 'redoStack']).last()
+  if (!redoOps) {
+    throw new RangeError('Cannot redo: the last change was not an undo')
+  }
+  const opSet = state.get('opSet')
+    .update('undoPos', undoPos => undoPos + 1)
+    .update('redoStack', stack => stack.pop())
+  return makeChange(state.set('opSet', opSet), redoOps, message)
+}
+
 module.exports = {
-  init, applyChanges, applyChange, getPatch, getChanges, getChangesForActor, getMissingDeps, merge
+  init, applyChanges, applyChange, getPatch, getChanges, getChangesForActor, getMissingDeps, merge,
+  canUndo, undo, canRedo, redo
 }
