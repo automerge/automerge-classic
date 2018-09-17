@@ -1,5 +1,7 @@
 const { Map, Set } = require('immutable')
 const uuid = require('./uuid')
+const Frontend = require('../frontend')
+const Backend = require('../backend')
 
 class DocSet {
   constructor () {
@@ -21,8 +23,11 @@ class DocSet {
   }
 
   applyChanges (docId, changes) {
-    let doc = this.docs.get(docId) || FreezeAPI.init(uuid())
-    doc = FreezeAPI.applyChanges(doc, doc._state.get('opSet'), changes, true)
+    let doc = this.docs.get(docId) || Frontend.init({backend: Backend})
+    const oldState = Frontend.getBackendState(doc)
+    const [newState, patch] = Backend.applyChanges(oldState, changes)
+    patch.state = newState
+    doc = Frontend.applyPatch(doc, patch)
     this.setDoc(docId, doc)
     return doc
   }

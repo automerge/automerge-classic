@@ -1,4 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
+const { lessOrEqual } = require('../src/common')
 const OpSet = require('./op_set')
 
 function isObject(obj) {
@@ -203,17 +204,6 @@ function getPatch(state) {
   return {diffs, deps: getDeps(state).toJS()}
 }
 
-/**
- * Returns true if all components of clock1 are less than or equal to those of clock2.
- * Returns false if there is at least one component in which clock1 is greater than clock2
- * (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
- */
-function lessOrEqual(clock1, clock2) {
-  return clock1.keySeq().concat(clock2.keySeq()).reduce(
-    (result, key) => (result && clock1.get(key, 0) <= clock2.get(key, 0)),
-    true)
-}
-
 function getChanges(oldState, newState) {
   const oldClock = oldState.getIn(['opSet', 'clock'])
   const newClock = newState.getIn(['opSet', 'clock'])
@@ -227,6 +217,10 @@ function getChanges(oldState, newState) {
 function getChangesForActor(state, actorId) {
   // I might want to validate the actorId here
   return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS()
+}
+
+function getMissingChanges(state, clock) {
+  return OpSet.getMissingChanges(state.get('opSet'), clock).toJS()
 }
 
 function getMissingDeps(state) {
@@ -296,6 +290,7 @@ function redo(state, message) {
 }
 
 module.exports = {
-  init, applyChanges, applyChange, getPatch, getChanges, getChangesForActor, getMissingDeps, merge,
+  init, applyChanges, applyChange, getPatch,
+  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge,
   canUndo, undo, canRedo, redo
 }

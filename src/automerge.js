@@ -136,8 +136,8 @@ module.exports = {
   equals, inspect, getHistory, getConflicts,
   Text, uuid,
   canUndo, undo, canRedo, redo,
-  Frontend, Backend
-  //DocSet: require('./doc_set'),
+  Frontend, Backend,
+  DocSet: require('./doc_set'),
   //WatchableDoc: require('./watchable_doc'),
-  //Connection: require('./connection')
+  Connection: require('./connection')
 }
