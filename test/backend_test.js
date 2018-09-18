@@ -1,4 +1,5 @@
 const assert = require('assert')
+const Automerge = require('../src/automerge')
 const Backend = require('../backend')
 const uuid = require('../src/uuid')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
@@ -231,6 +232,26 @@ describe('Backend', () => {
         {action: 'insert', obj: birds,   type: 'list', index: 1, value: 'goldfinches!!', elemId: `${actor}:2`},
         {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
       ]})
+    })
+  })
+
+  describe('getChangesForActor()', () => {
+    let oneDoc, twoDoc, mergeDoc
+
+    beforeEach(() => {
+      oneDoc = Automerge.change(Automerge.init('actor1'), doc => doc.document = 'watch me now')
+      twoDoc = Automerge.init('actor2')
+      twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can mash potato')
+      twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can do the twist')
+      mergeDoc = Automerge.merge(oneDoc, twoDoc)
+    })
+
+    it('should get changes for a single actor', () => {
+      const state = Automerge.Frontend.getBackendState(mergeDoc)
+      const actorChanges = Backend.getChangesForActor(state, 'actor2')
+
+      assert.equal(actorChanges.length, 2)
+      assert.equal(actorChanges[0].actor, 'actor2')
     })
   })
 })
