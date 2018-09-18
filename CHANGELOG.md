@@ -8,6 +8,17 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2018-09-18
+
+### Added
+- [#112]: Added `Automerge.undo()` and `Automerge.redo()` ([@ept])
+- [#118]: Introduced new Frontend and Backend APIs, and refactored existing APIs to use them
+  (this allows some of the work to be moved to a background thread)
+
+## Removed
+- Removed the experimental Immutable.js-compatible API (`Automerge.initImmutable()`), a
+  casualty of the refactoring in [#118]
+
 ## [0.8.0] — 2018-08-02
 
 ### Added
@@ -154,7 +165,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/automerge/automerge/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/automerge/automerge/compare/v0.7.11...v0.8.0
 [0.7.11]: https://github.com/automerge/automerge/compare/v0.7.10...v0.7.11
 [0.7.10]: https://github.com/automerge/automerge/compare/v0.7.9...v0.7.10
@@ -174,6 +186,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#118]: https://github.com/automerge/automerge/pull/118
+[#112]: https://github.com/automerge/automerge/pull/112
 [#111]: https://github.com/automerge/automerge/pull/111
 [#110]: https://github.com/automerge/automerge/pull/110
 [#109]: https://github.com/automerge/automerge/pull/109
