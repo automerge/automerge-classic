@@ -4,7 +4,6 @@ const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const Backend = require('../backend')
 const { isObject } = require('./common')
-const { Text } = require('./text')
 
 /**
  * Constructs a new frontend document that reflects the given list of changes.
@@ -133,10 +132,10 @@ function redo(doc, message) {
 
 module.exports = {
   init, change, emptyChange, load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
-  equals, inspect, getHistory, getConflicts,
-  Text, uuid,
+  equals, inspect, getHistory, getConflicts, uuid,
   canUndo, undo, canRedo, redo,
   Frontend, Backend,
+  Text: Frontend.Text,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')

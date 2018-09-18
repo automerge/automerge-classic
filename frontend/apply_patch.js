@@ -1,5 +1,6 @@
 const { ROOT_ID, isObject } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { Text } = require('./text')
 
 /**
  * Takes a string in the form that is used to identify list elements (an actor
@@ -244,6 +245,77 @@ function parentListObject(objectId, cache, updated) {
 }
 
 /**
+ * Applies the list of changes from `diffs[startIndex]` to `diffs[endIndex]`
+ * (inclusive the last element) to a Text object. `cache` and `updated` are
+ * indexed by objectId; the existing read-only object is taken from `cache`,
+ * and the updated object is written to `updated`.
+ */
+function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
+  const objectId = diffs[0].obj
+  if (!updated[objectId]) {
+    if (cache[objectId]) {
+      const elems = cache[objectId].elems.slice()
+      const maxElem = cache[objectId][MAX_ELEM]
+      updated[objectId] = new Text(objectId, elems, maxElem)
+    } else {
+      updated[objectId] = new Text(objectId)
+    }
+  }
+
+  let elems = updated[objectId].elems, maxElem = updated[objectId][MAX_ELEM]
+  let splicePos = -1, deletions, insertions
+
+  while (startIndex <= endIndex) {
+    const diff = diffs[startIndex]
+    if (diff.action === 'create') {
+      // do nothing
+
+    } else if (diff.action === 'insert') {
+      if (splicePos < 0) {
+        splicePos = diff.index
+        deletions = 0
+        insertions = []
+      }
+      maxElem = Math.max(maxElem, parseElemId(diff.elemId)[0])
+      insertions.push({elemId: diff.elemId, value: diff.value, conflicts: diff.conflicts})
+
+      if (startIndex === endIndex || diffs[startIndex + 1].action !== 'insert' ||
+          diffs[startIndex + 1].index !== diff.index + 1) {
+        elems.splice(splicePos, deletions, ...insertions)
+        splicePos = -1
+      }
+
+    } else if (diff.action === 'set') {
+      elems[diff.index] = {
+        elemId: elems[diff.index].elemId,
+        value: diff.value,
+        conflicts: diff.conflicts
+      }
+
+    } else if (diff.action === 'remove') {
+      if (splicePos < 0) {
+        splicePos = diff.index
+        deletions = 0
+        insertions = []
+      }
+      deletions += 1
+
+      if (startIndex === endIndex ||
+          !['insert', 'remove'].includes(diffs[startIndex + 1].action) ||
+          diffs[startIndex + 1].index !== diff.index) {
+        elems.splice(splicePos, deletions)
+        splicePos = -1
+      }
+    } else {
+      throw new RangeError('Unknown action type: ' + diff.action)
+    }
+
+    startIndex += 1
+  }
+  updated[objectId] = new Text(objectId, elems, maxElem)
+}
+
+/**
  * After some set of objects in `updated` (a map from object ID to mutable
  * object) have been updated, updates their parent objects to point to the new
  * object versions, all the way to the root object. `cache` contains the
@@ -272,21 +344,31 @@ function updateParentObjects(cache, updated, inbound) {
 }
 
 /**
- * Applies the change `diff` to the appropriate object in `updated`. `cache`
- * and `updated` are indexed by objectId; the existing read-only object is
- * taken from `cache`, and the updated writable object is written to
+ * Applies the list of changes `diffs` to the appropriate object in `updated`.
+ * `cache` and `updated` are indexed by objectId; the existing read-only object
+ * is taken from `cache`, and the updated writable object is written to
  * `updated`. `inbound` is a mapping from child objectId to parent objectId;
  * it is updated according to the change.
  */
-function applyDiff(diff, cache, updated, inbound) {
-  if (diff.type === 'map') {
-    updateMapObject(diff, cache, updated, inbound)
-  } else if (diff.type === 'list') {
-    updateListObject(diff, cache, updated, inbound)
-  } else if (diff.type === 'text') {
-    throw new TypeError('TODO: Automerge.Text is not yet supported')
-  } else {
-    throw new TypeError(`Unknown object type: ${diff.type}`)
+function applyDiffs(diffs, cache, updated, inbound) {
+  let startIndex = 0
+  for (let endIndex = 0; endIndex < diffs.length; endIndex++) {
+    const diff = diffs[endIndex]
+
+    if (diff.type === 'map') {
+      updateMapObject(diff, cache, updated, inbound)
+      startIndex = endIndex + 1
+    } else if (diff.type === 'list') {
+      updateListObject(diff, cache, updated, inbound)
+      startIndex = endIndex + 1
+    } else if (diff.type === 'text') {
+      if (endIndex === diffs.length - 1 || diffs[endIndex + 1].obj !== diff.obj) {
+        updateTextObject(diffs, startIndex, endIndex, cache, updated)
+        startIndex = endIndex + 1
+      }
+    } else {
+      throw new TypeError(`Unknown object type: ${diff.type}`)
+    }
   }
 }
 
@@ -301,5 +383,5 @@ function cloneRootObject(root) {
 }
 
 module.exports = {
-  applyDiff, updateParentObjects, cloneRootObject
+  applyDiffs, updateParentObjects, cloneRootObject
 }

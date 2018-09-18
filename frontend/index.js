@@ -1,9 +1,10 @@
 const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject } = require('../src/common')
 const uuid = require('../src/uuid')
-const { applyDiff, updateParentObjects, cloneRootObject } = require('./apply_patch')
+const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
+const { Text } = require('./text')
 
 /**
  * Takes a set of objects that have been updated (in `updated`) and an updated
@@ -103,11 +104,7 @@ function makeChange(doc, context, message) {
 function applyPatchToDoc(doc, patch, requests, maxSeq, deps, state) {
   let inbound = Object.assign({}, doc[INBOUND])
   let updated = {}
-
-  for (let diff of patch.diffs) {
-    applyDiff(diff, doc[CACHE], updated, inbound)
-  }
-
+  applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
   updateParentObjects(doc[CACHE], updated, inbound)
   return updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state)
 }
@@ -348,5 +345,6 @@ function getElementIds(list) {
 
 module.exports = {
   init, change, emptyChange, applyPatch,
-  getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds
+  getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds,
+  Text
 }

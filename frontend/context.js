@@ -1,5 +1,6 @@
-const { OPTIONS, CACHE, INBOUND, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
-const { applyDiff } = require('./apply_patch')
+const { OPTIONS, CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants')
+const { applyDiffs } = require('./apply_patch')
+const { Text, getElemId } = require('./text')
 const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -30,7 +31,7 @@ class Context {
    */
   apply(diff) {
     this.diffs.push(diff)
-    applyDiff(diff, this.cache, this.updated, this.inbound)
+    applyDiffs([diff], this.cache, this.updated, this.inbound)
   }
 
   /**
@@ -65,7 +66,15 @@ class Context {
     if (typeof value[OBJECT_ID] === 'string') return value[OBJECT_ID]
     const objectId = uuid()
 
-    if (Array.isArray(value)) {
+    if (value instanceof Text) {
+      // Create a new Text object
+      if (value.length > 0) {
+        throw new RangeError('Assigning a non-empty Text object is not supported')
+      }
+      this.apply({action: 'create', type: 'text', obj: objectId})
+      this.addOp({action: 'makeText', obj: objectId})
+
+    } else if (Array.isArray(value)) {
       // Create a new list object
       this.apply({action: 'create', type: 'list', obj: objectId})
       this.addOp({action: 'makeList', obj: objectId})
@@ -141,16 +150,17 @@ class Context {
     }
 
     const maxElem = list[MAX_ELEM] + 1
-    const prevId = (index === 0) ? '_head' : list[ELEM_IDS][index - 1]
+    const type = (list instanceof Text) ? 'text' : 'list'
+    const prevId = (index === 0) ? '_head' : getElemId(list, index - 1)
     const elemId = `${this.actorId}:${maxElem}`
     this.addOp({action: 'ins', obj: objectId, key: prevId, elem: maxElem})
 
     if (isObject(value)) {
       const childId = this.createNestedObjects(value)
-      this.apply({action: 'insert', type: 'list', obj: objectId, index, value: childId, link: true, elemId})
+      this.apply({action: 'insert', type, obj: objectId, index, value: childId, link: true, elemId})
       this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
     } else {
-      this.apply({action: 'insert', type: 'list', obj: objectId, index, value, elemId})
+      this.apply({action: 'insert', type, obj: objectId, index, value, elemId})
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
     this.getObject(objectId)[MAX_ELEM] = maxElem
@@ -173,16 +183,17 @@ class Context {
       throw new TypeError(`Unsupported type of value: ${typeof value}`)
     }
 
-    const elemId = list[ELEM_IDS][index]
+    const elemId = getElemId(list, index)
+    const type = (list instanceof Text) ? 'text' : 'list'
 
     if (isObject(value)) {
       const childId = this.createNestedObjects(value)
-      this.apply({action: 'set', type: 'list', obj: objectId, index, value: childId, link: true})
+      this.apply({action: 'set', type, obj: objectId, index, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
     } else if (list[index] !== value || list[CONFLICTS][index]) {
       // If the assigned list element value is the same as the existing value, and
       // the assignment does not resolve a conflict, do nothing
-      this.apply({action: 'set', type: 'list', obj: objectId, index, value})
+      this.apply({action: 'set', type, obj: objectId, index, value})
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
   }
@@ -194,6 +205,7 @@ class Context {
    */
   splice(objectId, start, deletions, insertions) {
     let list = this.getObject(objectId)
+    const type = (list instanceof Text) ? 'text' : 'list'
 
     if (deletions > 0) {
       if (start < 0 || start > list.length - deletions) {
@@ -201,8 +213,8 @@ class Context {
       }
 
       for (let i = 0; i < deletions; i++) {
-        this.addOp({action: 'del', obj: objectId, key: list[ELEM_IDS][start]})
-        this.apply({action: 'remove', type: 'list', obj: objectId, index: start})
+        this.addOp({action: 'del', obj: objectId, key: getElemId(list, start)})
+        this.apply({action: 'remove', type, obj: objectId, index: start})
 
         // Must refresh object after the first updateListObject call, since the
         // object previously may have been immutable

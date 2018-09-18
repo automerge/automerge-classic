@@ -1,5 +1,6 @@
 const { ROOT_ID } = require('../src/common')
 const { CHANGE } = require('./constants')
+const { Text } = require('./text')
 
 function parseListIndex(key) {
   if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
@@ -207,7 +208,7 @@ function listProxy(context, objectId) {
  */
 function instantiateProxy(objectId) {
   const object = this.getObject(objectId)
-  if (Array.isArray(object)) {
+  if (Array.isArray(object) || (object instanceof Text)) {
     return listProxy(this, objectId)
   } else {
     return mapProxy(this, objectId)
