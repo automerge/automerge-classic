@@ -102,7 +102,7 @@ function getConflicts(ops) {
   return conflicts
 }
 
-function patchList(opSet, objectId, index, action, ops) {
+function patchList(opSet, objectId, index, elemId, action, ops) {
   const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   const firstOp = ops ? ops.first() : null
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -115,6 +115,7 @@ function patchList(opSet, objectId, index, action, ops) {
 
   if (action === 'insert') {
     elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
+    edit.elemId = elemId
     edit.value = firstOp.get('value')
   } else if (action === 'set') {
     elemIds = elemIds.setValue(firstOp.get('key'), value)
@@ -135,9 +136,9 @@ function updateListElement(opSet, objectId, elemId) {
 
   if (index >= 0) {
     if (ops.isEmpty()) {
-      return patchList(opSet, objectId, index, 'remove', null)
+      return patchList(opSet, objectId, index, elemId, 'remove', null)
     } else {
-      return patchList(opSet, objectId, index, 'set', ops)
+      return patchList(opSet, objectId, index, elemId, 'set', ops)
     }
 
   } else {
@@ -153,7 +154,7 @@ function updateListElement(opSet, objectId, elemId) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, 'insert', ops)
+    return patchList(opSet, objectId, index + 1, elemId, 'insert', ops)
   }
 }
 
@@ -176,10 +177,19 @@ function updateMapKey(opSet, objectId, key) {
 }
 
 // Processes a 'set', 'del', or 'link' operation
-function applyAssign(opSet, op) {
+function applyAssign(opSet, op, topLevel) {
   const objectId = op.get('obj')
   const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
   if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+
+  if (opSet.has('undoLocal') && topLevel) {
+    let undoOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
+      .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value'].includes(k)))
+    if (undoOps.isEmpty()) {
+      undoOps = List.of(Map({action: 'del', obj: objectId, key: op.get('key')}))
+    }
+    opSet = opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
+  }
 
   const priorOpsConcurrent = opSet
     .getIn(['byObject', objectId, op.get('key')], List())
@@ -208,17 +218,23 @@ function applyAssign(opSet, op) {
   }
 }
 
-function applyOp(opSet, op) {
-  const action = op.get('action')
-  if (action === 'makeMap' || action === 'makeList' || action === 'makeText') {
-    return applyMake(opSet, op)
-  } else if (action === 'ins') {
-    return applyInsert(opSet, op)
-  } else if (action === 'set' || action === 'del' || action === 'link') {
-    return applyAssign(opSet, op)
-  } else {
-    throw 'Unknown operation type ' + action
+function applyOps(opSet, ops) {
+  let allDiffs = [], newObjects = Set()
+  for (let op of ops) {
+    let diffs, action = op.get('action')
+    if (action === 'makeMap' || action === 'makeList' || action === 'makeText') {
+      newObjects = newObjects.add(op.get('obj'))
+      ;[opSet, diffs] = applyMake(opSet, op)
+    } else if (action === 'ins') {
+      ;[opSet, diffs] = applyInsert(opSet, op)
+    } else if (action === 'set' || action === 'del' || action === 'link') {
+      ;[opSet, diffs] = applyAssign(opSet, op, !newObjects.contains(op.get('obj')))
+    } else {
+      throw new RangeError(`Unknown operation type ${action}`)
+    }
+    allDiffs.push(...diffs)
   }
+  return [opSet, allDiffs]
 }
 
 function applyChange(opSet, change) {
@@ -234,11 +250,8 @@ function applyChange(opSet, change) {
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
-  let diff, diffs = []
-  for (let op of change.get('ops')) {
-    [opSet, diff] = applyOp(opSet, op.merge({actor, seq}))
-    diffs.push(...diff)
-  }
+  let diffs, ops = change.get('ops').map(op => op.merge({actor, seq}))
+  ;[opSet, diffs] = applyOps(opSet, ops)
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
@@ -256,7 +269,7 @@ function applyQueuedOps(opSet) {
   while (true) {
     for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
-        [opSet, diff] = applyChange(opSet, change)
+        ;[opSet, diff] = applyChange(opSet, change)
         diffs.push(...diff)
       } else {
         queue = queue.push(change)
@@ -269,6 +282,19 @@ function applyQueuedOps(opSet) {
   }
 }
 
+function pushUndoHistory(opSet) {
+  const undoPos = opSet.get('undoPos')
+  return opSet
+    .update('undoStack', stack => {
+      return stack
+        .slice(0, undoPos)
+        .push(opSet.get('undoLocal'))
+    })
+    .set('undoPos', undoPos + 1)
+    .set('redoStack', List())
+    .remove('undoLocal')
+}
+
 function init() {
   return Map()
     .set('states',   Map())
@@ -278,22 +304,24 @@ function init() {
     .set('deps',     Map())
     .set('local',    List())
     .set('undoPos',   0)
-    .set('undoLocal', List())
     .set('undoStack', List())
     .set('redoStack', List())
     .set('queue',    List())
 }
 
-function addLocalOp(opSet, op, actor, undoOps) {
-  opSet = opSet
-    .update('local', ops => ops.push(op))
-    .update('undoLocal', ops => ops.concat(undoOps || List()))
-  return applyOp(opSet, op.set('actor', actor))
-}
-
-function addChange(opSet, change) {
+function addChange(opSet, change, isUndoable) {
   opSet = opSet.update('queue', queue => queue.push(change))
-  return applyQueuedOps(opSet)
+
+  if (isUndoable) {
+    // setting the undoLocal key enables undo history capture
+    opSet = opSet.set('undoLocal', List())
+    let diffs
+    ;[opSet, diffs] = applyQueuedOps(opSet)
+    opSet = pushUndoHistory(opSet)
+    return [opSet, diffs]
+  } else {
+    return applyQueuedOps(opSet)
+  }
 }
 
 function getMissingChanges(opSet, haveDeps) {
@@ -479,7 +507,7 @@ function listIterator(opSet, listId, mode, context) {
 }
 
 module.exports = {
-  init, addLocalOp, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
+  init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
   getObjectFields, getObjectField, getObjectConflicts, getFieldOps,
   listElemByIndex, listLength, listIterator, ROOT_ID
 }

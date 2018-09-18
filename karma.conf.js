@@ -6,7 +6,7 @@ module.exports = function(config) {
       ['test/*.js']: ['browserify']
     },
     browserify: {debug: true},
-    browsers: ['Chrome', 'Firefox'],
+    browsers: ['Chrome', 'Firefox', 'Safari'],
     singleRun: true
   })
 }

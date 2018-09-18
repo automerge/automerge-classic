@@ -1,14 +1,7 @@
 const { Map, fromJS } = require('immutable')
-const OpSet = require('./op_set')
-
-// Returns true if all components of clock1 are less than or equal to those of clock2.
-// Returns false if there is at least one component in which clock1 is greater than clock2
-// (that is, either clock1 is overall greater than clock2, or the clocks are incomparable).
-function lessOrEqual(clock1, clock2) {
-  return clock1.keySeq().concat(clock2.keySeq()).reduce(
-    (result, key) => (result && clock1.get(key, 0) <= clock2.get(key, 0)),
-    true)
-}
+const { lessOrEqual } = require('./common')
+const Frontend = require('../frontend')
+const Backend = require('../backend')
 
 // Updates the vector clock for `docId` in `clockMap` (mapping from docId to vector clock)
 // by merging in the new vector clock `clock`. Returns the updated `clockMap`, in which each node's
@@ -58,17 +51,18 @@ class Connection {
   sendMsg (docId, clock, changes) {
     const msg = {docId, clock: clock.toJS()}
     this._ourClock = clockUnion(this._ourClock, docId, clock)
-    if (changes) msg.changes = changes.toJS()
+    if (changes) msg.changes = changes
     this._sendMsg(msg)
   }
 
   maybeSendChanges (docId) {
     const doc = this._docSet.getDoc(docId)
-    const clock = doc._state.getIn(['opSet', 'clock'])
+    const state = Frontend.getBackendState(doc)
+    const clock = state.getIn(['opSet', 'clock'])
 
     if (this._theirClock.has(docId)) {
-      const changes = OpSet.getMissingChanges(doc._state.get('opSet'), this._theirClock.get(docId))
-      if (!changes.isEmpty()) {
+      const changes = Backend.getMissingChanges(state, this._theirClock.get(docId))
+      if (changes.length > 0) {
         this._theirClock = clockUnion(this._theirClock, docId, clock)
         this.sendMsg(docId, clock, changes)
         return
@@ -80,7 +74,8 @@ class Connection {
 
   // Callback that is called by the docSet whenever a document is changed
   docChanged (docId, doc) {
-    const clock = doc._state.getIn(['opSet', 'clock'])
+    const state = Frontend.getBackendState(doc)
+    const clock = state.getIn(['opSet', 'clock'])
     if (!clock) {
       throw new TypeError('This object cannot be used for network sync. ' +
                           'Are you trying to sync a snapshot from the history?')

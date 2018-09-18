@@ -1,5 +1,6 @@
 const { Map, Set, fromJS } = require('immutable')
-const AutoAPI = require('./auto_api')
+const Frontend = require('../frontend')
+const Backend = require('../backend')
 
 class WatchableDoc {
   constructor (doc) {
@@ -18,10 +19,12 @@ class WatchableDoc {
   }
 
   applyChanges (changes) {
-    let doc = this.doc
-    doc = AutoAPI.applyChanges(doc, fromJS(changes), true)
-    this.set(doc)
-    return doc
+    const oldState = Frontend.getBackendState(this.doc)
+    const [newState, patch] = Backend.applyChanges(oldState, changes)
+    patch.state = newState
+    const newDoc = Frontend.applyPatch(this.doc, patch)
+    this.set(newDoc)
+    return newDoc
   }
 
   registerHandler (handler) {
