@@ -12,12 +12,13 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - [#112]: Added `Automerge.undo()` and `Automerge.redo()` ([@ept])
-- [#118]: Introduced new Frontend and Backend APIs, and refactored existing APIs to use them
-  (this allows some of the work to be moved to a background thread)
+- [#118]: Introduced new Frontend and Backend APIs, and refactored existing APIs to use them;
+  this allows some of the work to be moved to a background thread, and provides better
+  modularisation ([@ept])
 
-## Removed
+### Removed
 - Removed the experimental Immutable.js-compatible API (`Automerge.initImmutable()`), a
-  casualty of the refactoring in [#118]
+  casualty of the refactoring in [#118] ([@ept])
 
 ## [0.8.0] — 2018-08-02
 
