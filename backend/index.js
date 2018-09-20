@@ -129,7 +129,24 @@ function init(actorId) {
     throw new TypeError('init() requires an actorId')
   }
   const opSet = OpSet.init()
-  return Map({actorId, opSet})
+  return Map({actorId, patchId: 0, opSet})
+}
+
+/**
+ * Loads an existing document for actor `actorId` from a list of `changes`.
+ * Returns a two-element array `[state, patch]` where `state` is the node state
+ * incorporating all of `changes`, and `patch` is a patch that, when applied to
+ * an empty document, constructs the document tree in the state described by
+ * the node state.
+ */
+function load(changes, actorId) {
+  const [state, _] = applyChanges(init(actorId), changes)
+  let diffs = [], opSet = state.get('opSet')
+  let context = new MaterializationContext(opSet)
+  context.instantiateObject(opSet, OpSet.ROOT_ID)
+  context.makePatch(OpSet.ROOT_ID, diffs)
+  const patch = {patchId: 1, deps: getDeps(state).toJS(), diffs}
+  return [state.set('patchId', 1), patch]
 }
 
 /**
@@ -156,8 +173,9 @@ function applyChanges(state, changes) {
     opSet = newOpSet
   }
 
-  state = state.set('opSet', opSet)
-  let patch = {diffs, deps: getDeps(state).toJS()}
+  const patchId = state.get('patchId') + 1
+  state = state.set('opSet', opSet).set('patchId', patchId)
+  let patch = {patchId, deps: getDeps(state).toJS(), diffs}
 
   if (changes.length === 1) {
     patch.actor = changes[0].actor
@@ -188,20 +206,9 @@ function makeChange(state, ops, message) {
   if (message) change = change.set('message', message)
 
   const [opSet, diffs] = OpSet.addChange(state.get('opSet'), change, false)
-  let patch = {actor, seq, deps: deps.toJS(), diffs}
-  return [state.set('opSet', opSet), patch]
-}
-
-/**
- * Returns a patch that, when applied to an empty document, constructs the
- * document tree in the state described by the node state `state`.
- */
-function getPatch(state) {
-  let diffs = [], opSet = state.get('opSet')
-  let context = new MaterializationContext(opSet)
-  context.instantiateObject(opSet, OpSet.ROOT_ID)
-  context.makePatch(OpSet.ROOT_ID, diffs)
-  return {diffs, deps: getDeps(state).toJS()}
+  const patchId = state.get('patchId') + 1
+  const patch = {actor, seq, patchId, deps: deps.toJS(), diffs}
+  return [state.merge({opSet, patchId}), patch]
 }
 
 function getChanges(oldState, newState) {
@@ -290,7 +297,7 @@ function redo(state, message) {
 }
 
 module.exports = {
-  init, applyChanges, applyChange, getPatch,
+  init, load, applyChanges, applyChange,
   getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge,
   canUndo, undo, canRedo, redo
 }

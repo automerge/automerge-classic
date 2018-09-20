@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
+const { OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, PATCH_ID, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_patch')
@@ -11,10 +11,10 @@ const { Text } = require('./text')
  * mapping from child objectId to parent objectId (in `inbound`), and returns
  * a new immutable document root object based on `doc` that reflects those
  * updates. The request queue `requests`, the sequence number `maxSeq`, the
- * dependencies map `deps`, and the optional backend state `state` are
- * attached to the new root object.
+ * dependencies map `deps`, the patch counter `patchId`, and the optional
+ * backend state `state` are attached to the new root object.
  */
-function updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state) {
+function updateRootObject(doc, updated, inbound, requests, maxSeq, deps, patchId, state) {
   let newDoc = updated[ROOT_ID]
   if (!newDoc) {
     newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
@@ -27,6 +27,7 @@ function updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state) 
   Object.defineProperty(newDoc, REQUESTS, {value: requests})
   Object.defineProperty(newDoc, MAX_SEQ,  {value: maxSeq})
   Object.defineProperty(newDoc, DEPS,     {value: deps})
+  Object.defineProperty(newDoc, PATCH_ID, {value: patchId})
   Object.defineProperty(newDoc, STATE,    {value: state})
 
   for (let objectId of Object.keys(doc[CACHE])) {
@@ -85,13 +86,13 @@ function makeChange(doc, context, message) {
   if (doc[OPTIONS].backend) {
     const request = {actor, seq, deps, message, ops}
     const [state, patch] = doc[OPTIONS].backend.applyChange(doc[STATE], request)
-    return applyPatchToDoc(doc, patch, [], seq, patch.deps, state)
+    return applyPatchToDoc(doc, patch, [], seq, patch.deps, patch.patchId, state)
 
   } else {
     const request = {actor, seq, deps, message, before: doc, ops, diffs: context.diffs}
     const requests = doc[REQUESTS].slice() // shallow clone
     requests.push(request)
-    return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS])
+    return updateRootObject(doc, context.updated, context.inbound, requests, seq, doc[DEPS], doc[PATCH_ID])
   }
 }
 
@@ -101,12 +102,12 @@ function makeChange(doc, context, message) {
  * dependencies map `deps`, and the optional backend state `state` are
  * attached to the new root object.
  */
-function applyPatchToDoc(doc, patch, requests, maxSeq, deps, state) {
+function applyPatchToDoc(doc, patch, requests, maxSeq, deps, patchId, state) {
   let inbound = Object.assign({}, doc[INBOUND])
   let updated = {}
   applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
   updateParentObjects(doc[CACHE], updated, inbound)
-  return updateRootObject(doc, updated, inbound, requests, maxSeq, deps, state)
+  return updateRootObject(doc, updated, inbound, requests, maxSeq, deps, patchId, state)
 }
 
 /**
@@ -198,6 +199,7 @@ function init(options) {
   Object.defineProperty(root, REQUESTS,  {value: Object.freeze([])})
   Object.defineProperty(root, MAX_SEQ,   {value: 0})
   Object.defineProperty(root, DEPS,      {value: Object.freeze({})})
+  Object.defineProperty(root, PATCH_ID,  {value: 0})
   Object.defineProperty(root, STATE,     {value: state})
   return Object.freeze(root)
 }
@@ -270,6 +272,9 @@ function applyPatch(doc, patch) {
     baseDoc = doc
     remainingRequests = []
   }
+  if (patch.patchId !== doc[PATCH_ID] + 1) {
+    throw new RangeError(`Patch applied out-of-order. Expected patchId ${doc[PATCH_ID] + 1}, got ${patch.patchId}`)
+  }
 
   const actor = doc[OPTIONS].actorId
   const deps = patch.deps || {}
@@ -279,14 +284,14 @@ function applyPatch(doc, patch) {
     if (!patch.state) {
       throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
     }
-    return applyPatchToDoc(doc, patch, [], maxSeq, patch.deps, patch.state)
+    return applyPatchToDoc(doc, patch, [], maxSeq, patch.deps, patch.patchId, patch.state)
   }
 
-  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, maxSeq, patch.deps)
+  let newDoc = applyPatchToDoc(baseDoc, patch, remainingRequests, maxSeq, patch.deps, patch.patchId)
   for (let request of remainingRequests) {
     request.before = newDoc
     transformRequest(request, patch)
-    newDoc = applyPatchToDoc(request.before, request, remainingRequests, maxSeq, patch.deps)
+    newDoc = applyPatchToDoc(request.before, request, remainingRequests, maxSeq, patch.deps, patch.patchId)
   }
   return newDoc
 }

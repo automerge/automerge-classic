@@ -5,7 +5,7 @@ const uuid = require('../src/uuid')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 describe('Backend', () => {
-  describe('incremental diffs', () => {
+  describe('applyChanges()', () => {
     it('should assign to a key in a map', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
@@ -13,7 +13,7 @@ describe('Backend', () => {
       ]}
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
-      assert.deepEqual(patch1, {actor, seq: 1, deps: {[actor]: 1}, diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, patchId: 1, deps: {[actor]: 1}, diffs: [
         {action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'magpie'}
       ]})
     })
@@ -28,7 +28,7 @@ describe('Backend', () => {
       const s0 = Backend.init('actor1')
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
-      assert.deepEqual(patch2, {actor: 'actor2', seq: 1, deps: {actor1: 1, actor2: 1}, diffs: [
+      assert.deepEqual(patch2, {actor: 'actor2', seq: 1, patchId: 2, deps: {actor1: 1, actor2: 1}, diffs: [
         {action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'blackbird',
           conflicts: [{actor: 'actor1', value: 'magpie'}]}
       ]})
@@ -45,7 +45,7 @@ describe('Backend', () => {
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
-      assert.deepEqual(patch2, {actor, seq: 2, deps: {[actor]: 2}, diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, patchId: 2, deps: {[actor]: 2}, diffs: [
         {action: 'remove', obj: ROOT_ID, path: [], type: 'map', key: 'bird'}
       ]})
     })
@@ -59,7 +59,7 @@ describe('Backend', () => {
       ]}
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
-      assert.deepEqual(patch1, {actor, seq: 1, deps: {[actor]: 1}, diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, patchId: 1, deps: {[actor]: 1}, diffs: [
         {action: 'create', obj: birds,   type: 'map'},
         {action: 'set',    obj: birds,   type: 'map', path: null, key: 'wrens', value: 3},
         {action: 'set',    obj: ROOT_ID, type: 'map', path: [],   key: 'birds', value: birds, link: true}
@@ -79,7 +79,7 @@ describe('Backend', () => {
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
-      assert.deepEqual(patch2, {actor, seq: 2, deps: {[actor]: 2}, diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, patchId: 2, deps: {[actor]: 2}, diffs: [
         {action: 'set', obj: birds, type: 'map', path: ['birds'], key: 'sparrows', value: 15}
       ]})
     })
@@ -94,7 +94,7 @@ describe('Backend', () => {
       ]}
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
-      assert.deepEqual(patch1, {actor, seq: 1, deps: {[actor]: 1}, diffs: [
+      assert.deepEqual(patch1, {actor, seq: 1, patchId: 1, deps: {[actor]: 1}, diffs: [
         {action: 'create', obj: birds,   type: 'list'},
         {action: 'insert', obj: birds,   type: 'list', path: null, index: 0, value: 'chaffinch', elemId: `${actor}:1`},
         {action: 'set',    obj: ROOT_ID, type: 'map',  path: [],   key: 'birds', value: birds, link: true}
@@ -115,7 +115,7 @@ describe('Backend', () => {
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
-      assert.deepEqual(patch2, {actor, seq: 2, deps: {[actor]: 2}, diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, patchId: 2, deps: {[actor]: 2}, diffs: [
         {action: 'set', obj: birds, type: 'list', path: ['birds'], index: 0, value: 'greenfinch'}
       ]})
     })
@@ -134,13 +134,13 @@ describe('Backend', () => {
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
-      assert.deepEqual(patch2, {actor, seq: 2, deps: {[actor]: 2}, diffs: [
+      assert.deepEqual(patch2, {actor, seq: 2, patchId: 2, deps: {[actor]: 2}, diffs: [
         {action: 'remove', obj: birds, type: 'list', path: ['birds'], index: 0}
       ]})
     })
   })
 
-  describe('getPatch()', () => {
+  describe('load()', () => {
     it('should include the most recent value for a key', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
@@ -149,9 +149,8 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init(actor)
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
-      assert.deepEqual(Backend.getPatch(s1), {deps: {[actor]: 2}, diffs: [
+      const [s1, patch] = Backend.load([change1, change2], actor)
+      assert.deepEqual(patch, {patchId: 1, deps: {[actor]: 2}, diffs: [
         {action: 'set', obj: ROOT_ID, type: 'map', key: 'bird', value: 'blackbird'}
       ]})
     })
@@ -163,9 +162,8 @@ describe('Backend', () => {
       const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init('actor1')
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
-      assert.deepEqual(Backend.getPatch(s1), {deps: {actor1: 1, actor2: 1}, diffs: [
+      const [s1, patch] = Backend.load([change1, change2], 'actor1')
+      assert.deepEqual(patch, {patchId: 1, deps: {actor1: 1, actor2: 1}, diffs: [
         {action: 'set', obj: ROOT_ID, type: 'map', key: 'bird', value: 'blackbird',
           conflicts: [{actor: 'actor1', value: 'magpie'}]}
       ]})
@@ -182,9 +180,8 @@ describe('Backend', () => {
         {action: 'del',     obj: birds,   key: 'wrens'},
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
-      const s0 = Backend.init(actor)
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
-      assert.deepEqual(Backend.getPatch(s1), {deps: {[actor]: 2}, diffs: [
+      const [s1, patch] = Backend.load([change1, change2], actor)
+      assert.deepEqual(patch, {patchId: 1, deps: {[actor]: 2}, diffs: [
         {action: 'create', obj: birds,   type: 'map'},
         {action: 'set',    obj: birds,   type: 'map', key: 'sparrows', value: 15},
         {action: 'set',    obj: ROOT_ID, type: 'map', key: 'birds',    value: birds, link: true}
@@ -199,9 +196,8 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const s0 = Backend.init(actor)
-      const [s1, patch] = Backend.applyChanges(s0, [change1])
-      assert.deepEqual(Backend.getPatch(s1), {deps: {[actor]: 1}, diffs: [
+      const [s1, patch] = Backend.load([change1], actor)
+      assert.deepEqual(patch, {patchId: 1, deps: {[actor]: 1}, diffs: [
         {action: 'create', obj: birds,   type: 'list'},
         {action: 'insert', obj: birds,   type: 'list', index: 0, value: 'chaffinch', elemId: `${actor}:1`},
         {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
@@ -224,9 +220,8 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:3`, value: 'greenfinch'},
         {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinches!!'}
       ]}
-      const s0 = Backend.init(actor)
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
-      assert.deepEqual(Backend.getPatch(s1), {deps: {[actor]: 2}, diffs: [
+      const [s1, patch] = Backend.load([change1, change2], actor)
+      assert.deepEqual(patch, {patchId: 1, deps: {[actor]: 2}, diffs: [
         {action: 'create', obj: birds,   type: 'list'},
         {action: 'insert', obj: birds,   type: 'list', index: 0, value: 'greenfinch',    elemId: `${actor}:3`},
         {action: 'insert', obj: birds,   type: 'list', index: 1, value: 'goldfinches!!', elemId: `${actor}:2`},

@@ -8,11 +8,10 @@ const { isObject } = require('./common')
 /**
  * Constructs a new frontend document that reflects the given list of changes.
  */
-function docFromChanges(actorId, changes) {
+function docFromChanges(changes, actorId) {
   if (!actorId) throw new RangeError('actorId is required in docFromChanges')
   const doc = Frontend.init({actorId, backend: Backend})
-  const [state, _] = Backend.applyChanges(Backend.init(actorId), changes)
-  const patch = Backend.getPatch(state)
+  const [state, patch] = Backend.load(changes, actorId)
   patch.state = state
   return Frontend.applyPatch(doc, patch)
 }
@@ -32,7 +31,7 @@ function emptyChange(doc, message) {
 }
 
 function load(string, actorId) {
-  return docFromChanges(actorId || uuid(), transit.fromJSON(string))
+  return docFromChanges(transit.fromJSON(string), actorId || uuid())
 }
 
 function save(doc) {
@@ -98,7 +97,7 @@ function getHistory(doc) {
         return change.toJS()
       },
       get snapshot () {
-        return docFromChanges(state.get('actorId'), history.slice(0, index + 1))
+        return docFromChanges(history.slice(0, index + 1), state.get('actorId'))
       }
     }
   }).toArray()
