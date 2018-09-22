@@ -17,5 +17,5 @@ const ELEM_IDS  = Symbol('_elemIds')   // list containing the element ID of each
 const MAX_ELEM  = Symbol('_maxElem')   // maximum element counter value in this list (number)
 
 module.exports = {
-  OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS, MAX_ELEM
+  OPTIONS, CACHE, INBOUND, REQUESTS, MAX_SEQ, DEPS, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS, MAX_ELEM
 }
