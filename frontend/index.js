@@ -273,7 +273,7 @@ function applyPatch(doc, patch) {
 
   const actor = doc[OPTIONS].actorId
   const deps = patch.deps || {}
-  const maxSeq = deps[actor] || doc[MAX_SEQ]
+  const maxSeq = Math.max(deps[actor] || 0, doc[MAX_SEQ])
 
   if (doc[OPTIONS].backend) {
     if (!patch.state) {

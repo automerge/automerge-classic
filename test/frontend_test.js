@@ -1,5 +1,6 @@
 const assert = require('assert')
 const Frontend = require('../frontend')
+const Backend = require('../backend')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const uuid = require('../src/uuid')
 
@@ -187,6 +188,21 @@ describe('Frontend', () => {
       const doc4 = Frontend.applyPatch(doc3, {actor, seq: 2, diffs: diffs4})
       assert.deepEqual(doc4, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
       assert.deepEqual(Frontend.getRequests(doc4), [])
+    })
+
+    it('should allow interleaving of patches and changes', () => {
+      const actor = uuid()
+      const doc1 = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
+      const doc2 = Frontend.change(doc1, doc => doc.number = 2)
+      const [req1, req2] = Frontend.getRequests(doc2)
+      assert.deepEqual(req1, {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 1}]})
+      assert.deepEqual(req2, {actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 2}]})
+      const state0 = Backend.init(actor)
+      const [state1, patch1] = Backend.applyChange(state0, req1)
+      const doc2a = Frontend.applyPatch(doc2, patch1)
+      const doc3 = Frontend.change(doc2a, doc => doc.number = 3)
+      const [req2a, req3] = Frontend.getRequests(doc3)
+      assert.deepEqual(req3, {actor, seq: 3, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 3}]})
     })
   })
 
