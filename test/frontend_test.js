@@ -198,7 +198,7 @@ describe('Frontend', () => {
       assert.deepEqual(req1, {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 1}]})
       assert.deepEqual(req2, {actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 2}]})
       const state0 = Backend.init(actor)
-      const [state1, patch1] = Backend.applyChange(state0, req1)
+      const [state1, patch1] = Backend.applyLocalChange(state0, req1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const doc3 = Frontend.change(doc2a, doc => doc.number = 3)
       const [req2a, req3] = Frontend.getRequests(doc3)

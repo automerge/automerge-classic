@@ -80,11 +80,10 @@ function makeChange(doc, context, message) {
 
   if (doc[OPTIONS].backend) {
     const request = {actor, seq: state.seq, deps, message, ops}
-    const [backendState, patch] = doc[OPTIONS].backend.applyChange(state.backendState, request)
-    state.deps = patch.deps
+    const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
     state.backendState = backendState
     state.requests = []
-    return applyPatchToDoc(doc, patch, state)
+    return applyPatchToDoc(doc, patch, state, true)
 
   } else {
     const request = {actor, seq: state.seq, deps, message, before: doc, ops, diffs: context.diffs}
@@ -97,12 +96,21 @@ function makeChange(doc, context, message) {
 /**
  * Applies the changes described in `patch` to the document with root object
  * `doc`. The state object `state` is attached to the new root object.
+ * `fromBackend` should be set to `true` if the patch came from the backend,
+ * and to `false` if the patch is a transient local (optimistically applied)
+ * change from the frontend.
  */
-function applyPatchToDoc(doc, patch, state) {
+function applyPatchToDoc(doc, patch, state, fromBackend) {
   let inbound = Object.assign({}, doc[INBOUND])
   let updated = {}
   applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
   updateParentObjects(doc[CACHE], updated, inbound)
+
+  if (fromBackend) {
+    state.deps = patch.deps
+    state.canUndo = patch.canUndo
+    state.canRedo = patch.canRedo
+  }
   return updateRootObject(doc, updated, inbound, state)
 }
 
@@ -185,7 +193,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], deps: {}}
+  const state = {seq: 0, requests: [], deps: {}, canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init(options.actorId)
   }
@@ -252,18 +260,17 @@ function emptyChange(doc, message) {
  */
 function applyPatch(doc, patch) {
   const actor = doc[OPTIONS].actorId
-  const deps = patch.deps || {}
   const state = Object.assign({}, doc[STATE])
   let baseDoc
+
   if (state.requests.length > 0) {
+    baseDoc = state.requests[0].before
     if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
       if (state.requests[0].seq !== patch.seq) {
         throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${state.requests[0].seq}`)
       }
-      baseDoc = state.requests[0].before
       state.requests = state.requests.slice(1).map(req => Object.assign({}, req))
     } else {
-      baseDoc = state.requests[0].before
       state.requests = state.requests.slice().map(req => Object.assign({}, req))
     }
   } else {
@@ -271,7 +278,7 @@ function applyPatch(doc, patch) {
     state.requests = []
   }
 
-  state.deps = deps
+  const deps = patch.deps || {}
   if (deps[actor] && deps[actor] > state.seq) {
     state.seq = deps[actor]
   }
@@ -282,16 +289,24 @@ function applyPatch(doc, patch) {
     }
     state.backendState = patch.state
     state.requests = []
-    return applyPatchToDoc(doc, patch, state)
+    return applyPatchToDoc(doc, patch, state, true)
   }
 
-  let newDoc = applyPatchToDoc(baseDoc, patch, state)
+  let newDoc = applyPatchToDoc(baseDoc, patch, state, true)
   for (let request of state.requests) {
     request.before = newDoc
     transformRequest(request, patch)
-    newDoc = applyPatchToDoc(request.before, request, state)
+    newDoc = applyPatchToDoc(request.before, request, state, false)
   }
   return newDoc
+}
+
+function canUndo(object) {
+  return !!object[STATE].canUndo
+}
+
+function canRedo(object) {
+  return !!object[STATE].canRedo
 }
 
 /**
@@ -348,6 +363,7 @@ function getElementIds(list) {
 
 module.exports = {
   init, change, emptyChange, applyPatch,
+  canUndo, canRedo,
   getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds,
   Text
 }

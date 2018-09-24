@@ -142,36 +142,54 @@ function getDeps(state) {
 }
 
 /**
- * Applies a list of `changes` to the node state `state`. Returns a two-element
- * array `[state, patch]` where `state` is the updated node state, and `patch`
- * describes the changes that need to be made to the document object to reflect
- * this change.
+ * Constructs a patch object from the current node state `state` and the list
+ * of object modifications `diffs`.
  */
-function applyChanges(state, changes) {
+function makePatch(state, diffs) {
+  const canUndo = state.getIn(['opSet', 'undoPos']) > 0
+  const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
+  const deps = getDeps(state).toJS()
+  return {deps, canUndo, canRedo, diffs}
+}
+
+/**
+ * The implementation behind `applyChanges()` and `applyLocalChange()`.
+ */
+function apply(state, changes, undoable) {
   let diffs = [], opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
-    const undoable = (change.get('actor') === state.get('actorId'))
     let [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
     diffs.push(...diff)
     opSet = newOpSet
   }
 
   state = state.set('opSet', opSet)
-  let patch = {diffs, deps: getDeps(state).toJS()}
-
-  if (changes.length === 1) {
-    patch.actor = changes[0].actor
-    patch.seq   = changes[0].seq
-  }
-  return [state, patch]
+  return [state, makePatch(state, diffs)]
 }
 
 /**
- * Applies a single `change` incrementally; otherwise the same as
- * `applyChanges()`.
-*/
-function applyChange(state, change) {
-  return applyChanges(state, [change])
+ * Applies a list of `changes` from remote nodes to the node state `state`.
+ * Returns a two-element array `[state, patch]` where `state` is the updated
+ * node state, and `patch` describes the modifications that need to be made
+ * to the document objects to reflect these changes.
+ */
+function applyChanges(state, changes) {
+  return apply(state, changes, false)
+}
+
+/**
+ * Takes a single change request `change` made by the local user, and applies
+ * it to the node state `state`. The difference to `applyChange()` is that this
+ * function adds the change to the undo history, so it can be undone (whereas
+ * remote changes are not normally added to the undo history). Returns a
+ * two-element array `[state, patch]` where `state` is the updated node state,
+ * and `patch` confirms the modifications to the document objects.
+ */
+function applyLocalChange(state, change) {
+  const [newState, patch] = apply(state, [change], true)
+  patch.actor = change.actor
+  patch.seq   = change.seq
+  return [newState, patch]
 }
 
 /**
@@ -188,8 +206,11 @@ function makeChange(state, ops, message) {
   if (message) change = change.set('message', message)
 
   const [opSet, diffs] = OpSet.addChange(state.get('opSet'), change, false)
-  let patch = {actor, seq, deps: deps.toJS(), diffs}
-  return [state.set('opSet', opSet), patch]
+  state = state.set('opSet', opSet)
+  const patch = makePatch(state, diffs)
+  patch.actor = actor
+  patch.seq = seq
+  return [state, patch]
 }
 
 /**
@@ -201,7 +222,7 @@ function getPatch(state) {
   let context = new MaterializationContext(opSet)
   context.instantiateObject(opSet, OpSet.ROOT_ID)
   context.makePatch(OpSet.ROOT_ID, diffs)
-  return {diffs, deps: getDeps(state).toJS()}
+  return makePatch(state, diffs)
 }
 
 function getChanges(oldState, newState) {
@@ -290,7 +311,7 @@ function redo(state, message) {
 }
 
 module.exports = {
-  init, applyChanges, applyChange, getPatch,
+  init, applyChanges, applyLocalChange, getPatch,
   getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge,
   canUndo, undo, canRedo, redo
 }
