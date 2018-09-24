@@ -934,12 +934,12 @@ describe('Automerge', () => {
     it('should allow redo if the last change was an undo', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['peregrine falcon'])
       assert.strictEqual(Automerge.canRedo(s1), false)
-      assert.throws(() => Automerge.redo(s1), /the last change was not an undo/)
+      assert.throws(() => Automerge.redo(s1), /there is no prior undo/)
       s1 = Automerge.undo(s1)
       assert.strictEqual(Automerge.canRedo(s1), true)
       s1 = Automerge.redo(s1)
       assert.strictEqual(Automerge.canRedo(s1), false)
-      assert.throws(() => Automerge.redo(s1), /the last change was not an undo/)
+      assert.throws(() => Automerge.redo(s1), /there is no prior undo/)
     })
 
     it('should allow several undos to be matched by several redos', () => {

@@ -20,7 +20,7 @@ describe('Frontend', () => {
       const actor = uuid()
       const doc = Frontend.change(Frontend.init(actor), doc => doc.bird = 'magpie')
       assert.deepEqual(doc, {bird: 'magpie'})
-      assert.deepEqual(Frontend.getRequests(doc), [{actor, seq: 1, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc), [{requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}
       ]}])
     })
@@ -29,7 +29,7 @@ describe('Frontend', () => {
       const doc = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 3})
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, {birds: {wrens: 3}})
-      assert.deepEqual(Frontend.getRequests(doc), [{actor, seq: 1, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc), [{requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: birds,   action: 'makeMap'},
         {obj: birds,   action: 'set',  key: 'wrens', value: 3},
         {obj: ROOT_ID, action: 'link', key: 'birds', value: birds}
@@ -42,7 +42,7 @@ describe('Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc1)
       assert.deepEqual(doc1, {birds: {wrens: 3}})
       assert.deepEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
-      assert.deepEqual(Frontend.getRequests(doc2)[1], {actor, seq: 2, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc2)[1], {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: birds, action: 'set', key: 'sparrows', value: 15}
       ]})
     })
@@ -53,7 +53,7 @@ describe('Frontend', () => {
       const doc2 = Frontend.change(doc1, doc => delete doc['magpies'])
       assert.deepEqual(doc1, {magpies: 2, sparrows: 15})
       assert.deepEqual(doc2, {sparrows: 15})
-      assert.deepEqual(Frontend.getRequests(doc2)[1], {actor, seq: 2, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc2)[1], {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: ROOT_ID, action: 'del', key: 'magpies'}
       ]})
     })
@@ -62,7 +62,7 @@ describe('Frontend', () => {
       const doc = Frontend.change(Frontend.init(), doc => doc.birds = ['chaffinch'])
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, {birds: ['chaffinch']})
-      assert.deepEqual(Frontend.getRequests(doc), [{actor, seq: 1, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc), [{requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: birds,   action: 'makeList'},
         {obj: birds,   action: 'ins',  key: '_head', elem: 1},
         {obj: birds,   action: 'set',  key: `${actor}:1`, value: 'chaffinch'},
@@ -76,7 +76,7 @@ describe('Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
       assert.deepEqual(doc1, {birds: ['chaffinch']})
       assert.deepEqual(doc2, {birds: ['greenfinch']})
-      assert.deepEqual(Frontend.getRequests(doc2)[1], {actor, seq: 2, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc2)[1], {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: birds, action: 'set', key: `${actor}:1`, value: 'greenfinch'}
       ]})
     })
@@ -87,7 +87,7 @@ describe('Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
       assert.deepEqual(doc1, {birds: ['chaffinch', 'goldfinch']})
       assert.deepEqual(doc2, {birds: ['goldfinch']})
-      assert.deepEqual(Frontend.getRequests(doc2)[1], {actor, seq: 2, deps: {}, ops: [
+      assert.deepEqual(Frontend.getRequests(doc2)[1], {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: birds, action: 'del', key: `${actor}:1`}
       ]})
     })
@@ -102,7 +102,7 @@ describe('Frontend', () => {
       let doc1 = Frontend.applyPatch(Frontend.init(local), patch1)
       let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
       assert.deepEqual(Frontend.getRequests(doc2), [
-        {actor: local, seq: 5, deps: {[remote1]: 11, [remote2]: 41}, ops: [
+        {requestType: 'change', actor: local, seq: 5, deps: {[remote1]: 11, [remote2]: 41}, ops: [
           {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
         ]}
       ])
@@ -113,15 +113,15 @@ describe('Frontend', () => {
       let doc1 = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)
       let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
       assert.deepEqual(Frontend.getRequests(doc2), [
-        {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]},
-        {actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+        {requestType: 'change', actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]},
+        {requestType: 'change', actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
       ])
 
       const diffs1 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'blackbirds', value: 24}]
       doc2 = Frontend.applyPatch(doc2, {actor, seq: 1, diffs: diffs1})
       assert.deepEqual(doc2, {blackbirds: 24, partridges: 1})
       assert.deepEqual(Frontend.getRequests(doc2), [
-        {actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+        {requestType: 'change', actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
       ])
 
       const diffs2 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'partridges', value: 1}]
@@ -134,14 +134,14 @@ describe('Frontend', () => {
       const actor = uuid(), other = uuid()
       let doc = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)
       assert.deepEqual(Frontend.getRequests(doc), [
-        {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+        {requestType: 'change', actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
       ])
 
       const diffs1 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'pheasants', value: 2}]
       doc = Frontend.applyPatch(doc, {actor: other, seq: 1, diffs: diffs1})
       assert.deepEqual(doc, {blackbirds: 24, pheasants: 2})
       assert.deepEqual(Frontend.getRequests(doc), [
-        {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+        {requestType: 'change', actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
       ])
 
       const diffs2 = [{obj: ROOT_ID, type: 'map', action: 'set', key: 'blackbirds', value: 24}]
@@ -195,14 +195,14 @@ describe('Frontend', () => {
       const doc1 = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
       const doc2 = Frontend.change(doc1, doc => doc.number = 2)
       const [req1, req2] = Frontend.getRequests(doc2)
-      assert.deepEqual(req1, {actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 1}]})
-      assert.deepEqual(req2, {actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 2}]})
+      assert.deepEqual(req1, {requestType: 'change', actor, seq: 1, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 1}]})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 2}]})
       const state0 = Backend.init(actor)
       const [state1, patch1] = Backend.applyLocalChange(state0, req1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const doc3 = Frontend.change(doc2a, doc => doc.number = 3)
       const [req2a, req3] = Frontend.getRequests(doc3)
-      assert.deepEqual(req3, {actor, seq: 3, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 3}]})
+      assert.deepEqual(req3, {requestType: 'change', actor, seq: 3, deps: {}, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 3}]})
     })
   })
 

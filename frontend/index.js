@@ -65,28 +65,32 @@ function ensureSingleAssignment(ops) {
 
 /**
  * Adds a new change request to the list of pending requests, and returns an
- * updated document root object. The details of the change are taken from the
- * context object `context`, and `message` is an optional human-readable string
- * describing the change.
+ * updated document root object. `requestType` is a string indicating the type
+ * of request, which may be "change", "undo", or "redo". For the "change" request
+ * type, the details of the change are taken from the context object `context`.
+ * `message` is an optional human-readable string describing the change.
  */
-function makeChange(doc, context, message) {
+function makeChange(doc, requestType, context, message) {
   const actor = doc[OPTIONS].actorId
   const state = Object.assign({}, doc[STATE])
   state.seq += 1
   const deps = Object.assign({}, state.deps)
   delete deps[actor]
 
-  const ops = ensureSingleAssignment(context.ops)
+  const request = {requestType, actor, seq: state.seq, deps, message}
+  if (context) {
+    request.ops = ensureSingleAssignment(context.ops)
+  }
 
   if (doc[OPTIONS].backend) {
-    const request = {actor, seq: state.seq, deps, message, ops}
     const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
     state.backendState = backendState
     state.requests = []
     return applyPatchToDoc(doc, patch, state, true)
 
   } else {
-    const request = {actor, seq: state.seq, deps, message, before: doc, ops, diffs: context.diffs}
+    request.before = doc
+    if (context) request.diffs = context.diffs
     state.requests = state.requests.slice() // shallow clone
     state.requests.push(request)
     return updateRootObject(doc, context.updated, context.inbound, state)
@@ -235,7 +239,7 @@ function change(doc, message, callback) {
     return doc
   } else {
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
-    return makeChange(doc, context, message)
+    return makeChange(doc, 'change', context, message)
   }
 }
 
@@ -249,7 +253,7 @@ function emptyChange(doc, message) {
   if (message !== undefined && typeof message !== 'string') {
     throw new TypeError('Change message must be a string')
   }
-  return makeChange(doc, new Context(doc), message)
+  return makeChange(doc, 'change', new Context(doc), message)
 }
 
 /**
@@ -301,12 +305,67 @@ function applyPatch(doc, patch) {
   return newDoc
 }
 
-function canUndo(object) {
-  return !!object[STATE].canUndo
+/**
+ * Returns `true` if undo is currently possible on the document `doc` (because
+ * there is a local change that has not already been undone); `false` if not.
+ */
+function canUndo(doc) {
+  return !!doc[STATE].canUndo && !isUndoRedoInFlight(doc)
 }
 
-function canRedo(object) {
-  return !!object[STATE].canRedo
+/**
+ * Returns `true` if one of the pending requests is an undo or redo.
+ */
+function isUndoRedoInFlight(doc) {
+  return doc[STATE].requests.some(req => ['undo', 'redo'].includes(req.requestType))
+}
+
+/**
+ * Enqueues a request to perform an undo on the document `doc` (see
+ * `getRequests(doc)`). `message` is an optional change description to attach
+ * to the undo. Note that the undo does not take effect immediately: only after
+ * the request is sent to the backend, and the backend responds with a patch,
+ * does the user-visible document update actually happen.
+ */
+function undo(doc, message) {
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  if (!doc[STATE].canUndo) {
+    throw new Error('Cannot undo: there is nothing to be undone')
+  }
+  if (isUndoRedoInFlight(doc)) {
+    throw new Error('Can only have one undo in flight at any one time')
+  }
+  return makeChange(doc, 'undo', null, message)
+}
+
+/**
+ * Returns `true` if redo is currently possible on the document `doc` (because
+ * a prior action was an undo that has not already been redone); `false` if not.
+ */
+function canRedo(doc) {
+  return !!doc[STATE].canRedo && !isUndoRedoInFlight(doc)
+}
+
+/**
+ * Enqueues a request to perform a redo of a prior undo on the document `doc`
+ * (see `getRequests(doc)`). `message` is an optional change description to
+ * attach to the redo. Note that the redo does not take effect immediately:
+ * only after the request is sent to the backend, and the backend responds
+ * with a patch, does the user-visible document update actually happen.
+ */
+function redo(doc, message) {
+  if (message !== undefined && typeof message !== 'string') {
+    throw new TypeError('Change message must be a string')
+  }
+  if (!doc[STATE].canRedo) {
+    throw new Error('Cannot redo: there is no prior undo')
+  }
+  if (isUndoRedoInFlight(doc)) {
+    throw new Error('Can only have one redo in flight at any one time')
+  }
+  return makeChange(doc, 'redo', null, message)
 }
 
 /**
@@ -339,12 +398,10 @@ function getConflicts(object) {
  */
 function getRequests(doc) {
   return doc[STATE].requests.map(req => {
-    const { actor, seq, deps, message, ops } = req
-    const change = { actor, seq, deps }
-    if (message !== undefined) {
-      change.message = message
-    }
-    change.ops = ops
+    const { requestType, actor, seq, deps, message, ops } = req
+    const change = { requestType, actor, seq, deps }
+    if (message !== undefined) change.message = message
+    if (ops !== undefined) change.ops = ops
     return change
   })
 }
@@ -363,7 +420,7 @@ function getElementIds(list) {
 
 module.exports = {
   init, change, emptyChange, applyPatch,
-  canUndo, canRedo,
+  canUndo, undo, canRedo, redo,
   getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds,
   Text
 }
