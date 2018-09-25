@@ -1,4 +1,3 @@
-const { List } = require('immutable')
 const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
