@@ -105,12 +105,15 @@ function makeChange(doc, requestType, context, message) {
  * change from the frontend.
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
-  let inbound = Object.assign({}, doc[INBOUND])
-  let updated = {}
+  const actor = getActorId(doc)
+  const inbound = Object.assign({}, doc[INBOUND])
+  const updated = {}
   applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
   updateParentObjects(doc[CACHE], updated, inbound)
 
   if (fromBackend) {
+    const seq = patch.clock ? patch.clock[actor] : undefined
+    if (seq && seq > state.seq) state.seq = seq
     state.deps = patch.deps
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
@@ -280,11 +283,6 @@ function applyPatch(doc, patch) {
   } else {
     baseDoc = doc
     state.requests = []
-  }
-
-  const deps = patch.deps || {}
-  if (deps[actor] && deps[actor] > state.seq) {
-    state.seq = deps[actor]
   }
 
   if (doc[OPTIONS].backend) {

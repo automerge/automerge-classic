@@ -133,23 +133,15 @@ function init(actorId) {
 }
 
 /**
- * Returns the current dependencies map in the form required by patch objects.
- */
-function getDeps(state) {
-  let actorId = state.get('actorId'), opSet = state.get('opSet')
-  return opSet.get('deps')
-    .set(actorId, opSet.getIn(['clock', actorId], 0))
-}
-
-/**
  * Constructs a patch object from the current node state `state` and the list
  * of object modifications `diffs`.
  */
 function makePatch(state, diffs) {
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
-  const deps = getDeps(state).toJS()
-  return {deps, canUndo, canRedo, diffs}
+  const clock = state.getIn(['opSet', 'clock']).toJS()
+  const deps = state.getIn(['opSet', 'deps']).toJS()
+  return {clock, deps, canUndo, canRedo, diffs}
 }
 
 /**
