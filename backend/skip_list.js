@@ -10,7 +10,7 @@ function randomLevel() {
   // generator polyfills in the distribution build.
   return {
     next() {
-      const rand = Math.floor(Math.random() * 4294967296)
+      const rand = Math.floor(Math.random() * 2**32)
       let level = 1
       while (rand < 1 << (32 - 2 * level) && level < 16) level += 1
       return { value: level, done: false }
