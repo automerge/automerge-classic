@@ -108,32 +108,10 @@ function getConflicts(doc, list) {
   return Frontend.getConflicts(list)
 }
 
-function canUndo(doc) {
-  return Backend.canUndo(Frontend.getBackendState(doc))
-}
-
-function undo(doc, message) {
-  const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = Backend.undo(oldState, message)
-  patch.state = newState
-  return Frontend.applyPatch(doc, patch)
-}
-
-function canRedo(doc) {
-  return Backend.canRedo(Frontend.getBackendState(doc))
-}
-
-function redo(doc, message) {
-  const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = Backend.redo(oldState, message)
-  patch.state = newState
-  return Frontend.applyPatch(doc, patch)
-}
-
 module.exports = {
   init, change, emptyChange, load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
   equals, inspect, getHistory, getConflicts, uuid,
-  canUndo, undo, canRedo, redo,
+  canUndo: Frontend.canUndo, undo: Frontend.undo, canRedo: Frontend.canRedo, redo: Frontend.redo,
   Frontend, Backend,
   Text: Frontend.Text,
   DocSet: require('./doc_set'),

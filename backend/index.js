@@ -142,54 +142,64 @@ function getDeps(state) {
 }
 
 /**
- * Applies a list of `changes` to the node state `state`. Returns a two-element
- * array `[state, patch]` where `state` is the updated node state, and `patch`
- * describes the changes that need to be made to the document object to reflect
- * this change.
+ * Constructs a patch object from the current node state `state` and the list
+ * of object modifications `diffs`.
  */
-function applyChanges(state, changes) {
+function makePatch(state, diffs) {
+  const canUndo = state.getIn(['opSet', 'undoPos']) > 0
+  const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
+  const deps = getDeps(state).toJS()
+  return {deps, canUndo, canRedo, diffs}
+}
+
+/**
+ * The implementation behind `applyChanges()` and `applyLocalChange()`.
+ */
+function apply(state, changes, undoable) {
   let diffs = [], opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
-    const undoable = (change.get('actor') === state.get('actorId'))
-    let [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
+    change = change.remove('requestType')
+    const [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
     diffs.push(...diff)
     opSet = newOpSet
   }
 
   state = state.set('opSet', opSet)
-  let patch = {diffs, deps: getDeps(state).toJS()}
-
-  if (changes.length === 1) {
-    patch.actor = changes[0].actor
-    patch.seq   = changes[0].seq
-  }
-  return [state, patch]
+  return [state, makePatch(state, diffs)]
 }
 
 /**
- * Applies a single `change` incrementally; otherwise the same as
- * `applyChanges()`.
-*/
-function applyChange(state, change) {
-  return applyChanges(state, [change])
-}
-
-/**
- * Creates and applies a new change by the local actor, containing the list of
- * operations `ops` and the optional `message`. Returns a two-element array
- * `[state, patch]` where `state` is the updated node state, and `patch`
- * describes the changes that need to be made to the document object.
+ * Applies a list of `changes` from remote nodes to the node state `state`.
+ * Returns a two-element array `[state, patch]` where `state` is the updated
+ * node state, and `patch` describes the modifications that need to be made
+ * to the document objects to reflect these changes.
  */
-function makeChange(state, ops, message) {
-  const actor = state.get('actorId')
-  const seq = state.getIn(['opSet', 'clock', actor], 0) + 1
-  const deps = getDeps(state)
-  let change = Map({actor, seq, deps, ops})
-  if (message) change = change.set('message', message)
+function applyChanges(state, changes) {
+  return apply(state, changes, false)
+}
 
-  const [opSet, diffs] = OpSet.addChange(state.get('opSet'), change, false)
-  let patch = {actor, seq, deps: deps.toJS(), diffs}
-  return [state.set('opSet', opSet), patch]
+/**
+ * Takes a single change request `change` made by the local user, and applies
+ * it to the node state `state`. The difference to `applyChange()` is that this
+ * function adds the change to the undo history, so it can be undone (whereas
+ * remote changes are not normally added to the undo history). Returns a
+ * two-element array `[state, patch]` where `state` is the updated node state,
+ * and `patch` confirms the modifications to the document objects.
+ */
+function applyLocalChange(state, change) {
+  let patch
+  if (change.requestType === 'change') {
+    ;[state, patch] = apply(state, [change], true)
+  } else if (change.requestType === 'undo') {
+    ;[state, patch] = undo(state, change)
+  } else if (change.requestType === 'redo') {
+    ;[state, patch] = redo(state, change)
+  } else {
+    throw new RangeError(`Unknown requestType: ${change.requestType}`)
+  }
+  patch.actor = change.actor
+  patch.seq   = change.seq
+  return [state, patch]
 }
 
 /**
@@ -201,7 +211,7 @@ function getPatch(state) {
   let context = new MaterializationContext(opSet)
   context.instantiateObject(opSet, OpSet.ROOT_ID)
   context.makePatch(OpSet.ROOT_ID, diffs)
-  return {diffs, deps: getDeps(state).toJS()}
+  return makePatch(state, diffs)
 }
 
 function getChanges(oldState, newState) {
@@ -236,19 +246,22 @@ function merge(local, remote) {
   return applyChanges(local, changes)
 }
 
-function canUndo(state) {
-  return state.getIn(['opSet', 'undoPos']) > 0
-}
-
-function undo(state, message) {
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
-  }
+/**
+ * Undoes the last change by the local user in the node state `state`. The
+ * `request` object contains all parts of the change except the operations;
+ * this function fetches the operations from the undo stack, pushes a record
+ * onto the redo stack, and applies the change, returning a two-element list
+ * containing `[state, patch]`.
+ */
+function undo(state, request) {
   const undoPos = state.getIn(['opSet', 'undoPos'])
   const undoOps = state.getIn(['opSet', 'undoStack', undoPos - 1])
   if (undoPos < 1 || !undoOps) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
+  const { actor, seq, deps, message } = request
+  const change = Map({ actor, seq, deps: fromJS(deps), message, ops: undoOps })
+
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
     for (let op of undoOps) {
@@ -265,32 +278,40 @@ function undo(state, message) {
       }
     }
   })
+
   opSet = opSet
     .set('undoPos', undoPos - 1)
     .update('redoStack', stack => stack.push(redoOps))
-  return makeChange(state.set('opSet', opSet), undoOps, message)
+
+  const [newOpSet, diffs] = OpSet.addChange(opSet, change, false)
+  state = state.set('opSet', newOpSet)
+  return [state, makePatch(state, diffs)]
 }
 
-function canRedo(state) {
-  return !state.getIn(['opSet', 'redoStack']).isEmpty()
-}
-
-function redo(state, message) {
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
-  }
+/**
+ * Redoes the last `undo()` in the node state `state`. The `request` object
+ * contains all parts of the change except the operations; this function
+ * fetches the operations from the redo stack, and applies the change,
+ * returning a two-element list `[state, patch]`.
+ */
+function redo(state, request) {
   const redoOps = state.getIn(['opSet', 'redoStack']).last()
   if (!redoOps) {
     throw new RangeError('Cannot redo: the last change was not an undo')
   }
+  const { actor, seq, deps, message } = request
+  const change = Map({ actor, seq, deps: fromJS(deps), message, ops: redoOps })
+
   const opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)
     .update('redoStack', stack => stack.pop())
-  return makeChange(state.set('opSet', opSet), redoOps, message)
+
+  const [newOpSet, diffs] = OpSet.addChange(opSet, change, false)
+  state = state.set('opSet', newOpSet)
+  return [state, makePatch(state, diffs)]
 }
 
 module.exports = {
-  init, applyChanges, applyChange, getPatch,
-  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge,
-  canUndo, undo, canRedo, redo
+  init, applyChanges, applyLocalChange, getPatch,
+  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge
 }
