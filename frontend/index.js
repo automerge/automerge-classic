@@ -202,7 +202,7 @@ function init(options) {
   const root = {}, cache = {[ROOT_ID]: root}
   const state = {seq: 0, requests: [], deps: {}, canUndo: false, canRedo: false}
   if (options.backend) {
-    state.backendState = options.backend.init(options.actorId)
+    state.backendState = options.backend.init()
   }
   Object.defineProperty(root, '_actorId', {value: options.actorId})
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
