@@ -1,4 +1,4 @@
-const { Map, Set, fromJS } = require('immutable')
+const { Set } = require('immutable')
 const Frontend = require('../frontend')
 const Backend = require('../backend')
 
