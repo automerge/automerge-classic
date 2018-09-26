@@ -6,7 +6,18 @@ const uuid = require('../src/uuid')
 
 describe('Frontend', () => {
   it('should be an empty object by default', () => {
-    assert.deepEqual(Frontend.init(), {})
+    const doc = Frontend.init()
+    assert.deepEqual(doc, {})
+    assert(!!Frontend.getActorId(doc).match(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
+  })
+
+  it('should allow actorId assignment to be deferred', () => {
+    let doc = Frontend.init({deferActorId: true})
+    assert.strictEqual(Frontend.getActorId(doc), undefined)
+    assert.throws(() => { Frontend.change(doc, doc => doc.foo = 'bar') }, /Actor ID must be initialized with setActorId/)
+    doc = Frontend.setActorId(doc, uuid())
+    doc = Frontend.change(doc, doc => doc.foo = 'bar')
+    assert.deepEqual(doc, {foo: 'bar'})
   })
 
   describe('performing changes', () => {

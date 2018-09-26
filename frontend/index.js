@@ -18,7 +18,7 @@ function updateRootObject(doc, updated, inbound, state) {
     newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
     updated[ROOT_ID] = newDoc
   }
-  Object.defineProperty(newDoc, '_actorId', {value: doc[OPTIONS].actorId})
+  Object.defineProperty(newDoc, '_actorId', {value: getActorId(doc)})
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
@@ -71,7 +71,10 @@ function ensureSingleAssignment(ops) {
  * `message` is an optional human-readable string describing the change.
  */
 function makeChange(doc, requestType, context, message) {
-  const actor = doc[OPTIONS].actorId
+  const actor = getActorId(doc)
+  if (!actor) {
+    throw new Error('Actor ID must be initialized with setActorId() before making a change')
+  }
   const state = Object.assign({}, doc[STATE])
   state.seq += 1
   const deps = Object.assign({}, state.deps)
@@ -195,7 +198,7 @@ function init(options) {
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported value for init() options: ${options}`)
   }
-  if (options.actorId === undefined) {
+  if (options.actorId === undefined && !options.deferActorId) {
     options.actorId = uuid()
   }
 
@@ -234,7 +237,11 @@ function change(doc, message, callback) {
     throw new TypeError('Change message must be a string')
   }
 
-  let context = new Context(doc)
+  const actorId = getActorId(doc)
+  if (!actorId) {
+    throw new Error('Actor ID must be initialized with setActorId() before making a change')
+  }
+  const context = new Context(doc, actorId)
   callback(rootObjectProxy(context))
 
   if (Object.keys(context.updated).length === 0) {
@@ -256,7 +263,12 @@ function emptyChange(doc, message) {
   if (message !== undefined && typeof message !== 'string') {
     throw new TypeError('Change message must be a string')
   }
-  return makeChange(doc, 'change', new Context(doc), message)
+
+  const actorId = getActorId(doc)
+  if (!actorId) {
+    throw new Error('Actor ID must be initialized with setActorId() before making a change')
+  }
+  return makeChange(doc, 'change', new Context(doc, actorId), message)
 }
 
 /**
@@ -266,7 +278,6 @@ function emptyChange(doc, message) {
  * request should be included in the patch, so that we can match them up here.
  */
 function applyPatch(doc, patch) {
-  const actor = doc[OPTIONS].actorId
   const state = Object.assign({}, doc[STATE])
   let baseDoc
 
@@ -377,7 +388,16 @@ function getObjectId(object) {
  * Returns the Automerge actor ID of the given document.
  */
 function getActorId(doc) {
-  return doc[OPTIONS].actorId
+  return doc[STATE].actorId || doc[OPTIONS].actorId
+}
+
+/**
+ * Sets the Automerge actor ID on the document object `doc`, returning a
+ * document object with updated metadata.
+ */
+function setActorId(doc, actorId) {
+  const state = Object.assign({}, doc[STATE], {actorId})
+  return updateRootObject(doc, {}, doc[INBOUND], state)
 }
 
 /**
@@ -419,6 +439,6 @@ function getElementIds(list) {
 module.exports = {
   init, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
-  getObjectId, getActorId, getConflicts, getRequests, getBackendState, getElementIds,
+  getObjectId, getActorId, setActorId, getConflicts, getRequests, getBackendState, getElementIds,
   Text
 }

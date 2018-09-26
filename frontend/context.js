@@ -10,8 +10,8 @@ const uuid = require('../src/uuid')
  * and to apply the requested changes.
  */
 class Context {
-  constructor (doc) {
-    this.actorId = doc[OPTIONS].actorId
+  constructor (doc, actorId) {
+    this.actorId = actorId
     this.cache = doc[CACHE]
     this.updated = {}
     this.inbound = Object.assign({}, doc[INBOUND])
