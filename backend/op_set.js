@@ -62,7 +62,7 @@ function getPath(opSet, objectId) {
 // Processes a 'makeMap', 'makeList', or 'makeText' operation
 function applyMake(opSet, op) {
   const objectId = op.get('obj')
-  if (opSet.hasIn(['byObject', objectId])) throw 'Duplicate creation of object ' + objectId
+  if (opSet.hasIn(['byObject', objectId])) throw new Error('Duplicate creation of object ' + objectId)
 
   let edit = {action: 'create', obj: objectId}
   let object = Map({_init: op, _inbound: Set()})
@@ -82,8 +82,8 @@ function applyMake(opSet, op) {
 // a subsequent 'set' or 'link' operation on the inserted element.
 function applyInsert(opSet, op) {
   const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
-  if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
-  if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw 'Duplicate list element ID ' + elemId
+  if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
+  if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
   opSet = opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
@@ -122,7 +122,7 @@ function patchList(opSet, objectId, index, elemId, action, ops) {
     edit.value = firstOp.get('value')
   } else if (action === 'remove') {
     elemIds = elemIds.removeIndex(index)
-  } else throw 'Unknown action type: ' + action
+  } else throw new Error('Unknown action type: ' + action)
 
   if (ops && ops.size > 1) edit.conflicts = getConflicts(ops)
   opSet = opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
@@ -180,7 +180,7 @@ function updateMapKey(opSet, objectId, key) {
 function applyAssign(opSet, op, topLevel) {
   const objectId = op.get('obj')
   const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-  if (!opSet.get('byObject').has(objectId)) throw 'Modification of unknown object ' + objectId
+  if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
 
   if (opSet.has('undoLocal') && topLevel) {
     let undoOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
@@ -242,7 +242,7 @@ function applyChange(opSet, change) {
   const prior = opSet.getIn(['states', actor], List())
   if (seq <= prior.size) {
     if (!prior.get(seq - 1).get('change').equals(change)) {
-      throw 'Inconsistent reuse of sequence number ' + seq + ' by ' + actor
+      throw new Error('Inconsistent reuse of sequence number ' + seq + ' by ' + actor)
     }
     return [opSet, []] // change already applied, return unchanged
   }
