@@ -124,21 +124,8 @@ class MaterializationContext {
 /**
  * Returns an empty node state.
  */
-function init(actorId) {
-  if (typeof actorId !== 'string') {
-    throw new TypeError('init() requires an actorId')
-  }
-  const opSet = OpSet.init()
-  return Map({actorId, opSet})
-}
-
-/**
- * Returns the current dependencies map in the form required by patch objects.
- */
-function getDeps(state) {
-  let actorId = state.get('actorId'), opSet = state.get('opSet')
-  return opSet.get('deps')
-    .set(actorId, opSet.getIn(['clock', actorId], 0))
+function init() {
+  return Map({opSet: OpSet.init()})
 }
 
 /**
@@ -148,8 +135,9 @@ function getDeps(state) {
 function makePatch(state, diffs) {
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
-  const deps = getDeps(state).toJS()
-  return {deps, canUndo, canRedo, diffs}
+  const clock = state.getIn(['opSet', 'clock']).toJS()
+  const deps = state.getIn(['opSet', 'deps']).toJS()
+  return {clock, deps, canUndo, canRedo, diffs}
 }
 
 /**
@@ -237,11 +225,15 @@ function getMissingDeps(state) {
   return OpSet.getMissingDeps(state.get('opSet'))
 }
 
+/**
+ * Takes any changes that appear in `remote` but not in `local`, and applies
+ * them to `local`, returning a two-element list `[state, patch]` where `state`
+ * is the updated version of `local`, and `patch` describes the modifications
+ * that need to be made to the document objects to reflect these changes.
+ * Note that this function does not detect if the same sequence number has been
+ * reused for different changes in `local` and `remote` respectively.
+ */
 function merge(local, remote) {
-  if (local.get('actorId') === remote.get('actorId')) {
-    throw new RangeError('Cannot merge an actor with itself')
-  }
-
   const changes = OpSet.getMissingChanges(remote.get('opSet'), local.getIn(['opSet', 'clock']))
   return applyChanges(local, changes)
 }

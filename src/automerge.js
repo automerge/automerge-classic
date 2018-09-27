@@ -23,14 +23,6 @@ function init(actorId) {
   return Frontend.init({actorId, backend: Backend})
 }
 
-function change(doc, message, callback) {
-  return Frontend.change(doc, message, callback)
-}
-
-function emptyChange(doc, message) {
-  return Frontend.emptyChange(doc, message)
-}
-
 function load(string, actorId) {
   return docFromChanges(actorId || uuid(), transit.fromJSON(string))
 }
@@ -41,6 +33,9 @@ function save(doc) {
 }
 
 function merge(localDoc, remoteDoc) {
+  if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
+    throw new RangeError('Cannot merge an actor with itself')
+  }
   const localState  = Frontend.getBackendState(localDoc)
   const remoteState = Frontend.getBackendState(remoteDoc)
   const [state, patch] = Backend.merge(localState, remoteState)
@@ -91,6 +86,7 @@ function inspect(doc) {
 
 function getHistory(doc) {
   const state = Frontend.getBackendState(doc)
+  const actor = Frontend.getActorId(doc)
   const history = state.getIn(['opSet', 'history'])
   return history.map((change, index) => {
     return {
@@ -98,23 +94,22 @@ function getHistory(doc) {
         return change.toJS()
       },
       get snapshot () {
-        return docFromChanges(state.get('actorId'), history.slice(0, index + 1))
+        return docFromChanges(actor, history.slice(0, index + 1))
       }
     }
   }).toArray()
 }
 
-function getConflicts(doc, list) {
-  return Frontend.getConflicts(list)
-}
-
 module.exports = {
-  init, change, emptyChange, load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
-  equals, inspect, getHistory, getConflicts, uuid,
-  canUndo: Frontend.canUndo, undo: Frontend.undo, canRedo: Frontend.canRedo, redo: Frontend.redo,
+  init, load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
+  equals, inspect, getHistory, uuid,
   Frontend, Backend,
-  Text: Frontend.Text,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
   Connection: require('./connection')
+}
+
+for (let name of ['change', 'emptyChange', 'canUndo', 'undo', 'canRedo', 'redo',
+     'getActorId', 'setActorId', 'getConflicts', 'Text']) {
+  module.exports[name] = Frontend[name]
 }

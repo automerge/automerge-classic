@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants')
+const { CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants')
 const { applyDiffs } = require('./apply_patch')
 const { Text, getElemId } = require('./text')
 const { isObject } = require('../src/common')
@@ -10,8 +10,8 @@ const uuid = require('../src/uuid')
  * and to apply the requested changes.
  */
 class Context {
-  constructor (doc) {
-    this.actorId = doc[OPTIONS].actorId
+  constructor (doc, actorId) {
+    this.actorId = actorId
     this.cache = doc[CACHE]
     this.updated = {}
     this.inbound = Object.assign({}, doc[INBOUND])

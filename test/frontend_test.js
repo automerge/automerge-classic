@@ -6,7 +6,18 @@ const uuid = require('../src/uuid')
 
 describe('Frontend', () => {
   it('should be an empty object by default', () => {
-    assert.deepEqual(Frontend.init(), {})
+    const doc = Frontend.init()
+    assert.deepEqual(doc, {})
+    assert(!!Frontend.getActorId(doc).match(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
+  })
+
+  it('should allow actorId assignment to be deferred', () => {
+    let doc = Frontend.init({deferActorId: true})
+    assert.strictEqual(Frontend.getActorId(doc), undefined)
+    assert.throws(() => { Frontend.change(doc, doc => doc.foo = 'bar') }, /Actor ID must be initialized with setActorId/)
+    doc = Frontend.setActorId(doc, uuid())
+    doc = Frontend.change(doc, doc => doc.foo = 'bar')
+    assert.deepEqual(doc, {foo: 'bar'})
   })
 
   describe('performing changes', () => {
@@ -96,13 +107,15 @@ describe('Frontend', () => {
   describe('backend concurrency', () => {
     it('should use dependencies and sequence number from the backend', () => {
       const local = uuid(), remote1 = uuid(), remote2 = uuid()
-      const patch1 = {deps: {[local]: 4, [remote1]: 11, [remote2]: 41}, diffs: [
-        {action: 'set', obj: ROOT_ID, type: 'map', key: 'blackbirds', value: 24}
-      ]}
+      const patch1 = {
+        clock: {[local]: 4, [remote1]: 11, [remote2]: 41},
+        deps: {[local]: 4, [remote2]: 41},
+        diffs: [{action: 'set', obj: ROOT_ID, type: 'map', key: 'blackbirds', value: 24}]
+      }
       let doc1 = Frontend.applyPatch(Frontend.init(local), patch1)
       let doc2 = Frontend.change(doc1, doc => doc.partridges = 1)
       assert.deepEqual(Frontend.getRequests(doc2), [
-        {requestType: 'change', actor: local, seq: 5, deps: {[remote1]: 11, [remote2]: 41}, ops: [
+        {requestType: 'change', actor: local, seq: 5, deps: {[remote2]: 41}, ops: [
           {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
         ]}
       ])
