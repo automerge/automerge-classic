@@ -8,6 +8,19 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.9.1] — 2018-09-27
+
+### Changed
+- [#126]: Backend no longer needs to know the actorId of the local node ([@ept])
+- [#126]: Frontend can now be initialized without actorId, as long as you call
+  `setActorId` before you make the first change ([@ept])
+- [#120]: Undo and redo must now be initiated by the frontend, not the backend ([@ept])
+
+### Fixed
+- [#120]: Fixed bug that would cause sequence numbers to be reused in some concurrent
+  executions ([@ept])
+- [#125]: Exceptions now throw Error objects rather than plain strings ([@wincent])
+
 ## [0.9.0] — 2018-09-18
 
 ### Added
@@ -166,7 +179,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/automerge/automerge/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/automerge/automerge/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/automerge/automerge/compare/v0.7.11...v0.8.0
 [0.7.11]: https://github.com/automerge/automerge/compare/v0.7.10...v0.7.11
@@ -187,6 +201,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#126]: https://github.com/automerge/automerge/pull/126
+[#125]: https://github.com/automerge/automerge/pull/125
+[#120]: https://github.com/automerge/automerge/pull/120
 [#118]: https://github.com/automerge/automerge/pull/118
 [#112]: https://github.com/automerge/automerge/pull/112
 [#111]: https://github.com/automerge/automerge/pull/111
@@ -234,3 +251,4 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@pvh]: https://github.com/pvh
 [@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
+[@wincent]: https://github.com/wincent
