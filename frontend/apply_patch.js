@@ -251,7 +251,7 @@ function parentListObject(objectId, cache, updated) {
  * and the updated object is written to `updated`.
  */
 function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
-  const objectId = diffs[0].obj
+  const objectId = diffs[startIndex].obj
   if (!updated[objectId]) {
     if (cache[objectId]) {
       const elems = cache[objectId].elems.slice()
