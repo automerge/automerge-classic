@@ -8,6 +8,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- [#128]: Fixed crash when Text object was modified in the same change as
+  another object ([@CGNonofr])
+
 ## [0.9.1] — 2018-09-27
 
 ### Changed
@@ -201,6 +205,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#128]: https://github.com/automerge/automerge/pull/128
 [#126]: https://github.com/automerge/automerge/pull/126
 [#125]: https://github.com/automerge/automerge/pull/125
 [#120]: https://github.com/automerge/automerge/pull/120
@@ -240,6 +245,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#30]: https://github.com/automerge/automerge/pull/30
 
 [@aslakhellesoy]: https://github.com/aslakhellesoy
+[@CGNonofr]: https://github.com/CGNonofr
 [@EthanRBrown]: https://github.com/EthanRBrown
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
