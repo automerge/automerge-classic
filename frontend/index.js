@@ -5,6 +5,7 @@ const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_pa
 const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
 const { Text } = require('./text')
+const { Table } = require('./table')
 
 /**
  * Takes a set of objects that have been updated (in `updated`) and an updated
@@ -24,11 +25,17 @@ function updateRootObject(doc, updated, inbound, state) {
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, STATE,    {value: state})
 
-  for (let objectId of Object.keys(doc[CACHE])) {
-    if (updated[objectId]) {
+  for (let objectId of Object.keys(updated)) {
+    if (updated[objectId] instanceof Table) {
+      updated[objectId]._freeze()
+    } else {
       Object.freeze(updated[objectId])
       Object.freeze(updated[objectId][CONFLICTS])
-    } else {
+    }
+  }
+
+  for (let objectId of Object.keys(doc[CACHE])) {
+    if (!updated[objectId]) {
       updated[objectId] = doc[CACHE][objectId]
     }
   }
@@ -439,5 +446,5 @@ module.exports = {
   init, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getActorId, setActorId, getConflicts, getBackendState, getElementIds,
-  Text
+  Text, Table
 }

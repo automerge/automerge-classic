@@ -68,6 +68,8 @@ function applyMake(opSet, op) {
   let object = Map({_init: op, _inbound: Set()})
   if (op.get('action') === 'makeMap') {
     edit.type = 'map'
+  } else if (op.get('action') === 'makeTable') {
+    edit.type = 'table'
   } else {
     edit.type = (op.get('action') === 'makeText') ? 'text' : 'list'
     object = object.set('_elemIds', new SkipList())
@@ -158,9 +160,9 @@ function updateListElement(opSet, objectId, elemId) {
   }
 }
 
-function updateMapKey(opSet, objectId, key) {
+function updateMapKey(opSet, objectId, type, key) {
   const ops = getFieldOps(opSet, objectId, key)
-  let edit = {action: '', type: 'map', obj: objectId, key, path: getPath(opSet, objectId)}
+  let edit = {action: '', type, obj: objectId, key, path: getPath(opSet, objectId)}
 
   if (ops.isEmpty()) {
     edit.action = 'remove'
@@ -211,10 +213,14 @@ function applyAssign(opSet, op, topLevel) {
   remaining = remaining.sortBy(op => op.get('actor')).reverse()
   opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
 
-  if (objType === 'makeList' || objType === 'makeText') {
+  if (objectId === ROOT_ID || objType === 'makeMap') {
+    return updateMapKey(opSet, objectId, 'map', op.get('key'))
+  } else if (objType === 'makeTable') {
+    return updateMapKey(opSet, objectId, 'table', op.get('key'))
+  } else if (objType === 'makeList' || objType === 'makeText') {
     return updateListElement(opSet, objectId, op.get('key'))
   } else {
-    return updateMapKey(opSet, objectId, op.get('key'))
+    throw new RangeError(`Unknown operation type ${objType}`)
   }
 }
 
@@ -222,7 +228,7 @@ function applyOps(opSet, ops) {
   let allDiffs = [], newObjects = Set()
   for (let op of ops) {
     let diffs, action = op.get('action')
-    if (action === 'makeMap' || action === 'makeList' || action === 'makeText') {
+    if (['makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
       newObjects = newObjects.add(op.get('obj'))
       ;[opSet, diffs] = applyMake(opSet, op)
     } else if (action === 'ins') {

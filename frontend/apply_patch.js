@@ -1,6 +1,7 @@
 const { ROOT_ID, isObject } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text } = require('./text')
+const { Table, instantiateTable } = require('./table')
 
 /**
  * Takes a string in the form that is used to identify list elements (an actor
@@ -136,6 +137,60 @@ function parentMapObject(objectId, cache, updated) {
 
     if (conflictsUpdate) {
       Object.freeze(conflictsUpdate)
+    }
+  }
+}
+
+/**
+ * Applies the change `diff` to a table object. `cache` and `updated` are indexed
+ * by objectId; the existing read-only object is taken from `cache`, and the
+ * updated writable object is written to `updated`. `inbound` is a mapping from
+ * child objectId to parent objectId; it is updated according to the change.
+ */
+function updateTableObject(diff, cache, updated, inbound) {
+  if (!updated[diff.obj]) {
+    updated[diff.obj] = cache[diff.obj] ? cache[diff.obj]._clone() : instantiateTable(diff.obj)
+  }
+  let object = updated[diff.obj]
+  let refsBefore = {}, refsAfter = {}
+
+  if (diff.action === 'create') {
+    // do nothing
+  } else if (diff.action === 'set') {
+    const previous = object.byId(diff.key)
+    if (isObject(previous)) refsBefore[previous[OBJECT_ID]] = true
+    if (diff.link) {
+      object.set(diff.key, updated[diff.value] || cache[diff.value])
+      refsAfter[diff.value] = true
+    } else {
+      object.set(diff.key, diff.value)
+    }
+  } else if (diff.action === 'remove') {
+    const previous = object.byId(diff.key)
+    if (isObject(previous)) refsBefore[previous[OBJECT_ID]] = true
+    object.remove(diff.key)
+  } else {
+    throw new RangeError('Unknown action type: ' + diff.action)
+  }
+
+  updateInbound(diff.obj, refsBefore, refsAfter, inbound)
+}
+
+/**
+ * Updates the table object with ID `objectId` such that all child objects that
+ * have been updated in `updated` are replaced with references to the updated
+ * version.
+ */
+function parentTableObject(objectId, cache, updated) {
+  if (!updated[objectId]) {
+    updated[objectId] = cache[objectId]._clone()
+  }
+  let table = updated[objectId]
+
+  for (let key of Object.keys(table.entries)) {
+    let value = table.byId(key)
+    if (isObject(value) && updated[value[OBJECT_ID]]) {
+      table.set(key, updated[value[OBJECT_ID]])
     }
   }
 }
@@ -336,6 +391,8 @@ function updateParentObjects(cache, updated, inbound) {
     for (let objectId of Object.keys(parents)) {
       if (Array.isArray(updated[objectId] || cache[objectId])) {
         parentListObject(objectId, cache, updated)
+      } else if ((updated[objectId] || cache[objectId]) instanceof Table) {
+        parentTableObject(objectId, cache, updated)
       } else {
         parentMapObject(objectId, cache, updated)
       }
@@ -357,6 +414,9 @@ function applyDiffs(diffs, cache, updated, inbound) {
 
     if (diff.type === 'map') {
       updateMapObject(diff, cache, updated, inbound)
+      startIndex = endIndex + 1
+    } else if (diff.type === 'table') {
+      updateTableObject(diff, cache, updated, inbound)
       startIndex = endIndex + 1
     } else if (diff.type === 'list') {
       updateListObject(diff, cache, updated, inbound)

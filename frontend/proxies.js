@@ -1,6 +1,7 @@
 const { ROOT_ID } = require('../src/common')
 const { CHANGE } = require('./constants')
 const { Text } = require('./text')
+const { Table } = require('./table')
 
 function parseListIndex(key) {
   if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
@@ -107,7 +108,7 @@ const MapHandler = {
 
   set (target, key, value) {
     const { context, objectId } = target
-    context.setMapKey(objectId, key, value)
+    context.setMapKey(objectId, 'map', key, value)
     return true
   },
 
@@ -210,6 +211,8 @@ function instantiateProxy(objectId) {
   const object = this.getObject(objectId)
   if (Array.isArray(object) || (object instanceof Text)) {
     return listProxy(this, objectId)
+  } else if (object instanceof Table) {
+    return object.getWriteable(this)
   } else {
     return mapProxy(this, objectId)
   }
