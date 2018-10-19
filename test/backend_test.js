@@ -152,6 +152,40 @@ describe('Backend', () => {
     })
   })
 
+  describe('applyLocalChange()', () => {
+    it('should apply change requests', () => {
+      const actor = uuid()
+      const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      ]}
+      const s0 = Backend.init(actor)
+      const [s1, patch1] = Backend.applyLocalChange(s0, change1)
+      assert.deepEqual(patch1, {
+        actor, seq: 1, canUndo: true, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'magpie'}]
+      })
+    })
+
+    it('should return a null patch on duplicate requests', () => {
+      const actor = uuid()
+      const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      ]}
+      const change2 = {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      ]}
+      const s0 = Backend.init(actor)
+      const [s1, patch1] = Backend.applyLocalChange(s0, change1)
+      const [s2, patch2] = Backend.applyLocalChange(s1, change2)
+      const [s3, patch3] = Backend.applyLocalChange(s2, change1)
+      const [s4, patch4] = Backend.applyLocalChange(s3, change2)
+      assert.strictEqual(s3, s2)
+      assert.strictEqual(s4, s2)
+      assert.strictEqual(patch3, null)
+      assert.strictEqual(patch4, null)
+    })
+  })
+
   describe('getPatch()', () => {
     it('should include the most recent value for a key', () => {
       const actor = uuid()

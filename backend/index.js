@@ -171,6 +171,14 @@ function applyChanges(state, changes) {
  * and `patch` confirms the modifications to the document objects.
  */
 function applyLocalChange(state, change) {
+  if (typeof change.actor !== 'string' || typeof change.seq !== 'number') {
+    throw new TypeError('Change request requries `actor` and `seq` properties')
+  }
+  // If we have already applied this change request, return a null patch
+  if (change.seq <= state.getIn(['opSet', 'clock', change.actor], 0)) {
+    return [state, null]
+  }
+
   let patch
   if (change.requestType === 'change') {
     ;[state, patch] = apply(state, [change], true)
