@@ -166,7 +166,7 @@ describe('Backend', () => {
       })
     })
 
-    it('should return a null patch on duplicate requests', () => {
+    it('should throw an exception on duplicate requests', () => {
       const actor = uuid()
       const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
@@ -177,12 +177,8 @@ describe('Backend', () => {
       const s0 = Backend.init(actor)
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
       const [s2, patch2] = Backend.applyLocalChange(s1, change2)
-      const [s3, patch3] = Backend.applyLocalChange(s2, change1)
-      const [s4, patch4] = Backend.applyLocalChange(s3, change2)
-      assert.strictEqual(s3, s2)
-      assert.strictEqual(s4, s2)
-      assert.strictEqual(patch3, null)
-      assert.strictEqual(patch4, null)
+      assert.throws(() => Backend.applyLocalChange(s2, change1), /Change request has already been applied/)
+      assert.throws(() => Backend.applyLocalChange(s2, change2), /Change request has already been applied/)
     })
   })
 

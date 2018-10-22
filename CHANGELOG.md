@@ -11,6 +11,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - [#128]: Fixed crash when Text object was modified in the same change as
   another object ([@CGNonofr])
+- [#129]: Prevent application of duplicate requests in `applyLocalChange()` ([@ept])
 
 ## [0.9.1] — 2018-09-27
 
@@ -205,6 +206,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#129]: https://github.com/automerge/automerge/pull/129
 [#128]: https://github.com/automerge/automerge/pull/128
 [#126]: https://github.com/automerge/automerge/pull/126
 [#125]: https://github.com/automerge/automerge/pull/125

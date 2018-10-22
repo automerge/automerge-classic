@@ -174,9 +174,9 @@ function applyLocalChange(state, change) {
   if (typeof change.actor !== 'string' || typeof change.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
   }
-  // If we have already applied this change request, return a null patch
+  // Throw error if we have already applied this change request
   if (change.seq <= state.getIn(['opSet', 'clock', change.actor], 0)) {
-    return [state, null]
+    throw new RangeError('Change request has already been applied')
   }
 
   let patch
