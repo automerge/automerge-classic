@@ -95,8 +95,7 @@ function makeChange(doc, requestType, context, message) {
     return [applyPatchToDoc(doc, patch, state, true), request]
 
   } else {
-    const queuedRequest = Object.assign({}, request)
-    queuedRequest.before = doc
+    const queuedRequest = {...request, before: doc}
     if (context) queuedRequest.diffs = context.diffs
     state.requests = state.requests.slice() // shallow clone
     state.requests.push(queuedRequest)
