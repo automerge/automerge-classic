@@ -80,7 +80,10 @@ function makeChange(doc, requestType, context, message) {
   const deps = Object.assign({}, state.deps)
   delete deps[actor]
 
-  const request = {requestType, actor, seq: state.seq, deps, message}
+  const request = {requestType, actor, seq: state.seq, deps}
+  if (message !== undefined) {
+    request.message = message
+  }
   if (context) {
     request.ops = ensureSingleAssignment(context.ops)
   }
@@ -89,14 +92,15 @@ function makeChange(doc, requestType, context, message) {
     const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
     state.backendState = backendState
     state.requests = []
-    return applyPatchToDoc(doc, patch, state, true)
+    return [applyPatchToDoc(doc, patch, state, true), request]
 
   } else {
-    request.before = doc
-    if (context) request.diffs = context.diffs
+    const queuedRequest = Object.assign({}, request)
+    queuedRequest.before = doc
+    if (context) queuedRequest.diffs = context.diffs
     state.requests = state.requests.slice() // shallow clone
-    state.requests.push(request)
-    return updateRootObject(doc, context.updated, context.inbound, state)
+    state.requests.push(queuedRequest)
+    return [updateRootObject(doc, context.updated, context.inbound, state), request]
   }
 }
 
@@ -221,7 +225,10 @@ function init(options) {
  * Changes a document `doc` according to actions taken by the local user.
  * `message` is an optional descriptive string that is attached to the change.
  * The actual change is made within the callback function `callback`, which is
- * given a mutable version of the document as argument.
+ * given a mutable version of the document as argument. Returns a two-element
+ * array `[doc, request]` where `doc` is the updated document, and `request`
+ * is the change request to send to the backend. If nothing was actually
+ * changed, returns the original `doc` and a `null` change request.
  */
 function change(doc, message, callback) {
   if (doc[OBJECT_ID] !== ROOT_ID) {
@@ -246,7 +253,7 @@ function change(doc, message, callback) {
 
   if (Object.keys(context.updated).length === 0) {
     // If the callback didn't change anything, return the original document object unchanged
-    return doc
+    return [doc, null]
   } else {
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
     return makeChange(doc, 'change', context, message)
@@ -258,6 +265,8 @@ function change(doc, message, callback) {
  * modifying its data. `message` is an optional descriptive string attached to
  * the change. This function can be useful for acknowledging the receipt of
  * some message (as it's incorported into the `deps` field of the change).
+ * Returns a two-element array `[doc, request]` where `doc` is the updated
+ * document, and `request` is the change request to send to the backend.
  */
 function emptyChange(doc, message) {
   if (message !== undefined && typeof message !== 'string') {
@@ -330,11 +339,12 @@ function isUndoRedoInFlight(doc) {
 }
 
 /**
- * Enqueues a request to perform an undo on the document `doc` (see
- * `getRequests(doc)`). `message` is an optional change description to attach
- * to the undo. Note that the undo does not take effect immediately: only after
- * the request is sent to the backend, and the backend responds with a patch,
- * does the user-visible document update actually happen.
+ * Creates a request to perform an undo on the document `doc`, returning a
+ * two-element array `[doc, request]` where `doc` is the updated document, and
+ * `request` needs to be sent to the backend. `message` is an optional change
+ * description to attach to the undo. Note that the undo does not take effect
+ * immediately: only after the request is sent to the backend, and the backend
+ * responds with a patch, does the user-visible document update actually happen.
  */
 function undo(doc, message) {
   if (message !== undefined && typeof message !== 'string') {
@@ -358,11 +368,13 @@ function canRedo(doc) {
 }
 
 /**
- * Enqueues a request to perform a redo of a prior undo on the document `doc`
- * (see `getRequests(doc)`). `message` is an optional change description to
- * attach to the redo. Note that the redo does not take effect immediately:
- * only after the request is sent to the backend, and the backend responds
- * with a patch, does the user-visible document update actually happen.
+ * Creates a request to perform a redo of a prior undo on the document `doc`,
+ * returning a two-element array `[doc, request]` where `doc` is the updated
+ * document, and `request` needs to be sent to the backend. `message` is an
+ * optional change description to attach to the redo. Note that the redo does
+ * not take effect immediately: only after the request is sent to the backend,
+ * and the backend responds with a patch, does the user-visible document
+ * update actually happen.
  */
 function redo(doc, message) {
   if (message !== undefined && typeof message !== 'string') {
@@ -412,19 +424,6 @@ function getConflicts(object) {
 }
 
 /**
- * Returns the list of change requests pending on the document `doc`.
- */
-function getRequests(doc) {
-  return doc[STATE].requests.map(req => {
-    const { requestType, actor, seq, deps, message, ops } = req
-    const change = { requestType, actor, seq, deps }
-    if (message !== undefined) change.message = message
-    if (ops !== undefined) change.ops = ops
-    return change
-  })
-}
-
-/**
  * Returns the backend state associated with the document `doc` (only used if
  * a backend implementation is passed to `init()`).
  */
@@ -439,6 +438,6 @@ function getElementIds(list) {
 module.exports = {
   init, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
-  getObjectId, getActorId, setActorId, getConflicts, getRequests, getBackendState, getElementIds,
+  getObjectId, getActorId, setActorId, getConflicts, getBackendState, getElementIds,
   Text
 }

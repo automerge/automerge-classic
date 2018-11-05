@@ -22,6 +22,26 @@ function init(actorId) {
   return Frontend.init({actorId, backend: Backend})
 }
 
+function change(doc, message, callback) {
+  const [newDoc, change] = Frontend.change(doc, message, callback)
+  return newDoc
+}
+
+function emptyChange(doc, message) {
+  const [newDoc, change] = Frontend.emptyChange(doc, message)
+  return newDoc
+}
+
+function undo(doc, message) {
+  const [newDoc, change] = Frontend.undo(doc, message)
+  return newDoc
+}
+
+function redo(doc, message) {
+  const [newDoc, change] = Frontend.redo(doc, message)
+  return newDoc
+}
+
 function load(string, actorId) {
   return docFromChanges(actorId || uuid(), transit.fromJSON(string))
 }
@@ -100,7 +120,8 @@ function getHistory(doc) {
 }
 
 module.exports = {
-  init, load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
+  init, change, emptyChange, undo, redo,
+  load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
   equals, inspect, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),
@@ -108,7 +129,6 @@ module.exports = {
   Connection: require('./connection')
 }
 
-for (let name of ['change', 'emptyChange', 'canUndo', 'undo', 'canRedo', 'redo',
-     'getActorId', 'setActorId', 'getConflicts', 'Text']) {
+for (let name of ['canUndo', 'canRedo', 'getActorId', 'setActorId', 'getConflicts', 'Text']) {
   module.exports[name] = Frontend[name]
 }
