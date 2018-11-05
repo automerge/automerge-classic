@@ -8,10 +8,16 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.9.2] — 2018-11-05
+
 ### Fixed
 - [#128]: Fixed crash when Text object was modified in the same change as
   another object ([@CGNonofr])
 - [#129]: Prevent application of duplicate requests in `applyLocalChange()` ([@ept])
+
+### Changed
+- [#130]: Frontend API no longer uses `Frontend.getRequests()`; instead, frontend
+  change functions now return request objects directly ([@ept])
 
 ## [0.9.1] — 2018-09-27
 
@@ -184,7 +190,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/automerge/automerge/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/automerge/automerge/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/automerge/automerge/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/automerge/automerge/compare/v0.7.11...v0.8.0
@@ -206,6 +213,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#130]: https://github.com/automerge/automerge/pull/130
 [#129]: https://github.com/automerge/automerge/pull/129
 [#128]: https://github.com/automerge/automerge/pull/128
 [#126]: https://github.com/automerge/automerge/pull/126
