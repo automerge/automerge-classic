@@ -205,7 +205,8 @@ class WriteableTable extends Table {
    * within a change callback.
    */
   get columns() {
-    return this.context.getObjectField(this[OBJECT_ID], 'columns')
+    const columnsId = this.entries.columns[OBJECT_ID]
+    return this.context.instantiateObject(columnsId)
   }
 
   /**

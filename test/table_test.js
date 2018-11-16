@@ -124,19 +124,36 @@ describe('Automerge.Table', () => {
       assert.strictEqual(s2.books.count, 0)
       assert.deepEqual([...s2.books], [])
     })
-  })
 
-  it('should translate an array row into a map', () => {
-    let rowId
-    const s1 = Automerge.change(Automerge.init(), doc => {
-      doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
-      rowId = doc.books.add([
-        ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-        'Introduction to Reliable and Secure Distributed Programming',
-        '3-642-15259-7'
-      ])
+    it('should allow the column list to be changed', () => {
+      const s2 = Automerge.change(s1, doc => {
+        doc.books.columns.push('publisher')
+      })
+      assert.deepEqual(s2.books.columns, ['authors', 'title', 'isbn', 'publisher'])
+      assert.deepEqual(s2.books.byId(rowId), DDIA)
     })
-    assert.deepEqual(s1.books.byId(rowId), RSDP)
+
+    it('should translate an array row into a map', () => {
+      let rsdp, lovelace
+      const s2 = Automerge.change(s1, doc => {
+        rsdp = doc.books.add([
+          ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
+          'Introduction to Reliable and Secure Distributed Programming',
+          '3-642-15259-7'
+        ])
+        lovelace = doc.books.add([
+          ['Padua, Sydney'],
+          'The Thrilling Adventures of Lovelace and Babbage',
+          '9780141981536'
+        ])
+      })
+      assert.deepEqual(s2.books.byId(rsdp), RSDP)
+      assert.deepEqual(s2.books.byId(lovelace), {
+        authors: ['Padua, Sydney'],
+        title: 'The Thrilling Adventures of Lovelace and Babbage',
+        isbn: '9780141981536'
+      })
+    })
   })
 
   it('should allow concurrent row insertion', () => {
