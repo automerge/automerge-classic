@@ -1,6 +1,22 @@
 const { OBJECT_ID, CONFLICTS } = require('./constants')
 const { isObject } = require('../src/common')
 
+function compareRows(properties, row1, row2) {
+  for (let prop of properties) {
+    if (row1[prop] === row2[prop]) continue
+
+    if (typeof row1[prop] === 'number' && typeof row2[prop] === 'number') {
+      return row1[prop] - row2[prop]
+    } else {
+      const prop1 = '' + row1[prop], prop2 = '' + row2[prop]
+      if (prop1 === prop2) continue
+      if (prop1 < prop2) return -1; else return +1
+    }
+  }
+  return 0
+}
+
+
 /**
  * A relational-style collection of records. A table has an ordered list of
  * columns, and an unordered set of rows. Each row is an object that maps
@@ -22,6 +38,13 @@ class Table {
   }
 
   /**
+   * Looks up a row in the table by its unique ID.
+   */
+  byId(id) {
+    return this.entries[id]
+  }
+
+  /**
    * Returns an array containing the unique IDs of all rows in the table, in no
    * particular order.
    */
@@ -40,10 +63,59 @@ class Table {
   }
 
   /**
-   * Looks up a row in the table by its unique ID.
+   * Returns an array containing all of the rows in the table, in no particular
+   * order.
    */
-  byId(id) {
-    return this.entries[id]
+  get rows() {
+    return this.ids.map(id => this.byId(id))
+  }
+
+  /**
+   * The standard JavaScript `filter()` method, which passes each row to the
+   * callback function and returns all rows for which the it returns true.
+   */
+  filter(callback, thisArg) {
+    return this.rows.filter(callback, thisArg)
+  }
+
+  /**
+   * The standard JavaScript `find()` method, which passes each row to the
+   * callback function and returns the first row for which it returns true.
+   */
+  find(callback, thisArg) {
+    return this.rows.find(callback, thisArg)
+  }
+
+  /**
+   * The standard JavaScript `map()` method, which passes each row to the
+   * callback function and returns a list of its return values.
+   */
+  map(callback, thisArg) {
+    return this.rows.map(callback, thisArg)
+  }
+
+  /**
+  * Returns the list of rows, sorted by one of the following:
+  * - If a function argument is given, it compares rows as per
+  *   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#Description
+  * - If a string argument is given, it is interpreted as a column name and
+  *   rows are sorted according to that column.
+  * - If an array of strings is given, it is interpreted as a list of column
+  *   names, and rows are sorted lexicographically by those columns.
+  * - If no argument is given, it sorts by row ID by default.
+  */
+  sort(arg) {
+    if (typeof arg === 'function') {
+      return this.rows.sort(arg)
+    } else if (typeof arg === 'string') {
+      return this.rows.sort((row1, row2) => compareRows([arg], row1, row2))
+    } else if (Array.isArray(arg)) {
+      return this.rows.sort((row1, row2) => compareRows(arg, row1, row2))
+    } else if (arg === undefined) {
+      return this.rows.sort((row1, row2) => compareRows([OBJECT_ID], row1, row2))
+    } else {
+      throw new TypeError(`Unsupported sorting argument: ${arg}`)
+    }
   }
 
   /**
@@ -51,12 +123,12 @@ class Table {
    * particular order.
    */
   [Symbol.iterator] () {
-    let ids = this.ids, that = this, index = -1
+    let rows = this.rows, index = -1
     return {
       next () {
         index += 1
-        if (index < ids.length) {
-          return {done: false, value: that.byId(ids[index])}
+        if (index < rows.length) {
+          return {done: false, value: rows[index]}
         } else {
           return {done: true}
         }

@@ -86,6 +86,14 @@ describe('Automerge.Table', () => {
       assert.deepEqual([...s1.books], [DDIA])
     })
 
+    it('should support standard array methods', () => {
+      assert.deepEqual(s1.books.filter(book => book.isbn === '1449373321'), [DDIA])
+      assert.deepEqual(s1.books.filter(book => book.isbn === '9781449373320'), [])
+      assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), DDIA)
+      assert.strictEqual(s1.books.find(book => book.isbn === '9781449373320'), undefined)
+      assert.deepEqual(s1.books.map(book => book.title), ['Designing Data-Intensive Applications'])
+    })
+
     it('should be immutable', () => {
       assert.strictEqual(s1.books.add, undefined)
       assert.throws(() => s1.books.set('id', {}), /can only be modified in a change function/)
@@ -145,5 +153,18 @@ describe('Automerge.Table', () => {
     assert.deepEqual(a2.books.byId(rsdp), RSDP)
     assert.strictEqual(a2.books.count, 2)
     equalsOneOf(a2.books.ids, [ddia, rsdp], [rsdp, ddia])
+  })
+
+  it('should allow rows to be sorted in various ways', () => {
+    const s = Automerge.change(Automerge.init(), doc => {
+      doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
+      doc.books.add(DDIA)
+      doc.books.add(RSDP)
+    })
+    assert.deepEqual(s.books.sort('title'), [DDIA, RSDP])
+    assert.deepEqual(s.books.sort(['authors', 'title']), [RSDP, DDIA])
+    assert.deepEqual(s.books.sort((row1, row2) => {
+      return (row1.isbn === '1449373321') ? -1 : +1
+    }), [DDIA, RSDP])
   })
 })
