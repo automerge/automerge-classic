@@ -10,7 +10,7 @@ const { isObject } = require('./common')
 function docFromChanges(actorId, changes) {
   if (!actorId) throw new RangeError('actorId is required in docFromChanges')
   const doc = Frontend.init({actorId, backend: Backend})
-  const [state, _] = Backend.applyChanges(Backend.init(actorId), changes)
+  const [state, _] = Backend.applyChanges(Backend.init(), changes)
   const patch = Backend.getPatch(state)
   patch.state = state
   return Frontend.applyPatch(doc, patch)

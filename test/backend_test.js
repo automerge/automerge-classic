@@ -11,7 +11,7 @@ describe('Backend', () => {
       const change1 = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
@@ -26,7 +26,7 @@ describe('Backend', () => {
       const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init('actor1')
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
@@ -44,7 +44,7 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'del', obj: ROOT_ID, key: 'bird'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
@@ -60,7 +60,7 @@ describe('Backend', () => {
         {action: 'set',     obj: birds,   key: 'wrens', value: 3},
         {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
@@ -82,7 +82,7 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
@@ -99,7 +99,7 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
@@ -122,7 +122,7 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'greenfinch'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
@@ -142,7 +142,7 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
@@ -158,7 +158,7 @@ describe('Backend', () => {
       const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
       assert.deepEqual(patch1, {
         actor, seq: 1, canUndo: true, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
@@ -174,7 +174,7 @@ describe('Backend', () => {
       const change2 = {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
       const [s2, patch2] = Backend.applyLocalChange(s1, change2)
       assert.throws(() => Backend.applyLocalChange(s2, change1), /Change request has already been applied/)
@@ -191,7 +191,7 @@ describe('Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
@@ -206,7 +206,7 @@ describe('Backend', () => {
       const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init('actor1')
+      const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {actor1: 1, actor2: 1}, deps: {actor1: 1, actor2: 1},
@@ -226,7 +226,7 @@ describe('Backend', () => {
         {action: 'del',     obj: birds,   key: 'wrens'},
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
@@ -246,7 +246,7 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
@@ -274,7 +274,7 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:3`, value: 'greenfinch'},
         {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinches!!'}
       ]}
-      const s0 = Backend.init(actor)
+      const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
