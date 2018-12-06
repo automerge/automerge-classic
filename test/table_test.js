@@ -25,8 +25,8 @@ describe('Automerge.Table', () => {
       const [doc, req] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table(['authors', 'title'])
       })
-      const books = doc.books._objectId
-      const cols = doc.books.columns._objectId
+      const books = Frontend.getObjectId(doc.books)
+      const cols = Frontend.getObjectId(doc.books.columns)
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: books, action: 'makeTable'},
         {obj: cols, action: 'makeList'},
@@ -48,7 +48,7 @@ describe('Automerge.Table', () => {
       const [doc2, req2] = Frontend.change(doc1, doc => {
         rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
-      const books = doc2.books._objectId
+      const books = Frontend.getObjectId(doc2.books)
       assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: rowId, action: 'makeMap'},
         {obj: rowId, action: 'set', key: 'authors', value: 'Kleppmann, Martin'},
@@ -71,7 +71,7 @@ describe('Automerge.Table', () => {
     it('should look up a row by ID', () => {
       const row = s1.books.byId(rowId)
       assert.deepEqual(row, DDIA)
-      assert.strictEqual(row._objectId, rowId)
+      assert.strictEqual(Frontend.getObjectId(row), rowId)
     })
 
     it('should return the row count', () => {
