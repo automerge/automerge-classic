@@ -570,6 +570,33 @@ describe('Automerge', () => {
       assert.deepEqual(s3._conflicts, {})
     })
 
+    it('should add concurrent increments of the same property', () => {
+      s1 = Automerge.change(s1, doc => doc.counter = 0)
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.counter++)
+      s2 = Automerge.change(s2, doc => doc.counter += 2)
+      s3 = Automerge.merge(s1, s2)
+      assert.strictEqual(s1.counter, 1)
+      assert.strictEqual(s2.counter, 2)
+      assert.strictEqual(s3.counter, 3)
+      assert.deepEqual(s3._conflicts, {})
+    })
+
+    it('should add increments only to the values they precede', () => {
+      s1 = Automerge.change(s1, doc => doc.counter = 0)
+      s1 = Automerge.change(s1, doc => doc.counter++)
+      s2 = Automerge.change(s2, doc => doc.counter = 100)
+      s2 = Automerge.change(s2, doc => doc.counter += 3)
+      s3 = Automerge.merge(s1, s2)
+      if (s1._actorId > s2._actorId) {
+        assert.deepEqual(s3, {counter: 1})
+        assert.deepEqual(s3._conflicts, {counter: {[s2._actorId]: 103}})
+      } else {
+        assert.deepEqual(s3, {counter: 103})
+        assert.deepEqual(s3._conflicts, {counter: {[s1._actorId]: 1}})
+      }
+    })
+
     it('should detect concurrent updates of the same field', () => {
       s1 = Automerge.change(s1, doc => doc.field = 'one')
       s2 = Automerge.change(s2, doc => doc.field = 'two')

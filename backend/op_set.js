@@ -176,7 +176,7 @@ function updateMapKey(opSet, objectId, key) {
   return [opSet, [edit]]
 }
 
-// Processes a 'set', 'del', or 'link' operation
+// Processes a 'set', 'del', 'link', or 'inc' operation
 function applyAssign(opSet, op, topLevel) {
   const objectId = op.get('obj')
   const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
@@ -191,11 +191,24 @@ function applyAssign(opSet, op, topLevel) {
     opSet = opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
   }
 
-  const priorOpsConcurrent = opSet
-    .getIn(['byObject', objectId, op.get('key')], List())
-    .groupBy(other => !!isConcurrent(opSet, other, op))
-  let overwritten = priorOpsConcurrent.get(false, List())
-  let remaining   = priorOpsConcurrent.get(true,  List())
+  const ops = opSet.getIn(['byObject', objectId, op.get('key')], List())
+  let overwritten, remaining
+
+  if (op.get('action') === 'inc') {
+    overwritten = List()
+    remaining = ops.map(other => {
+      if (other.get('action') === 'set' && typeof other.get('value') === 'number' &&
+          !isConcurrent(opSet, other, op)) {
+        return other.set('value', other.get('value') + op.get('value'))
+      } else {
+        return other
+      }
+    })
+  } else {
+    const priorOpsConcurrent = ops.groupBy(other => !!isConcurrent(opSet, other, op))
+    overwritten = priorOpsConcurrent.get(false, List())
+    remaining   = priorOpsConcurrent.get(true,  List())
+  }
 
   // If any links were overwritten, remove them from the index of inbound links
   for (let op of overwritten.filter(op => op.get('action') === 'link')) {
@@ -205,7 +218,7 @@ function applyAssign(opSet, op, topLevel) {
   if (op.get('action') === 'link') {
     opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
   }
-  if (op.get('action') !== 'del') {
+  if (['set', 'link'].includes(op.get('action'))) {
     remaining = remaining.push(op)
   }
   remaining = remaining.sortBy(op => op.get('actor')).reverse()
@@ -227,7 +240,7 @@ function applyOps(opSet, ops) {
       ;[opSet, diffs] = applyMake(opSet, op)
     } else if (action === 'ins') {
       ;[opSet, diffs] = applyInsert(opSet, op)
-    } else if (action === 'set' || action === 'del' || action === 'link') {
+    } else if (['set', 'del', 'link', 'inc'].includes(action)) {
       ;[opSet, diffs] = applyAssign(opSet, op, !newObjects.contains(op.get('obj')))
     } else {
       throw new RangeError(`Unknown operation type ${action}`)
