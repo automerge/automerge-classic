@@ -50,11 +50,15 @@ describe('Frontend', () => {
 
     it('should apply updates inside nested maps', () => {
       const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 3})
-      const [doc2, req2] = Frontend.change(doc1, doc => doc.birds.sparrows = 15)
+      const [doc2, req2] = Frontend.change(doc1, doc => {
+        doc.birds.wrens = 4
+        doc.birds.sparrows = 15
+      })
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc1)
       assert.deepEqual(doc1, {birds: {wrens: 3}})
-      assert.deepEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
+      assert.deepEqual(doc2, {birds: {wrens: 4, sparrows: 15}})
       assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'set', key: 'wrens',    value: 4},
         {obj: birds, action: 'set', key: 'sparrows', value: 15}
       ]})
     })
@@ -101,6 +105,61 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {birds: ['goldfinch']})
       assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {obj: birds, action: 'del', key: `${actor}:1`}
+      ]})
+    })
+
+    it('should detect increments in maps', () => {
+      const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 1})
+      const [doc2, req2] = Frontend.change(doc1, doc => doc.birds.wrens += 1)
+      const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+      assert.deepEqual(doc1, {birds: {wrens: 1}})
+      assert.deepEqual(doc2, {birds: {wrens: 2}})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'inc', key: 'wrens', value: 1}
+      ]})
+    })
+
+    it('should detect increments in lists', () => {
+      const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.counts = [1])
+      const [doc2, req2] = Frontend.change(doc1, doc => doc.counts[0]++)
+      const counts = Frontend.getObjectId(doc2.counts), actor = Frontend.getActorId(doc2)
+      assert.deepEqual(doc1, {counts: [1]})
+      assert.deepEqual(doc2, {counts: [2]})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: counts, action: 'inc', key: `${actor}:1`, value: 1}
+      ]})
+    })
+
+    it('should coalesce assignments and increments', () => {
+      const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {})
+      const [doc2, req2] = Frontend.change(doc1, doc => { doc.birds.wrens = 1; doc.birds.wrens += 2 })
+      const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+      assert.deepEqual(doc1, {birds: {}})
+      assert.deepEqual(doc2, {birds: {wrens: 3}})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'set', key: 'wrens', value: 3}
+      ]})
+    })
+
+    it('should coalesce multiple increments', () => {
+      const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 0})
+      const [doc2, req2] = Frontend.change(doc1, doc => { doc.birds.wrens++; doc.birds.wrens += 2; doc.birds.wrens++ })
+      const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+      assert.deepEqual(doc1, {birds: {wrens: 0}})
+      assert.deepEqual(doc2, {birds: {wrens: 4}})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'inc', key: 'wrens', value: 4}
+      ]})
+    })
+
+    it('should let an assignment override increments', () => {
+      const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 1})
+      const [doc2, req2] = Frontend.change(doc1, doc => { doc.birds.wrens++; doc.birds.wrens = 10 })
+      const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+      assert.deepEqual(doc1, {birds: {wrens: 1}})
+      assert.deepEqual(doc2, {birds: {wrens: 10}})
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'set', key: 'wrens', value: 10}
       ]})
     })
   })

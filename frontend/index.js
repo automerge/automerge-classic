@@ -48,13 +48,16 @@ function ensureSingleAssignment(ops) {
 
   for (let i = ops.length - 1; i >= 0; i--) {
     const op = ops[i], { obj, key, action } = op
-    if (['set', 'del', 'link'].includes(action)) {
+    if (['set', 'del', 'link', 'inc'].includes(action)) {
       if (!assignments[obj]) {
-        assignments[obj] = {[key]: true}
+        assignments[obj] = {[key]: op}
         result.push(op)
       } else if (!assignments[obj][key]) {
-        assignments[obj][key] = true
+        assignments[obj][key] = op
         result.push(op)
+      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
+        assignments[obj][key].action = action
+        assignments[obj][key].value += op.value
       }
     } else {
       result.push(op)

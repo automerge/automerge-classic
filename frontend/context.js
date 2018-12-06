@@ -17,6 +17,7 @@ class Context {
     this.inbound = Object.assign({}, doc[INBOUND])
     this.ops = []
     this.diffs = []
+    this.read = {} // map objectId -> (map key -> boolean)
   }
 
   /**
@@ -48,6 +49,11 @@ class Context {
    * with ID `objectId`. If the value is an object, returns a proxy for it.
    */
   getObjectField(objectId, key) {
+    if (!this.read[objectId]) {
+      this.read[objectId] = {}
+    }
+    this.read[objectId][key] = true
+
     const object = this.getObject(objectId)
     if (isObject(object[key])) {
       // The instantiateObject function is added to the context object by rootObjectProxy()
@@ -117,11 +123,23 @@ class Context {
       this.apply({action: 'set', type: 'map', obj: objectId, key, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key, value: childId})
 
+    // If the application has read a number and written back a number, treat
+    // it as an increment
+    } else if (this.read[objectId] && this.read[objectId][key] && !object[CONFLICTS][key] &&
+               typeof object[key] === 'number' && typeof value === 'number') {
+      const diff = value - object[key]
+      this.apply({action: 'set', type: 'map', obj: objectId, key, value})
+      this.addOp({action: 'inc', obj: objectId, key, value: diff})
+
+    // If the assigned field value is the same as the existing value, and
+    // the assignment does not resolve a conflict, do nothing
     } else if (object[key] !== value || object[CONFLICTS][key]) {
-      // If the assigned field value is the same as the existing value, and
-      // the assignment does not resolve a conflict, do nothing
       this.apply({action: 'set', type: 'map', obj: objectId, key, value})
       this.addOp({action: 'set', obj: objectId, key, value})
+    }
+
+    if (this.read[objectId]) {
+      delete this.read[objectId][key]
     }
   }
 
@@ -133,6 +151,9 @@ class Context {
     if (object[key] !== undefined) {
       this.apply({action: 'remove', type: 'map', obj: objectId, key})
       this.addOp({action: 'del', obj: objectId, key})
+    }
+    if (this.read[objectId]) {
+      delete this.read[objectId][key]
     }
   }
 
@@ -164,6 +185,7 @@ class Context {
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
     }
     this.getObject(objectId)[MAX_ELEM] = maxElem
+    delete this.read[objectId]
   }
 
   /**
@@ -190,11 +212,24 @@ class Context {
       const childId = this.createNestedObjects(value)
       this.apply({action: 'set', type, obj: objectId, index, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
+
+    // If the application has read a number and written back a number, treat
+    // it as an increment
+    } else if (this.read[objectId] && this.read[objectId][index] && !list[CONFLICTS][index] &&
+               typeof list[index] === 'number' && typeof value === 'number') {
+      const diff = value - list[index]
+      this.apply({action: 'set', type, obj: objectId, index, value})
+      this.addOp({action: 'inc', obj: objectId, key: elemId, value: diff})
+
+    // If the assigned list element value is the same as the existing value, and
+    // the assignment does not resolve a conflict, do nothing
     } else if (list[index] !== value || list[CONFLICTS][index]) {
-      // If the assigned list element value is the same as the existing value, and
-      // the assignment does not resolve a conflict, do nothing
       this.apply({action: 'set', type, obj: objectId, index, value})
       this.addOp({action: 'set', obj: objectId, key: elemId, value})
+    }
+
+    if (this.read[objectId]) {
+      delete this.read[objectId][index]
     }
   }
 
@@ -225,6 +260,7 @@ class Context {
     for (let i = 0; i < insertions.length; i++) {
       this.insertListItem(objectId, start + i, insertions[i])
     }
+    delete this.read[objectId]
   }
 }
 
