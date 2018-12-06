@@ -87,6 +87,18 @@ describe('Automerge', () => {
         assert.deepEqual(s1._conflicts, {})
       })
 
+      it('should turn Date objects into ISO8601 strings', () => {
+        const ISO8601 = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}/
+        s2 = Automerge.change(s1, doc => {
+          doc.now = new Date()
+          doc.object = {foo: new Date()}
+          assert(ISO8601.test(doc.now))
+          assert(ISO8601.test(doc.object.foo))
+        })
+        assert(ISO8601.test(s2.now))
+        assert(ISO8601.test(s2.object.foo))
+      })
+
       it('should return the unchanged state object if nothing changed', () => {
         s2 = Automerge.change(s1, doc => {})
         assert.strictEqual(s2, s1)

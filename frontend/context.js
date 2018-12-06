@@ -5,6 +5,24 @@ const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 /**
+ * Takes a value that a user may assign within a change callback, and turns it
+ * into the value we actually want to store. Currently, turns JavaScript Date
+ * objects into ISO 8601 strings (which is what JSON.stringify does).
+ */
+function coerceValue(value) {
+  if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+    throw new TypeError(`Unsupported type of value: ${typeof value}`)
+  }
+
+  if ((typeof value === 'object') && (value instanceof Date)) {
+    return JSON.parse(JSON.stringify(value))
+  } else {
+    return value
+  }
+}
+
+
+/**
  * An instance of this class is passed to `rootObjectProxy()`. The methods are
  * called by proxy object mutation functions to query the current object state
  * and to apply the requested changes.
@@ -109,10 +127,9 @@ class Context {
     }
 
     const object = this.getObject(objectId)
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    value = coerceValue(value)
 
-    } else if (isObject(value)) {
+    if (isObject(value)) {
       const childId = this.createNestedObjects(value)
       this.apply({action: 'set', type: 'map', obj: objectId, key, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key, value: childId})
@@ -141,12 +158,10 @@ class Context {
    * ID `objectId`.
    */
   insertListItem(objectId, index, value) {
+    value = coerceValue(value)
     const list = this.getObject(objectId)
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
-    }
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
     }
 
     const maxElem = list[MAX_ELEM] + 1
@@ -171,6 +186,7 @@ class Context {
    * position `index` with the new value `value`.
    */
   setListIndex(objectId, index, value) {
+    value = coerceValue(value)
     const list = this.getObject(objectId)
     if (index === list.length) {
       this.insertListItem(objectId, index, value)
@@ -178,9 +194,6 @@ class Context {
     }
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
-    }
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
     }
 
     const elemId = getElemId(list, index)
