@@ -92,9 +92,13 @@ describe('Automerge', () => {
         s2 = Automerge.change(s1, doc => {
           doc.now = new Date()
           doc.object = {foo: new Date()}
+          assert.strictEqual(typeof doc.now, 'string')
+          assert.strictEqual(typeof doc.object.foo, 'string')
           assert(ISO8601.test(doc.now))
           assert(ISO8601.test(doc.object.foo))
         })
+        assert.strictEqual(typeof s2.now, 'string')
+        assert.strictEqual(typeof s2.object.foo, 'string')
         assert(ISO8601.test(s2.now))
         assert(ISO8601.test(s2.object.foo))
       })
