@@ -43,16 +43,16 @@ class MaterializationContext {
    * Updates `this.diffs[objectId]` to contain the patch necessary to
    * instantiate the map object with ID `objectId`.
    */
-  instantiateMap(opSet, objectId) {
+  instantiateMap(opSet, objectId, type) {
     let diffs = this.diffs[objectId]
     if (objectId !== OpSet.ROOT_ID) {
-      diffs.push({obj: objectId, type: 'map', action: 'create'})
+      diffs.push({obj: objectId, type, action: 'create'})
     }
 
     const conflicts = OpSet.getObjectConflicts(opSet, objectId, this)
 
     for (let key of OpSet.getObjectFields(opSet, objectId)) {
-      let diff = {obj: objectId, type: 'map', action: 'set', key}
+      let diff = {obj: objectId, type, action: 'set', key}
       this.unpackValue(objectId, diff, OpSet.getObjectField(opSet, objectId, key, this))
       this.unpackConflicts(objectId, diff, conflicts.get(key))
       diffs.push(diff)
@@ -93,7 +93,9 @@ class MaterializationContext {
     this.children[objectId] = []
 
     if (isRoot || objType === 'makeMap') {
-      this.instantiateMap(opSet, objectId)
+      this.instantiateMap(opSet, objectId, 'map')
+    } else if (objType === 'makeTable') {
+      this.instantiateMap(opSet, objectId, 'table')
     } else if (objType === 'makeList') {
       this.instantiateList(opSet, objectId, 'list')
     } else if (objType === 'makeText') {

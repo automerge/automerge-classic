@@ -1,6 +1,7 @@
 const { CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants')
 const { applyDiffs } = require('./apply_patch')
 const { Text, getElemId } = require('./text')
+const { Table } = require('./table')
 const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -74,6 +75,15 @@ class Context {
       this.apply({action: 'create', type: 'text', obj: objectId})
       this.addOp({action: 'makeText', obj: objectId})
 
+    } else if (value instanceof Table) {
+      // Create a new Table object
+      if (value.count > 0) {
+        throw new RangeError('Assigning a non-empty Table object is not supported')
+      }
+      this.apply({action: 'create', type: 'table', obj: objectId})
+      this.addOp({action: 'makeTable', obj: objectId})
+      this.setMapKey(objectId, 'table', 'columns', value.columns)
+
     } else if (Array.isArray(value)) {
       // Create a new list object
       this.apply({action: 'create', type: 'list', obj: objectId})
@@ -86,7 +96,7 @@ class Context {
       this.addOp({action: 'makeMap', obj: objectId})
 
       for (let key of Object.keys(value)) {
-        this.setMapKey(objectId, key, value[key])
+        this.setMapKey(objectId, 'map', key, value[key])
       }
     }
 
@@ -94,10 +104,11 @@ class Context {
   }
 
   /**
-   * Updates the map object with ID `objectId`, setting the property with name
-   * `key` to `value`.
+   * Updates the object with ID `objectId`, setting the property with name
+   * `key` to `value`. The `type` argument is 'map' if the object is a map
+   * object, or 'table' if it is a table object.
    */
-  setMapKey(objectId, key, value) {
+  setMapKey(objectId, type, key, value) {
     if (typeof key !== 'string') {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
     }
@@ -114,13 +125,13 @@ class Context {
 
     } else if (isObject(value)) {
       const childId = this.createNestedObjects(value)
-      this.apply({action: 'set', type: 'map', obj: objectId, key, value: childId, link: true})
+      this.apply({action: 'set', type, obj: objectId, key, value: childId, link: true})
       this.addOp({action: 'link', obj: objectId, key, value: childId})
 
     } else if (object[key] !== value || object[CONFLICTS][key]) {
       // If the assigned field value is the same as the existing value, and
       // the assignment does not resolve a conflict, do nothing
-      this.apply({action: 'set', type: 'map', obj: objectId, key, value})
+      this.apply({action: 'set', type, obj: objectId, key, value})
       this.addOp({action: 'set', obj: objectId, key, value})
     }
   }
@@ -225,6 +236,32 @@ class Context {
     for (let i = 0; i < insertions.length; i++) {
       this.insertListItem(objectId, start + i, insertions[i])
     }
+  }
+
+  /**
+   * Updates the table object with ID `objectId`, adding a new entry `row`.
+   * Returns the objectId of the new row.
+   */
+  addTableRow(objectId, row) {
+    if (!isObject(row)) {
+      throw new TypeError('A table row must be an object')
+    }
+    if (row[OBJECT_ID]) {
+      throw new TypeError('Cannot reuse an existing object as table row')
+    }
+
+    const rowId = this.createNestedObjects(row)
+    this.apply({action: 'set', type: 'table', obj: objectId, key: rowId, value: rowId, link: true})
+    this.addOp({action: 'link', obj: objectId, key: rowId, value: rowId})
+    return rowId
+  }
+
+  /**
+   * Updates the table object with ID `objectId`, deleting the row with ID `rowId`.
+   */
+  deleteTableRow(objectId, rowId) {
+    this.apply({action: 'remove', type: 'table', obj: objectId, key: rowId})
+    this.addOp({action: 'del', obj: objectId, key: rowId})
   }
 }
 
