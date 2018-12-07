@@ -8,6 +8,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Added** [#29]: New `Automerge.Table` datatype provides an unordered collection of records,
+  like a relational database ([@ept])
+
 ## [0.9.2] — 2018-11-05
 
 - **Fixed** [#128]: Fixed crash when Text object was modified in the same change as
@@ -224,6 +227,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#34]: https://github.com/automerge/automerge/pull/34
 [#32]: https://github.com/automerge/automerge/pull/32
 [#30]: https://github.com/automerge/automerge/pull/30
+[#29]: https://github.com/automerge/automerge/issues/29
 
 [@aslakhellesoy]: https://github.com/aslakhellesoy
 [@CGNonofr]: https://github.com/CGNonofr
