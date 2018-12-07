@@ -7,7 +7,6 @@ describe('Automerge proxy API', () => {
   describe('root object', () => {
     it('should have a fixed object ID', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert.strictEqual(doc._type, 'map')
         assert.strictEqual(Automerge.getObjectId(doc), ROOT_ID)
       })
     })

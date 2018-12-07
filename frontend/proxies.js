@@ -98,8 +98,6 @@ function listMethods(context, listId) {
 const MapHandler = {
   get (target, key) {
     const { context, objectId } = target
-    if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(context, objectId)))
-    if (key === '_type') return 'map'
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === '_get') return context._get
@@ -120,7 +118,7 @@ const MapHandler = {
 
   has (target, key) {
     const { context, objectId } = target
-    return ['_type', OBJECT_ID, CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
+    return [OBJECT_ID, CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
@@ -141,8 +139,6 @@ const ListHandler = {
   get (target, key) {
     const [context, objectId] = target
     if (key === Symbol.iterator) return context.getObject(objectId)[Symbol.iterator]
-    if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
-    if (key === '_type') return 'list'
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === 'length') return context.getObject(objectId).length
@@ -169,7 +165,7 @@ const ListHandler = {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
-    return ['length', '_type', OBJECT_ID, CHANGE].includes(key)
+    return ['length', OBJECT_ID, CHANGE].includes(key)
   },
 
   getOwnPropertyDescriptor (target, key) {
