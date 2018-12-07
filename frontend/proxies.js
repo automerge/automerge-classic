@@ -100,7 +100,6 @@ const MapHandler = {
     const { context, objectId } = target
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
-    if (key === '_get') return context._get
     return context.getObjectField(objectId, key)
   },
 
@@ -118,7 +117,7 @@ const MapHandler = {
 
   has (target, key) {
     const { context, objectId } = target
-    return [OBJECT_ID, CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
+    return [OBJECT_ID, CHANGE].includes(key) || (key in context.getObject(objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
@@ -216,7 +215,6 @@ function instantiateProxy(objectId) {
 
 function rootObjectProxy(context) {
   context.instantiateObject = instantiateProxy
-  context._get = (objId) => instantiateProxy.call(context, objId)
   return mapProxy(context, ROOT_ID)
 }
 

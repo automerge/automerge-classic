@@ -408,6 +408,19 @@ function getObjectId(object) {
 }
 
 /**
+ * Returns the object with the given Automerge object ID.
+ */
+function getObjectById(doc, objectId) {
+  const context = doc[CHANGE]
+  if (context) {
+    // If we're within a change callback, return a proxied object
+    return context.instantiateObject(objectId)
+  } else {
+    return doc[CACHE][objectId]
+  }
+}
+
+/**
  * Returns the Automerge actor ID of the given document.
  */
 function getActorId(doc) {
@@ -447,6 +460,7 @@ function getElementIds(list) {
 module.exports = {
   init, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
-  getObjectId, getActorId, setActorId, getConflicts, getBackendState, getElementIds,
+  getObjectId, getObjectById, getActorId, setActorId, getConflicts,
+  getBackendState, getElementIds,
   Text, Table, Counter
 }

@@ -83,25 +83,27 @@ describe('Automerge proxy API', () => {
     })
 
     it('should allow access to an object by id', () => {
-      Automerge.change(Automerge.init(), doc => {
-        const rootObj = doc._get(ROOT_ID)
+      let deepObjId, deepListId
+
+      const doc = Automerge.change(Automerge.init(), doc => {
+        const rootObj = Automerge.getObjectById(doc, ROOT_ID)
         assert.strictEqual(Automerge.getObjectId(rootObj), Automerge.getObjectId(doc))
 
         rootObj.deepObj = {}
-        const deepObjId = Automerge.getObjectId(doc.deepObj)
-        const deepObj = doc._get(deepObjId)
+        deepObjId = Automerge.getObjectId(doc.deepObj)
+        const deepObj = Automerge.getObjectById(doc, deepObjId)
         assert.strictEqual(Automerge.getObjectId(deepObj), deepObjId)
 
         deepObj.deepList = []
-        const deepListId = Automerge.getObjectId(doc.deepObj.deepList)
-        const deepList = doc._get(deepListId)
+        deepListId = Automerge.getObjectId(doc.deepObj.deepList)
+        const deepList = Automerge.getObjectById(doc, deepListId)
         assert.strictEqual(Automerge.getObjectId(deepList), deepListId)
-
-        deepList.insertAt(0, {})
-        const deepItemId = Automerge.getObjectId(doc.deepObj.deepList[0])
-        const deepItem = doc._get(deepItemId)
-        assert.strictEqual(Automerge.getObjectId(deepItem), deepItemId)
       })
+
+      const deepObj = Automerge.getObjectById(doc, deepObjId)
+      assert.strictEqual(Automerge.getObjectId(deepObj), Automerge.getObjectId(doc.deepObj))
+      const deepList = Automerge.getObjectById(doc, deepListId)
+      assert.strictEqual(Automerge.getObjectId(deepList), Automerge.getObjectId(doc.deepObj.deepList))
     })
   })
 
