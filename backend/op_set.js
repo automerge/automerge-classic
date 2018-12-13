@@ -117,9 +117,11 @@ function patchList(opSet, objectId, index, elemId, action, ops) {
     elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
     edit.elemId = elemId
     edit.value = firstOp.get('value')
+    if (firstOp.get('datatype')) edit.datatype = firstOp.get('datatype')
   } else if (action === 'set') {
     elemIds = elemIds.setValue(firstOp.get('key'), value)
     edit.value = firstOp.get('value')
+    if (firstOp.get('datatype')) edit.datatype = firstOp.get('datatype')
   } else if (action === 'remove') {
     elemIds = elemIds.removeIndex(index)
   } else throw new Error('Unknown action type: ' + action)
@@ -160,15 +162,19 @@ function updateListElement(opSet, objectId, elemId) {
 
 function updateMapKey(opSet, objectId, key) {
   const ops = getFieldOps(opSet, objectId, key)
+  const firstOp = ops.first()
   let edit = {action: '', type: 'map', obj: objectId, key, path: getPath(opSet, objectId)}
 
   if (ops.isEmpty()) {
     edit.action = 'remove'
   } else {
     edit.action = 'set'
-    edit.value = ops.first().get('value')
-    if (ops.first().get('action') === 'link') {
+    edit.value = firstOp.get('value')
+    if (firstOp.get('action') === 'link') {
       edit.link = true
+    }
+    if (firstOp.get('datatype')) {
+      edit.datatype = firstOp.get('datatype')
     }
 
     if (ops.size > 1) edit.conflicts = getConflicts(ops)
@@ -426,9 +432,14 @@ function getPrevious(opSet, objectId, key) {
 
 function getOpValue(opSet, op, context) {
   if (typeof op !== 'object' || op === null) return op
-  switch (op.get('action')) {
-    case 'set':  return op.get('value')
-    case 'link': return context.instantiateObject(opSet, op.get('value'))
+  if (op.get('action') === 'link') {
+    return context.instantiateObject(opSet, op.get('value'))
+  } else if (op.get('action') === 'set') {
+    const result = {value: op.get('value')}
+    if (op.get('datatype')) result.datatype = op.get('datatype')
+    return result
+  } else {
+    throw new TypeError(`Unexpected operation action: ${op.get('action')}`)
   }
 }
 

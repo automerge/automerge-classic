@@ -150,6 +150,40 @@ describe('Backend', () => {
         diffs: [{action: 'remove', obj: birds, type: 'list', path: ['birds'], index: 0}]
       })
     })
+
+    it('should support Date objects at the root', () => {
+      const now = new Date()
+      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change])
+      assert.deepEqual(patch, {
+        canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [{action: 'set', obj: ROOT_ID, type: 'map', path: [], key: 'now', value: now.getTime(), datatype: 'timestamp'}]
+      })
+    })
+
+    it('should support Date objects in a list', () => {
+      const now = new Date(), list = uuid(), actor = uuid()
+      const change = {actor, seq: 1, deps: {}, ops: [
+        {action: 'makeList', obj: list},
+        {action: 'ins',      obj: list,    key: '_head',      elem: 1},
+        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
+        {action: 'link',     obj: ROOT_ID, key: 'list',       value: list}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change])
+      assert.deepEqual(patch, {
+        canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [
+          {action: 'create', obj: list,    type: 'list'},
+          {action: 'insert', obj: list,    type: 'list', path: null, index: 0,
+            value: now.getTime(), elemId: `${actor}:1`, datatype: 'timestamp'},
+          {action: 'set',    obj: ROOT_ID, type: 'map',  path: [],   key: 'list', value: list, link: true}
+        ]
+      })
+    })
   })
 
   describe('applyLocalChange()', () => {
@@ -283,6 +317,65 @@ describe('Backend', () => {
           {action: 'insert', obj: birds,   type: 'list', index: 0, value: 'greenfinch',    elemId: `${actor}:3`},
           {action: 'insert', obj: birds,   type: 'list', index: 1, value: 'goldfinches!!', elemId: `${actor}:2`},
           {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
+        ]
+      })
+    })
+
+    it('should handle nested maps in lists', () => {
+      const todos = uuid(), item = uuid(), actor = uuid()
+      const change = {actor, seq: 1, deps: {}, ops: [
+        {action: 'makeList', obj: todos},
+        {action: 'ins',      obj: todos,   key: '_head',     elem: 1},
+        {action: 'makeMap',  obj: item},
+        {action: 'set',      obj: item,    key: 'title',     value: 'water plants'},
+        {action: 'set',      obj: item,    key: 'done',      value: false},
+        {action: 'link',     obj: todos,   key:`${actor}:1`, value: item},
+        {action: 'link',     obj: ROOT_ID, key: 'todos',     value: todos}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change])
+      assert.deepEqual(Backend.getPatch(s1), {
+        canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [
+          {action: 'create', obj: item,    type: 'map'},
+          {action: 'set',    obj: item,    type: 'map',  key: 'title', value: 'water plants'},
+          {action: 'set',    obj: item,    type: 'map',  key: 'done',  value: false},
+          {action: 'create', obj: todos,   type: 'list'},
+          {action: 'insert', obj: todos,   type: 'list', index: 0,     value: item,  link: true, elemId: `${actor}:1`},
+          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'todos', value: todos, link: true}
+        ]
+      })
+    })
+
+    it('should include Date objects at the root', () => {
+      const now = new Date()
+      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change])
+      assert.deepEqual(Backend.getPatch(s1), {
+        canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [{action: 'set', obj: ROOT_ID, type: 'map', key: 'now', value: now.getTime(), datatype: 'timestamp'}]
+      })
+    })
+
+    it('should include Date objects in a list', () => {
+      const now = new Date(), list = uuid(), actor = uuid()
+      const change = {actor, seq: 1, deps: {}, ops: [
+        {action: 'makeList', obj: list},
+        {action: 'ins',      obj: list,    key: '_head',      elem: 1},
+        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
+        {action: 'link',     obj: ROOT_ID, key: 'list',       value: list}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change])
+      assert.deepEqual(Backend.getPatch(s1), {
+        canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
+        diffs: [
+          {action: 'create', obj: list,    type: 'list'},
+          {action: 'insert', obj: list,    type: 'list', index: 0, value: now.getTime(), elemId: `${actor}:1`, datatype: 'timestamp'},
+          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'list', value: list, link: true}
         ]
       })
     })
