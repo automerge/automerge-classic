@@ -103,6 +103,17 @@ describe('Frontend', () => {
         {obj: birds, action: 'del', key: `${actor}:1`}
       ]})
     })
+
+    it('should store Date objects as timestamps', () => {
+      const now = new Date()
+      const [doc, req] = Frontend.change(Frontend.init(), doc => doc.now = now)
+      const actor = Frontend.getActorId(doc)
+      assert(doc.now instanceof Date)
+      assert.strictEqual(doc.now.getTime(), now.getTime())
+      assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+        {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
+      ]})
+    })
   })
 
   describe('backend concurrency', () => {
