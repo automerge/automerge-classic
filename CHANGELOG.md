@@ -10,6 +10,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 - **Added** [#29]: New `Automerge.Table` datatype provides an unordered collection of records,
   like a relational database ([@ept])
+- **Added** [#139]: JavaScript Date objects are now supported in Automerge documents ([@ept])
 
 ## [0.9.2] — 2018-11-05
 
@@ -187,6 +188,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#139]: https://github.com/automerge/automerge/pull/139
 [#130]: https://github.com/automerge/automerge/pull/130
 [#129]: https://github.com/automerge/automerge/pull/129
 [#128]: https://github.com/automerge/automerge/pull/128
