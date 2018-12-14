@@ -5,6 +5,7 @@ const { Table } = require('./table')
 const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
+
 /**
  * An instance of this class is passed to `rootObjectProxy()`. The methods are
  * called by proxy object mutation functions to query the current object state
@@ -104,6 +105,37 @@ class Context {
   }
 
   /**
+   * Records an operation to update the object with ID `obj`, setting `key`
+   * to `value`. Returns an object in which the value has been normalized: if it
+   * is a reference to another object, `{value: otherObjectId, link: true}` is
+   * returned; if it is a Date object, `{value: timestamp, datatype: 'timestamp'}`
+   * is returned; and if it is a primitive value, `{value}` is returned.
+   */
+  setValue(obj, key, value) {
+    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    }
+
+    if (isObject(value)) {
+      if (value instanceof Date) {
+        // Date object, translate to timestamp (milliseconds since epoch)
+        const timestamp = value.getTime()
+        this.addOp({action: 'set', obj, key, value: timestamp, datatype: 'timestamp'})
+        return {value: timestamp, datatype: 'timestamp'}
+      } else {
+        // Reference to another object
+        const childId = this.createNestedObjects(value)
+        this.addOp({action: 'link', obj, key, value: childId})
+        return {value: childId, link: true}
+      }
+    } else {
+      // Primitive value (number, string, boolean, or null)
+      this.addOp({action: 'set', obj, key, value})
+      return {value}
+    }
+  }
+
+  /**
    * Updates the object with ID `objectId`, setting the property with name
    * `key` to `value`. The `type` argument is 'map' if the object is a map
    * object, or 'table' if it is a table object.
@@ -119,20 +151,12 @@ class Context {
       throw new RangeError(`Map entries starting with underscore are not allowed: ${key}`)
     }
 
+    // If the assigned field value is the same as the existing value, and
+    // the assignment does not resolve a conflict, do nothing
     const object = this.getObject(objectId)
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
-
-    } else if (isObject(value)) {
-      const childId = this.createNestedObjects(value)
-      this.apply({action: 'set', type, obj: objectId, key, value: childId, link: true})
-      this.addOp({action: 'link', obj: objectId, key, value: childId})
-
-    } else if (object[key] !== value || object[CONFLICTS][key]) {
-      // If the assigned field value is the same as the existing value, and
-      // the assignment does not resolve a conflict, do nothing
-      this.apply({action: 'set', type, obj: objectId, key, value})
-      this.addOp({action: 'set', obj: objectId, key, value})
+    if (object[key] !== value || object[CONFLICTS][key] || value === undefined) {
+      const valueObj = this.setValue(objectId, key, value)
+      this.apply(Object.assign({action: 'set', type, obj: objectId, key}, valueObj))
     }
   }
 
@@ -156,9 +180,6 @@ class Context {
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
-    }
 
     const maxElem = list[MAX_ELEM] + 1
     const type = (list instanceof Text) ? 'text' : 'list'
@@ -166,14 +187,8 @@ class Context {
     const elemId = `${this.actorId}:${maxElem}`
     this.addOp({action: 'ins', obj: objectId, key: prevId, elem: maxElem})
 
-    if (isObject(value)) {
-      const childId = this.createNestedObjects(value)
-      this.apply({action: 'insert', type, obj: objectId, index, value: childId, link: true, elemId})
-      this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
-    } else {
-      this.apply({action: 'insert', type, obj: objectId, index, value, elemId})
-      this.addOp({action: 'set', obj: objectId, key: elemId, value})
-    }
+    const valueObj = this.setValue(objectId, elemId, value)
+    this.apply(Object.assign({action: 'insert', type, obj: objectId, index, elemId}, valueObj))
     this.getObject(objectId)[MAX_ELEM] = maxElem
   }
 
@@ -190,22 +205,14 @@ class Context {
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
-    }
 
-    const elemId = getElemId(list, index)
-    const type = (list instanceof Text) ? 'text' : 'list'
-
-    if (isObject(value)) {
-      const childId = this.createNestedObjects(value)
-      this.apply({action: 'set', type, obj: objectId, index, value: childId, link: true})
-      this.addOp({action: 'link', obj: objectId, key: elemId, value: childId})
-    } else if (list[index] !== value || list[CONFLICTS][index]) {
-      // If the assigned list element value is the same as the existing value, and
-      // the assignment does not resolve a conflict, do nothing
-      this.apply({action: 'set', type, obj: objectId, index, value})
-      this.addOp({action: 'set', obj: objectId, key: elemId, value})
+    // If the assigned list element value is the same as the existing value, and
+    // the assignment does not resolve a conflict, do nothing
+    if (list[index] !== value || list[CONFLICTS][index] || value === undefined) {
+      const elemId = getElemId(list, index)
+      const type = (list instanceof Text) ? 'text' : 'list'
+      const valueObj = this.setValue(objectId, elemId, value)
+      this.apply(Object.assign({action: 'set', type, obj: objectId, index}, valueObj))
     }
   }
 

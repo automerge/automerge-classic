@@ -169,6 +169,26 @@ describe('Automerge', () => {
         })
         assert.deepEqual(s1, {stuff: {foo: 'bar', baz: 'updated!'}})
       })
+
+      it('should support Date objects in maps', () => {
+        const now = new Date()
+        s1 = Automerge.change(s1, doc => doc.now = now)
+        let changes = Automerge.getChanges(Automerge.init(), s1)
+        changes = JSON.parse(JSON.stringify(changes))
+        s2 = Automerge.applyChanges(Automerge.init(), changes)
+        assert(s2.now instanceof Date)
+        assert.strictEqual(s2.now.getTime(), now.getTime())
+      })
+
+      it('should support Date objects in lists', () => {
+        const now = new Date()
+        s1 = Automerge.change(s1, doc => doc.list = [now])
+        let changes = Automerge.getChanges(Automerge.init(), s1)
+        changes = JSON.parse(JSON.stringify(changes))
+        s2 = Automerge.applyChanges(Automerge.init(), changes)
+        assert(s2.list[0] instanceof Date)
+        assert.strictEqual(s2.list[0].getTime(), now.getTime())
+      })
     })
 
     describe('emptyChange()', () => {

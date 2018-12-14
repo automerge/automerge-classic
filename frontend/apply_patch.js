@@ -17,6 +17,24 @@ function parseElemId(elemId) {
 }
 
 /**
+ * Reconstructs the value from the diff object `diff`.
+ */
+function getValue(diff, cache, updated) {
+  if (diff.link) {
+    // Reference to another object; fetch it from the cache
+    return updated[diff.value] || cache[diff.value]
+  } else if (diff.datatype === 'timestamp') {
+    // Timestamp: value is milliseconds since 1970 epoch
+    return new Date(diff.value)
+  } else if (diff.datatype !== undefined) {
+    throw new TypeError(`Unknown datatype: ${diff.datatype}`)
+  } else {
+    // Primitive value (number, string, boolean, or null)
+    return diff.value
+  }
+}
+
+/**
  * Finds the object IDs of all child objects referenced under the key `key` of
  * `object` (both `object[key]` and any conflicts under that key). Returns a map
  * from those objectIds to the value `true`.
@@ -83,12 +101,11 @@ function updateMapObject(diff, cache, updated, inbound) {
     // do nothing
   } else if (diff.action === 'set') {
     refsBefore = childReferences(object, diff.key)
-    object[diff.key] = diff.link ? (updated[diff.value] || cache[diff.value]) : diff.value
+    object[diff.key] = getValue(diff, cache, updated)
     if (diff.conflicts) {
       conflicts[diff.key] = {}
       for (let conflict of diff.conflicts) {
-        const value = conflict.link ? (updated[conflict.value] || cache[conflict.value]) : conflict.value
-        conflicts[diff.key][conflict.actor] = value
+        conflicts[diff.key][conflict.actor] = getValue(conflict, cache, updated)
       }
       Object.freeze(conflicts[diff.key])
     } else {
@@ -228,11 +245,11 @@ function updateListObject(diff, cache, updated, inbound) {
   let value = null, conflict = null
 
   if (['insert', 'set'].includes(diff.action)) {
-    value = diff.link ? (updated[diff.value] || cache[diff.value]) : diff.value
+    value = getValue(diff, cache, updated)
     if (diff.conflicts) {
       conflict = {}
       for (let c of diff.conflicts) {
-        conflict[c.actor] = c.link ? (updated[c.value] || cache[c.value]) : c.value
+        conflict[c.actor] = getValue(c, cache, updated)
       }
       Object.freeze(conflict)
     }

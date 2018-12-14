@@ -9,16 +9,16 @@ class MaterializationContext {
   }
 
   /**
-   * Unpacks `value`: if it's an object of the form `{objectId: '...'}`, updates
-   * `diff` to link to that objectId. Otherwise uses `value` as a primitive.
+   * Updates `diff` with the properties from `data`. The object `data` should be
+   * of the form `{value: objectId, link: true}` if the value is a reference to
+   * another object, of the form `{value: timestamp, datatype: 'timestamp'}` if
+   * the value is a Date object, and of the form `{value: primitiveValue}`
+   * if the value is a primitive value.
    */
-  unpackValue(parentId, diff, value) {
-    if (isObject(value)) {
-      diff.value = value.objectId
-      diff.link = true
-      this.children[parentId].push(value.objectId)
-    } else {
-      diff.value = value
+  unpackValue(parentId, diff, data) {
+    Object.assign(diff, data)
+    if (data.link) {
+      this.children[parentId].push(data.value)
     }
   }
 
@@ -81,11 +81,11 @@ class MaterializationContext {
   /**
    * Called by OpSet.getOpValue() when recursively instantiating an object in
    * the document tree. Updates `this.diffs[objectId]` to contain the patch
-   * necessary to instantiate the object, and returns `{objectId: objectId}`
-   * (which is then interpreted by `this.unpackValue()`).
+   * necessary to instantiate the object, and returns
+   * `{value: objectId, link: true}` (which is used to update the parent object).
    */
   instantiateObject(opSet, objectId) {
-    if (this.diffs[objectId]) return {objectId}
+    if (this.diffs[objectId]) return {value: objectId, link: true}
 
     const isRoot = (objectId === OpSet.ROOT_ID)
     const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
@@ -103,7 +103,7 @@ class MaterializationContext {
     } else {
       throw new RangeError(`Unknown object type: ${objType}`)
     }
-    return {objectId}
+    return {value: objectId, link: true}
   }
 
   /**
