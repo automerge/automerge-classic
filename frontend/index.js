@@ -6,6 +6,7 @@ const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
+const { Counter } = require('./counter')
 
 /**
  * Takes a set of objects that have been updated (in `updated`) and an updated
@@ -55,13 +56,16 @@ function ensureSingleAssignment(ops) {
 
   for (let i = ops.length - 1; i >= 0; i--) {
     const op = ops[i], { obj, key, action } = op
-    if (['set', 'del', 'link'].includes(action)) {
+    if (['set', 'del', 'link', 'inc'].includes(action)) {
       if (!assignments[obj]) {
-        assignments[obj] = {[key]: true}
+        assignments[obj] = {[key]: op}
         result.push(op)
       } else if (!assignments[obj][key]) {
-        assignments[obj][key] = true
+        assignments[obj][key] = op
         result.push(op)
+      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
+        assignments[obj][key].action = action
+        assignments[obj][key].value += op.value
       }
     } else {
       result.push(op)
@@ -446,5 +450,5 @@ module.exports = {
   init, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getActorId, setActorId, getConflicts, getBackendState, getElementIds,
-  Text, Table
+  Text, Table, Counter
 }

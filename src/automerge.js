@@ -129,6 +129,7 @@ module.exports = {
   Connection: require('./connection')
 }
 
-for (let name of ['canUndo', 'canRedo', 'getActorId', 'setActorId', 'getConflicts', 'Text', 'Table']) {
+for (let name of ['canUndo', 'canRedo', 'getActorId', 'setActorId',
+     'getConflicts', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }

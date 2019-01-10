@@ -114,6 +114,89 @@ describe('Frontend', () => {
         {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]})
     })
+
+    describe('counters', () => {
+      it('should handle counters inside maps', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => {
+          doc.wrens = new Frontend.Counter()
+          assert.strictEqual(doc.wrens.value, 0)
+        })
+        const [doc2, req2] = Frontend.change(doc1, doc => {
+          doc.wrens.increment()
+          assert.strictEqual(doc.wrens.value, 1)
+        })
+        const actor = Frontend.getActorId(doc2)
+        assert.deepEqual(doc1, {wrens: new Frontend.Counter(0)})
+        assert.deepEqual(doc2, {wrens: new Frontend.Counter(1)})
+        assert.deepEqual(req1, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'wrens', value: 0, datatype: 'counter'}
+        ]})
+        assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+          {obj: ROOT_ID, action: 'inc', key: 'wrens', value: 1}
+        ]})
+      })
+
+      it('should handle counters inside lists', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => {
+          doc.counts = [new Frontend.Counter(1)]
+          assert.strictEqual(doc.counts[0].value, 1)
+        })
+        const [doc2, req2] = Frontend.change(doc1, doc => {
+          doc.counts[0].increment(2)
+          assert.strictEqual(doc.counts[0].value, 3)
+        })
+        const counts = Frontend.getObjectId(doc2.counts), actor = Frontend.getActorId(doc2)
+        assert.deepEqual(doc1, {counts: [new Frontend.Counter(1)]})
+        assert.deepEqual(doc2, {counts: [new Frontend.Counter(3)]})
+        assert.deepEqual(req1, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+          {obj: counts,  action: 'makeList'},
+          {obj: counts,  action: 'ins',  key: '_head', elem: 1},
+          {obj: counts,  action: 'set',  key: `${actor}:1`, value: 1, datatype: 'counter'},
+          {obj: ROOT_ID, action: 'link', key: 'counts', value: counts}
+        ]})
+        assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+          {obj: counts, action: 'inc', key: `${actor}:1`, value: 2}
+        ]})
+      })
+
+      it('should coalesce assignments and increments', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {})
+        const [doc2, req2] = Frontend.change(doc1, doc => {
+          doc.birds.wrens = new Frontend.Counter(1)
+          doc.birds.wrens.increment(2)
+        })
+        const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+        assert.deepEqual(doc1, {birds: {}})
+        assert.deepEqual(doc2, {birds: {wrens: new Frontend.Counter(3)}})
+        assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+          {obj: birds, action: 'set', key: 'wrens', value: 3}
+        ]})
+      })
+
+      it('should coalesce multiple increments', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: new Frontend.Counter()})
+        const [doc2, req2] = Frontend.change(doc1, doc => {
+          doc.birds.wrens.increment(2)
+          doc.birds.wrens.decrement()
+          doc.birds.wrens.increment(3)
+        })
+        const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
+        assert.deepEqual(doc1, {birds: {wrens: new Frontend.Counter(0)}})
+        assert.deepEqual(doc2, {birds: {wrens: new Frontend.Counter(4)}})
+        assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+          {obj: birds, action: 'inc', key: 'wrens', value: 4}
+        ]})
+      })
+
+      it('should refuse to overwrite a property with a counter value', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => {
+          doc.counter = new Frontend.Counter()
+          doc.list = [new Frontend.Counter()]
+        })
+        assert.throws(() => Frontend.change(doc1, doc => doc.counter++), /Cannot overwrite a Counter object/)
+        assert.throws(() => Frontend.change(doc1, doc => doc.list[0] = 3), /Cannot overwrite a Counter object/)
+      })
+    })
   })
 
   describe('backend concurrency', () => {
