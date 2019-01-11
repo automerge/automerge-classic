@@ -19,6 +19,23 @@ describe('Backend', () => {
       })
     })
 
+    it('should increment a key in a map', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
+      ]}
+      const change2 = {actor, seq: 2, deps: {}, ops: [
+        {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1])
+      const [s2, patch2] = Backend.applyChanges(s1, [change2])
+      assert.deepEqual(patch2, {
+        canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
+        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'counter', value: 3, datatype: 'counter'}]
+      })
+    })
+
     it('should make a conflict on assignment to the same key', () => {
       const change1 = {actor: 'actor1', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
@@ -247,6 +264,22 @@ describe('Backend', () => {
         diffs: [{action: 'set', obj: ROOT_ID, type: 'map', key: 'bird', value: 'blackbird',
           conflicts: [{actor: 'actor1', value: 'magpie'}]}
       ]})
+    })
+
+    it('should handle increments for a key in a map', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
+      ]}
+      const change2 = {actor, seq: 2, deps: {}, ops: [
+        {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      assert.deepEqual(Backend.getPatch(s1), {
+        canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
+        diffs: [{action: 'set', obj: ROOT_ID, type: 'map', key: 'counter', value: 3, datatype: 'counter'}]
+      })
     })
 
     it('should create nested maps', () => {
