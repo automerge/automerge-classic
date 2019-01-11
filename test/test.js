@@ -67,24 +67,24 @@ describe('Automerge', () => {
 
       it('should allow repeated reading and writing of values', () => {
         s2 = Automerge.change(s1, 'change message', doc => {
-          doc.counter = 1
-          assert.strictEqual(doc.counter, 1)
-          doc.counter += 1
-          doc.counter += 1
-          assert.strictEqual(doc.counter, 3)
+          doc.value = 'a'
+          assert.strictEqual(doc.value, 'a')
+          doc.value = 'b'
+          doc.value = 'c'
+          assert.strictEqual(doc.value, 'c')
         })
         assert.deepEqual(s1, {})
-        assert.deepEqual(s2, {counter: 3})
+        assert.deepEqual(s2, {value: 'c'})
       })
 
       it('should not record conflicts when writing the same field several times within one change', () => {
         s1 = Automerge.change(s1, 'change message', doc => {
-          doc.counter = 1
-          doc.counter += 1
-          doc.counter += 1
+          doc.value = 'a'
+          doc.value = 'b'
+          doc.value = 'c'
         })
-        assert.strictEqual(s1.counter, 3)
-        assert.deepEqual(s1._conflicts, {})
+        assert.strictEqual(s1.value, 'c')
+        assert.deepEqual(Automerge.getConflicts(s1), {})
       })
 
       it('should return the unchanged state object if nothing changed', () => {
