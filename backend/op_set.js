@@ -196,8 +196,13 @@ function applyAssign(opSet, op, topLevel) {
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
 
   if (opSet.has('undoLocal') && topLevel) {
-    let undoOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
-      .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value'].includes(k)))
+    let undoOps
+    if (op.get('action') === 'inc') {
+      undoOps = List.of(Map({action: 'inc', obj: objectId, key: op.get('key'), value: -op.get('value')}))
+    } else {
+      undoOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
+        .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype'].includes(k)))
+    }
     if (undoOps.isEmpty()) {
       undoOps = List.of(Map({action: 'del', obj: objectId, key: op.get('key')}))
     }

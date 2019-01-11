@@ -971,6 +971,16 @@ describe('Automerge', () => {
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
+
+    it('should undo counter increments', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.counter = new Automerge.Counter())
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      assert.deepEqual(s1, {counter: new Automerge.Counter(1)})
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
+                       [{action: 'inc', obj: ROOT_ID, key: 'counter', value: -1}])
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(0)})
+    })
   })
 
   describe('Automerge.redo()', () => {
@@ -1104,6 +1114,18 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {list: ['A', 'C']})
     })
 
+    it('should undo/redo counter increments', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.counter = new Automerge.Counter(5))
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(6)})
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
+                       [{action: 'inc', obj: ROOT_ID, key: 'counter', value: 1}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(7)})
+    })
+
     it('should redo assignments by other actors that precede the undo', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.value = 1)
       s1 = Automerge.change(s1, doc => doc.value = 2)
@@ -1144,7 +1166,7 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {trout: 3, salmon: 1})
     })
 
-    it('should apply undos by growing the history', () => {
+    it('should apply redos by growing the history', () => {
       let s1 = Automerge.change(Automerge.init(), 'set 1', doc => doc.value = 1)
       s1 = Automerge.change(s1, 'set 2', doc => doc.value = 2)
       s1 = Automerge.undo(s1, 'undo')

@@ -263,11 +263,13 @@ function undo(state, request) {
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
     for (let op of undoOps) {
-      if (!['set', 'del', 'link'].includes(op.get('action'))) {
+      if (!['set', 'del', 'link', 'inc'].includes(op.get('action'))) {
         throw new RangeError(`Unexpected operation type in undo history: ${op}`)
       }
       const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
-      if (fieldOps.isEmpty()) {
+      if (op.get('action') === 'inc') {
+        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key: op.get('key'), value: -op.get('value')}))
+      } else if (fieldOps.isEmpty()) {
         redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
       } else {
         for (let fieldOp of fieldOps) {
