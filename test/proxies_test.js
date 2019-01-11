@@ -8,8 +8,7 @@ describe('Automerge proxy API', () => {
     it('should have a fixed object ID', () => {
       Automerge.change(Automerge.init(), doc => {
         assert.strictEqual(doc._type, 'map')
-        assert.strictEqual(doc._objectId, ROOT_ID)
-        assert.strictEqual('_objectId' in doc, true)
+        assert.strictEqual(Automerge.getObjectId(doc), ROOT_ID)
       })
     })
 
@@ -87,22 +86,22 @@ describe('Automerge proxy API', () => {
     it('should allow access to an object by id', () => {
       Automerge.change(Automerge.init(), doc => {
         const rootObj = doc._get(ROOT_ID)
-        assert.strictEqual(rootObj._objectId, doc._objectId)
+        assert.strictEqual(Automerge.getObjectId(rootObj), Automerge.getObjectId(doc))
 
         rootObj.deepObj = {}
-        const deepObjId = doc.deepObj._objectId
+        const deepObjId = Automerge.getObjectId(doc.deepObj)
         const deepObj = doc._get(deepObjId)
-        assert.strictEqual(deepObj._objectId, deepObjId)
+        assert.strictEqual(Automerge.getObjectId(deepObj), deepObjId)
 
         deepObj.deepList = []
-        const deepListId = doc.deepObj.deepList._objectId
+        const deepListId = Automerge.getObjectId(doc.deepObj.deepList)
         const deepList = doc._get(deepListId)
-        assert.strictEqual(deepList._objectId, deepListId)
+        assert.strictEqual(Automerge.getObjectId(deepList), deepListId)
 
         deepList.insertAt(0, {})
-        const deepItemId = doc.deepObj.deepList[0]._objectId
+        const deepItemId = Automerge.getObjectId(doc.deepObj.deepList[0])
         const deepItem = doc._get(deepItemId)
-        assert.strictEqual(deepItem._objectId, deepItemId)
+        assert.strictEqual(Automerge.getObjectId(deepItem), deepItemId)
       })
     })
   })
@@ -163,7 +162,7 @@ describe('Automerge proxy API', () => {
 
     it('should support Object.getOwnPropertyNames()', () => {
       Automerge.change(root, doc => {
-        assert.deepEqual(Object.getOwnPropertyNames(doc.list), ['length', '_objectId', '0', '1', '2'])
+        assert.deepEqual(Object.getOwnPropertyNames(doc.list), ['length', '0', '1', '2'])
       })
     })
 

@@ -1,5 +1,5 @@
 const { ROOT_ID } = require('../src/common')
-const { CHANGE } = require('./constants')
+const { OBJECT_ID, CHANGE } = require('./constants')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
@@ -100,7 +100,7 @@ const MapHandler = {
     const { context, objectId } = target
     if (key === '_inspect') return JSON.parse(JSON.stringify(mapProxy(context, objectId)))
     if (key === '_type') return 'map'
-    if (key === '_objectId') return objectId
+    if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === '_get') return context._get
     return context.getObjectField(objectId, key)
@@ -120,7 +120,7 @@ const MapHandler = {
 
   has (target, key) {
     const { context, objectId } = target
-    return ['_type', '_objectId', CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
+    return ['_type', OBJECT_ID, CHANGE, '_get'].includes(key) || (key in context.getObject(objectId))
   },
 
   getOwnPropertyDescriptor (target, key) {
@@ -143,7 +143,7 @@ const ListHandler = {
     if (key === Symbol.iterator) return context.getObject(objectId)[Symbol.iterator]
     if (key === '_inspect') return JSON.parse(JSON.stringify(listProxy(context, objectId)))
     if (key === '_type') return 'list'
-    if (key === '_objectId') return objectId
+    if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
@@ -169,12 +169,12 @@ const ListHandler = {
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
-    return ['length', '_type', '_objectId', CHANGE].includes(key)
+    return ['length', '_type', OBJECT_ID, CHANGE].includes(key)
   },
 
   getOwnPropertyDescriptor (target, key) {
     if (key === 'length') return {}
-    if (key === '_objectId') return {configurable: true, enumerable: false}
+    if (key === OBJECT_ID) return {configurable: false, enumerable: false}
 
     const [context, objectId] = target
     const object = context.getObject(objectId)
@@ -188,7 +188,7 @@ const ListHandler = {
   ownKeys (target) {
     const [context, objectId] = target
     const object = context.getObject(objectId)
-    let keys = ['length', '_objectId']
+    let keys = ['length']
     keys.push(...Object.keys(object))
     return keys
   }

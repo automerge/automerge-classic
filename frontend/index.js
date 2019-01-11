@@ -424,14 +424,12 @@ function setActorId(doc, actorId) {
 }
 
 /**
- * Fetches the conflicts on `object`, which may be any object in a document.
- * If the object is a map, returns an object mapping keys to conflict sets
- * (only for those keys that actually have conflicts). If the object is a list,
- * returns a list that contains null for non-conflicting indexes and a conflict
- * set otherwise.
+ * Fetches the conflicts on the property `key` of `object`, which may be any
+ * object in a document. If `object` is a list, then `key` must be a list
+ * index; if `object` is a map, then `key` must be a property name.
  */
-function getConflicts(object) {
-  return object[CONFLICTS]
+function getConflicts(object, key) {
+  return object[CONFLICTS][key]
 }
 
 /**

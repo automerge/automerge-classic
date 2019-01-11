@@ -5,8 +5,8 @@ const INBOUND   = Symbol('_inbound')   // map from child objectId to parent obje
 const STATE     = Symbol('_state')     // object containing metadata about current state (e.g. sequence numbers)
 
 // Properties of all Automerge objects
-const OBJECT_ID = '_objectId'          // the object ID of the current object (string)
-const CONFLICTS = '_conflicts'         // map or list (depending on object type) of conflicts
+const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (string)
+const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type) of conflicts
 const CHANGE    = Symbol('_change')    // the context object on proxy objects used in change callback
 
 // Properties of Automerge list objects
