@@ -99,10 +99,6 @@ function equals(val1, val2) {
   return true
 }
 
-function inspect(doc) {
-  return JSON.parse(JSON.stringify(doc))
-}
-
 function getHistory(doc) {
   const state = Frontend.getBackendState(doc)
   const actor = Frontend.getActorId(doc)
@@ -122,7 +118,7 @@ function getHistory(doc) {
 module.exports = {
   init, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
-  equals, inspect, getHistory, uuid,
+  equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),

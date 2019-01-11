@@ -84,23 +84,6 @@ describe('Automerge proxy API', () => {
       })
     })
 
-    it('should allow inspection as regular JS objects', () => {
-      Automerge.change(Automerge.init(), doc => {
-        assert.deepEqual(doc._inspect, {})
-        assert.deepEqual(Automerge.inspect(doc), {})
-        doc.key1 = 'value1'
-        assert.deepEqual(doc._inspect, {key1: 'value1'})
-        assert.deepEqual(Automerge.inspect(doc), {key1: 'value1'})
-        doc.key2 = 'value2'
-        assert.deepEqual(doc._inspect, {
-          key1: 'value1', key2: 'value2'
-        })
-        assert.deepEqual(Automerge.inspect(doc), {
-          key1: 'value1', key2: 'value2'
-        })
-      })
-    })
-
     it('should allow access to an object by id', () => {
       Automerge.change(Automerge.init(), doc => {
         const rootObj = doc._get(ROOT_ID)
@@ -190,17 +173,6 @@ describe('Automerge proxy API', () => {
           list: [1, 2, 3], empty: []
         })
         assert.deepEqual(JSON.stringify(doc.list), '[1,2,3]')
-      })
-    })
-
-    it('should allow inspection as regular JS objects', () => {
-      Automerge.change(root, doc => {
-        assert.deepEqual(doc._inspect, {
-          list: [1, 2, 3], empty: []
-        })
-        assert.deepEqual(Automerge.inspect(doc), {
-          list: [1, 2, 3], empty: []
-        })
       })
     })
 
