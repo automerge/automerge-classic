@@ -196,6 +196,18 @@ describe('Frontend', () => {
         assert.throws(() => Frontend.change(doc1, doc => doc.counter++), /Cannot overwrite a Counter object/)
         assert.throws(() => Frontend.change(doc1, doc => doc.list[0] = 3), /Cannot overwrite a Counter object/)
       })
+
+      it('should make counter objects behave like primitive numbers', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = new Frontend.Counter(3))
+        assert.equal(doc1.birds, 3) // they are equal according to ==, but not strictEqual according to ===
+        assert.notStrictEqual(doc1.birds, 3)
+        assert(doc1.birds < 4)
+        assert(doc1.birds >= 0)
+        assert(!(doc1.birds <= 2))
+        assert.strictEqual(doc1.birds + 10, 13)
+        assert.strictEqual(`I saw ${doc1.birds} birds`, 'I saw 3 birds')
+        assert.strictEqual(['I saw', doc1.birds, 'birds'].join(' '), 'I saw 3 birds')
+      })
     })
   })
 
