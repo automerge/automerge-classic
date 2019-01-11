@@ -67,24 +67,24 @@ describe('Automerge', () => {
 
       it('should allow repeated reading and writing of values', () => {
         s2 = Automerge.change(s1, 'change message', doc => {
-          doc.counter = 1
-          assert.strictEqual(doc.counter, 1)
-          doc.counter += 1
-          doc.counter += 1
-          assert.strictEqual(doc.counter, 3)
+          doc.value = 'a'
+          assert.strictEqual(doc.value, 'a')
+          doc.value = 'b'
+          doc.value = 'c'
+          assert.strictEqual(doc.value, 'c')
         })
         assert.deepEqual(s1, {})
-        assert.deepEqual(s2, {counter: 3})
+        assert.deepEqual(s2, {value: 'c'})
       })
 
       it('should not record conflicts when writing the same field several times within one change', () => {
         s1 = Automerge.change(s1, 'change message', doc => {
-          doc.counter = 1
-          doc.counter += 1
-          doc.counter += 1
+          doc.value = 'a'
+          doc.value = 'b'
+          doc.value = 'c'
         })
-        assert.strictEqual(s1.counter, 3)
-        assert.deepEqual(s1._conflicts, {})
+        assert.strictEqual(s1.value, 'c')
+        assert.deepEqual(Automerge.getConflicts(s1), {})
       })
 
       it('should return the unchanged state object if nothing changed', () => {
@@ -590,6 +590,33 @@ describe('Automerge', () => {
       assert.deepEqual(s3._conflicts, {})
     })
 
+    it('should add concurrent increments of the same property', () => {
+      s1 = Automerge.change(s1, doc => doc.counter = new Automerge.Counter())
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s2 = Automerge.change(s2, doc => doc.counter.increment(2))
+      s3 = Automerge.merge(s1, s2)
+      assert.strictEqual(s1.counter.value, 1)
+      assert.strictEqual(s2.counter.value, 2)
+      assert.strictEqual(s3.counter.value, 3)
+      assert.deepEqual(s3._conflicts, {})
+    })
+
+    it('should add increments only to the values they precede', () => {
+      s1 = Automerge.change(s1, doc => doc.counter = new Automerge.Counter(0))
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s2 = Automerge.change(s2, doc => doc.counter = new Automerge.Counter(100))
+      s2 = Automerge.change(s2, doc => doc.counter.increment(3))
+      s3 = Automerge.merge(s1, s2)
+      if (s1._actorId > s2._actorId) {
+        assert.deepEqual(s3, {counter: new Automerge.Counter(1)})
+        assert.deepEqual(s3._conflicts, {counter: {[s2._actorId]: new Automerge.Counter(103)}})
+      } else {
+        assert.deepEqual(s3, {counter: new Automerge.Counter(103)})
+        assert.deepEqual(s3._conflicts, {counter: {[s1._actorId]: new Automerge.Counter(1)}})
+      }
+    })
+
     it('should detect concurrent updates of the same field', () => {
       s1 = Automerge.change(s1, doc => doc.field = 'one')
       s2 = Automerge.change(s2, doc => doc.field = 'two')
@@ -944,6 +971,16 @@ describe('Automerge', () => {
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
+
+    it('should undo counter increments', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.counter = new Automerge.Counter())
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      assert.deepEqual(s1, {counter: new Automerge.Counter(1)})
+      assert.deepEqual(getUndoStack(s1).last().toJS(),
+                       [{action: 'inc', obj: ROOT_ID, key: 'counter', value: -1}])
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(0)})
+    })
   })
 
   describe('Automerge.redo()', () => {
@@ -1077,6 +1114,18 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {list: ['A', 'C']})
     })
 
+    it('should undo/redo counter increments', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.counter = new Automerge.Counter(5))
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s1 = Automerge.change(s1, doc => doc.counter.increment())
+      s1 = Automerge.undo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(6)})
+      assert.deepEqual(getRedoStack(s1).last().toJS(),
+                       [{action: 'inc', obj: ROOT_ID, key: 'counter', value: 1}])
+      s1 = Automerge.redo(s1)
+      assert.deepEqual(s1, {counter: new Automerge.Counter(7)})
+    })
+
     it('should redo assignments by other actors that precede the undo', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.value = 1)
       s1 = Automerge.change(s1, doc => doc.value = 2)
@@ -1117,7 +1166,7 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {trout: 3, salmon: 1})
     })
 
-    it('should apply undos by growing the history', () => {
+    it('should apply redos by growing the history', () => {
       let s1 = Automerge.change(Automerge.init(), 'set 1', doc => doc.value = 1)
       s1 = Automerge.change(s1, 'set 2', doc => doc.value = 2)
       s1 = Automerge.undo(s1, 'undo')

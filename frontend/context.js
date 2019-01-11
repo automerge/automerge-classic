@@ -2,6 +2,7 @@ const { CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants'
 const { applyDiffs } = require('./apply_patch')
 const { Text, getElemId } = require('./text')
 const { Table } = require('./table')
+const { Counter, getWriteableCounter } = require('./counter')
 const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -51,9 +52,14 @@ class Context {
    */
   getObjectField(objectId, key) {
     const object = this.getObject(objectId)
-    if (isObject(object[key])) {
+
+    if (object[key] instanceof Counter) {
+      return getWriteableCounter(object[key].value, this, objectId, key)
+
+    } else if (isObject(object[key])) {
       // The instantiateObject function is added to the context object by rootObjectProxy()
       return this.instantiateObject(object[key][OBJECT_ID])
+
     } else {
       return object[key]
     }
@@ -108,8 +114,10 @@ class Context {
    * Records an operation to update the object with ID `obj`, setting `key`
    * to `value`. Returns an object in which the value has been normalized: if it
    * is a reference to another object, `{value: otherObjectId, link: true}` is
-   * returned; if it is a Date object, `{value: timestamp, datatype: 'timestamp'}`
-   * is returned; and if it is a primitive value, `{value}` is returned.
+   * returned; otherwise `{value: primitiveValue, datatype: someType}` is
+   * returned. The datatype is only present for values that need to be
+   * interpreted in a special way (timestamps, counters); for primitive types
+   * (string, number, boolean, null) the datatype property is omitted.
    */
   setValue(obj, key, value) {
     if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
@@ -122,6 +130,12 @@ class Context {
         const timestamp = value.getTime()
         this.addOp({action: 'set', obj, key, value: timestamp, datatype: 'timestamp'})
         return {value: timestamp, datatype: 'timestamp'}
+
+      } else if (value instanceof Counter) {
+        // Counter object, save current value
+        this.addOp({action: 'set', obj, key, value: value.value, datatype: 'counter'})
+        return {value: value.value, datatype: 'counter'}
+
       } else {
         // Reference to another object
         const childId = this.createNestedObjects(value)
@@ -151,9 +165,13 @@ class Context {
       throw new RangeError(`Map entries starting with underscore are not allowed: ${key}`)
     }
 
+    const object = this.getObject(objectId)
+    if (object[key] instanceof Counter) {
+      throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')
+    }
+
     // If the assigned field value is the same as the existing value, and
     // the assignment does not resolve a conflict, do nothing
-    const object = this.getObject(objectId)
     if (object[key] !== value || object[CONFLICTS][key] || value === undefined) {
       const valueObj = this.setValue(objectId, key, value)
       this.apply(Object.assign({action: 'set', type, obj: objectId, key}, valueObj))
@@ -204,6 +222,9 @@ class Context {
     }
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
+    }
+    if (list[index] instanceof Counter) {
+      throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')
     }
 
     // If the assigned list element value is the same as the existing value, and
@@ -269,6 +290,28 @@ class Context {
   deleteTableRow(objectId, rowId) {
     this.apply({action: 'remove', type: 'table', obj: objectId, key: rowId})
     this.addOp({action: 'del', obj: objectId, key: rowId})
+  }
+
+  /**
+   * Adds the integer `delta` to the value of the counter located at property
+   * `key` in the object with ID `objectId`.
+   */
+  increment(objectId, key, delta) {
+    const object = this.getObject(objectId)
+    if (!(object[key] instanceof Counter)) {
+      throw new TypeError('Only counter values can be incremented')
+    }
+    const value = object[key].value + delta
+
+    if (Array.isArray(object) || object instanceof Text) {
+      const elemId = getElemId(object, key)
+      const type = (object instanceof Text) ? 'text' : 'list'
+      this.addOp({action: 'inc', obj: objectId, key: elemId, value: delta})
+      this.apply({action: 'set', obj: objectId, type, index: key, value, datatype: 'counter'})
+    } else {
+      this.addOp({action: 'inc', obj: objectId, key, value: delta})
+      this.apply({action: 'set', obj: objectId, type: 'map', key, value, datatype: 'counter'})
+    }
   }
 }
 

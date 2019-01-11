@@ -2,6 +2,7 @@ const { ROOT_ID, isObject } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text } = require('./text')
 const { Table, instantiateTable } = require('./table')
+const { Counter } = require('./counter')
 
 /**
  * Takes a string in the form that is used to identify list elements (an actor
@@ -26,6 +27,8 @@ function getValue(diff, cache, updated) {
   } else if (diff.datatype === 'timestamp') {
     // Timestamp: value is milliseconds since 1970 epoch
     return new Date(diff.value)
+  } else if (diff.datatype === 'counter') {
+    return new Counter(diff.value)
   } else if (diff.datatype !== undefined) {
     throw new TypeError(`Unknown datatype: ${diff.datatype}`)
   } else {
@@ -43,7 +46,7 @@ function childReferences(object, key) {
   let refs = {}, conflicts = object[CONFLICTS][key] || {}
   let children = [object[key]].concat(Object.values(conflicts))
   for (let child of children) {
-    if (isObject(child)) {
+    if (isObject(child) && child[OBJECT_ID]) {
       refs[child[OBJECT_ID]] = true
     }
   }

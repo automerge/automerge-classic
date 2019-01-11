@@ -291,6 +291,42 @@ unmodified. The only special things about it are:
 * Objects also have a `_conflicts` property, which is used when several users make conflicting
   changes at the same time (see below).
 
+### Counters
+
+If you have a numeric value that is only ever changed by adding or subtracting (e.g. counting how
+many times the user has done a particular thing), it is recommmended that you use the
+`Automerge.Counter` datatype instead of a plain number. You set it up like this:
+
+```js
+state = Automerge.change(state, doc => {
+  // The counter is initialized to 0 by default. You can pass a number to the
+  // Automerge.Counter constructor if you want a different initial value.
+  doc.buttonClicks = new Automerge.Counter()
+})
+```
+
+To get the current counter value, use `doc.buttonClicks.value`.
+Whenever you want to increase or decrease the counter value, you can use the `.increment()`
+or `.decrement()` method:
+
+```js
+state = Automerge.change(state, doc => {
+  doc.buttonClicks.increment()  // Add 1 to counter value
+  doc.buttonClicks.increment(4) // Add 4 to counter value
+  doc.buttonClicks.decrement(3) // Subtract 3 from counter value
+})
+```
+
+Using the `Automerge.Counter` datatype is safer than changing a number value using the `++` or
+`+= 1` operators: if several users concurrently change a `Automerge.Counter` value, all the
+changes are added up as you'd expect, whereas concurrent `++` or `+= 1` operations will result
+in conflicts that need to be resolved (see "Conflicting changes" below).
+
+Another note: in relational databases it is common to use an auto-incrementing counter to generate
+primary keys for rows in a table, but this is not safe in Automerge, since several users may end
+up generating the same counter value! See the section "Relational table support" below for
+implementing a relational-like table with a primary key.
+
 ### Text editing support
 
 `Automerge.Text` provides experimental support for collaborative text editing.
