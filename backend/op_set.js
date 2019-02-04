@@ -475,12 +475,8 @@ function getOpValue(opSet, op, context) {
   }
 }
 
-function validFieldName(key) {
-  return (typeof key === 'string' && key !== '' && !key.startsWith('_'))
-}
-
 function isFieldPresent(opSet, objectId, key) {
-  return validFieldName(key) && !getFieldOps(opSet, objectId, key).isEmpty()
+  return !getFieldOps(opSet, objectId, key).isEmpty()
 }
 
 function getObjectFields(opSet, objectId) {
@@ -491,14 +487,13 @@ function getObjectFields(opSet, objectId) {
 }
 
 function getObjectField(opSet, objectId, key, context) {
-  if (!validFieldName(key)) return undefined
   const ops = getFieldOps(opSet, objectId, key)
   if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
 }
 
 function getObjectConflicts(opSet, objectId, context) {
   return opSet.getIn(['byObject', objectId, '_keys'])
-    .filter((field, key) => validFieldName(key) && getFieldOps(opSet, objectId, key).size > 1)
+    .filter((field, key) => getFieldOps(opSet, objectId, key).size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
       .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
     ])

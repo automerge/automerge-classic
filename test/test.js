@@ -270,9 +270,6 @@ describe('Automerge', () => {
         assert.throws(() => {
           Automerge.change(s1, 'foo', doc => doc[''] = 'x')
         }, /must not be an empty string/)
-        assert.throws(() => {
-          Automerge.change(s1, 'foo', doc => doc['_foo'] = 'x')
-        }, /Map entries starting with underscore are not allowed/)
       })
 
       it('should not allow assignment of unsupported datatypes', () => {
@@ -403,8 +400,6 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.nested = {})
         assert.throws(() => { Automerge.change(s1, doc => doc.nested[''] = 'x') }, /must not be an empty string/)
         assert.throws(() => { Automerge.change(s1, doc => doc.nested = {'': 'x'}) }, /must not be an empty string/)
-        assert.throws(() => { Automerge.change(s1, doc => doc.nested._foo = 'x') }, /Map entries starting with underscore are not allowed/)
-        assert.throws(() => { Automerge.change(s1, doc => doc.nested = {_foo: 'x'}) }, /Map entries starting with underscore are not allowed/)
       })
     })
 
