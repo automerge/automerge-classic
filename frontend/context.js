@@ -161,9 +161,6 @@ class Context {
     if (key === '') {
       throw new RangeError('The key of a map entry must not be an empty string')
     }
-    if (key.startsWith('_')) {
-      throw new RangeError(`Map entries starting with underscore are not allowed: ${key}`)
-    }
 
     const object = this.getObject(objectId)
     if (object[key] instanceof Counter) {

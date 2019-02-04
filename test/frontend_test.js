@@ -349,7 +349,7 @@ describe('Frontend', () => {
       ]
       const doc = Frontend.applyPatch(Frontend.init(), {diffs})
       assert.deepEqual(doc, {favoriteBird: 'wagtail'})
-      assert.deepEqual(Frontend.getConflicts(doc), {favoriteBird: {[actor]: 'robin'}})
+      assert.deepEqual(Frontend.getConflicts(doc, 'favoriteBird'), {[actor]: 'robin'})
     })
 
     it('should create nested maps', () => {
@@ -396,8 +396,8 @@ describe('Frontend', () => {
       const doc2 = Frontend.applyPatch(doc1, {diffs: diffs2})
       assert.deepEqual(doc1, {favoriteBirds: {wrens: 3}})
       assert.deepEqual(doc2, {favoriteBirds: {wrens: 3}})
-      assert.deepEqual(Frontend.getConflicts(doc1), {favoriteBirds: {[actor]: {blackbirds: 1}}})
-      assert.deepEqual(Frontend.getConflicts(doc2), {favoriteBirds: {[actor]: {blackbirds: 2}}})
+      assert.deepEqual(Frontend.getConflicts(doc1, 'favoriteBirds'), {[actor]: {blackbirds: 1}})
+      assert.deepEqual(Frontend.getConflicts(doc2, 'favoriteBirds'), {[actor]: {blackbirds: 2}})
     })
 
     it('should structure-share unmodified objects', () => {
@@ -483,8 +483,8 @@ describe('Frontend', () => {
       assert.deepEqual(doc1, {birds: [{species: 'lapwing', numSeen: 2}]})
       assert.deepEqual(doc2, {birds: [{species: 'lapwing', numSeen: 2}]})
       assert.strictEqual(doc1.birds[0], doc2.birds[0])
-      assert.deepEqual(Frontend.getConflicts(doc1.birds), [{[actor]: {species: 'woodpecker', numSeen: 1}}])
-      assert.deepEqual(Frontend.getConflicts(doc2.birds), [{[actor]: {species: 'woodpecker', numSeen: 2}}])
+      assert.deepEqual(Frontend.getConflicts(doc1.birds, 0), {[actor]: {species: 'woodpecker', numSeen: 1}})
+      assert.deepEqual(Frontend.getConflicts(doc2.birds, 0), {[actor]: {species: 'woodpecker', numSeen: 2}})
     })
 
     it('should delete list elements', () => {

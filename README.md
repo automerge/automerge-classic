@@ -104,11 +104,7 @@ const Automerge = require('automerge')
 // Further down we'll simulate a second device.
 let doc1 = Automerge.init()
 
-// That initial state is just an empty object: {}
-// Actually, it's got an automatically generated _objectId property, but we'll
-// leave out the object IDs from this example in order to make it easier to
-// read.
-
+// That initial state is just an empty object: {}.
 // The doc1 object is immutable -- you cannot change it directly (if you try,
 // you'll either get an exception or your change will be silently ignored,
 // depending on your JavaScript engine). To change it, you need to call
@@ -286,10 +282,11 @@ unmodified. The only special things about it are:
 * All objects in the document are made immutable using
   [`Object.freeze()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze),
   to ensure you don't accidentally modify them outside of an `Automerge.change()` callback.
-* Every object and every array has an `_objectId` property, which is used by Automerge to track
-  which object is which.
-* Objects also have a `_conflicts` property, which is used when several users make conflicting
-  changes at the same time (see below).
+* Every object has a unique ID, which you can get by passing the object to the
+  `Automerge.getObjectId()` function. This ID is used by Automerge to track which object is which.
+* Objects also have information about *conflicts*, which is used when several users make changes
+  to the same property concurrently (see below). You can get conflicts using the
+  `Automerge.getConflicts()` function.
 
 ### Counters
 
@@ -503,23 +500,23 @@ doc2 = Automerge.merge(doc2, doc1)
 ```
 
 Although only one of the concurrently written values shows up in the object, the other values are
-not lost. They are merely relegated to a `_conflicts` object:
+not lost. They are merely relegated to a conflicts object:
 
 ```js
 doc1 // {x: 2}
 doc2 // {x: 2}
-doc1._conflicts // {x: {'0506162a-ac6e-4567-bc16-a12618b71940': 1}}
-doc2._conflicts // {x: {'0506162a-ac6e-4567-bc16-a12618b71940': 1}}
+Automerge.getConflicts(doc1, 'x') // {'0506162a-ac6e-4567-bc16-a12618b71940': 1}
+Automerge.getConflicts(doc2, 'x') // {'0506162a-ac6e-4567-bc16-a12618b71940': 1}
 ```
 
-Here, the `_conflicts` object contains the property `x`, which matches the name of the property
+Here, the conflicts object contains the property `x`, which matches the name of the property
 on which the concurrent assignments happened. The nested key `0506162a-ac6e-4567-bc16-a12618b71940`
 is the actor ID that performed the assignment, and the associated value is the value it assigned
-to the property `x`. You might use the information in the `_conflicts` object to show the conflict
+to the property `x`. You might use the information in the conflicts object to show the conflict
 in the user interface.
 
 The next time you assign to a conflicting property, the conflict is automatically considered to
-be resolved, and the property disappears from the `_conflicts` object.
+be resolved, and the conflict disappears from the object returned by `Automerge.getConflicts()`.
 
 ### Undo and Redo
 
@@ -594,8 +591,8 @@ Automerge.diff(history[2].snapshot, doc2) // get all changes since history[2]
 ```
 
 In the objects returned by `Automerge.diff()`, `obj` indicates the object ID of the object being
-edited (matching its `_objectId` property), and `type` indicates whether that object is a `map`,
-`list`, or `text`.
+edited (the same as returned by `Automerge.getObjectId()`), and `type` indicates whether that object
+is a `map`, `list`, or `text`.
 
 The available values for `action` depend on the type of object. For `type: 'map'`, the possible
 actions are:
@@ -603,7 +600,7 @@ actions are:
 * `action: 'set'`: Then the property `key` is the name of the property being updated. If the value
   assigned to the property is a primitive (string, number, boolean, null), then `value` contains
   that value. If the assigned value is an object (map, list, or text), then `value` contains the
-  `_objectId` of that object, and additionally the property `link: true` is set. Moreover, if this
+  ID of that object, and additionally the property `link: true` is set. Moreover, if this
   assignment caused conflicts, then the conflicting values are additionally contained in a
   `conflicts` property.
 * `action: 'remove'`: Then the property `key` is the name of the property being removed.
@@ -612,10 +609,10 @@ For `type: 'list'` and `type: 'text'`, the possible actions are:
 
 * `action: 'insert'`: Then the property `index` contains the list index at which a new element is
   being inserted, and `value` contains the value inserted there. If the inserted value is an
-  object, the `value` property contains its `_objectId`, and the property `link: true` is set.
+  object, the `value` property contains its ID, and the property `link: true` is set.
 * `action: 'set'`: Then the property `index` contains the list index to which a new value is being
   assigned, and `value` contains that value. If the assigned value is an object, the `value`
-  property contains its `_objectId`, and the property `link: true` is set.
+  property contains its ID, and the property `link: true` is set.
 * `action: 'remove'`: Then the property `index` contains the list index that is being removed from
   the list.
 
