@@ -62,10 +62,10 @@ function getPath(opSet, objectId) {
 // Processes a 'makeMap', 'makeList', or 'makeText' operation
 function applyMake(opSet, op) {
   const objectId = op.get('obj')
-  if (opSet.hasIn(['byObject', objectId])) throw new Error('Duplicate creation of object ' + objectId)
+  if (opSet.hasIn(['byObject', objectId, '_keys'])) throw new Error('Duplicate creation of object ' + objectId)
 
   let edit = {action: 'create', obj: objectId}
-  let object = Map({_init: op, _inbound: Set()})
+  let object = Map({_init: op, _inbound: Set(), _keys: Map()})
   if (op.get('action') === 'makeMap') {
     edit.type = 'map'
   } else if (op.get('action') === 'makeTable') {
@@ -200,7 +200,7 @@ function applyAssign(opSet, op, topLevel) {
     if (op.get('action') === 'inc') {
       undoOps = List.of(Map({action: 'inc', obj: objectId, key: op.get('key'), value: -op.get('value')}))
     } else {
-      undoOps = opSet.getIn(['byObject', objectId, op.get('key')], List())
+      undoOps = opSet.getIn(['byObject', objectId, '_keys', op.get('key')], List())
         .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype'].includes(k)))
     }
     if (undoOps.isEmpty()) {
@@ -209,7 +209,7 @@ function applyAssign(opSet, op, topLevel) {
     opSet = opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
   }
 
-  const ops = opSet.getIn(['byObject', objectId, op.get('key')], List())
+  const ops = opSet.getIn(['byObject', objectId, '_keys', op.get('key')], List())
   let overwritten, remaining
 
   if (op.get('action') === 'inc') {
@@ -240,7 +240,7 @@ function applyAssign(opSet, op, topLevel) {
     remaining = remaining.push(op)
   }
   remaining = remaining.sortBy(op => op.get('actor')).reverse()
-  opSet = opSet.setIn(['byObject', objectId, op.get('key')], remaining)
+  opSet = opSet.setIn(['byObject', objectId, '_keys', op.get('key')], remaining)
 
   if (objectId === ROOT_ID || objType === 'makeMap') {
     return updateMapKey(opSet, objectId, 'map', op.get('key'))
@@ -334,7 +334,7 @@ function init() {
   return Map()
     .set('states',   Map())
     .set('history',  List())
-    .set('byObject', Map().set(ROOT_ID, Map()))
+    .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
     .set('clock',    Map())
     .set('deps',     Map())
     .set('local',    List())
@@ -393,7 +393,7 @@ function getMissingDeps(opSet) {
 }
 
 function getFieldOps(opSet, objectId, key) {
-  return opSet.getIn(['byObject', objectId, key], List())
+  return opSet.getIn(['byObject', objectId, '_keys', key], List())
 }
 
 function getParent(opSet, objectId, key) {
@@ -484,7 +484,7 @@ function isFieldPresent(opSet, objectId, key) {
 }
 
 function getObjectFields(opSet, objectId) {
-  return opSet.getIn(['byObject', objectId])
+  return opSet.getIn(['byObject', objectId, '_keys'])
     .keySeq()
     .filter(key => isFieldPresent(opSet, objectId, key))
     .toSet()
@@ -497,7 +497,7 @@ function getObjectField(opSet, objectId, key, context) {
 }
 
 function getObjectConflicts(opSet, objectId, context) {
-  return opSet.getIn(['byObject', objectId])
+  return opSet.getIn(['byObject', objectId, '_keys'])
     .filter((field, key) => validFieldName(key) && getFieldOps(opSet, objectId, key).size > 1)
     .mapEntries(([key, field]) => [key, field.shift().toMap()
       .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
