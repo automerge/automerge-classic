@@ -264,6 +264,8 @@ function updateListObject(diff, cache, updated, inbound) {
     list.splice(diff.index, 1)
     conflicts.splice(diff.index, 1) || {}
     elemIds.splice(diff.index, 1)
+  } else if (diff.action === 'maxElem') {
+    list[MAX_ELEM] = Math.max(list[MAX_ELEM], diff.value)
   } else {
     throw new RangeError('Unknown action type: ' + diff.action)
   }
@@ -368,6 +370,9 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
         elems.splice(splicePos, deletions)
         splicePos = -1
       }
+
+    } else if (diff.action === 'maxElem') {
+      maxElem = Math.max(maxElem, diff.value)
     } else {
       throw new RangeError('Unknown action type: ' + diff.action)
     }
