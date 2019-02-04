@@ -17,6 +17,19 @@ function lessOrEqual(clock1, clock2) {
     true)
 }
 
+/**
+ * Takes a string in the form that is used to identify list elements (an actor
+ * ID concatenated with a counter, separated by a colon) and returns an object
+ * of the structure `{counter, actorId}`.
+ */
+function parseElemId(elemId) {
+  const match = /^(.*):(\d+)$/.exec(elemId || '')
+  if (!match) {
+    throw new RangeError(`Not a valid elemId: ${elemId}`)
+  }
+  return {counter: parseInt(match[2]), actorId: match[1]}
+}
+
 module.exports = {
-  ROOT_ID, isObject, lessOrEqual
+  ROOT_ID, isObject, lessOrEqual, parseElemId
 }

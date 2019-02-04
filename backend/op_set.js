@@ -1,6 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const { SkipList } = require('./skip_list')
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+const { ROOT_ID, parseElemId } = require('../src/common')
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -412,8 +412,11 @@ function lamportCompare(op1, op2) {
 }
 
 function insertionsAfter(opSet, objectId, parentId, childId) {
-  const match = /^(.*):(\d+)$/.exec(childId || '')
-  const childKey = match ? Map({actor: match[1], elem: parseInt(match[2])}) : null
+  let childKey = null
+  if (childId) {
+    const parsedId = parseElemId(childId)
+    childKey = Map({actor: parsedId.actorId, elem: parsedId.counter})
+  }
 
   return opSet
     .getIn(['byObject', objectId, '_following', parentId], List())

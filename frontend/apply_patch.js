@@ -1,21 +1,8 @@
-const { ROOT_ID, isObject } = require('../src/common')
+const { ROOT_ID, isObject, parseElemId } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
-
-/**
- * Takes a string in the form that is used to identify list elements (an actor
- * ID concatenated with a counter, separated by a colon) and returns a
- * two-element array, `[counter, actorId]`.
- */
-function parseElemId(elemId) {
-  const match = /^(.*):(\d+)$/.exec(elemId || '')
-  if (!match) {
-    throw new RangeError(`Not a valid elemId: ${elemId}`)
-  }
-  return [parseInt(match[2]), match[1]]
-}
 
 /**
  * Reconstructs the value from the diff object `diff`.
@@ -262,7 +249,7 @@ function updateListObject(diff, cache, updated, inbound) {
   if (diff.action === 'create') {
     // do nothing
   } else if (diff.action === 'insert') {
-    list[MAX_ELEM] = Math.max(list[MAX_ELEM], parseElemId(diff.elemId)[0])
+    list[MAX_ELEM] = Math.max(list[MAX_ELEM], parseElemId(diff.elemId).counter)
     list.splice(diff.index, 0, value)
     conflicts.splice(diff.index, 0, conflict)
     elemIds.splice(diff.index, 0, diff.elemId)
@@ -351,7 +338,7 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
         deletions = 0
         insertions = []
       }
-      maxElem = Math.max(maxElem, parseElemId(diff.elemId)[0])
+      maxElem = Math.max(maxElem, parseElemId(diff.elemId).counter)
       insertions.push({elemId: diff.elemId, value: diff.value, conflicts: diff.conflicts})
 
       if (startIndex === endIndex || diffs[startIndex + 1].action !== 'insert' ||
