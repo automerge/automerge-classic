@@ -13,6 +13,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Added** [#139]: JavaScript Date objects are now supported in Automerge documents ([@ept])
 - **Added** [#147]: New `Automerge.Counter` datatype provides a CRDT counter ([@ept])
 - **Removed** [#148]: `Automerge.inspect` has been removed ([@ept])
+- **Fixed** [#145]: Exception "Duplicate list element ID" after reloading document from disk
+  ([@ept])
 
 ## [0.9.2] — 2018-11-05
 
@@ -192,6 +194,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 [#148]: https://github.com/automerge/automerge/pull/148
 [#147]: https://github.com/automerge/automerge/pull/147
+[#145]: https://github.com/automerge/automerge/issues/145
 [#139]: https://github.com/automerge/automerge/pull/139
 [#130]: https://github.com/automerge/automerge/pull/130
 [#129]: https://github.com/automerge/automerge/pull/129
