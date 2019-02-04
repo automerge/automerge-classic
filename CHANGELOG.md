@@ -8,12 +8,18 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.10.0] — 2019-02-04
+
 - **Added** [#29]: New `Automerge.Table` datatype provides an unordered collection of records,
   like a relational database ([@ept])
 - **Added** [#139]: JavaScript Date objects are now supported in Automerge documents ([@ept])
 - **Added** [#147]: New `Automerge.Counter` datatype provides a CRDT counter ([@ept])
 - **Removed** [#148]: `Automerge.inspect` has been removed ([@ept])
 - **Fixed** [#145]: Exception "Duplicate list element ID" after reloading document from disk
+  ([@ept])
+- **Changed** [#150]: Underscore-prefixed property names are now allowed in map objects;
+  `doc.object._objectId` is now `Automerge.getObjectId(doc.object)`; and
+  `doc.object._conflicts.property` is now `Automerge.getConflicts(doc.object, 'property')`.
   ([@ept])
 
 ## [0.9.2] — 2018-11-05
@@ -169,7 +175,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/automerge/automerge/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/automerge/automerge/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/automerge/automerge/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/automerge/automerge/compare/v0.8.0...v0.9.0
@@ -192,6 +199,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#150]: https://github.com/automerge/automerge/pull/150
 [#148]: https://github.com/automerge/automerge/pull/148
 [#147]: https://github.com/automerge/automerge/pull/147
 [#145]: https://github.com/automerge/automerge/issues/145
