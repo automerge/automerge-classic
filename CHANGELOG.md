@@ -18,9 +18,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Fixed** [#145]: Exception "Duplicate list element ID" after reloading document from disk
   ([@ept])
 - **Changed** [#150]: Underscore-prefixed property names are now allowed in map objects;
-  `doc.object._objectId` is now `Automerge.getObjectId(doc.object)`; and
-  `doc.object._conflicts.property` is now `Automerge.getConflicts(doc.object, 'property')`.
-  ([@ept])
+  `doc.object._objectId` is now `Automerge.getObjectId(doc.object)`,
+  `doc.object._conflicts.property` is now `Automerge.getConflicts(doc.object, 'property')`,
+  and `doc._actorId` is now `Automerge.getActorId(doc)`. ([@ept])
 
 ## [0.9.2] — 2018-11-05
 

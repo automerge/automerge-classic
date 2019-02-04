@@ -51,6 +51,7 @@ class Context {
    * with ID `objectId`. If the value is an object, returns a proxy for it.
    */
   getObjectField(objectId, key) {
+    if (!['string', 'number'].includes(typeof key)) return
     const object = this.getObject(objectId)
 
     if (object[key] instanceof Counter) {

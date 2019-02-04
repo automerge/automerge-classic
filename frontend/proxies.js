@@ -1,5 +1,5 @@
 const { ROOT_ID } = require('../src/common')
-const { OBJECT_ID, CHANGE } = require('./constants')
+const { OBJECT_ID, CHANGE, STATE } = require('./constants')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
@@ -100,6 +100,7 @@ const MapHandler = {
     const { context, objectId } = target
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
+    if (key === STATE) return {actorId: context.actorId}
     return context.getObjectField(objectId, key)
   },
 

@@ -13,10 +13,9 @@ describe('Automerge proxy API', () => {
 
     it('should know its actor ID', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(doc._actorId))
-        assert.notEqual(doc._actorId, ROOT_ID)
-        assert.strictEqual(Automerge.init('customActorId')._actorId, 'customActorId')
-        assert.strictEqual('_actorId' in doc, true)
+        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(Automerge.getActorId(doc)))
+        assert.notEqual(Automerge.getActorId(doc), ROOT_ID)
+        assert.strictEqual(Automerge.getActorId(Automerge.init('customActorId')), 'customActorId')
       })
     })
 

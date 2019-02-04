@@ -20,7 +20,6 @@ function updateRootObject(doc, updated, inbound, state) {
     newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
     updated[ROOT_ID] = newDoc
   }
-  Object.defineProperty(newDoc, '_actorId', {value: getActorId(doc)})
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
@@ -222,7 +221,6 @@ function init(options) {
   if (options.backend) {
     state.backendState = options.backend.init()
   }
-  Object.defineProperty(root, '_actorId', {value: options.actorId})
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
