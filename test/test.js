@@ -1212,6 +1212,17 @@ describe('Automerge', () => {
       assert.deepEqual(s3._conflicts, {x: {actor1: 3}})
     })
 
+    it('should reconstitute element ID counters', () => {
+      let s = Automerge.init('actorid')
+      s = Automerge.change(s, doc => doc.list = ['a'])
+      assert.strictEqual(Automerge.Frontend.getElementIds(s.list)[0], 'actorid:1')
+      s = Automerge.change(s, doc => doc.list.deleteAt(0))
+      s = Automerge.load(Automerge.save(s), 'actorid')
+      s = Automerge.change(s, doc => doc.list.push('b'))
+      assert.deepEqual(s, {list: ['b']})
+      assert.strictEqual(Automerge.Frontend.getElementIds(s.list)[0], 'actorid:2')
+    })
+
     it('should allow a reloaded list to be mutated', () => {
       let doc = Automerge.change(Automerge.init(), doc => doc.foo = [])
       doc = Automerge.load(Automerge.save(doc))

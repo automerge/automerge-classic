@@ -318,9 +318,10 @@ describe('Backend', () => {
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
         diffs: [
-          {action: 'create', obj: birds,   type: 'list'},
-          {action: 'insert', obj: birds,   type: 'list', index: 0, value: 'chaffinch', elemId: `${actor}:1`},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
+          {action: 'create',  obj: birds,   type: 'list'},
+          {action: 'insert',  obj: birds,   type: 'list', index: 0, value: 'chaffinch', elemId: `${actor}:1`},
+          {action: 'maxElem', obj: birds,   type: 'list', value: 1},
+          {action: 'set',     obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
         ]
       })
     })
@@ -346,10 +347,11 @@ describe('Backend', () => {
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
         diffs: [
-          {action: 'create', obj: birds,   type: 'list'},
-          {action: 'insert', obj: birds,   type: 'list', index: 0, value: 'greenfinch',    elemId: `${actor}:3`},
-          {action: 'insert', obj: birds,   type: 'list', index: 1, value: 'goldfinches!!', elemId: `${actor}:2`},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
+          {action: 'create',  obj: birds,   type: 'list'},
+          {action: 'insert',  obj: birds,   type: 'list', index: 0, value: 'greenfinch',    elemId: `${actor}:3`},
+          {action: 'insert',  obj: birds,   type: 'list', index: 1, value: 'goldfinches!!', elemId: `${actor}:2`},
+          {action: 'maxElem', obj: birds,   type: 'list', value: 3},
+          {action: 'set',     obj: ROOT_ID, type: 'map',  key: 'birds', value: birds, link: true}
         ]
       })
     })
@@ -370,12 +372,13 @@ describe('Backend', () => {
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
         diffs: [
-          {action: 'create', obj: item,    type: 'map'},
-          {action: 'set',    obj: item,    type: 'map',  key: 'title', value: 'water plants'},
-          {action: 'set',    obj: item,    type: 'map',  key: 'done',  value: false},
-          {action: 'create', obj: todos,   type: 'list'},
-          {action: 'insert', obj: todos,   type: 'list', index: 0,     value: item,  link: true, elemId: `${actor}:1`},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'todos', value: todos, link: true}
+          {action: 'create',  obj: item,    type: 'map'},
+          {action: 'set',     obj: item,    type: 'map',  key: 'title', value: 'water plants'},
+          {action: 'set',     obj: item,    type: 'map',  key: 'done',  value: false},
+          {action: 'create',  obj: todos,   type: 'list'},
+          {action: 'insert',  obj: todos,   type: 'list', index: 0,     value: item,  link: true, elemId: `${actor}:1`},
+          {action: 'maxElem', obj: todos,   type: 'list', value: 1},
+          {action: 'set',     obj: ROOT_ID, type: 'map',  key: 'todos', value: todos, link: true}
         ]
       })
     })
@@ -406,9 +409,10 @@ describe('Backend', () => {
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
         diffs: [
-          {action: 'create', obj: list,    type: 'list'},
-          {action: 'insert', obj: list,    type: 'list', index: 0, value: now.getTime(), elemId: `${actor}:1`, datatype: 'timestamp'},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  key: 'list', value: list, link: true}
+          {action: 'create',  obj: list,    type: 'list'},
+          {action: 'insert',  obj: list,    type: 'list', index: 0, value: now.getTime(), elemId: `${actor}:1`, datatype: 'timestamp'},
+          {action: 'maxElem', obj: list,    type: 'list', value: 1},
+          {action: 'set',     obj: ROOT_ID, type: 'map',  key: 'list', value: list, link: true}
         ]
       })
     })

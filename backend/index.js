@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const { isObject, lessOrEqual } = require('../src/common')
+const { isObject, lessOrEqual, parseElemId } = require('../src/common')
 const OpSet = require('./op_set')
 
 class MaterializationContext {
@@ -64,18 +64,21 @@ class MaterializationContext {
    * instantiate the list or text object with ID `objectId`.
    */
   instantiateList(opSet, objectId, type) {
-    let diffs = this.diffs[objectId]
+    let diffs = this.diffs[objectId], maxCounter = 0
     diffs.push({obj: objectId, type, action: 'create'})
 
-    let conflicts = OpSet.listIterator(opSet, objectId, 'conflicts', this)
-    let values    = OpSet.listIterator(opSet, objectId, 'values',    this)
+    for (let item of OpSet.listIterator(opSet, objectId, this)) {
+      const {index, elemId, value, conflicts} = item
+      maxCounter = Math.max(maxCounter, parseElemId(elemId).counter)
 
-    for (let [index, elemId] of OpSet.listIterator(opSet, objectId, 'elems', this)) {
-      let diff = {obj: objectId, type, action: 'insert', index, elemId}
-      this.unpackValue(objectId, diff, values.next().value)
-      this.unpackConflicts(objectId, diff, conflicts.next().value)
-      diffs.push(diff)
+      if (index !== undefined) {
+        let diff = {obj: objectId, type, action: 'insert', index, elemId}
+        this.unpackValue(objectId, diff, value)
+        this.unpackConflicts(objectId, diff, conflicts)
+        diffs.push(diff)
+      }
     }
+    diffs.push({obj: objectId, type, action: 'maxElem', value: maxCounter})
   }
 
   /**

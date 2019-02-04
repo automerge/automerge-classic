@@ -1,6 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const { SkipList } = require('./skip_list')
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+const { ROOT_ID, parseElemId } = require('../src/common')
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -412,8 +412,11 @@ function lamportCompare(op1, op2) {
 }
 
 function insertionsAfter(opSet, objectId, parentId, childId) {
-  const match = /^(.*):(\d+)$/.exec(childId || '')
-  const childKey = match ? Map({actor: match[1], elem: parseInt(match[2])}) : null
+  let childKey = null
+  if (childId) {
+    const parsedId = parseElemId(childId)
+    childKey = Map({actor: parsedId.actorId, elem: parsedId.counter})
+  }
 
   return opSet
     .getIn(['byObject', objectId, '_following', parentId], List())
@@ -513,31 +516,27 @@ function listLength(opSet, objectId) {
   return opSet.getIn(['byObject', objectId, '_elemIds']).length
 }
 
-function listIterator(opSet, listId, mode, context) {
+function listIterator(opSet, listId, context) {
   let elem = '_head', index = -1
   const next = () => {
     while (elem) {
       elem = getNext(opSet, listId, elem)
       if (!elem) return {done: true}
 
+      const result = {elemId: elem}
       const ops = getFieldOps(opSet, listId, elem)
       if (!ops.isEmpty()) {
-        const value = getOpValue(opSet, ops.first(), context)
         index += 1
-        switch (mode) {
-          case 'keys':    return {done: false, value: index}
-          case 'values':  return {done: false, value: value}
-          case 'entries': return {done: false, value: [index, value]}
-          case 'elems':   return {done: false, value: [index, elem]}
-          case 'conflicts':
-            let conflict = null
-            if (ops.size > 1) {
-              conflict = ops.shift().toMap()
-                .mapEntries(([_, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
-            }
-            return {done: false, value: conflict}
+        result.index = index
+        result.value = getOpValue(opSet, ops.first(), context)
+
+        result.conflicts = null
+        if (ops.size > 1) {
+          result.conflicts = ops.shift().toMap()
+            .mapEntries(([_, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
         }
       }
+      return {done: false, value: result}
     }
   }
 
