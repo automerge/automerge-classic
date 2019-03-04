@@ -244,8 +244,6 @@ newDoc = Automerge.change(currentDoc, doc => {
 })
 ```
 
-Object properties starting with an underscore cannot be used, as these are reserved by Automerge.
-
 The top-level Automerge document is always an object (i.e. a mapping from properties to values).
 You can use arrays (lists) by assigning a JavaScript array object to a property within a document.
 Then you can use most of the standard
