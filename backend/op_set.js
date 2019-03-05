@@ -79,19 +79,22 @@ function applyMake(opSet, op) {
   return [opSet, [edit]]
 }
 
-// Processes an 'ins' operation. Does not produce any diffs since the insertion alone
-// produces no application-visible effect; the list element only becomes visible through
-// a subsequent 'set' or 'link' operation on the inserted element.
+// Processes an 'ins' operation. Does not produce an insertion diff because the new list element
+// only becomes visible through a subsequent 'set' or 'link' operation.
 function applyInsert(opSet, op) {
   const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
+  const maxElem = Math.max(elem, opSet.getIn(['byObject', objectId, '_maxElem'], 0))
+  const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
   opSet = opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
-    .updateIn(['byObject', objectId, '_maxElem'], 0, maxElem => Math.max(elem, maxElem))
+    .setIn(['byObject', objectId, '_maxElem'], maxElem)
     .setIn(['byObject', objectId, '_insertion', elemId], op)
-  return [opSet, []]
+  return [opSet, [
+    {obj: objectId, type, action: 'maxElem', value: maxElem, path: getPath(opSet, objectId)}
+  ]]
 }
 
 function getConflicts(ops) {
@@ -253,6 +256,30 @@ function applyAssign(opSet, op, topLevel) {
   }
 }
 
+// Removes any redundant diffs from a patch.
+function simplifyDiffs(diffs) {
+  let maxElems = {}, result = []
+
+  for (let i = diffs.length - 1; i >= 0; i--) {
+    const diff = diffs[i], { obj, action } = diff
+    if (action === 'maxElem') {
+      if (maxElems[obj] === undefined || maxElems[obj] < diff.value) {
+        maxElems[obj] = diff.value
+        result.push(diff)
+      }
+    } else if (action === 'insert') {
+      const counter = parseElemId(diff.elemId).counter
+      if (maxElems[obj] === undefined || maxElems[obj] < counter) {
+        maxElems[obj] = counter
+      }
+      result.push(diff)
+    } else {
+      result.push(diff)
+    }
+  }
+  return result.reverse()
+}
+
 function applyOps(opSet, ops) {
   let allDiffs = [], newObjects = Set()
   for (let op of ops) {
@@ -269,7 +296,7 @@ function applyOps(opSet, ops) {
     }
     allDiffs.push(...diffs)
   }
-  return [opSet, allDiffs]
+  return [opSet, simplifyDiffs(allDiffs)]
 }
 
 function applyChange(opSet, change) {

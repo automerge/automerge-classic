@@ -547,6 +547,21 @@ describe('Automerge', () => {
         assert.strictEqual(s1.letters[1], 'd')
       })
 
+      it('should allow adding and removing list elements in the same change callback', () => {
+        s1 = Automerge.change(Automerge.init(), doc => doc.noodles = [])
+        s1 = Automerge.change(s1, doc => {
+          doc.noodles.push('udon')
+          doc.noodles.deleteAt(0)
+        })
+        assert.deepEqual(s1, {noodles: []})
+        // do the add-remove cycle twice, test for #151 (https://github.com/automerge/automerge/issues/151)
+        s1 = Automerge.change(s1, doc => {
+          doc.noodles.push('soba')
+          doc.noodles.deleteAt(0)
+        })
+        assert.deepEqual(s1, {noodles: []})
+      })
+
       it('should handle arbitrary-depth nesting', () => {
         s1 = Automerge.change(s1, doc => doc.maze = [[[[[[[['noodles', ['here']]]]]]]]])
         s1 = Automerge.change(s1, doc => doc.maze[0][0][0][0][0][0][0][1].unshift('found'))

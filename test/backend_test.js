@@ -168,6 +168,25 @@ describe('Backend', () => {
       })
     })
 
+    it('should handle list element insertion and deletion in the same change', () => {
+      const birds = uuid(), actor = uuid()
+      const change1 = {actor, seq: 1, deps: {}, ops: [
+        {action: 'makeList', obj: birds},
+        {action: 'link',     obj: ROOT_ID, key: 'birds', value: birds}
+      ]}
+      const change2 = {actor, seq: 2, deps: {}, ops: [
+        {action: 'ins', obj: birds, key: '_head', elem: 1},
+        {action: 'del', obj: birds, key: `${actor}:1`}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1])
+      const [s2, patch2] = Backend.applyChanges(s1, [change2])
+      assert.deepEqual(patch2, {
+        canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
+        diffs: [{action: 'maxElem', obj: birds, value: 1, type: 'list', path: ['birds']}]
+      })
+    })
+
     it('should support Date objects at the root', () => {
       const now = new Date()
       const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
