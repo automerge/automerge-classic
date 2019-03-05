@@ -8,6 +8,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Fixed** [#151]: Exception "Duplicate list element ID" after a list element was added and
+  removed again in the same change callback ([@ept], [@minhhien1996])
+
 ## [0.10.0] — 2019-02-04
 
 - **Added** [#29]: New `Automerge.Table` datatype provides an unordered collection of records,
@@ -199,6 +202,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#151]: https://github.com/automerge/automerge/issues/151
 [#150]: https://github.com/automerge/automerge/pull/150
 [#148]: https://github.com/automerge/automerge/pull/148
 [#147]: https://github.com/automerge/automerge/pull/147
@@ -254,6 +258,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@ept]: https://github.com/ept
 [@kpruden]: https://github.com/kpruden
 [@mattkrick]: https://github.com/mattkrick
+[@minhhien1996]: https://github.com/minhhien1996
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@pvh]: https://github.com/pvh
