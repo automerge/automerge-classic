@@ -101,7 +101,7 @@ describe('Automerge.Table', () => {
       assert.throws(() => s1.books.remove('id'),  /can only be modified in a change function/)
     })
 
-    it('should save and reload', () => {
+    it.skip('should save and reload', () => {
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepEqual(s2.books.columns, ['authors', 'title', 'isbn'])
       assert.deepEqual(s2.books.byId(rowId), DDIA)

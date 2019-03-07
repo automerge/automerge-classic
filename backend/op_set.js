@@ -488,12 +488,12 @@ function getPrevious(opSet, objectId, key) {
   }
 }
 
-function getOpValue(opSet, op, context) {
+function constructField(opSet, op) {
   if (typeof op !== 'object' || op === null) return op
   if (op.get('action') === 'link') {
-    return context.instantiateObject(opSet, op.get('value'))
+    return constructObject(opSet, op.get('value'))
   } else if (op.get('action') === 'set') {
-    const result = {value: op.get('value')}
+    const result = {action: 'set', actor: op.get('actor'), value: op.get('value')}
     if (op.get('datatype')) result.datatype = op.get('datatype')
     return result
   } else {
@@ -501,73 +501,54 @@ function getOpValue(opSet, op, context) {
   }
 }
 
-function isFieldPresent(opSet, objectId, key) {
-  return !getFieldOps(opSet, objectId, key).isEmpty()
-}
-
-function getObjectFields(opSet, objectId) {
-  return opSet.getIn(['byObject', objectId, '_keys'])
-    .keySeq()
-    .filter(key => isFieldPresent(opSet, objectId, key))
-    .toSet()
-}
-
-function getObjectField(opSet, objectId, key, context) {
-  const ops = getFieldOps(opSet, objectId, key)
-  if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
-}
-
-function getObjectConflicts(opSet, objectId, context) {
-  return opSet.getIn(['byObject', objectId, '_keys'])
-    .filter((field, key) => getFieldOps(opSet, objectId, key).size > 1)
-    .mapEntries(([key, field]) => [key, field.shift().toMap()
-      .mapEntries(([idx, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
-    ])
-}
-
-function listElemByIndex(opSet, objectId, index, context) {
-  const elemId = opSet.getIn(['byObject', objectId, '_elemIds']).keyOf(index)
-  if (elemId) {
-    const ops = getFieldOps(opSet, objectId, elemId)
-    if (!ops.isEmpty()) return getOpValue(opSet, ops.first(), context)
-  }
-}
-
-function listLength(opSet, objectId) {
-  return opSet.getIn(['byObject', objectId, '_elemIds']).length
-}
-
-function listIterator(opSet, listId, context) {
-  let elem = '_head', index = -1
-  const next = () => {
-    while (elem) {
-      elem = getNext(opSet, listId, elem)
-      if (!elem) return {done: true}
-
-      const result = {elemId: elem}
-      const ops = getFieldOps(opSet, listId, elem)
-      if (!ops.isEmpty()) {
-        index += 1
-        result.index = index
-        result.value = getOpValue(opSet, ops.first(), context)
-
-        result.conflicts = null
-        if (ops.size > 1) {
-          result.conflicts = ops.shift().toMap()
-            .mapEntries(([_, op]) => [op.get('actor'), getOpValue(opSet, op, context)])
-        }
-      }
-      return {done: false, value: result}
+function constructMap(opSet, objectId, type) {
+  const patch = {action: 'create', type, objectId, diffs: {}}
+  for (let [key, fieldOps] of opSet.getIn(['byObject', objectId, '_keys']).entries()) {
+    if (!fieldOps.isEmpty()) {
+      patch.diffs[key] = fieldOps.toArray().map(op => constructField(opSet, op))
     }
   }
+  return patch
+}
 
-  const iterator = {next}
-  iterator[Symbol.iterator] = () => { return iterator }
-  return iterator
+function constructList(opSet, objectId, type) {
+  const patch = {action: 'create', type, objectId, diffs: []}
+  let elemId = '_head', index = -1, maxCounter = 0
+
+  while (true) {
+    elemId = getNext(opSet, objectId, elemId)
+    if (!elemId) {
+      patch.diffs.push({action: 'maxElem', value: maxCounter})
+      return patch
+    }
+    maxCounter = Math.max(maxCounter, parseElemId(elemId).counter)
+
+    const fieldOps = getFieldOps(opSet, objectId, elemId)
+    if (!fieldOps.isEmpty()) {
+      index += 1
+      const elem = {action: 'insert', elemId, index}
+      elem.values = fieldOps.toArray().map(op => constructField(opSet, op))
+      patch.diffs.push(elem)
+    }
+  }
+}
+
+function constructObject(opSet, objectId) {
+  const objInit = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  if (objectId === ROOT_ID || objInit === 'makeMap') {
+    return constructMap(opSet, objectId, 'map')
+  } else if (objInit === 'makeTable') {
+    return constructMap(opSet, objectId, 'table')
+  } else if (objInit === 'makeList') {
+    return constructList(opSet, objectId, 'list')
+  } else if (objInit === 'makeText') {
+    return constructList(opSet, objectId, 'text')
+  } else {
+    throw new RangeError(`Unknown object type: ${objInit}`)
+  }
 }
 
 module.exports = {
   init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
-  getObjectFields, getObjectField, getObjectConflicts, getFieldOps,
-  listElemByIndex, listLength, listIterator, ROOT_ID
+  constructObject, getFieldOps, getPath, ROOT_ID
 }

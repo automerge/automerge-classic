@@ -1249,7 +1249,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('saving and loading', () => {
+  describe.skip('saving and loading', () => {
     it('should save and restore an empty document', () => {
       let s = Automerge.load(Automerge.save(Automerge.init()))
       assert.deepEqual(s, {})
@@ -1305,7 +1305,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('history API', () => {
+  describe.skip('history API', () => {
     it('should return an empty history for an empty document', () => {
       assert.deepEqual(Automerge.getHistory(Automerge.init()), [])
     })
