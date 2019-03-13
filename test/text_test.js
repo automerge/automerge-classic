@@ -2,7 +2,7 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
 
-describe('Automerge.Text', () => {
+describe.skip('Automerge.Text', () => {
   let s1, s2
   beforeEach(() => {
     s1 = Automerge.change(Automerge.init(), doc => doc.text = new Automerge.Text())

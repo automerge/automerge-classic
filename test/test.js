@@ -4,7 +4,7 @@ const { assertEqualsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
-describe('Automerge', () => {
+describe.skip('Automerge', () => {
   describe('sequential use:', () => {
     let s1, s2
     beforeEach(() => {
@@ -1249,7 +1249,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe.skip('saving and loading', () => {
+  describe('saving and loading', () => {
     it('should save and restore an empty document', () => {
       let s = Automerge.load(Automerge.save(Automerge.init()))
       assert.deepEqual(s, {})
@@ -1305,7 +1305,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe.skip('history API', () => {
+  describe('history API', () => {
     it('should return an empty history for an empty document', () => {
       assert.deepEqual(Automerge.getHistory(Automerge.init()), [])
     })

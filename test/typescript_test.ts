@@ -13,7 +13,7 @@ interface NumberBox {
   number: number
 }
 
-describe('TypeScript support', () => {
+describe.skip('TypeScript support', () => {
   describe('Automerge.init()', () => {
     it('should allow a document to be `any`', () => {
       let s1 = Automerge.init<any>()
@@ -122,7 +122,7 @@ describe('TypeScript support', () => {
     })
   })
 
-  describe.skip('saving and loading', () => {
+  describe('saving and loading', () => {
     it('should allow an `any` type document to be loaded', () => {
       let s1 = Automerge.init<any>()
       s1 = Automerge.change(s1, doc => (doc.key = 'value'))
@@ -349,7 +349,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(diff[0].value, 2)
     })
 
-    it.skip('should inspect document history', () => {
+    it('should inspect document history', () => {
       const s0 = Automerge.init<NumberBox>()
       const s1 = Automerge.change(s0, 'one', doc => (doc.number = 1))
       const s2 = Automerge.change(s1, 'two', doc => (doc.number = 2))

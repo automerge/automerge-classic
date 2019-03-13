@@ -343,7 +343,7 @@ describe('Automerge.Frontend', () => {
       assert.deepEqual(getRequests(doc4), [])
     })
 
-    it('should allow interleaving of patches and changes', () => {
+    it.skip('should allow interleaving of patches and changes', () => {
       const actor = uuid()
       const [doc1, req1] = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
       const [doc2, req2] = Frontend.change(doc1, doc => doc.number = 2)
@@ -573,7 +573,7 @@ describe('Automerge.Frontend', () => {
       return [newBackend, Frontend.applyPatch(doc, patch)]
     }
 
-    it('should perform multiple undos and redos', () => {
+    it.skip('should perform multiple undos and redos', () => {
       const doc0 = Frontend.init(), b0 = Backend.init()
       const [b1, doc1] = apply(b0, Frontend.change(doc0, doc => doc.number = 1))
       const [b2, doc2] = apply(b1, Frontend.change(doc1, doc => doc.number = 2))

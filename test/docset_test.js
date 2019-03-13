@@ -3,7 +3,7 @@ const sinon = require('sinon')
 const Automerge =
   process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
-describe('Automerge.DocSet', () => {
+describe.skip('Automerge.DocSet', () => {
   let beforeDoc
   let afterDoc
   let docSet

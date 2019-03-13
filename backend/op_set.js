@@ -36,125 +36,89 @@ function transitiveDeps(opSet, baseDeps) {
   }, Map())
 }
 
-// Returns the path from the root object to the given objectId, as an array of string keys
-// (for ancestor maps) and integer indexes (for ancestor lists). If there are several paths
-// to the same object, returns one of the paths arbitrarily. If the object is not reachable
-// from the root, returns null.
+/**
+ * Returns the path from the root object to the given objectId, as an array of
+ * operations describing the objects and keys traversed. If there are several
+ * paths to the same object, returns one of the paths arbitrarily.
+ */
 function getPath(opSet, objectId) {
   let path = []
   while (objectId !== ROOT_ID) {
     const ref = opSet.getIn(['byObject', objectId, '_inbound'], Set()).first()
-    if (!ref) return null
+    if (!ref) throw new RangeError(`No path found to object ${objectId}`)
+    path.unshift(ref)
     objectId = ref.get('obj')
-    const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-
-    if (objType === 'makeList' || objType === 'makeText') {
-      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(ref.get('key'))
-      if (index < 0) return null
-      path.unshift(index)
-    } else {
-      path.unshift(ref.get('key'))
-    }
   }
   return path
 }
 
-// Processes a 'makeMap', 'makeList', or 'makeText' operation
-function applyMake(opSet, op) {
-  const objectId = op.get('obj')
-  if (opSet.hasIn(['byObject', objectId, '_keys'])) throw new Error('Duplicate creation of object ' + objectId)
+/**
+ * Returns a string that is either 'map', 'table', 'list', or 'text', indicating
+ * the type of the object with ID `objectId`.
+ */
+function getObjectType(opSet, objectId) {
+  if (objectId === ROOT_ID) return 'map'
+  const objInit = opSet.getIn(['byObject', objectId, '_init', 'action'])
+  const type = {makeMap: 'map', makeTable: 'table', makeList: 'list', makeText: 'text'}[objInit]
+  if (!type) throw new RangeError(`Unknown object type ${objInit} for ${objectId}`)
+  return type
+}
 
-  let edit = {action: 'create', obj: objectId}
+// Processes a 'makeMap', 'makeList', 'makeTable', or 'makeText' operation
+function applyMake(opSet, op, patch) {
+  const objectId = op.get('child')
+  if (opSet.hasIn(['byObject', objectId, '_keys'])) throw new Error(`Duplicate creation of object ${objectId}`)
+
+  patch.objectId = objectId
   let object = Map({_init: op, _inbound: Set(), _keys: Map()})
+
   if (op.get('action') === 'makeMap') {
-    edit.type = 'map'
+    patch.type = 'map'
   } else if (op.get('action') === 'makeTable') {
-    edit.type = 'table'
+    patch.type = 'table'
   } else {
-    edit.type = (op.get('action') === 'makeText') ? 'text' : 'list'
+    patch.type = (op.get('action') === 'makeText') ? 'text' : 'list'
     object = object.set('_elemIds', new SkipList())
   }
 
-  opSet = opSet.setIn(['byObject', objectId], object)
-  return [opSet, [edit]]
+  return opSet.setIn(['byObject', objectId], object)
 }
 
 // Processes an 'ins' operation. Does not produce an insertion diff because the new list element
 // only becomes visible through a subsequent 'set' or 'link' operation.
-function applyInsert(opSet, op) {
+function applyInsert(opSet, op, patch) {
   const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
   const maxElem = Math.max(elem, opSet.getIn(['byObject', objectId, '_maxElem'], 0))
   const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
-  opSet = opSet
+  patch.maxElem = maxElem
+  return opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
     .setIn(['byObject', objectId, '_maxElem'], maxElem)
     .setIn(['byObject', objectId, '_insertion', elemId], op)
-  return [opSet, [
-    {obj: objectId, type, action: 'maxElem', value: maxElem, path: getPath(opSet, objectId)}
-  ]]
 }
 
-function getConflicts(ops) {
-  const conflicts = []
-  for (let op of ops.shift()) {
-    let conflict = {actor: op.get('actor'), value: op.get('value')}
-    if (op.get('action') === 'link') {
-      conflict.link = true
-    }
-    if (op.get('datatype')) {
-      conflict.datatype = op.get('datatype')
-    }
-    conflicts.push(conflict)
-  }
-  return conflicts
-}
-
-function patchList(opSet, objectId, index, elemId, action, ops) {
-  const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
-  const firstOp = ops ? ops.first() : null
-  let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
-  let value = firstOp ? firstOp.get('value') : null
-  let edit = {action, type, obj: objectId, index, path: getPath(opSet, objectId)}
-  if (firstOp && firstOp.get('action') === 'link') {
-    edit.link = true
-    value = {obj: firstOp.get('value')}
-  }
-
-  if (action === 'insert') {
-    elemIds = elemIds.insertIndex(index, firstOp.get('key'), value)
-    edit.elemId = elemId
-    edit.value = firstOp.get('value')
-    if (firstOp.get('datatype')) edit.datatype = firstOp.get('datatype')
-  } else if (action === 'set') {
-    elemIds = elemIds.setValue(firstOp.get('key'), value)
-    edit.value = firstOp.get('value')
-    if (firstOp.get('datatype')) edit.datatype = firstOp.get('datatype')
-  } else if (action === 'remove') {
-    elemIds = elemIds.removeIndex(index)
-  } else throw new Error('Unknown action type: ' + action)
-
-  if (ops && ops.size > 1) edit.conflicts = getConflicts(ops)
-  opSet = opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
-  return [opSet, [edit]]
-}
-
-function updateListElement(opSet, objectId, elemId) {
+function updateListElement(opSet, objectId, elemId, patch) {
   const ops = getFieldOps(opSet, objectId, elemId)
-  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+  let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let index = elemIds.indexOf(elemId)
+
+  if (patch.edits === undefined) {
+    patch.edits = []
+  }
 
   if (index >= 0) {
     if (ops.isEmpty()) {
-      return patchList(opSet, objectId, index, elemId, 'remove', null)
+      elemIds = elemIds.removeIndex(index)
+      patch.edits.push({action: 'remove', elemId, index})
     } else {
-      return patchList(opSet, objectId, index, elemId, 'set', ops)
+      elemIds = elemIds.setValue(elemId, ops.first().get('value'))
     }
 
   } else {
-    if (ops.isEmpty()) return [opSet, []] // deleting a non-existent element = no-op
+    if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
 
     // find the index of the closest preceding list element
     let prevId = elemId
@@ -166,56 +130,76 @@ function updateListElement(opSet, objectId, elemId) {
       if (index >= 0) break
     }
 
-    return patchList(opSet, objectId, index + 1, elemId, 'insert', ops)
+    index += 1
+    elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
+    patch.edits.push({action: 'insert', elemId, index})
   }
+  return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
 
-function updateMapKey(opSet, objectId, type, key) {
-  const ops = getFieldOps(opSet, objectId, key)
-  const firstOp = ops.first()
-  let edit = {action: '', type, obj: objectId, key, path: getPath(opSet, objectId)}
+/**
+ * Computes the inverse of operation `op` and adds it to the list of undo operations
+ * (`undoLocal`) in `opSet`. The inverse is the operation that restores the modified
+ * field to its previous value. Returns the updated `opSet`.
+ */
+function recordUndoHistory(opSet, op) {
+  if (!opSet.has('undoLocal')) return opSet
+  const objectId = op.get('obj'), key = op.get('key'), value = op.get('value')
 
-  if (ops.isEmpty()) {
-    edit.action = 'remove'
+  let undoOps
+  if (op.get('action') === 'inc') {
+    undoOps = List.of(Map({action: 'inc', obj: objectId, key, value: -value}))
   } else {
-    edit.action = 'set'
-    edit.value = firstOp.get('value')
-    if (firstOp.get('action') === 'link') {
-      edit.link = true
-    }
-    if (firstOp.get('datatype')) {
-      edit.datatype = firstOp.get('datatype')
-    }
-
-    if (ops.size > 1) edit.conflicts = getConflicts(ops)
+    undoOps = getFieldOps(opSet, objectId, key)
+      .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype'].includes(k)))
   }
-  return [opSet, [edit]]
+  if (undoOps.isEmpty()) {
+    undoOps = List.of(Map({action: 'del', obj: objectId, key}))
+  }
+  return opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
 }
 
-// Processes a 'set', 'del', 'link', or 'inc' operation
-function applyAssign(opSet, op, topLevel) {
-  const objectId = op.get('obj')
-  const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
-  if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
+/**
+ * Returns true if the operation `op` introduces a child object.
+ */
+function isChildOp(op) {
+  const action = op.get('action')
+  return action.startsWith('make') || action === 'move'
+}
 
-  if (opSet.has('undoLocal') && topLevel) {
-    let undoOps
-    if (op.get('action') === 'inc') {
-      undoOps = List.of(Map({action: 'inc', obj: objectId, key: op.get('key'), value: -op.get('value')}))
-    } else {
-      undoOps = opSet.getIn(['byObject', objectId, '_keys', op.get('key')], List())
-        .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype'].includes(k)))
-    }
-    if (undoOps.isEmpty()) {
-      undoOps = List.of(Map({action: 'del', obj: objectId, key: op.get('key')}))
-    }
-    opSet = opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
+/**
+ * Processes a 'set', 'del', 'make*', 'move', or 'inc' operation. Mutates `patch`
+ * to describe the change and returns an updated `opSet`.
+ */
+function applyAssign(opSet, op, patch) {
+  const objectId = op.get('obj'), action = op.get('action'), key = op.get('key')
+  if (!opSet.get('byObject').has(objectId)) throw new RangeError(`Modification of unknown object ${objectId}`)
+
+  patch.objectId = patch.objectId || objectId
+  if (patch.objectId !== objectId) {
+    throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
+  }
+  if (patch.props === undefined) {
+    patch.props = {}
+  }
+  if (patch.props[key] === undefined) {
+    patch.props[key] = {}
   }
 
-  const ops = opSet.getIn(['byObject', objectId, '_keys', op.get('key')], List())
+  const type = getObjectType(opSet, objectId)
+  patch.type = patch.type || type
+  if (patch.type !== type) {
+    throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
+  }
+  if (action.startsWith('make')) {
+    patch.props[key][op.get('actor')] = {}
+    opSet = applyMake(opSet, op, patch.props[key][op.get('actor')])
+  }
+
+  const ops = getFieldOps(opSet, objectId, key)
   let overwritten, remaining
 
-  if (op.get('action') === 'inc') {
+  if (action === 'inc') {
     overwritten = List()
     remaining = ops.map(other => {
       if (other.get('action') === 'set' && typeof other.get('value') === 'number' &&
@@ -231,89 +215,170 @@ function applyAssign(opSet, op, topLevel) {
     remaining   = priorOpsConcurrent.get(true,  List())
   }
 
-  // If any links were overwritten, remove them from the index of inbound links
-  for (let op of overwritten.filter(op => op.get('action') === 'link')) {
-    opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], ops => ops.remove(op))
+  // If any child object references were overwritten, remove them from the index of inbound links
+  for (let old of overwritten.filter(isChildOp)) {
+    opSet = opSet.updateIn(['byObject', old.get('child'), '_inbound'], ops => ops.remove(old))
   }
 
-  if (op.get('action') === 'link') {
-    opSet = opSet.updateIn(['byObject', op.get('value'), '_inbound'], Set(), ops => ops.add(op))
+  if (isChildOp(op)) {
+    opSet = opSet.updateIn(['byObject', op.get('child'), '_inbound'], Set(), ops => ops.add(op))
   }
-  if (['set', 'link'].includes(op.get('action'))) {
+  if (action === 'set' || isChildOp(op)) {
     remaining = remaining.push(op)
   }
   remaining = remaining.sortBy(op => op.get('actor')).reverse()
-  opSet = opSet.setIn(['byObject', objectId, '_keys', op.get('key')], remaining)
+  opSet = opSet.setIn(['byObject', objectId, '_keys', key], remaining)
+  setPatchProps(opSet, objectId, key, patch)
 
-  if (objectId === ROOT_ID || objType === 'makeMap') {
-    return updateMapKey(opSet, objectId, 'map', op.get('key'))
-  } else if (objType === 'makeTable') {
-    return updateMapKey(opSet, objectId, 'table', op.get('key'))
-  } else if (objType === 'makeList' || objType === 'makeText') {
-    return updateListElement(opSet, objectId, op.get('key'))
-  } else {
-    throw new RangeError(`Unknown operation type ${objType}`)
+  if (type === 'list' || type === 'text') {
+    opSet = updateListElement(opSet, objectId, key, patch)
   }
+  return opSet
 }
 
-// Removes any redundant diffs from a patch.
-function simplifyDiffs(diffs) {
-  let maxElems = {}, result = []
+/**
+ * Updates `patch` with the fields required in a patch. `pathOp` is an operation
+ * along the path from the root to the object being modified, as returned by
+ * `getPath()`. Returns the sub-object representing the child identified by this
+ * operation.
+ */
+function initializePatch(opSet, pathOp, patch) {
+  const objectId = pathOp.get('obj'), type = getObjectType(opSet, objectId)
+  const key = pathOp.get('key'), actor = pathOp.get('actor')
+  patch.objectId = patch.objectId || objectId
+  patch.type     = patch.type     || type
 
-  for (let i = diffs.length - 1; i >= 0; i--) {
-    const diff = diffs[i], { obj, action } = diff
-    if (action === 'maxElem') {
-      if (maxElems[obj] === undefined || maxElems[obj] < diff.value) {
-        maxElems[obj] = diff.value
-        result.push(diff)
+  if (patch.objectId !== objectId) {
+    throw new RangeError(`objectId mismatch in path: ${patch.objectId} != ${objectId}`)
+  }
+  if (patch.type !== type) {
+    throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
+  }
+  setPatchProps(opSet, objectId, key, patch)
+
+  if (patch.props[key][actor] === undefined) {
+    throw new RangeError(`field ops for ${key} did not contain actor ${actor}`)
+  }
+  return patch.props[key][actor]
+}
+
+/**
+ * Updates `patch` to include all the values (including conflicts) for the field
+ * `key` of the object with ID `objectId`.
+ */
+function setPatchProps(opSet, objectId, key, patch) {
+  if (patch.props === undefined) {
+    patch.props = {}
+  }
+  if (patch.props[key] === undefined) {
+    patch.props[key] = {}
+  }
+
+  const actors = {}
+  for (let op of getFieldOps(opSet, objectId, key)) {
+    const actor = op.get('actor'), action = op.get('action'), value = op.get('value')
+    actors[actor] = true
+
+    if (action === 'set') {
+      patch.props[key][actor] = {value}
+      if (op.get('datatype')) {
+        patch.props[key][actor].datatype = op.get('datatype')
       }
-    } else if (action === 'insert') {
-      const counter = parseElemId(diff.elemId).counter
-      if (maxElems[obj] === undefined || maxElems[obj] < counter) {
-        maxElems[obj] = counter
+    } else if (action.startsWith('make')) {
+      if (!patch.props[key][actor]) {
+        const childId = op.get('child')
+        patch.props[key][actor] = {objectId: childId, type: getObjectType(opSet, childId)}
       }
-      result.push(diff)
     } else {
-      result.push(diff)
+      throw new RangeError(`Unexpected operation in field ops: ${action}`)
     }
   }
-  return result.reverse()
+
+  // Remove any values that appear in the patch, but were not returned by getFieldOps()
+  for (let actor of Object.keys(patch.props[key])) {
+    if (!actors[actor]) {
+      delete patch.props[key][actor]
+    }
+  }
 }
 
-function applyOps(opSet, ops) {
-  let allDiffs = [], newObjects = Set()
+/**
+ * Mutates `patch`, changing elemId-based addressing of lists to index-based
+ * addressing. (This can only be done once all the changes have been applied,
+ * since the indexes are still in flux until that point.)
+ */
+function finalizePatch(opSet, patch) {
+  if (!patch || !patch.props) return
+
+  if (patch.type === 'list' || patch.type === 'text') {
+    const elemIds = opSet.getIn(['byObject', patch.objectId, '_elemIds'])
+    const newProps = {}
+    for (let elemId of Object.keys(patch.props)) {
+      if (Object.keys(patch.props[elemId]).length > 0) {
+        const index = elemIds.indexOf(elemId)
+        if (index < 0) throw new RangeError(`List element has no index: ${elemId}`)
+        newProps[index] = patch.props[elemId]
+      }
+    }
+    patch.props = newProps
+  }
+
+  for (let key of Object.keys(patch.props)) {
+    for (let actor of Object.keys(patch.props[key])) {
+      finalizePatch(opSet, patch.props[key][actor])
+    }
+  }
+}
+
+/**
+ * Applies the operations in the list `ops` to `opSet`. As a side-effect, `patch`
+ * is mutated to describe the changes. Returns the updated `opSet`.
+ */
+function applyOps(opSet, ops, patch) {
+  let newObjects = Set()
   for (let op of ops) {
-    let diffs, action = op.get('action')
-    if (['makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
-      newObjects = newObjects.add(op.get('obj'))
-      ;[opSet, diffs] = applyMake(opSet, op)
-    } else if (action === 'ins') {
-      ;[opSet, diffs] = applyInsert(opSet, op)
-    } else if (['set', 'del', 'link', 'inc'].includes(action)) {
-      ;[opSet, diffs] = applyAssign(opSet, op, !newObjects.contains(op.get('obj')))
-    } else {
-      throw new RangeError(`Unknown operation type ${action}`)
+    const action = op.get('action')
+    let localPatch = patch
+    for (let pathOp of getPath(opSet, op.get('obj'))) {
+      localPatch = initializePatch(opSet, pathOp, localPatch)
     }
-    allDiffs.push(...diffs)
+
+    if (action.startsWith('make')) {
+      newObjects = newObjects.add(op.get('child'))
+    }
+
+    if (action === 'ins') {
+      opSet = applyInsert(opSet, op, localPatch)
+    } else {
+      if (!newObjects.contains(op.get('obj'))) {
+        opSet = recordUndoHistory(opSet, op)
+      }
+      opSet = applyAssign(opSet, op, localPatch)
+    }
   }
-  return [opSet, simplifyDiffs(allDiffs)]
+  return opSet
 }
 
-function applyChange(opSet, change) {
+/**
+ * Applies the changeset `change` to `opSet` (unless it has already been applied,
+ * in which case we do nothing). As a side-effect, `patch` is mutated to describe
+ * the changes. Returns the updated `opSet`.
+ */
+function applyChange(opSet, change, patch) {
   const actor = change.get('actor'), seq = change.get('seq')
   const prior = opSet.getIn(['states', actor], List())
   if (seq <= prior.size) {
     if (!prior.get(seq - 1).get('change').equals(change)) {
       throw new Error('Inconsistent reuse of sequence number ' + seq + ' by ' + actor)
     }
-    return [opSet, []] // change already applied, return unchanged
+    return opSet // change already applied, return unchanged
   }
 
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
-  let diffs, ops = change.get('ops').map(op => op.merge({actor, seq}))
-  ;[opSet, diffs] = applyOps(opSet, ops)
+  let ops = change.get('ops').map(op => op.merge({actor, seq}))
+  opSet = applyOps(opSet, ops, patch)
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
@@ -323,22 +388,21 @@ function applyChange(opSet, change) {
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
     .update('history', history => history.push(change))
-  return [opSet, diffs]
+  return opSet
 }
 
-function applyQueuedOps(opSet) {
-  let queue = List(), diff, diffs = []
+function applyQueuedOps(opSet, patch) {
+  let queue = List()
   while (true) {
     for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
-        ;[opSet, diff] = applyChange(opSet, change)
-        diffs.push(...diff)
+        opSet = applyChange(opSet, change, patch)
       } else {
         queue = queue.push(change)
       }
     }
 
-    if (queue.count() === opSet.get('queue').count()) return [opSet, diffs]
+    if (queue.count() === opSet.get('queue').count()) return opSet
     opSet = opSet.set('queue', queue)
     queue = List()
   }
@@ -370,19 +434,21 @@ function init() {
     .set('queue',    List())
 }
 
-function addChange(opSet, change, isUndoable) {
+/**
+ * Adds `change` to `opSet`. If `isUndoable` is true, an undo history entry is created.
+ * `patch` is mutated to describe the change (in the format used by patches).
+ */
+function addChange(opSet, change, isUndoable, patch) {
   opSet = opSet.update('queue', queue => queue.push(change))
 
   if (isUndoable) {
-    // setting the undoLocal key enables undo history capture
-    opSet = opSet.set('undoLocal', List())
-    let diffs
-    ;[opSet, diffs] = applyQueuedOps(opSet)
+    opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
+    opSet = applyQueuedOps(opSet, patch)
     opSet = pushUndoHistory(opSet)
-    return [opSet, diffs]
   } else {
-    return applyQueuedOps(opSet)
+    opSet = applyQueuedOps(opSet, patch)
   }
+  return opSet
 }
 
 function getMissingChanges(opSet, haveDeps) {
@@ -489,11 +555,10 @@ function getPrevious(opSet, objectId, key) {
 }
 
 function constructField(opSet, op) {
-  if (typeof op !== 'object' || op === null) return op
-  if (op.get('action') === 'link') {
-    return constructObject(opSet, op.get('value'))
+  if (op.get('action').startsWith('make')) {
+    return constructObject(opSet, op.get('child'))
   } else if (op.get('action') === 'set') {
-    const result = {action: 'set', actor: op.get('actor'), value: op.get('value')}
+    const result = {value: op.get('value')}
     if (op.get('datatype')) result.datatype = op.get('datatype')
     return result
   } else {
@@ -502,53 +567,54 @@ function constructField(opSet, op) {
 }
 
 function constructMap(opSet, objectId, type) {
-  const patch = {action: 'create', type, objectId, diffs: {}}
+  const patch = {objectId, type, props: {}}
   for (let [key, fieldOps] of opSet.getIn(['byObject', objectId, '_keys']).entries()) {
     if (!fieldOps.isEmpty()) {
-      patch.diffs[key] = fieldOps.toArray().map(op => constructField(opSet, op))
+      patch.props[key] = {}
+      for (let op of fieldOps) {
+        patch.props[key][op.get('actor')] = constructField(opSet, op)
+      }
     }
   }
   return patch
 }
 
 function constructList(opSet, objectId, type) {
-  const patch = {action: 'create', type, objectId, diffs: []}
-  let elemId = '_head', index = -1, maxCounter = 0
+  const patch = {objectId, type, props: {}, edits: []}
+  let elemId = '_head', index = 0, maxCounter = 0
 
   while (true) {
     elemId = getNext(opSet, objectId, elemId)
     if (!elemId) {
-      patch.diffs.push({action: 'maxElem', value: maxCounter})
+      patch.maxElem = maxCounter
       return patch
     }
     maxCounter = Math.max(maxCounter, parseElemId(elemId).counter)
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {
+      patch.edits.push({action: 'insert', elemId, index})
+      patch.props[index] = {}
+      for (let op of fieldOps) {
+        patch.props[index][op.get('actor')] = constructField(opSet, op)
+      }
       index += 1
-      const elem = {action: 'insert', elemId, index}
-      elem.values = fieldOps.toArray().map(op => constructField(opSet, op))
-      patch.diffs.push(elem)
     }
   }
 }
 
 function constructObject(opSet, objectId) {
-  const objInit = opSet.getIn(['byObject', objectId, '_init', 'action'])
-  if (objectId === ROOT_ID || objInit === 'makeMap') {
-    return constructMap(opSet, objectId, 'map')
-  } else if (objInit === 'makeTable') {
-    return constructMap(opSet, objectId, 'table')
-  } else if (objInit === 'makeList') {
-    return constructList(opSet, objectId, 'list')
-  } else if (objInit === 'makeText') {
-    return constructList(opSet, objectId, 'text')
+  const type = getObjectType(opSet, objectId)
+  if (type === 'map' || type === 'table') {
+    return constructMap(opSet, objectId, type)
+  } else if (type === 'list' || type === 'text') {
+    return constructList(opSet, objectId, type)
   } else {
-    throw new RangeError(`Unknown object type: ${objInit}`)
+    throw new RangeError(`Unknown object type: ${type}`)
   }
 }
 
 module.exports = {
   init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
-  constructObject, getFieldOps, getPath, ROOT_ID
+  constructObject, getFieldOps, finalizePatch, ROOT_ID
 }

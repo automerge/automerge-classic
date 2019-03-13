@@ -15,7 +15,9 @@ describe('Automerge.Backend', () => {
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'magpie'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {[actor]: {value: 'magpie'}}
+        }}
       })
     })
 
@@ -32,7 +34,9 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'counter', value: 3, datatype: 'counter'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          counter: {[actor]: {value: 3, datatype: 'counter'}}
+        }}
       })
     })
 
@@ -48,9 +52,10 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {actor1: 1, actor2: 1}, deps: {actor1: 1, actor2: 1},
-        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'blackbird',
-          conflicts: [{actor: 'actor1', value: 'magpie'}]}
-      ]})
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {actor1: {value: 'magpie'}, actor2: {value: 'blackbird'}}
+        }}
+      })
     })
 
     it('should delete a key from a map', () => {
@@ -66,35 +71,31 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'remove', obj: ROOT_ID, path: [], type: 'map', key: 'bird'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {bird: {}}}
       })
     })
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeMap', obj: birds},
-        {action: 'set',     obj: birds,   key: 'wrens', value: 3},
-        {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
+        {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
+        {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [
-          {action: 'create', obj: birds,   type: 'map'},
-          {action: 'set',    obj: birds,   type: 'map', path: null, key: 'wrens', value: 3},
-          {action: 'set',    obj: ROOT_ID, type: 'map', path: [],   key: 'birds', value: birds, link: true}
-        ]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {wrens: {[actor]: {value: 3}}}
+        }}}}
       })
     })
 
     it('should assign to keys in nested maps', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeMap', obj: birds},
-        {action: 'set',     obj: birds,   key: 'wrens', value: 3},
-        {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
+        {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
+        {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
@@ -104,37 +105,37 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'set', obj: birds, type: 'map', path: ['birds'], key: 'sparrows', value: 15}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {sparrows: {[actor]: {value: 15}}}
+        }}}}
       })
     })
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
+        {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
-        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
-        {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
+        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(patch1, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [
-          {action: 'create', obj: birds,   type: 'list'},
-          {action: 'insert', obj: birds,   type: 'list', path: null, index: 0, value: 'chaffinch', elemId: `${actor}:1`},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  path: [],   key: 'birds', value: birds, link: true}
-        ]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', maxElem: 1,
+          edits: [{action: 'insert', index: 0, elemId: `${actor}:1`}],
+          props: {0: {[actor]: {value: 'chaffinch'}}}
+        }}}}
       })
     })
 
     it('should apply updates inside lists', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
+        {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
-        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
-        {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
+        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'greenfinch'}
@@ -144,17 +145,19 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'set', obj: birds, type: 'list', path: ['birds'], index: 0, value: 'greenfinch'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', edits: [],
+          props: {0: {[actor]: {value: 'greenfinch'}}}
+        }}}}
       })
     })
 
     it('should delete list elements', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
+        {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
-        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
-        {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
+        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`}
@@ -164,15 +167,17 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'remove', obj: birds, type: 'list', path: ['birds'], index: 0}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', props: {},
+          edits: [{action: 'remove', index: 0, elemId: `${actor}:1`}]
+        }}}}
       })
     })
 
     it('should handle list element insertion and deletion in the same change', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
-        {action: 'link',     obj: ROOT_ID, key: 'birds', value: birds}
+        {action: 'makeList', obj: ROOT_ID, key: 'birds', child: birds}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'ins', obj: birds, key: '_head', elem: 1},
@@ -183,7 +188,34 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [change2])
       assert.deepEqual(patch2, {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: [{action: 'maxElem', obj: birds, value: 1, type: 'list', path: ['birds']}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', maxElem: 1, edits: [], props: {}
+        }}}}
+      })
+    })
+
+    it('should handle changes within conflicted objects', () => {
+      const list = uuid(), map = uuid(), actor1 = uuid(), actor2 = uuid()
+      const change1 = {actor: actor1, seq: 1, deps: {}, ops: [
+        {action: 'makeList', obj: ROOT_ID, key: 'conflict', child: list}
+      ]}
+      const change2 = {actor: actor2, seq: 1, deps: {}, ops: [
+        {action: 'makeMap',  obj: ROOT_ID, key: 'conflict', child: map}
+      ]}
+      const change3 = {actor: actor2, seq: 2, deps: {}, ops: [
+        {action: 'set', obj: map, key: 'sparrows', value: 12}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1])
+      const [s2, patch2] = Backend.applyChanges(s1, [change2])
+      const [s3, patch3] = Backend.applyChanges(s2, [change3])
+      assert.deepEqual(patch3, {
+        canUndo: false, canRedo: false,
+        clock: {[actor1]: 1, [actor2]: 2}, deps: {[actor1]: 1, [actor2]: 2},
+        diffs: {objectId: ROOT_ID, type: 'map', props: {conflict: {
+          [actor1]: {objectId: list, type: 'list'},
+          [actor2]: {objectId: map, type: 'map', props: {sparrows: {[actor2]: {value: 12}}}}
+        }}}
       })
     })
 
@@ -196,28 +228,28 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change])
       assert.deepEqual(patch, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [{action: 'set', obj: ROOT_ID, type: 'map', path: [], key: 'now', value: now.getTime(), datatype: 'timestamp'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          now: {[actor]: {value: now.getTime(), datatype: 'timestamp'}}
+        }}
       })
     })
 
     it('should support Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
       const change = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: list},
+        {action: 'makeList', obj: ROOT_ID, key: 'list',       child: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
-        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
-        {action: 'link',     obj: ROOT_ID, key: 'list',       value: list}
+        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change])
       assert.deepEqual(patch, {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [
-          {action: 'create', obj: list,    type: 'list'},
-          {action: 'insert', obj: list,    type: 'list', path: null, index: 0,
-            value: now.getTime(), elemId: `${actor}:1`, datatype: 'timestamp'},
-          {action: 'set',    obj: ROOT_ID, type: 'map',  path: [],   key: 'list', value: list, link: true}
-        ]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[actor]: {
+          objectId: list, type: 'list', maxElem: 1,
+          edits: [{action: 'insert', index: 0, elemId: `${actor}:1`}],
+          props: {0: {[actor]: {value: now.getTime(), datatype: 'timestamp'}}}
+        }}}}
       })
     })
   })
@@ -232,7 +264,9 @@ describe('Automerge.Backend', () => {
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
       assert.deepEqual(patch1, {
         actor, seq: 1, canUndo: true, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: [{action: 'set', obj: ROOT_ID, path: [], type: 'map', key: 'bird', value: 'magpie'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {[actor]: {value: 'magpie'}}
+        }}
       })
     })
 
@@ -265,8 +299,8 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          bird: [{action: 'set', actor, value: 'blackbird'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {[actor]: {value: 'blackbird'}}
         }}
       })
     })
@@ -282,11 +316,8 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {actor1: 1, actor2: 1}, deps: {actor1: 1, actor2: 1},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          bird: [
-            {action: 'set', actor: 'actor2', value: 'blackbird'},
-            {action: 'set', actor: 'actor1', value: 'magpie'}
-          ]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {actor1: {value: 'magpie'}, actor2: {value: 'blackbird'}}
         }}
       })
     })
@@ -303,8 +334,8 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          counter: [{action: 'set', actor, value: 3, datatype: 'counter'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          counter: {[actor]: {value: 3, datatype: 'counter'}}
         }}
       })
     })
@@ -312,9 +343,8 @@ describe('Automerge.Backend', () => {
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeMap', obj: birds},
-        {action: 'set',     obj: birds,   key: 'wrens', value: 3},
-        {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
+        {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
+        {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',     obj: birds,   key: 'wrens'},
@@ -324,44 +354,39 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          birds: [{objectId: birds, type: 'map', action: 'create', diffs: {
-            sparrows: [{action: 'set', actor, value: 15}]
-          }}]
-        }}
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {sparrows: {[actor]: {value: 15}}}
+        }}}}
       })
     })
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
+        {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
-        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
-        {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
+        {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
       const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change1])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          birds: [{objectId: birds, type: 'list', action: 'create', diffs: [
-            {action: 'insert', elemId: `${actor}:1`, index: 0, values: [{action: 'set', actor, value: 'chaffinch'}]},
-            {action: 'maxElem', value: 1}
-          ]}]
-        }}
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', maxElem: 1,
+          edits: [{action: 'insert', index: 0, elemId: `${actor}:1`}],
+          props: {0: {[actor]: {value: 'chaffinch'}}}
+        }}}}
       })
     })
 
     it('should include the latest state of a list', () => {
       const birds = uuid(), actor = uuid()
       const change1 = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: birds},
+        {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'ins',      obj: birds,   key: `${actor}:1`, elem: 2},
-        {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinch'},
-        {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
+        {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinch'}
       ]}
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`},
@@ -373,42 +398,40 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 2}, deps: {[actor]: 2},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          birds: [{objectId: birds, type: 'list', action: 'create', diffs: [
-            {action: 'insert', elemId: `${actor}:3`, index: 0, values: [{action: 'set', actor, value: 'greenfinch'}]},
-            {action: 'insert', elemId: `${actor}:2`, index: 1, values: [{action: 'set', actor, value: 'goldfinches!!'}]},
-            {action: 'maxElem', value: 3}
-          ]}]
-        }}
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', maxElem: 3,
+          edits: [
+            {action: 'insert', index: 0, elemId: `${actor}:3`},
+            {action: 'insert', index: 1, elemId: `${actor}:2`}
+          ],
+          props: {0: {[actor]: {value: 'greenfinch'}}, 1: {[actor]: {value: 'goldfinches!!'}}}
+        }}}}
       })
     })
 
     it('should handle nested maps in lists', () => {
       const todos = uuid(), item = uuid(), actor = uuid()
       const change = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: todos},
+        {action: 'makeList', obj: ROOT_ID, key: 'todos',     child: todos},
         {action: 'ins',      obj: todos,   key: '_head',     elem: 1},
-        {action: 'makeMap',  obj: item},
+        {action: 'makeMap',  obj: todos,   key:`${actor}:1`, child: item},
         {action: 'set',      obj: item,    key: 'title',     value: 'water plants'},
-        {action: 'set',      obj: item,    key: 'done',      value: false},
-        {action: 'link',     obj: todos,   key:`${actor}:1`, value: item},
-        {action: 'link',     obj: ROOT_ID, key: 'todos',     value: todos}
+        {action: 'set',      obj: item,    key: 'done',      value: false}
       ]}
       const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          todos: [{objectId: todos, type: 'list', action: 'create', diffs: [
-            {action: 'insert', elemId: `${actor}:1`, index: 0, values: [
-              {objectId: item, type: 'map', action: 'create', diffs: {
-                title: [{action: 'set', actor, value: 'water plants'}],
-                done:  [{action: 'set', actor, value: false}]
-              }}
-            ]},
-            {action: 'maxElem', value: 1}
-          ]}]
-        }}
+        diffs: {objectId: ROOT_ID, type: 'map', props: {todos: {[actor]: {
+          objectId: todos, type: 'list', maxElem: 1,
+          edits: [{action: 'insert', index: 0, elemId: `${actor}:1`}],
+          props: {0: {[actor]: {
+            objectId: item, type: 'map', props: {
+              title: {[actor]: {value: 'water plants'}},
+              done:  {[actor]: {value: false}}
+            }
+          }}}
+        }}}}
       })
     })
 
@@ -421,8 +444,8 @@ describe('Automerge.Backend', () => {
       const [s1, patch] = Backend.applyChanges(s0, [change])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          now: [{action: 'set', actor, value: now.getTime(), datatype: 'timestamp'}]
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          now: {[actor]: {value: now.getTime(), datatype: 'timestamp'}}
         }}
       })
     })
@@ -430,23 +453,19 @@ describe('Automerge.Backend', () => {
     it('should include Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
       const change = {actor, seq: 1, deps: {}, ops: [
-        {action: 'makeList', obj: list},
+        {action: 'makeList', obj: ROOT_ID, key: 'list',       child: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
-        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
-        {action: 'link',     obj: ROOT_ID, key: 'list',       value: list}
+        {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [change])
       assert.deepEqual(Backend.getPatch(s1), {
         canUndo: false, canRedo: false, clock: {[actor]: 1}, deps: {[actor]: 1},
-        diffs: {objectId: ROOT_ID, type: 'map', action: 'create', diffs: {
-          list: [{objectId: list, type: 'list', action: 'create', diffs: [
-            {action: 'insert', elemId: `${actor}:1`, index: 0, values: [
-              {action: 'set', actor, value: now.getTime(), datatype: 'timestamp'}
-            ]},
-            {action: 'maxElem', value: 1}
-          ]}]
-        }}
+        diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[actor]: {
+          objectId: list, type: 'list', maxElem: 1,
+          edits: [{action: 'insert', index: 0, elemId: `${actor}:1`}],
+          props: {0: {[actor]: {value: now.getTime(), datatype: 'timestamp'}}}
+        }}}}
       })
     })
   })

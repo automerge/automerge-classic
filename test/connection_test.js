@@ -4,7 +4,7 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 const Connection = Automerge.Connection
 const DocSet = Automerge.DocSet
 
-describe('Automerge.Connection', () => {
+describe.skip('Automerge.Connection', () => {
   let doc1, nodes
 
   beforeEach(() => {

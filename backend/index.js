@@ -26,14 +26,13 @@ function makePatch(state, diffs) {
  * The implementation behind `applyChanges()` and `applyLocalChange()`.
  */
 function apply(state, changes, undoable) {
-  let diffs = [], opSet = state.get('opSet')
+  let diffs = {}, opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
     change = change.remove('requestType')
-    const [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
-    diffs.push(...diff)
-    opSet = newOpSet
+    opSet = OpSet.addChange(opSet, change, undoable, diffs)
   }
 
+  OpSet.finalizePatch(opSet, diffs)
   state = state.set('opSet', opSet)
   return [state, makePatch(state, diffs)]
 }
@@ -164,8 +163,10 @@ function undo(state, request) {
     .set('undoPos', undoPos - 1)
     .update('redoStack', stack => stack.push(redoOps))
 
-  const [newOpSet, diffs] = OpSet.addChange(opSet, change, false)
-  state = state.set('opSet', newOpSet)
+  let diffs = {}
+  opSet = OpSet.addChange(opSet, change, false, diffs)
+  state = state.set('opSet', opSet)
+  OpSet.finalizePatch(opSet, diffs)
   return [state, makePatch(state, diffs)]
 }
 
@@ -183,12 +184,14 @@ function redo(state, request) {
   const { actor, seq, deps, message } = request
   const change = Map({ actor, seq, deps: fromJS(deps), message, ops: redoOps })
 
-  const opSet = state.get('opSet')
+  let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)
     .update('redoStack', stack => stack.pop())
 
-  const [newOpSet, diffs] = OpSet.addChange(opSet, change, false)
-  state = state.set('opSet', newOpSet)
+  let diffs = {}
+  opSet = OpSet.addChange(opSet, change, false, diffs)
+  state = state.set('opSet', opSet)
+  OpSet.finalizePatch(opSet, diffs)
   return [state, makePatch(state, diffs)]
 }
 
