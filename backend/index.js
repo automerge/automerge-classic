@@ -25,8 +25,9 @@ function makePatch(state, diffs) {
 /**
  * The implementation behind `applyChanges()` and `applyLocalChange()`.
  */
-function apply(state, changes, undoable) {
-  let diffs = {}, opSet = state.get('opSet')
+function apply(state, changes, undoable, incremental) {
+  let diffs = incremental ? {} : null
+  let opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
     change = change.remove('requestType')
     opSet = OpSet.addChange(opSet, change, undoable, diffs)
@@ -34,7 +35,7 @@ function apply(state, changes, undoable) {
 
   OpSet.finalizePatch(opSet, diffs)
   state = state.set('opSet', opSet)
-  return [state, makePatch(state, diffs)]
+  return [state, incremental ? makePatch(state, diffs) : null]
 }
 
 /**
@@ -44,7 +45,7 @@ function apply(state, changes, undoable) {
  * to the document objects to reflect these changes.
  */
 function applyChanges(state, changes) {
-  return apply(state, changes, false)
+  return apply(state, changes, false, true)
 }
 
 /**
@@ -66,7 +67,7 @@ function applyLocalChange(state, change) {
 
   let patch
   if (change.requestType === 'change') {
-    ;[state, patch] = apply(state, [change], true)
+    ;[state, patch] = apply(state, [change], true, true)
   } else if (change.requestType === 'undo') {
     ;[state, patch] = undo(state, change)
   } else if (change.requestType === 'redo') {
@@ -77,6 +78,18 @@ function applyLocalChange(state, change) {
   patch.actor = change.actor
   patch.seq   = change.seq
   return [state, patch]
+}
+
+/**
+ * Applies a list of `changes` to the node state `state`, and returns the updated
+ * state with those changes incorporated. Unlike `applyChanges()`, this function
+ * does not produce a patch describing the incremental modifications, making it
+ * a little faster when loading a document from disk. When all the changes have
+ * been loaded, you can use `getPatch()` to construct the latest document state.
+ */
+function loadChanges(state, changes) {
+  const [newState, patch] = apply(state, changes, false, false)
+  return newState
 }
 
 /**
@@ -196,6 +209,6 @@ function redo(state, request) {
 }
 
 module.exports = {
-  init, applyChanges, applyLocalChange, getPatch,
+  init, applyChanges, applyLocalChange, loadChanges, getPatch,
   getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge
 }

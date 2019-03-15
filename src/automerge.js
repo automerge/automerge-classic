@@ -9,7 +9,7 @@ const { isObject } = require('./common')
  */
 function docFromChanges(options, changes) {
   const doc = init(options)
-  const [state, _] = Backend.applyChanges(Backend.init(), changes)
+  const state = Backend.loadChanges(Backend.init(), changes)
   const patch = Backend.getPatch(state)
   patch.state = state
   return Frontend.applyPatch(doc, patch)

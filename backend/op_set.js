@@ -66,22 +66,20 @@ function getObjectType(opSet, objectId) {
 
 // Processes a 'makeMap', 'makeList', 'makeTable', or 'makeText' operation
 function applyMake(opSet, op, patch) {
-  const objectId = op.get('child')
+  const objectId = op.get('child'), action = op.get('action')
   if (opSet.hasIn(['byObject', objectId, '_keys'])) throw new Error(`Duplicate creation of object ${objectId}`)
 
-  patch.objectId = objectId
   let object = Map({_init: op, _inbound: Set(), _keys: Map()})
-
-  if (op.get('action') === 'makeMap') {
-    patch.type = 'map'
-  } else if (op.get('action') === 'makeTable') {
-    patch.type = 'table'
-  } else {
-    patch.type = (op.get('action') === 'makeText') ? 'text' : 'list'
+  if (action === 'makeList' || action === 'makeText') {
     object = object.set('_elemIds', new SkipList())
   }
+  opSet = opSet.setIn(['byObject', objectId], object)
 
-  return opSet.setIn(['byObject', objectId], object)
+  if (patch) {
+    patch.objectId = objectId
+    patch.type = getObjectType(opSet, objectId)
+  }
+  return opSet
 }
 
 // Processes an 'ins' operation. Does not produce an insertion diff because the new list element
@@ -93,7 +91,7 @@ function applyInsert(opSet, op, patch) {
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
-  patch.maxElem = maxElem
+  if (patch) patch.maxElem = maxElem
   return opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
     .setIn(['byObject', objectId, '_maxElem'], maxElem)
@@ -105,14 +103,14 @@ function updateListElement(opSet, objectId, elemId, patch) {
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let index = elemIds.indexOf(elemId)
 
-  if (patch.edits === undefined) {
+  if (patch && patch.edits === undefined) {
     patch.edits = []
   }
 
   if (index >= 0) {
     if (ops.isEmpty()) {
       elemIds = elemIds.removeIndex(index)
-      patch.edits.push({action: 'remove', elemId, index})
+      if (patch) patch.edits.push({action: 'remove', elemId, index})
     } else {
       elemIds = elemIds.setValue(elemId, ops.first().get('value'))
     }
@@ -132,7 +130,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    patch.edits.push({action: 'insert', elemId, index})
+    if (patch) patch.edits.push({action: 'insert', elemId, index})
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -174,26 +172,33 @@ function isChildOp(op) {
 function applyAssign(opSet, op, patch) {
   const objectId = op.get('obj'), action = op.get('action'), key = op.get('key')
   if (!opSet.get('byObject').has(objectId)) throw new RangeError(`Modification of unknown object ${objectId}`)
-
-  patch.objectId = patch.objectId || objectId
-  if (patch.objectId !== objectId) {
-    throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
-  }
-  if (patch.props === undefined) {
-    patch.props = {}
-  }
-  if (patch.props[key] === undefined) {
-    patch.props[key] = {}
-  }
-
   const type = getObjectType(opSet, objectId)
-  patch.type = patch.type || type
-  if (patch.type !== type) {
-    throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
+
+  if (patch) {
+    patch.objectId = patch.objectId || objectId
+    if (patch.objectId !== objectId) {
+      throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
+    }
+    if (patch.props === undefined) {
+      patch.props = {}
+    }
+    if (patch.props[key] === undefined) {
+      patch.props[key] = {}
+    }
+
+    patch.type = patch.type || type
+    if (patch.type !== type) {
+      throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
+    }
   }
+
   if (action.startsWith('make')) {
-    patch.props[key][op.get('actor')] = {}
-    opSet = applyMake(opSet, op, patch.props[key][op.get('actor')])
+    if (patch) {
+      patch.props[key][op.get('actor')] = {}
+      opSet = applyMake(opSet, op, patch.props[key][op.get('actor')])
+    } else {
+      opSet = applyMake(opSet, op)
+    }
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -267,6 +272,7 @@ function initializePatch(opSet, pathOp, patch) {
  * `key` of the object with ID `objectId`.
  */
 function setPatchProps(opSet, objectId, key, patch) {
+  if (!patch) return
   if (patch.props === undefined) {
     patch.props = {}
   }
@@ -339,8 +345,10 @@ function applyOps(opSet, ops, patch) {
   for (let op of ops) {
     const action = op.get('action')
     let localPatch = patch
-    for (let pathOp of getPath(opSet, op.get('obj'))) {
-      localPatch = initializePatch(opSet, pathOp, localPatch)
+    if (patch) {
+      for (let pathOp of getPath(opSet, op.get('obj'))) {
+        localPatch = initializePatch(opSet, pathOp, localPatch)
+      }
     }
 
     if (action.startsWith('make')) {
