@@ -68,17 +68,20 @@ class Context {
 
   /**
    * Recursively creates Automerge versions of all the objects and nested
-   * objects in `value`, and returns the object ID of the root object. If any
-   * object is an existing Automerge object, its existing ID is returned.
+   * objects in `value`, and returns the object ID of the root object. The new
+   * root object is created under the key `key` in the existing object with ID
+   * `objectId`. If `key` is not given, the ID of the new root object is used
+   * as key (this construction is used by Automerge.Table).
    */
-  createNestedObjects(value) {
-    if (typeof value[OBJECT_ID] === 'string') return value[OBJECT_ID]
-    const objectId = uuid()
+  createNestedObjects(objectId, key, value) {
+    // if (typeof value[OBJECT_ID] === 'string') TODO: move existing object
+    const childId = uuid()
+    if (!key) key = childId
 
     if (value instanceof Text) {
       // Create a new Text object
-      this.apply({action: 'create', type: 'text', obj: objectId})
-      this.addOp({action: 'makeText', obj: objectId})
+      this.apply({action: 'create', type: 'text', obj: childId})
+      this.addOp({action: 'makeText', obj: objectId, key, child: childId})
 
       if (value.length > 0) {
         this.splice(objectId, 0, 0, [...value])
@@ -97,27 +100,27 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      this.apply({action: 'create', type: 'table', obj: objectId})
-      this.addOp({action: 'makeTable', obj: objectId})
-      this.setMapKey(objectId, 'table', 'columns', value.columns)
+      this.apply({action: 'create', type: 'table', obj: childId})
+      this.addOp({action: 'makeTable', obj: objectId, key, child: childId})
+      this.setMapKey(childId, 'table', 'columns', value.columns)
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      this.apply({action: 'create', type: 'list', obj: objectId})
-      this.addOp({action: 'makeList', obj: objectId})
-      this.splice(objectId, 0, 0, value)
+      this.apply({action: 'create', type: 'list', obj: childId})
+      this.addOp({action: 'makeList', obj: objectId, key, child: childId})
+      this.splice(childId, 0, 0, value)
 
     } else {
       // Create a new map object
-      this.apply({action: 'create', type: 'map', obj: objectId})
-      this.addOp({action: 'makeMap', obj: objectId})
+      this.apply({action: 'create', type: 'map', obj: childId})
+      this.addOp({action: 'makeMap', obj: objectId, key, child: childId})
 
-      for (let key of Object.keys(value)) {
-        this.setMapKey(objectId, 'map', key, value[key])
+      for (let nested of Object.keys(value)) {
+        this.setMapKey(childId, 'map', nested, value[nested])
       }
     }
 
-    return objectId
+    return childId
   }
 
   /**
@@ -148,8 +151,7 @@ class Context {
 
       } else {
         // Reference to another object
-        const childId = this.createNestedObjects(value)
-        this.addOp({action: 'link', obj, key, value: childId})
+        const childId = this.createNestedObjects(obj, key, value)
         return {value: childId, link: true}
       }
     } else {
@@ -285,9 +287,8 @@ class Context {
       throw new TypeError('Cannot reuse an existing object as table row')
     }
 
-    const rowId = this.createNestedObjects(row)
+    const rowId = this.createNestedObjects(objectId, null, row)
     this.apply({action: 'set', type: 'table', obj: objectId, key: rowId, value: rowId, link: true})
-    this.addOp({action: 'link', obj: objectId, key: rowId, value: rowId})
     return rowId
   }
 

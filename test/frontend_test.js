@@ -61,9 +61,8 @@ describe('Automerge.Frontend', () => {
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, {birds: {wrens: 3}})
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
-        {obj: birds,   action: 'makeMap'},
-        {obj: birds,   action: 'set',  key: 'wrens', value: 3},
-        {obj: ROOT_ID, action: 'link', key: 'birds', value: birds}
+        {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: birds},
+        {obj: birds,   action: 'set',     key: 'wrens', value: 3}
       ]})
     })
 
@@ -94,10 +93,9 @@ describe('Automerge.Frontend', () => {
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, {birds: ['chaffinch']})
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
-        {obj: birds,   action: 'makeList'},
-        {obj: birds,   action: 'ins',  key: '_head', elem: 1},
-        {obj: birds,   action: 'set',  key: `${actor}:1`, value: 'chaffinch'},
-        {obj: ROOT_ID, action: 'link', key: 'birds', value: birds}
+        {obj: ROOT_ID, action: 'makeList', key: 'birds',      child: birds},
+        {obj: birds,   action: 'ins',      key: '_head',      elem: 1},
+        {obj: birds,   action: 'set',      key: `${actor}:1`, value: 'chaffinch'},
       ]})
     })
 
@@ -168,10 +166,9 @@ describe('Automerge.Frontend', () => {
         assert.deepEqual(doc1, {counts: [new Frontend.Counter(1)]})
         assert.deepEqual(doc2, {counts: [new Frontend.Counter(3)]})
         assert.deepEqual(req1, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
-          {obj: counts,  action: 'makeList'},
-          {obj: counts,  action: 'ins',  key: '_head', elem: 1},
-          {obj: counts,  action: 'set',  key: `${actor}:1`, value: 1, datatype: 'counter'},
-          {obj: ROOT_ID, action: 'link', key: 'counts', value: counts}
+          {obj: ROOT_ID, action: 'makeList', key: 'counts',     child: counts},
+          {obj: counts,  action: 'ins',      key: '_head',      elem: 1},
+          {obj: counts,  action: 'set',      key: `${actor}:1`, value: 1, datatype: 'counter'}
         ]})
         assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
           {obj: counts, action: 'inc', key: `${actor}:1`, value: 2}
