@@ -1,5 +1,5 @@
-const { CACHE, INBOUND, OBJECT_ID, CONFLICTS, MAX_ELEM } = require('./constants')
-const { applyDiffs } = require('./apply_patch')
+const { CACHE, INBOUND, OBJECT_ID, CONFLICTS, DEFAULT_V, MAX_ELEM } = require('./constants')
+const { interpretPatch } = require('./apply_patch')
 const { Text, getElemId } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
@@ -32,9 +32,9 @@ class Context {
   /**
    * Applies a diff object to the current document state.
    */
-  apply(diff) {
+  apply(path, diff) {
     this.diffs.push(diff)
-    applyDiffs([diff], this.cache, this.updated, this.inbound)
+    interpretPatch([diff], this.cache, this.updated, this.inbound) // FIXME
   }
 
   /**
@@ -50,16 +50,17 @@ class Context {
    * Returns the value associated with the property named `key` on the object
    * with ID `objectId`. If the value is an object, returns a proxy for it.
    */
-  getObjectField(objectId, key) {
+  getObjectField(path, objectId, key) {
     if (!['string', 'number'].includes(typeof key)) return
     const object = this.getObject(objectId)
 
     if (object[key] instanceof Counter) {
-      return getWriteableCounter(object[key].value, this, objectId, key)
+      return getWriteableCounter(object[key].value, this, path, objectId, key)
 
     } else if (isObject(object[key])) {
+      const subpath = path.concat([{objectId, key, actor: object[DEFAULT_V][key]}])
       // The instantiateObject function is added to the context object by rootObjectProxy()
-      return this.instantiateObject(object[key][OBJECT_ID])
+      return this.instantiateObject(subpath, object[key][OBJECT_ID])
 
     } else {
       return object[key]
@@ -73,14 +74,14 @@ class Context {
    * `objectId`. If `key` is not given, the ID of the new root object is used
    * as key (this construction is used by Automerge.Table).
    */
-  createNestedObjects(objectId, key, value) {
+  createNestedObjects(path, objectId, key, value) {
     // if (typeof value[OBJECT_ID] === 'string') TODO: move existing object
     const childId = uuid()
     if (!key) key = childId
 
     if (value instanceof Text) {
       // Create a new Text object
-      this.apply({action: 'create', type: 'text', obj: childId})
+      this.apply(path, {action: 'create', type: 'text', obj: childId})
       this.addOp({action: 'makeText', obj: objectId, key, child: childId})
 
       if (value.length > 0) {
@@ -100,23 +101,23 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      this.apply({action: 'create', type: 'table', obj: childId})
+      this.apply(path, {action: 'create', type: 'table', obj: childId})
       this.addOp({action: 'makeTable', obj: objectId, key, child: childId})
-      this.setMapKey(childId, 'table', 'columns', value.columns)
+      this.setMapKey(TODO_PATH, childId, 'table', 'columns', value.columns)
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      this.apply({action: 'create', type: 'list', obj: childId})
+      this.apply(path, {action: 'create', type: 'list', obj: childId})
       this.addOp({action: 'makeList', obj: objectId, key, child: childId})
-      this.splice(childId, 0, 0, value)
+      this.splice(path, childId, 0, 0, value)
 
     } else {
       // Create a new map object
-      this.apply({action: 'create', type: 'map', obj: childId})
+      this.apply(path, {action: 'create', type: 'map', obj: childId})
       this.addOp({action: 'makeMap', obj: objectId, key, child: childId})
 
       for (let nested of Object.keys(value)) {
-        this.setMapKey(childId, 'map', nested, value[nested])
+        this.setMapKey(TODO_PATH, childId, 'map', nested, value[nested])
       }
     }
 
@@ -132,7 +133,7 @@ class Context {
    * interpreted in a special way (timestamps, counters); for primitive types
    * (string, number, boolean, null) the datatype property is omitted.
    */
-  setValue(obj, key, value) {
+  setValue(path, obj, key, value) {
     if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
       throw new TypeError(`Unsupported type of value: ${typeof value}`)
     }
@@ -150,8 +151,8 @@ class Context {
         return {value: value.value, datatype: 'counter'}
 
       } else {
-        // Reference to another object
-        const childId = this.createNestedObjects(obj, key, value)
+        // Nested object (map, list, text, or table)
+        const childId = this.createNestedObjects(path, obj, key, value)
         return {value: childId, link: true}
       }
     } else {
@@ -166,7 +167,7 @@ class Context {
    * `key` to `value`. The `type` argument is 'map' if the object is a map
    * object, or 'table' if it is a table object.
    */
-  setMapKey(objectId, type, key, value) {
+  setMapKey(path, objectId, type, key, value) { // TODO use path
     if (typeof key !== 'string') {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
     }
@@ -182,18 +183,18 @@ class Context {
     // If the assigned field value is the same as the existing value, and
     // the assignment does not resolve a conflict, do nothing
     if (object[key] !== value || object[CONFLICTS][key] || value === undefined) {
-      const valueObj = this.setValue(objectId, key, value)
-      this.apply(Object.assign({action: 'set', type, obj: objectId, key}, valueObj))
+      const valueObj = this.setValue(path, objectId, key, value)
+      this.apply(path, Object.assign({action: 'set', type, obj: objectId, key}, valueObj))
     }
   }
 
   /**
    * Updates the map object with ID `objectId`, deleting the property `key`.
    */
-  deleteMapKey(objectId, key) {
+  deleteMapKey(path, objectId, key) { // TODO use path
     const object = this.getObject(objectId)
     if (object[key] !== undefined) {
-      this.apply({action: 'remove', type: 'map', obj: objectId, key})
+      this.apply(path, {action: 'remove', type: 'map', obj: objectId, key})
       this.addOp({action: 'del', obj: objectId, key})
     }
   }
@@ -202,7 +203,7 @@ class Context {
    * Inserts a new list element `value` at position `index` into the list with
    * ID `objectId`.
    */
-  insertListItem(objectId, index, value) {
+  insertListItem(path, objectId, index, value) { // TODO use path
     const list = this.getObject(objectId)
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
@@ -214,8 +215,8 @@ class Context {
     const elemId = `${this.actorId}:${maxElem}`
     this.addOp({action: 'ins', obj: objectId, key: prevId, elem: maxElem})
 
-    const valueObj = this.setValue(objectId, elemId, value)
-    this.apply(Object.assign({action: 'insert', type, obj: objectId, index, elemId}, valueObj))
+    const valueObj = this.setValue(path, objectId, elemId, value)
+    this.apply(path, Object.assign({action: 'insert', type, obj: objectId, index, elemId}, valueObj))
     this.getObject(objectId)[MAX_ELEM] = maxElem
   }
 
@@ -223,10 +224,10 @@ class Context {
    * Updates the list with ID `objectId`, replacing the current value at
    * position `index` with the new value `value`.
    */
-  setListIndex(objectId, index, value) {
+  setListIndex(path, objectId, index, value) { // TODO use path
     const list = this.getObject(objectId)
     if (index === list.length) {
-      this.insertListItem(objectId, index, value)
+      this.insertListItem(path, objectId, index, value)
       return
     }
     if (index < 0 || index > list.length) {
@@ -241,8 +242,8 @@ class Context {
     if (list[index] !== value || list[CONFLICTS][index] || value === undefined) {
       const elemId = getElemId(list, index)
       const type = (list instanceof Text) ? 'text' : 'list'
-      const valueObj = this.setValue(objectId, elemId, value)
-      this.apply(Object.assign({action: 'set', type, obj: objectId, index}, valueObj))
+      const valueObj = this.setValue(path, objectId, elemId, value)
+      this.apply(path, Object.assign({action: 'set', type, obj: objectId, index}, valueObj))
     }
   }
 
@@ -251,7 +252,7 @@ class Context {
    * elements starting from list index `start`, and inserting the list of new
    * elements `insertions` at that position.
    */
-  splice(objectId, start, deletions, insertions) {
+  splice(path, objectId, start, deletions, insertions) {
     let list = this.getObject(objectId)
     const type = (list instanceof Text) ? 'text' : 'list'
 
@@ -262,7 +263,7 @@ class Context {
 
       for (let i = 0; i < deletions; i++) {
         this.addOp({action: 'del', obj: objectId, key: getElemId(list, start)})
-        this.apply({action: 'remove', type, obj: objectId, index: start})
+        this.apply(path, {action: 'remove', type, obj: objectId, index: start})
 
         // Must refresh object after the first updateListObject call, since the
         // object previously may have been immutable
@@ -271,7 +272,7 @@ class Context {
     }
 
     for (let i = 0; i < insertions.length; i++) {
-      this.insertListItem(objectId, start + i, insertions[i])
+      this.insertListItem(path, objectId, start + i, insertions[i])
     }
   }
 
@@ -279,7 +280,7 @@ class Context {
    * Updates the table object with ID `objectId`, adding a new entry `row`.
    * Returns the objectId of the new row.
    */
-  addTableRow(objectId, row) {
+  addTableRow(path, objectId, row) {
     if (!isObject(row)) {
       throw new TypeError('A table row must be an object')
     }
@@ -287,16 +288,16 @@ class Context {
       throw new TypeError('Cannot reuse an existing object as table row')
     }
 
-    const rowId = this.createNestedObjects(objectId, null, row)
-    this.apply({action: 'set', type: 'table', obj: objectId, key: rowId, value: rowId, link: true})
+    const rowId = this.createNestedObjects(path, objectId, null, row)
+    this.apply(path, {action: 'set', type: 'table', obj: objectId, key: rowId, value: rowId, link: true})
     return rowId
   }
 
   /**
    * Updates the table object with ID `objectId`, deleting the row with ID `rowId`.
    */
-  deleteTableRow(objectId, rowId) {
-    this.apply({action: 'remove', type: 'table', obj: objectId, key: rowId})
+  deleteTableRow(path, objectId, rowId) {
+    this.apply(path, {action: 'remove', type: 'table', obj: objectId, key: rowId})
     this.addOp({action: 'del', obj: objectId, key: rowId})
   }
 
@@ -304,7 +305,7 @@ class Context {
    * Adds the integer `delta` to the value of the counter located at property
    * `key` in the object with ID `objectId`.
    */
-  increment(objectId, key, delta) {
+  increment(path, objectId, key, delta) {
     const object = this.getObject(objectId)
     if (!(object[key] instanceof Counter)) {
       throw new TypeError('Only counter values can be incremented')
@@ -315,10 +316,10 @@ class Context {
       const elemId = getElemId(object, key)
       const type = (object instanceof Text) ? 'text' : 'list'
       this.addOp({action: 'inc', obj: objectId, key: elemId, value: delta})
-      this.apply({action: 'set', obj: objectId, type, index: key, value, datatype: 'counter'})
+      this.apply(path, {action: 'set', obj: objectId, type, index: key, value, datatype: 'counter'})
     } else {
       this.addOp({action: 'inc', obj: objectId, key, value: delta})
-      this.apply({action: 'set', obj: objectId, type: 'map', key, value, datatype: 'counter'})
+      this.apply(path, {action: 'set', obj: objectId, type: 'map', key, value, datatype: 'counter'})
     }
   }
 }

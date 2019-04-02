@@ -50,7 +50,7 @@ class WriteableCounter extends Counter {
    */
   increment(delta) {
     delta = typeof delta === 'number' ? delta : 1
-    this.context.increment(this.objectId, this.key, delta)
+    this.context.increment(this.path, this.objectId, this.key, delta)
     this.value += delta
     return this.value
   }
@@ -71,10 +71,11 @@ class WriteableCounter extends Counter {
  * the property name (key in map, or index in list) where the counter is
  * located.
 */
-function getWriteableCounter(value, context, objectId, key) {
+function getWriteableCounter(value, context, path, objectId, key) {
   const instance = Object.create(WriteableCounter.prototype)
   instance.value = value
   instance.context = context
+  instance.path = path
   instance.objectId = objectId
   instance.key = key
   return instance

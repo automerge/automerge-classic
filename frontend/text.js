@@ -54,7 +54,7 @@ class Text {
    * the text object is accessed within a change callback. `context` is the
    * proxy context that keeps track of the mutations.
    */
-  getWriteable(context) {
+  getWriteable(context, path) { // TODO use path parameter
     if (!this[OBJECT_ID]) {
       throw new RangeError('getWriteable() requires the objectId to be set')
     }

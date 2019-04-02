@@ -1,4 +1,4 @@
-const { OBJECT_ID, CONFLICTS } = require('./constants')
+const { OBJECT_ID, CONFLICTS, DEFAULT_V } = require('./constants')
 const { isObject, copyObject } = require('../src/common')
 
 function compareRows(properties, row1, row2) {
@@ -145,7 +145,7 @@ class Table {
     if (!this[OBJECT_ID]) {
       throw new RangeError('clone() requires the objectId to be set')
     }
-    return instantiateTable(this[OBJECT_ID], copyObject(this.entries))
+    return instantiateTable(this[OBJECT_ID], copyObject(this.entries), copyObject(this[DEFAULT_V]))
   }
 
   /**
@@ -182,7 +182,7 @@ class Table {
    * the table is accessed within a change callback. `context` is the proxy
    * context that keeps track of the mutations.
    */
-  getWriteable(context) {
+  getWriteable(context, path) {
     if (!this[OBJECT_ID]) {
       throw new RangeError('getWriteable() requires the objectId to be set')
     }
@@ -191,6 +191,7 @@ class Table {
     instance[OBJECT_ID] = this[OBJECT_ID]
     instance.context = context
     instance.entries = this.entries
+    instance.path = path
     return instance
   }
 
@@ -217,7 +218,7 @@ class WriteableTable extends Table {
    */
   get columns() {
     const columnsId = this.entries.columns[OBJECT_ID]
-    return this.context.instantiateObject(columnsId)
+    return this.context.instantiateObject(this.path, columnsId) // FIXME add 'columns' element to path
   }
 
   /**
@@ -226,7 +227,7 @@ class WriteableTable extends Table {
    */
   byId(id) {
     if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
-      return this.context.instantiateObject(id)
+      return this.context.instantiateObject(this.path, id) // FIXME add id element to path
     }
   }
 
@@ -244,7 +245,7 @@ class WriteableTable extends Table {
       }
       row = rowObj
     }
-    return this.context.addTableRow(this[OBJECT_ID], row)
+    return this.context.addTableRow(this.path, this[OBJECT_ID], row)
   }
 
   /**
@@ -253,7 +254,7 @@ class WriteableTable extends Table {
    */
   remove(id) {
     if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
-      this.context.deleteTableRow(this[OBJECT_ID], id)
+      this.context.deleteTableRow(this.path, this[OBJECT_ID], id)
     } else {
       throw new RangeError(`There is no row with ID ${id} in this table`)
     }
@@ -264,10 +265,11 @@ class WriteableTable extends Table {
  * This function is used to instantiate a Table object in the context of
  * applying a patch (see apply_patch.js).
  */
-function instantiateTable(objectId, entries) {
+function instantiateTable(objectId, entries, defaultV) {
   const instance = Object.create(Table.prototype)
   instance[OBJECT_ID] = objectId
   instance[CONFLICTS] = Object.freeze({})
+  instance[DEFAULT_V] = defaultV || {}
   instance.entries = entries || {}
   return instance
 }

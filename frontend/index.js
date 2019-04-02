@@ -1,7 +1,7 @@
 const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
-const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_patch')
+const { interpretPatch, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
 const { Text } = require('./text')
@@ -29,6 +29,9 @@ function updateRootObject(doc, updated, inbound, state) {
     for (let objectId of Object.keys(updated)) {
       if (updated[objectId] instanceof Table) {
         updated[objectId]._freeze()
+      } else if (updated[objectId] instanceof Text) {
+        Object.freeze(updated[objectId].elems)
+        Object.freeze(updated[objectId])
       } else {
         Object.freeze(updated[objectId])
         Object.freeze(updated[objectId][CONFLICTS])
@@ -130,8 +133,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
   const actor = getActorId(doc)
   const inbound = copyObject(doc[INBOUND])
   const updated = {}
-  applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
-  updateParentObjects(doc[CACHE], updated, inbound)
+  interpretPatch(patch.diffs, doc, updated, inbound)
 
   if (fromBackend) {
     const seq = patch.clock ? patch.clock[actor] : undefined
@@ -277,7 +279,6 @@ function change(doc, message, callback) {
     // If the callback didn't change anything, return the original document object unchanged
     return [doc, null]
   } else {
-    updateParentObjects(doc[CACHE], context.updated, context.inbound)
     return makeChange(doc, 'change', context, message)
   }
 }
@@ -419,16 +420,17 @@ function getObjectId(object) {
 }
 
 /**
- * Returns the object with the given Automerge object ID.
+ * Returns the object with the given Automerge object ID. Note: when called
+ * within a change callback, the returned object is read-only (not a mutable
+ * proxy object).
  */
 function getObjectById(doc, objectId) {
-  const context = doc[CHANGE]
-  if (context) {
-    // If we're within a change callback, return a proxied object
-    return context.instantiateObject(objectId)
-  } else {
-    return doc[CACHE][objectId]
-  }
+  // It would be nice to return a proxied object in a change callback:
+  //   const context = doc[CHANGE]
+  //   if (context) return context.instantiateObject(path, objectId)
+  // However, that requires knowing the path from the root to the current
+  // object, which we don't have if we jumped straight to the object by its ID.
+  return doc[CACHE][objectId]
 }
 
 /**

@@ -1,60 +1,126 @@
 const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS, DEFAULT_V, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
 /**
- * Reconstructs the value from the diff object `diff`.
+ * Reconstructs the value from the patch object `patch`.
  */
-function getValue(diff, cache, updated) {
-  if (diff.link) {
-    // Reference to another object; fetch it from the cache
-    return updated[diff.value] || cache[diff.value]
-  } else if (diff.datatype === 'timestamp') {
+function getValue(patch, object, updated) {
+  if (patch.objectId) {
+    if (object && object[OBJECT_ID] !== patch.objectId) {
+      throw new RangeError(`Object ID mismatch: ${object[OBJECT_ID]} != ${patch.objectId}`)
+    }
+    return interpretPatch(patch, object, updated)
+  } else if (patch.datatype === 'timestamp') {
     // Timestamp: value is milliseconds since 1970 epoch
-    return new Date(diff.value)
-  } else if (diff.datatype === 'counter') {
-    return new Counter(diff.value)
-  } else if (diff.datatype !== undefined) {
-    throw new TypeError(`Unknown datatype: ${diff.datatype}`)
+    return new Date(patch.value)
+  } else if (patch.datatype === 'counter') {
+    return new Counter(patch.value)
+  } else if (patch.datatype !== undefined) {
+    throw new TypeError(`Unknown datatype: ${patch.datatype}`)
   } else {
     // Primitive value (number, string, boolean, or null)
-    return diff.value
+    return patch.value
   }
 }
 
 /**
- * Finds the object IDs of all child objects referenced under the key `key` of
- * `object` (both `object[key]` and any conflicts under that key). Returns a map
- * from those objectIds to the value `true`.
+ * `props` is an object of the form:
+ * `{key1: {actor1: {...}, actor2: {...}}, key2: {actor3: {...}}}`
+ * where the outer object is a mapping from property names to inner objects,
+ * and the inner objects are a mapping from actor ID to sub-patch.
+ * This function interprets that structure and updates the objects `object`,
+ * `conflicts` and `defaultV` to reflect it. For each key, the lexicographically
+ * greatest actor ID is chosen as the default resolution; that actor ID is
+ * assigned to `defaultV[key]` and the corresponding value is assigned to
+ * `object[key]`. The remaining actor IDs (if any) are packed into a conflicts
+ * object of the form `{actor1: value1, actor2: value2}` and assigned to
+ * `conflicts[key]`.
  */
-function childReferences(object, key) {
-  let refs = {}, conflicts = object[CONFLICTS][key] || {}
-  let children = [object[key]].concat(Object.values(conflicts))
-  for (let child of children) {
-    if (isObject(child) && child[OBJECT_ID]) {
-      refs[child[OBJECT_ID]] = true
+function applyProperties(props, object, conflicts, defaultV, updated) {
+  if (!props) return
+
+  for (let key of Object.keys(props)) {
+    const values = {}, actors = Object.keys(props[key]).sort().reverse()
+    for (let actor of actors) {
+      const subpatch = props[key][actor]
+      if (actor === defaultV[key]) {
+        values[actor] = getValue(subpatch, object[key], updated)
+      } else if (conflicts[key] && conflicts[key][actor]) {
+        values[actor] = getValue(subpatch, conflicts[key][actor], updated)
+      } else {
+        values[actor] = getValue(subpatch, undefined, updated)
+      }
+    }
+
+    if (actors.length === 0) {
+      delete object[key]
+      delete conflicts[key]
+      delete defaultV[key]
+    } else {
+      object[key] = values[actors[0]]
+      defaultV[key] = actors[0]
+      if (actors.length === 1) {
+        delete conflicts[key]
+      } else {
+        delete values[actors[0]]
+        conflicts[key] = values
+      }
     }
   }
-  return refs
 }
 
 /**
- * Updates `inbound` (a mapping from each child object ID to its parent) based
- * on a change to the object with ID `objectId`. `refsBefore` and `refsAfter`
- * are objects produced by the `childReferences()` function, containing the IDs
- * of child objects before and after the change, respectively.
+ * `edits` is an array of edits to a list data structure, each of which is an
+ * object of the form either `{action: 'insert', index, elemId}` or
+ * `{action: 'remove', index, elemId}`. This merges adjacent edits and calls
+ * `insertCallback(index, elemIds)` or `removeCallback(index, count)`, as
+ * appropriate, for each sequence of insertions or removals.
  */
-function updateInbound(objectId, refsBefore, refsAfter, inbound) {
-  for (let ref of Object.keys(refsBefore)) {
-    if (!refsAfter[ref]) delete inbound[ref]
-  }
-  for (let ref of Object.keys(refsAfter)) {
-    if (inbound[ref] && inbound[ref] !== objectId) {
-      throw new RangeError(`Object ${ref} has multiple parents`)
-    } else if (!inbound[ref]) {
-      inbound[ref] = objectId
+function iterateEdits(edits, insertCallback, removeCallback) {
+  if (!edits) return
+  let splicePos = -1, deletions, insertions
+
+  for (let i = 0; i < edits.length; i++) {
+    const edit = edits[i], action = edit.action, index = edit.index
+
+    if (action === 'insert') {
+      if (splicePos < 0) {
+        splicePos = index
+        deletions = 0
+        insertions = []
+      }
+      insertions.push(edit.elemId)
+
+      // If there are multiple consecutive insertions at successive indexes,
+      // accumulate them and then process them in a single insertCallback
+      if (i === edits.length - 1 ||
+          edits[i + 1].action !== 'insert' ||
+          edits[i + 1].index  !== index + 1) {
+        insertCallback(splicePos, insertions)
+        splicePos = -1
+      }
+
+    } else if (action === 'remove') {
+      if (splicePos < 0) {
+        splicePos = index
+        deletions = 0
+        insertions = []
+      }
+      deletions += 1
+
+      // If there are multiple consecutive removals of the same index,
+      // accumulate them and then process them in a single removeCallback
+      if (i === edits.length - 1 ||
+          edits[i + 1].action !== 'remove' ||
+          edits[i + 1].index  !== index) {
+        removeCallback(splicePos, deletions)
+        splicePos = -1
+      }
+    } else {
+      throw new RangeError(`Unknown list edit action: ${action}`)
     }
   }
 }
@@ -64,142 +130,45 @@ function updateInbound(objectId, refsBefore, refsAfter, inbound) {
  * is undefined, creates an empty object with ID `objectId`.
  */
 function cloneMapObject(originalObject, objectId) {
-  if (originalObject && originalObject[OBJECT_ID] !== objectId) {
-    throw new RangeError(`cloneMapObject ID mismatch: ${originalObject[OBJECT_ID]} !== ${objectId}`)
-  }
-  let object = copyObject(originalObject)
-  let conflicts = copyObject(originalObject ? originalObject[CONFLICTS] : undefined)
-  Object.defineProperty(object, CONFLICTS, {value: conflicts})
+  const object    = copyObject(originalObject)
+  const conflicts = copyObject(originalObject ? originalObject[CONFLICTS] : undefined)
+  const defaultV  = copyObject(originalObject ? originalObject[DEFAULT_V] : undefined)
   Object.defineProperty(object, OBJECT_ID, {value: objectId})
+  Object.defineProperty(object, CONFLICTS, {value: conflicts})
+  Object.defineProperty(object, DEFAULT_V, {value: defaultV})
   return object
 }
 
 /**
- * Applies the change `diff` to a map object. `cache` and `updated` are indexed
- * by objectId; the existing read-only object is taken from `cache`, and the
- * updated writable object is written to `updated`. `inbound` is a mapping from
- * child objectId to parent objectId; it is updated according to the change.
+ * Updates the map object `obj` according to the modifications described in
+ * `patch`, or creates a new object if `obj` is undefined. Mutates `updated`
+ * to map the objectId to the new object, and returns the new object.
  */
-function updateMapObject(diff, cache, updated, inbound) {
-  if (!updated[diff.obj]) {
-    updated[diff.obj] = cloneMapObject(cache[diff.obj], diff.obj)
-  }
-  let object = updated[diff.obj], conflicts = object[CONFLICTS]
-  let refsBefore = {}, refsAfter = {}
-
-  if (diff.action === 'create') {
-    // do nothing
-  } else if (diff.action === 'set') {
-    refsBefore = childReferences(object, diff.key)
-    object[diff.key] = getValue(diff, cache, updated)
-    if (diff.conflicts) {
-      conflicts[diff.key] = {}
-      for (let conflict of diff.conflicts) {
-        conflicts[diff.key][conflict.actor] = getValue(conflict, cache, updated)
-      }
-      Object.freeze(conflicts[diff.key])
-    } else {
-      delete conflicts[diff.key]
-    }
-    refsAfter = childReferences(object, diff.key)
-  } else if (diff.action === 'remove') {
-    refsBefore = childReferences(object, diff.key)
-    delete object[diff.key]
-    delete conflicts[diff.key]
-  } else {
-    throw new RangeError('Unknown action type: ' + diff.action)
-  }
-
-  updateInbound(diff.obj, refsBefore, refsAfter, inbound)
-}
-
-/**
- * Updates the map object with ID `objectId` such that all child objects that
- * have been updated in `updated` are replaced with references to the updated
- * version.
- */
-function parentMapObject(objectId, cache, updated) {
+function updateMapObject(patch, obj, updated) {
+  const objectId = patch.objectId
   if (!updated[objectId]) {
-    updated[objectId] = cloneMapObject(cache[objectId], objectId)
+    updated[objectId] = cloneMapObject(obj, objectId)
   }
-  let object = updated[objectId]
 
-  for (let key of Object.keys(object)) {
-    let value = object[key]
-    if (isObject(value) && updated[value[OBJECT_ID]]) {
-      object[key] = updated[value[OBJECT_ID]]
-    }
-
-    let conflicts = object[CONFLICTS][key] || {}, conflictsUpdate = null
-    for (let actorId of Object.keys(conflicts)) {
-      value = conflicts[actorId]
-      if (isObject(value) && updated[value[OBJECT_ID]]) {
-        if (!conflictsUpdate) {
-          conflictsUpdate = copyObject(conflicts)
-          object[CONFLICTS][key] = conflictsUpdate
-        }
-        conflictsUpdate[actorId] = updated[value[OBJECT_ID]]
-      }
-    }
-
-    if (conflictsUpdate && cache[ROOT_ID][OPTIONS].freeze) {
-      Object.freeze(conflictsUpdate)
-    }
-  }
+  const object = updated[objectId]
+  applyProperties(patch.props, object, object[CONFLICTS], object[DEFAULT_V], updated)
+  return object
 }
 
 /**
- * Applies the change `diff` to a table object. `cache` and `updated` are indexed
- * by objectId; the existing read-only object is taken from `cache`, and the
- * updated writable object is written to `updated`. `inbound` is a mapping from
- * child objectId to parent objectId; it is updated according to the change.
+ * Updates the table object `obj` according to the modifications described in
+ * `patch`, or creates a new object if `obj` is undefined. Mutates `updated`
+ * to map the objectId to the new object, and returns the new object.
  */
-function updateTableObject(diff, cache, updated, inbound) {
-  if (!updated[diff.obj]) {
-    updated[diff.obj] = cache[diff.obj] ? cache[diff.obj]._clone() : instantiateTable(diff.obj)
-  }
-  let object = updated[diff.obj]
-  let refsBefore = {}, refsAfter = {}
-
-  if (diff.action === 'create') {
-    // do nothing
-  } else if (diff.action === 'set') {
-    const previous = object.byId(diff.key)
-    if (isObject(previous)) refsBefore[previous[OBJECT_ID]] = true
-    if (diff.link) {
-      object.set(diff.key, updated[diff.value] || cache[diff.value])
-      refsAfter[diff.value] = true
-    } else {
-      object.set(diff.key, diff.value)
-    }
-  } else if (diff.action === 'remove') {
-    const previous = object.byId(diff.key)
-    if (isObject(previous)) refsBefore[previous[OBJECT_ID]] = true
-    object.remove(diff.key)
-  } else {
-    throw new RangeError('Unknown action type: ' + diff.action)
-  }
-
-  updateInbound(diff.obj, refsBefore, refsAfter, inbound)
-}
-
-/**
- * Updates the table object with ID `objectId` such that all child objects that
- * have been updated in `updated` are replaced with references to the updated
- * version.
- */
-function parentTableObject(objectId, cache, updated) {
+function updateTableObject(patch, obj, updated) {
+  const objectId = patch.objectId
   if (!updated[objectId]) {
-    updated[objectId] = cache[objectId]._clone()
+    updated[objectId] = obj ? obj._clone() : instantiateTable(objectId)
   }
-  let table = updated[objectId]
 
-  for (let key of Object.keys(table.entries)) {
-    let value = table.byId(key)
-    if (isObject(value) && updated[value[OBJECT_ID]]) {
-      table.set(key, updated[value[OBJECT_ID]])
-    }
-  }
+  const object = updated[objectId]
+  applyProperties(patch.props, object, object[CONFLICTS], object[DEFAULT_V], updated)
+  return object
 }
 
 /**
@@ -207,240 +176,118 @@ function parentTableObject(objectId, cache, updated) {
  * undefined, creates an empty list with ID `objectId`.
  */
 function cloneListObject(originalList, objectId) {
-  if (originalList && originalList[OBJECT_ID] !== objectId) {
-    throw new RangeError(`cloneListObject ID mismatch: ${originalList[OBJECT_ID]} !== ${objectId}`)
-  }
-  let list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
-  let conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
-  let elemIds   = (originalList && originalList[ELEM_IDS] ) ? originalList[ELEM_IDS].slice()  : []
-  let maxElem   = (originalList && originalList[MAX_ELEM] ) ? originalList[MAX_ELEM]          : 0
+  const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
+  const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
+  const defaultV  = (originalList && originalList[DEFAULT_V]) ? originalList[DEFAULT_V].slice() : []
+  const elemIds   = (originalList && originalList[ELEM_IDS ]) ? originalList[ELEM_IDS ].slice() : []
+  const maxElem   = (originalList && originalList[MAX_ELEM] ) ? originalList[MAX_ELEM]          : 0
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
+  Object.defineProperty(list, DEFAULT_V, {value: defaultV})
   Object.defineProperty(list, ELEM_IDS,  {value: elemIds})
   Object.defineProperty(list, MAX_ELEM,  {value: maxElem, writable: true})
   return list
 }
 
 /**
- * Applies the change `diff` to a list object. `cache` and `updated` are indexed
- * by objectId; the existing read-only object is taken from `cache`, and the
- * updated writable object is written to `updated`. `inbound` is a mapping from
- * child objectId to parent objectId; it is updated according to the change.
+ * Updates the list object `obj` according to the modifications described in
+ * `patch`, or creates a new object if `obj` is undefined. Mutates `updated`
+ * to map the objectId to the new object, and returns the new object.
  */
-function updateListObject(diff, cache, updated, inbound) {
-  if (!updated[diff.obj]) {
-    updated[diff.obj] = cloneListObject(cache[diff.obj], diff.obj)
+function updateListObject(patch, obj, updated) {
+  const objectId = patch.objectId
+  if (!updated[objectId]) {
+    updated[objectId] = cloneListObject(obj, objectId)
   }
-  let list = updated[diff.obj], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
-  let value = null, conflict = null
 
-  if (['insert', 'set'].includes(diff.action)) {
-    value = getValue(diff, cache, updated)
-    if (diff.conflicts) {
-      conflict = {}
-      for (let c of diff.conflicts) {
-        conflict[c.actor] = getValue(c, cache, updated)
-      }
-      Object.freeze(conflict)
+  const list = updated[objectId], conflicts = list[CONFLICTS]
+  const defaultV = list[DEFAULT_V], elemIds = list[ELEM_IDS]
+  list[MAX_ELEM] = Math.max(list[MAX_ELEM], patch.maxElem || 0)
+
+  iterateEdits(patch.edits,
+    (index, insertions) => { // insertion
+      const blanks = new Array(insertions.length)
+      list     .splice(index, 0, ...blanks)
+      conflicts.splice(index, 0, ...blanks)
+      defaultV .splice(index, 0, ...blanks)
+      elemIds  .splice(index, 0, ...insertions)
+    },
+    (index, count) => { // deletion
+      list     .splice(index, count)
+      conflicts.splice(index, count)
+      defaultV .splice(index, count)
+      elemIds  .splice(index, count)
     }
-  }
+  )
 
-  let refsBefore = {}, refsAfter = {}
-  if (diff.action === 'create') {
-    // do nothing
-  } else if (diff.action === 'insert') {
-    list[MAX_ELEM] = Math.max(list[MAX_ELEM], parseElemId(diff.elemId).counter)
-    list.splice(diff.index, 0, value)
-    conflicts.splice(diff.index, 0, conflict)
-    elemIds.splice(diff.index, 0, diff.elemId)
-    refsAfter = childReferences(list, diff.index)
-  } else if (diff.action === 'set') {
-    refsBefore = childReferences(list, diff.index)
-    list[diff.index] = value
-    conflicts[diff.index] = conflict
-    refsAfter = childReferences(list, diff.index)
-  } else if (diff.action === 'remove') {
-    refsBefore = childReferences(list, diff.index)
-    list.splice(diff.index, 1)
-    conflicts.splice(diff.index, 1) || {}
-    elemIds.splice(diff.index, 1)
-  } else if (diff.action === 'maxElem') {
-    list[MAX_ELEM] = Math.max(list[MAX_ELEM], diff.value)
+  applyProperties(patch.props, list, conflicts, defaultV, updated)
+  return list
+}
+
+/**
+ * Updates the text object `obj` according to the modifications described in
+ * `patch`, or creates a new object if `obj` is undefined. Mutates `updated`
+ * to map the objectId to the new object, and returns the new object.
+ */
+function updateTextObject(patch, obj, updated) {
+  const objectId = patch.objectId
+  let elems, maxElem
+  if (updated[objectId]) {
+    elems = updated[objectId].elems
+    maxElem = updated[objectId][MAX_ELEM]
+  } else if (obj) {
+    elems = obj.elems.slice()
+    maxElem = obj[MAX_ELEM]
   } else {
-    throw new RangeError('Unknown action type: ' + diff.action)
+    elems = []
+    maxElem = 0
   }
 
-  updateInbound(diff.obj, refsBefore, refsAfter, inbound)
-}
+  maxElem = Math.max(maxElem, patch.maxElem || 0)
 
-/**
- * Updates the list object with ID `objectId` such that all child objects that
- * have been updated in `updated` are replaced with references to the updated
- * version.
- */
-function parentListObject(objectId, cache, updated) {
-  if (!updated[objectId]) {
-    updated[objectId] = cloneListObject(cache[objectId], objectId)
-  }
-  let list = updated[objectId]
-
-  for (let index = 0; index < list.length; index++) {
-    let value = list[index]
-    if (isObject(value) && updated[value[OBJECT_ID]]) {
-      list[index] = updated[value[OBJECT_ID]]
+  iterateEdits(patch.edits,
+    (index, insertions) => { // insertion
+      elems.splice(index, insertions.map(elemId => ({elemId})))
+    },
+    (index, count) => { // deletion
+      elems.splice(index, deletions)
     }
+  )
 
-    let conflicts = list[CONFLICTS][index] || {}, conflictsUpdate = null
-    for (let actorId of Object.keys(conflicts)) {
-      value = conflicts[actorId]
-      if (isObject(value) && updated[value[OBJECT_ID]]) {
-        if (!conflictsUpdate) {
-          conflictsUpdate = copyObject(conflicts)
-          list[CONFLICTS][index] = conflictsUpdate
-        }
-        conflictsUpdate[actorId] = updated[value[OBJECT_ID]]
-      }
-    }
+  for (let key of Object.keys(patch.props || {})) {
+    const actor = Object.keys(patch.props[key]).sort().reverse()[0]
+    if (!actor) throw new RangeError(`No default value at index ${key}`)
 
-    if (conflictsUpdate && cache[ROOT_ID][OPTIONS].freeze) {
-      Object.freeze(conflictsUpdate)
-    }
-  }
-}
-
-/**
- * Applies the list of changes from `diffs[startIndex]` to `diffs[endIndex]`
- * (inclusive the last element) to a Text object. `cache` and `updated` are
- * indexed by objectId; the existing read-only object is taken from `cache`,
- * and the updated object is written to `updated`.
- */
-function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
-  const objectId = diffs[startIndex].obj
-  if (!updated[objectId]) {
-    if (cache[objectId]) {
-      const elems = cache[objectId].elems.slice()
-      const maxElem = cache[objectId][MAX_ELEM]
-      updated[objectId] = instantiateText(objectId, elems, maxElem)
-    } else {
-      updated[objectId] = instantiateText(objectId, [], 0)
-    }
+    const oldValue = (elems[key].defaultV === actor) ? elems[key].value : undefined
+    elems[key].value = getValue(patch.props[key][actor], oldValue, updated)
+    elems[key].defaultV = actor
   }
 
-  let elems = updated[objectId].elems, maxElem = updated[objectId][MAX_ELEM]
-  let splicePos = -1, deletions, insertions
-
-  while (startIndex <= endIndex) {
-    const diff = diffs[startIndex]
-    if (diff.action === 'create') {
-      // do nothing
-
-    } else if (diff.action === 'insert') {
-      if (splicePos < 0) {
-        splicePos = diff.index
-        deletions = 0
-        insertions = []
-      }
-      maxElem = Math.max(maxElem, parseElemId(diff.elemId).counter)
-      insertions.push({elemId: diff.elemId, value: diff.value, conflicts: diff.conflicts})
-
-      if (startIndex === endIndex || diffs[startIndex + 1].action !== 'insert' ||
-          diffs[startIndex + 1].index !== diff.index + 1) {
-        elems.splice(splicePos, deletions, ...insertions)
-        splicePos = -1
-      }
-
-    } else if (diff.action === 'set') {
-      elems[diff.index] = {
-        elemId: elems[diff.index].elemId,
-        value: diff.value,
-        conflicts: diff.conflicts
-      }
-
-    } else if (diff.action === 'remove') {
-      if (splicePos < 0) {
-        splicePos = diff.index
-        deletions = 0
-        insertions = []
-      }
-      deletions += 1
-
-      if (startIndex === endIndex ||
-          !['insert', 'remove'].includes(diffs[startIndex + 1].action) ||
-          diffs[startIndex + 1].index !== diff.index) {
-        elems.splice(splicePos, deletions)
-        splicePos = -1
-      }
-
-    } else if (diff.action === 'maxElem') {
-      maxElem = Math.max(maxElem, diff.value)
-    } else {
-      throw new RangeError('Unknown action type: ' + diff.action)
-    }
-
-    startIndex += 1
-  }
   updated[objectId] = instantiateText(objectId, elems, maxElem)
+  return updated[objectId]
 }
 
 /**
- * After some set of objects in `updated` (a map from object ID to mutable
- * object) have been updated, updates their parent objects to point to the new
- * object versions, all the way to the root object. `cache` contains the
- * previous (immutable) version of all objects, and `inbound` is the mapping
- * from child objectId to parent objectId. Any objects that were not modified
- * continue to refer to the existing version in `cache`.
+ * Applies the patch object `patch` to the read-only document object `obj`.
+ * Clones a writable copy of `obj` and places it in `updated` (indexed by
+ * objectId), if that has not already been done. Returns the updated object.
  */
-function updateParentObjects(cache, updated, inbound) {
-  let affected = updated
-  while (Object.keys(affected).length > 0) {
-    let parents = {}
-    for (let childId of Object.keys(affected)) {
-      const parentId = inbound[childId]
-      if (parentId) parents[parentId] = true
-    }
-    affected = parents
-
-    for (let objectId of Object.keys(parents)) {
-      if (Array.isArray(updated[objectId] || cache[objectId])) {
-        parentListObject(objectId, cache, updated)
-      } else if ((updated[objectId] || cache[objectId]) instanceof Table) {
-        parentTableObject(objectId, cache, updated)
-      } else {
-        parentMapObject(objectId, cache, updated)
-      }
-    }
+function interpretPatch(patch, obj, updated) {
+  // Return original object if it already exists and isn't being modified
+  if (isObject(obj) && !patch.props && !patch.edits && !updated[patch.objectId]) {
+    return obj
   }
-}
 
-/**
- * Applies the list of changes `diffs` to the appropriate object in `updated`.
- * `cache` and `updated` are indexed by objectId; the existing read-only object
- * is taken from `cache`, and the updated writable object is written to
- * `updated`. `inbound` is a mapping from child objectId to parent objectId;
- * it is updated according to the change.
- */
-function applyDiffs(diffs, cache, updated, inbound) {
-  let startIndex = 0
-  for (let endIndex = 0; endIndex < diffs.length; endIndex++) {
-    const diff = diffs[endIndex]
-
-    if (diff.type === 'map') {
-      updateMapObject(diff, cache, updated, inbound)
-      startIndex = endIndex + 1
-    } else if (diff.type === 'table') {
-      updateTableObject(diff, cache, updated, inbound)
-      startIndex = endIndex + 1
-    } else if (diff.type === 'list') {
-      updateListObject(diff, cache, updated, inbound)
-      startIndex = endIndex + 1
-    } else if (diff.type === 'text') {
-      if (endIndex === diffs.length - 1 || diffs[endIndex + 1].obj !== diff.obj) {
-        updateTextObject(diffs, startIndex, endIndex, cache, updated)
-        startIndex = endIndex + 1
-      }
-    } else {
-      throw new TypeError(`Unknown object type: ${diff.type}`)
-    }
+  if (patch.type === 'map') {
+    return updateMapObject(patch, obj, updated)
+  } else if (patch.type === 'table') {
+    return updateTableObject(patch, obj, updated)
+  } else if (patch.type === 'list') {
+    return updateListObject(patch, obj, updated)
+  } else if (patch.type === 'text') {
+    return updateTextObject(patch, obj, updated)
+  } else {
+    throw new TypeError(`Unknown object type: ${patch.type}`)
   }
 }
 
@@ -455,5 +302,5 @@ function cloneRootObject(root) {
 }
 
 module.exports = {
-  applyDiffs, updateParentObjects, cloneRootObject
+  interpretPatch, cloneRootObject
 }
