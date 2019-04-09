@@ -4,7 +4,7 @@
   "description": "Data structures for building collaborative applications",
   "main": "dist/automerge.js",
   "scripts": {
-    "browsertest": "karma start karma.conf.js",
+    "browsertest": "karma start",
     "test": "mocha",
     "build": "webpack",
     "prepublishOnly": "webpack"
@@ -25,7 +25,6 @@
     "babel-core": "^6.26.3",
     "babel-loader": "^7.1.4",
     "babel-preset-env": "^1.7.0",
-    "browserify": "^16.2.2",
     "jsverify": "^0.8.3",
     "karma": "^4.0.1",
     "karma-chrome-launcher": "^2.2.0",
