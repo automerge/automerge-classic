@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "lib": ["dom", "esnext.asynciterable", "es2017", "es2016", "es2015"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "paths": { "*": ["src/*", "*", "frontend/*", "backend/*"] },
+    "rootDir": "",
+    "target": "es2016",
+    "typeRoots": ["./@types", "./node_modules/@types"]
+  },
+  "exclude": ["dist/**/*"]
+}
