@@ -2,7 +2,7 @@ const assert = require('assert')
 
 // Assertion that succeeds if the first argument deepEquals at least one of the
 // subsequent arguments (but we don't care which one)
-function equalsOneOf(actual, ...expected) {
+function assertEqualsOneOf(actual, ...expected) {
   assert(expected.length > 0)
   for (let i = 0; i < expected.length; i++) {
     try {
@@ -14,4 +14,4 @@ function equalsOneOf(actual, ...expected) {
   }
 }
 
-module.exports = { equalsOneOf }
+module.exports = { assertEqualsOneOf }
