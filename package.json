@@ -3,11 +3,12 @@
   "version": "0.10.0",
   "description": "Data structures for building collaborative applications",
   "main": "dist/automerge.js",
+  "types": "dist/automerge.d.ts",
   "scripts": {
     "browsertest": "karma start",
     "test": "mocha",
-    "build": "webpack",
-    "prepublishOnly": "webpack"
+    "build": "webpack && copyfiles --flat @types/automerge/index.d.ts dist",
+    "prepublishOnly": "npm run-script build"
   },
   "author": "",
   "license": "MIT",
@@ -24,6 +25,7 @@
     "@types/uuid": "^3.4.4",
     "babel-core": "^6.26.3",
     "babel-loader": "^7.1.4",
+    "copyfiles": "^2.1.0",
     "babel-preset-env": "^1.7.0",
     "jsverify": "^0.8.3",
     "karma": "^4.0.1",
