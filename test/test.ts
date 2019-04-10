@@ -3,6 +3,7 @@ import * as Automerge from 'automerge'
 
 import { assertEqualsOneOf } from './helpers'
 
+
 // const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -50,7 +51,8 @@ describe('Automerge', () => {
         assert.deepEqual(s2, { first: 'one', second: 'two' })
       })
 
-      it('should prevent mutations outside of a change block', () => {
+      it('should prevent mutations outside of a change block by throwing an error (strict mode)', () => {
+
         s2 = Automerge.change(s1, doc => (doc.foo = 'bar'))
         
         // modifications of a frozen object throw an error
@@ -69,35 +71,31 @@ describe('Automerge', () => {
         assert.notStrictEqual(s2.x, 4)
       })
       
-      it('should prevent mutations outside of a change block by silently ignoring them (not strict mode)', () => {
-        // confirm we're *not* in strict mode
-        const isStrictMode = (eval("var __temp = null"), eval('typeof __temp === "undefined"'))
-        assert.strictEqual(isStrictMode, false)
+      // it('should prevent mutations outside of a change block by silently ignoring them (not strict mode)', () => {
+      //   s2 = Automerge.change(s1, doc => (doc.foo = 'bar'))
+        
+      //   // modifications of a frozen object are silently ignored
+      //   s2.foo = 'lemon'
+      //   assert.strictEqual(s2.foo, 'bar')
+        
+      //   // deletes are also silently ignored
+      //   const deleted = delete s2['foo']
+      //   assert.strictEqual(s2.foo, 'bar')
+      //   assert.strictEqual(deleted, false)
+        
+      //   // within a change block, changes must be made to the callback argument
+      //   Automerge.change(s2, doc => {
+      //     s2.foo = 'lemon'
+      //     assert.strictEqual(s2.foo, 'bar')
+      //   })
+      //   assert.strictEqual(s2.foo, 'bar')
 
-        s2 = Automerge.change(s1, doc => (doc.foo = 'bar'))
-        
-        // modifications of a frozen object are silently ignored
-        s2.foo = 'lemon'
-        assert.strictEqual(s2.foo, 'bar')
-        
-        // deletes are also silently ignored
-        const deleted = delete s2['foo']
-        assert.strictEqual(s2.foo, 'bar')
-        assert.strictEqual(deleted, false)
-        
-        // within a change block, changes must be made to the callback argument
-        Automerge.change(s2, doc => {
-          s2.foo = 'lemon'
-          assert.strictEqual(s2.foo, 'bar')
-        })
-        assert.strictEqual(s2.foo, 'bar')
-
-        // Object.assign throws either way
-        assert.throws(() => {
-          Object.assign(s2, { x: 4 })
-        })
-        assert.notStrictEqual(s2.x, 4)
-      })
+      //   // Object.assign throws either way
+      //   assert.throws(() => {
+      //     Object.assign(s2, { x: 4 })
+      //   })
+      //   assert.notStrictEqual(s2.x, 4)
+      // })
 
       it('should allow repeated reading and writing of values', () => {
         s2 = Automerge.change(s1, 'change message', doc => {
