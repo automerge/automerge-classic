@@ -10,7 +10,9 @@ describe('Automerge.WatchableDoc', () => {
     beforeDoc = Automerge.change(Automerge.init(), doc => doc.document = 'watch me now')
     afterDoc = Automerge.change(beforeDoc, doc => doc.document = 'i can mash potato')
     changes = Automerge.getChanges(beforeDoc, afterDoc)
-    watchDoc = new WatchableDoc(beforeDoc)
+    watchDoc = new Automerge.WatchableDoc(beforeDoc)
+    callback = sinon.spy()
+    watchDoc.registerHandler(callback)
   })
   
   it('should have a document inside the docset', () => {
@@ -18,25 +20,19 @@ describe('Automerge.WatchableDoc', () => {
   })
 
   it('should call the handler via set', () => {
-    let callback = sinon.spy();
-    watchDoc.registerHandler(callback);
     watchDoc.set(afterDoc)
     assert(callback.calledOnce)
     assert.deepEqual(watchDoc.get(), afterDoc)
   })
 
   it('should call the handler via applyChanges', () => {
-    let callback = sinon.spy();
-    watchDoc.registerHandler(callback);
     watchDoc.applyChanges(changes)
     assert(callback.calledOnce)
     assert.deepEqual(watchDoc.get(), afterDoc)
   })
 
   it('should allow removing the handler', () => {
-    let callback = sinon.spy();
-    watchDoc.registerHandler(callback);
-    watchDoc.unregisterHandler(callback);
+    watchDoc.unregisterHandler(callback)
     watchDoc.applyChanges(changes)
     assert(callback.notCalled)
   })
