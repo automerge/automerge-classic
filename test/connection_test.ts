@@ -1,21 +1,42 @@
-const assert = require('assert')
-const sinon = require('sinon')
-const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
-const Connection = Automerge.Connection
-const DocSet = Automerge.DocSet
+import * as Automerge from 'automerge'
+import * as assert from 'assert'
+import { Connection, DocSet } from 'automerge'
+import sinon, { SinonSpy } from 'sinon'
 
 describe('Automerge.Connection', () => {
-  var doc1, nodes
+  interface ObjTestDoc {
+    key1?: string
+    key2?: string
+    another1?: string
+    another2?: string
+    list?: string[]
+  }
+
+  type Link = [number, number]
+
+  interface Step {
+    from: number
+    to: number
+    drop?: boolean
+    deliver?: boolean
+    match?: (msg: Message) => void
+  }
+
+  var doc1: ObjTestDoc
+  var nodes: DocSet<ObjTestDoc>[]
 
   beforeEach(() => {
-    doc1 = Automerge.change(Automerge.init(), doc => doc.doc1 = 'doc1')
+    doc1 = Automerge.change(Automerge.init(), (doc: ObjTestDoc) => (doc.key1 = 'value1'))
     nodes = []
-    for (let i=0; i<5; i++) nodes.push(new DocSet())
+    for (let i = 0; i < 5; i++) nodes.push(new DocSet())
   })
 
   // Mini-DSL for describing the message exchanges between nodes
-  function execution(links, steps) {
-    let count = [], spies = [], conns = [], allConns = []
+  function execution(links: Link[], steps: (Step | Function)[]) {
+    let count: number[][] = []
+    let spies: SinonSpy[][] = []
+    let conns: Connection<ObjTestDoc>[][] = []
+    let allConns: Connection<ObjTestDoc>[] = []
 
     for (let link of links) {
       let n1 = link[0], n2 = link[1]
@@ -50,10 +71,11 @@ describe('Automerge.Connection', () => {
       }
     }
 
-    function checkCallCount(n1, n2) {
+    function checkCallCount(n1: number, n2: number) {
       if (spies[n1][n2].callCount !== count[n1][n2]) {
-        throw new Error('Expected ' + count[n1][n2] + ' messages from node ' + n1 + ' to node ' + n2 +
-                        ', but saw ' + spies[n1][n2].callCount + ' messages')
+        throw new Error(`Expected ${count[n1][n2]} messages from node ${n1} to node ${n2}, ` +
+                        `but saw ${spies[n1][n2].callCount} messages`
+        )
       }
     }
 
@@ -97,7 +119,7 @@ describe('Automerge.Connection', () => {
         assert.strictEqual(msg.changes.length, 1)
       }},
 
-      () => { assert.strictEqual(nodes[2].getDoc('doc1').doc1, 'doc1') },
+      () => { assert.strictEqual(nodes[2].getDoc('doc1').key1, 'value1') },
 
       // Node 2 acknowledges receipt
       {from: 2, to: 1, deliver: true, match(msg) {
@@ -107,7 +129,7 @@ describe('Automerge.Connection', () => {
   })
 
   it('should concurrently exchange any missing documents', () => {
-    let doc2 = Automerge.change(Automerge.init(), doc => doc.doc2 = 'doc2')
+    let doc2 = Automerge.change(Automerge.init<ObjTestDoc>(), doc => (doc.key2 = 'value2'))
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc2', doc2)
 
@@ -147,8 +169,8 @@ describe('Automerge.Connection', () => {
   })
 
   it('should bring an older copy up-to-date with a newer one', () => {
-    let doc2 = Automerge.merge(Automerge.init(), doc1)
-    doc2 = Automerge.change(doc2, doc => doc.doc1 = 'doc1++')
+    let doc2 = Automerge.merge(Automerge.init<ObjTestDoc>(), doc1)
+    doc2 = Automerge.change(doc2, (doc: ObjTestDoc) => (doc.key1 = 'value2'))
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc1', doc2)
 
@@ -180,14 +202,14 @@ describe('Automerge.Connection', () => {
       }}
     ])
 
-    assert.strictEqual(nodes[1].getDoc('doc1').doc1, 'doc1++')
-    assert.strictEqual(nodes[1].getDoc('doc1').doc1, 'doc1++')
+    assert.strictEqual(nodes[1].getDoc('doc1').key1, 'value2')
+    assert.strictEqual(nodes[2].getDoc('doc1').key1, 'value2')
   })
 
   it('should bidirectionally merge divergent document copies', () => {
-    let doc2 = Automerge.merge(Automerge.init(), doc1)
-    doc2 = Automerge.change(doc2, doc => doc.two = 'two')
-    doc1 = Automerge.change(doc1, doc => doc.one = 'one')
+    let doc2 = Automerge.merge(Automerge.init<ObjTestDoc>(), doc1)
+    doc2 = Automerge.change(doc2, doc => (doc.another2 = 'two'))
+    doc1 = Automerge.change(doc1, doc => (doc.another1 = 'one'))
     nodes[1].setDoc('doc1', doc1)
     nodes[2].setDoc('doc1', doc2)
 
@@ -225,10 +247,8 @@ describe('Automerge.Connection', () => {
       }}
     ])
 
-    assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {doc1: 'doc1', one: 'one', two: 'two'})
-    assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {doc1: 'doc1', one: 'one', two: 'two'})
+    assert.deepEqual(nodes[1].getDoc('doc1'), { key1: 'value1', another1: 'one', another2: 'two' })
+    assert.deepEqual(nodes[2].getDoc('doc1'), { key1: 'value1', another1: 'one', another2: 'two' })
   })
 
   it('should forward incoming changes to other connections', () => {
@@ -245,7 +265,7 @@ describe('Automerge.Connection', () => {
 
       // Node 2 sends the document to node 1
       {from: 2, to: 1, deliver: true},
-      () => { assert.strictEqual(nodes[1].getDoc('doc1').doc1, 'doc1') },
+      () => { assert.strictEqual(nodes[1].getDoc('doc1').key1, 'value1') },
 
       // Node 1 sends acknowledgement to node 2, and advertisement to node 3
       {from: 1, to: 2, deliver: true},
@@ -258,7 +278,7 @@ describe('Automerge.Connection', () => {
 
       // Node 1 sends the document to node 3
       {from: 1, to: 3, deliver: true},
-      () => { assert.strictEqual(nodes[3].getDoc('doc1').doc1, 'doc1') },
+      () => { assert.strictEqual(nodes[3].getDoc('doc1').key1, 'value1') },
 
       // Node 3 sends acknowledgement to node 1
       {from: 3, to: 1, deliver: true}
