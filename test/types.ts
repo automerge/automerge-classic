@@ -34,6 +34,10 @@ export interface BirdCounterMap {
   birds: CounterMap
 }
 
+export interface CounterList {
+  counts: Frontend.Counter[]
+}
+
 export interface DateBox {
   now: Date
 }
