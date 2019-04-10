@@ -34,7 +34,7 @@
     "karma-safari-launcher": "^1.0.0",
     "karma-sauce-launcher": "^2.0.2",
     "karma-typescript": "^4.0.0",
-    "mocha": "^6.1.2",
+    "mocha": "^5.1.1",
     "sinon": "^5.0.10",
     "ts-node": "^8.0.3",
     "tsconfig-paths": "^3.8.0",
