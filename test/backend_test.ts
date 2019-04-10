@@ -1,14 +1,15 @@
-const assert = require('assert')
-const Automerge = require('../src/automerge')
-const Backend = require('../backend')
-const uuid = require('../src/uuid')
+import * as assert from 'assert'
+import * as Automerge from 'automerge'
+import * as Backend from 'backend'
+import uuid from 'uuid'
+
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
-describe('Backend', () => {
+describe('Automerge.Backend', () => {
   describe('incremental diffs', () => {
     it('should assign to a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
       const s0 = Backend.init()
@@ -21,10 +22,10 @@ describe('Backend', () => {
 
     it('should increment a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
       ]}
       const s0 = Backend.init()
@@ -37,10 +38,10 @@ describe('Backend', () => {
     })
 
     it('should make a conflict on assignment to the same key', () => {
-      const change1 = {actor: 'actor1', seq: 1, deps: {}, ops: [
+      const change1: Change = {actor: 'actor1', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+      const change2: Change = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s0 = Backend.init()
@@ -55,10 +56,10 @@ describe('Backend', () => {
 
     it('should delete a key from a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'del', obj: ROOT_ID, key: 'bird'}
       ]}
       const s0 = Backend.init()
@@ -72,7 +73,7 @@ describe('Backend', () => {
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeMap', obj: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3},
         {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
@@ -91,12 +92,12 @@ describe('Backend', () => {
 
     it('should assign to keys in nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeMap', obj: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3},
         {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
       const s0 = Backend.init()
@@ -110,7 +111,7 @@ describe('Backend', () => {
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
@@ -130,13 +131,13 @@ describe('Backend', () => {
 
     it('should apply updates inside lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'greenfinch'}
       ]}
       const s0 = Backend.init()
@@ -150,13 +151,13 @@ describe('Backend', () => {
 
     it('should delete list elements', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`}
       ]}
       const s0 = Backend.init()
@@ -170,11 +171,11 @@ describe('Backend', () => {
 
     it('should handle list element insertion and deletion in the same change', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'link',     obj: ROOT_ID, key: 'birds', value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'ins', obj: birds, key: '_head', elem: 1},
         {action: 'del', obj: birds, key: `${actor}:1`}
       ]}
@@ -189,7 +190,7 @@ describe('Backend', () => {
 
     it('should support Date objects at the root', () => {
       const now = new Date()
-      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+      const actor = uuid(), change: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s0 = Backend.init()
@@ -202,7 +203,7 @@ describe('Backend', () => {
 
     it('should support Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
         {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
@@ -225,7 +226,7 @@ describe('Backend', () => {
   describe('applyLocalChange()', () => {
     it('should apply change requests', () => {
       const actor = uuid()
-      const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
       const s0 = Backend.init()
@@ -238,10 +239,10 @@ describe('Backend', () => {
 
     it('should throw an exception on duplicate requests', () => {
       const actor = uuid()
-      const change1 = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {requestType: 'change', actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
       ]}
       const s0 = Backend.init()
@@ -255,10 +256,10 @@ describe('Backend', () => {
   describe('getPatch()', () => {
     it('should include the most recent value for a key', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s0 = Backend.init()
@@ -270,10 +271,10 @@ describe('Backend', () => {
     })
 
     it('should include conflicting values for a key', () => {
-      const change1 = {actor: 'actor1', seq: 1, deps: {}, ops: [
+      const change1: Change = {actor: 'actor1', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+      const change2: Change = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s0 = Backend.init()
@@ -287,10 +288,10 @@ describe('Backend', () => {
 
     it('should handle increments for a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
       ]}
       const s0 = Backend.init()
@@ -303,12 +304,12 @@ describe('Backend', () => {
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeMap', obj: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3},
         {action: 'link',    obj: ROOT_ID, key: 'birds', value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',     obj: birds,   key: 'wrens'},
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
@@ -326,7 +327,7 @@ describe('Backend', () => {
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
@@ -347,7 +348,7 @@ describe('Backend', () => {
 
     it('should include the latest state of a list', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
@@ -355,7 +356,7 @@ describe('Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinch'},
         {action: 'link',     obj: ROOT_ID, key: 'birds',      value: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2: Change = {actor, seq: 2, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`},
         {action: 'ins',      obj: birds,   key: `${actor}:1`, elem: 3},
         {action: 'set',      obj: birds,   key: `${actor}:3`, value: 'greenfinch'},
@@ -377,7 +378,7 @@ describe('Backend', () => {
 
     it('should handle nested maps in lists', () => {
       const todos = uuid(), item = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: todos},
         {action: 'ins',      obj: todos,   key: '_head',     elem: 1},
         {action: 'makeMap',  obj: item},
@@ -404,7 +405,7 @@ describe('Backend', () => {
 
     it('should include Date objects at the root', () => {
       const now = new Date()
-      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+      const actor = uuid(), change: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s0 = Backend.init()
@@ -417,7 +418,7 @@ describe('Backend', () => {
 
     it('should include Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change: Change = {actor, seq: 1, deps: {}, ops: [
         {action: 'makeList', obj: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
         {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'},
@@ -438,7 +439,12 @@ describe('Backend', () => {
   })
 
   describe('getChangesForActor()', () => {
-    let oneDoc, twoDoc, mergeDoc
+    interface DocBox {
+      document: string
+    }
+    let oneDoc: DocBox
+    let twoDoc: DocBox
+    let mergeDoc: DocBox
 
     beforeEach(() => {
       oneDoc = Automerge.change(Automerge.init('actor1'), doc => doc.document = 'watch me now')
