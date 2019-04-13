@@ -111,7 +111,7 @@ declare module 'automerge' {
     function applyPatch<T>(doc: T, patch: Patch): T
     function canRedo<T>(doc: T): boolean
     function canUndo<T>(doc: T): boolean
-    function change<T>(doc: T, message: string, callback: ChangeFn<T>): [T, Change]
+    function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change]
     function change<T>(doc: T, callback: ChangeFn<T>): [T, Change]
     function emptyChange<T>(doc: T, message?: string): T
     function getActorId<T>(doc: T): UUID
