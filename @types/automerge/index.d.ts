@@ -86,13 +86,29 @@ declare module 'automerge' {
     unregisterHandler(handler: Handler<T>): void
   }
 
+  // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
+  // can't treat a Counter like a literal number without force-casting it as a number.
+  // This won't compile:
+  //   `const foo: number = c + 10` 
+  // But this will:
+  //   `const foo: number = c as unknown as number + 10`
+  class Counter extends Number {
+    constructor(value?: number)
+    increment(delta?: number): void
+    decrement(delta?: number): void
+    toString(): string
+    valueOf(): number
+    value: number
+  }
+  const uuid: UUIDFactory;
+
   namespace Frontend {
     // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
     // can't treat a Counter like a literal number without force-casting it as a number.
     // This won't compile:
-    // `assert.strictEqual(c + 10, 13) // Operator '+' cannot be applied to types 'Counter' and '10'.ts(2365)`
+    //   `assert.strictEqual(c + 10, 13) // Operator '+' cannot be applied to types 'Counter' and '10'.ts(2365)`
     // But this will:
-    // `assert.strictEqual(c as unknown as number + 10, 13)`
+    //   `assert.strictEqual(c as unknown as number + 10, 13)`
     class Counter extends Number {
       constructor(value?: number)
       increment(delta?: number): void
@@ -126,6 +142,14 @@ declare module 'automerge' {
     function setActorId<T>(doc: T, actorId: UUID): any
     function undo<T>(doc: T, message?: string): any
   }
+
+  type UUIDGenerator = () => UUID;
+  interface UUIDFactory extends UUIDGenerator {
+    setFactory: (generator: UUIDGenerator) => void;
+    reset: () => void;
+  }
+  const uuid: UUIDFactory;
+
 }
 
 declare module 'frontend/constants' {
