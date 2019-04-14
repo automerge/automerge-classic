@@ -19,7 +19,7 @@ describe('Automerge.Connection', () => {
     to: number
     drop?: boolean
     deliver?: boolean
-    match?: (msg: Message) => void
+    match?: (msg: Message<any>) => void
   }
 
   var doc1: ObjTestDoc

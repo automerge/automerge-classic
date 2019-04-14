@@ -1,5 +1,5 @@
 declare module 'automerge' {
-  function applyChanges<T>(doc: T, changes: Change[]): T
+  function applyChanges<T>(doc: T, changes: Change<T>[]): T
   function canRedo<T>(doc: T): boolean
   function canUndo<T>(doc: T): boolean
   function change<T>(doc: T, message: string, callback: ChangeFn<T>): T
@@ -8,7 +8,7 @@ declare module 'automerge' {
   function emptyChange<T>(doc: T, message?: string): T
   function equals<T>(val1: T, val2: T): boolean
   function getActorId<T>(doc: T): UUID
-  function getChanges<T>(oldDoc: T, newDoc: T): Change[]
+  function getChanges<T>(oldDoc: T, newDoc: T): Change<T>[]
   function getConflicts<T>(doc: T, key: Key): any
   function getHistory<T>(doc: T): State<T>[]
   function getMissingDeps<T>(doc: T): Clock
@@ -24,13 +24,13 @@ declare module 'automerge' {
   function getElemId<T=string>(object: List<T> | Text, index: number): UUID
 
   class Connection<T> {
-    constructor(docSet: DocSet<T>, sendMsg: (msg: Message) => void)
+    constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
     close(): void
     docChanged(docId: UUID, doc: T): void
     maybeSendChanges(docId: UUID): void
     open(): void
-    receiveMsg(msg: Message): T
-    sendMsg(docId: UUID, clock: Clock, changes: Change[]): void
+    receiveMsg(msg: Message<T>): T
+    sendMsg(docId: UUID, clock: Clock, changes: Change<T>[]): void
   }
 
   class Table<T> {
@@ -72,7 +72,7 @@ declare module 'automerge' {
 
   class DocSet<T> {
     constructor()
-    applyChanges(docId: UUID, changes: Change[]): T
+    applyChanges(docId: UUID, changes: Change<T>[]): T
     getDoc(docId: UUID): T
     setDoc(docId: UUID, doc: T): void
     registerHandler(handler: Handler<T>): void
@@ -81,7 +81,7 @@ declare module 'automerge' {
 
   class WatchableDoc<T> {
     constructor(doc: T)
-    applyChanges(changes: Change[]): T
+    applyChanges(changes: Change<T>[]): T
     get(): T
     set(doc: T): void
     registerHandler(handler: Handler<T>): void
@@ -107,8 +107,8 @@ declare module 'automerge' {
     function applyPatch<T>(doc: T, patch: Patch): T
     function canRedo<T>(doc: T): boolean
     function canUndo<T>(doc: T): boolean
-    function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change]
-    function change<T>(doc: T, callback: ChangeFn<T>): [T, Change]
+    function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
+    function change<T>(doc: T, callback: ChangeFn<T>): [T, Change<T>]
     function emptyChange<T>(doc: T, message?: string): T
     function getActorId<T>(doc: T): UUID
     function getBackendState<T>(doc: T): T
@@ -124,11 +124,11 @@ declare module 'automerge' {
   }
 
   namespace Backend {
-    function applyChanges<T>(state: T, changes: Change[]): [T, Patch]
-    function applyLocalChange<T>(state: T, change: Change): [T, Patch]
-    function getChanges<T>(oldState: T, newState: T): Change[]
-    function getChangesForActor<T>(state: T, actorId: UUID): Change[]
-    function getMissingChanges<T>(state: T, clock: Clock): Change[]
+    function applyChanges<T>(state: T, changes: Change<T>[]): [T, Patch]
+    function applyLocalChange<T>(state: T, change: Change<T>): [T, Patch]
+    function getChanges<T>(oldState: T, newState: T): Change<T>[]
+    function getChangesForActor<T>(state: T, actorId: UUID): Change<T>[]
+    function getMissingChanges<T>(state: T, clock: Clock): Change<T>[]
     function getMissingDeps<T>(state: T): Clock
     function getPatch<T>(state: T): Patch
     function init<T>(): T
@@ -148,10 +148,10 @@ declare module 'automerge' {
   type UUID = string | number
   type filterFn<T> = (elem: T) => boolean
 
-  interface Message {
+  interface Message<T> {
     docId: UUID
     clock: Clock
-    changes?: Change[]
+    changes?: Change<T>[]
   }
 
   interface Clock {
@@ -159,18 +159,18 @@ declare module 'automerge' {
   }
 
   interface State<T> {
-    change: Change
+    change: Change<T>
     snapshot: T
   }
 
-  interface Change {
+  interface Change<T> {
     message?: string
     requestType?: RequestType
     actor: UUID
     seq: number
     deps: Clock
     ops: Op[]
-    before?: any // TODO: make this Change<T> and before?: T
+    before?: T
     diffs?: Diff[]
   }
 

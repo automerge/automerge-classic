@@ -10,7 +10,7 @@ describe('Automerge.WatchableDoc', () => {
   let watchDoc: Automerge.WatchableDoc<TestDoc>
   let beforeDoc: TestDoc
   let afterDoc: TestDoc
-  let changes: Change[]
+  let changes: Change<TestDoc>[]
   let callback: sinon.SinonSpy
 
   beforeEach(() => {

@@ -43,7 +43,7 @@ describe('Automerge.Frontend', () => {
         seq: 1,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie' }],
-      } as Change)
+      } as Change<BirdBox>)
     })
 
     it('should create nested maps', () => {
@@ -61,7 +61,7 @@ describe('Automerge.Frontend', () => {
           { obj: birds, action: 'set', key: 'wrens', value: 3 },
           { obj: ROOT_ID, action: 'link', key: 'birds', value: birds },
         ],
-      } as Change)
+      } as Change<AnimalMap>)
     })
 
     it('should apply updates inside nested maps', () => {
@@ -77,7 +77,7 @@ describe('Automerge.Frontend', () => {
         seq: 2,
         deps: {},
         ops: [{ obj: birds, action: 'set', key: 'sparrows', value: 15 }],
-      } as Change)
+      } as Change<AnimalMap>)
     })
 
     it('should delete keys in maps', () => {
@@ -95,7 +95,7 @@ describe('Automerge.Frontend', () => {
         seq: 2,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'del', key: 'magpies' }],
-      } as Change)
+      } as Change<CountMap>)
     })
 
     it('should create lists', () => {
@@ -114,7 +114,7 @@ describe('Automerge.Frontend', () => {
           { obj: birds, action: 'set', key: `${actor}:1`, value: 'chaffinch' },
           { obj: ROOT_ID, action: 'link', key: 'birds', value: birds },
         ],
-      } as Change)
+      } as Change<BirdList>)
     })
 
     it('should apply updates inside lists', () => {
@@ -130,7 +130,7 @@ describe('Automerge.Frontend', () => {
         seq: 2,
         deps: {},
         ops: [{ obj: birds, action: 'set', key: `${actor}:1`, value: 'greenfinch' }],
-      } as Change)
+      } as Change<BirdList>)
     })
 
     it('should delete list elements', () => {
@@ -146,7 +146,7 @@ describe('Automerge.Frontend', () => {
         seq: 2,
         deps: {},
         ops: [{ obj: birds, action: 'del', key: `${actor}:1` }],
-      } as Change)
+      } as Change<BirdList>)
     })
 
     it('should store Date objects as timestamps', () => {
@@ -161,7 +161,7 @@ describe('Automerge.Frontend', () => {
         seq: 1,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp' }],
-      } as Change)
+      } as Change<DateBox>)
     })
   })
 
@@ -184,14 +184,14 @@ describe('Automerge.Frontend', () => {
         seq: 1,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'wrens', value: 0, datatype: 'counter' }],
-      } as Change)
+      } as Change<CounterMap>)
       assert.deepEqual(req2, {
         requestType: 'change',
         actor,
         seq: 2,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'inc', key: 'wrens', value: 1 }],
-      } as Change)
+      } as Change<CounterMap>)
     })
 
     it('should handle counters inside lists', () => {
@@ -218,14 +218,14 @@ describe('Automerge.Frontend', () => {
           { obj: counts, action: 'set', key: `${actor}:1`, value: 1, datatype: 'counter' },
           { obj: ROOT_ID, action: 'link', key: 'counts', value: counts },
         ],
-      } as Change)
+      } as Change<CounterList>)
       assert.deepEqual(req2, {
         requestType: 'change',
         actor,
         seq: 2,
         deps: {},
         ops: [{ obj: counts, action: 'inc', key: `${actor}:1`, value: 2 }],
-      } as Change)
+      } as Change<CounterList>)
     })
 
     it('should coalesce assignments and increments', () => {
@@ -264,7 +264,7 @@ describe('Automerge.Frontend', () => {
         seq: 2,
         deps: {},
         ops: [{ obj: birds, action: 'inc', key: 'wrens', value: 4 }],
-      } as Change)
+      } as Change<BirdCounterMap>)
     })
 
     it('should refuse to overwrite a property with a counter value', () => {
@@ -299,8 +299,8 @@ describe('Automerge.Frontend', () => {
   })
 
   describe('backend concurrency', () => {
-    function getRequests(doc: any): Change[] {
-      return doc[STATE].requests.map((req: Change) => {
+    function getRequests(doc: any): Change<typeof doc>[] {
+      return doc[STATE].requests.map((req: Change<typeof doc>) => {
         req = Object.assign({}, req)
         delete req['before']
         delete req['diffs']
@@ -327,7 +327,7 @@ describe('Automerge.Frontend', () => {
           deps: { [remote2]: 41 },
           ops: [{ obj: ROOT_ID, action: 'set', key: 'partridges', value: 1 }],
         },
-      ] as Change[])
+      ] as Change<CountMap>[])
     })
 
     it('should remove pending requests once handled', () => {
@@ -382,7 +382,7 @@ describe('Automerge.Frontend', () => {
           deps: {},
           ops: [{ obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24 }],
         },
-      ] as Change[])
+      ] as Change<CountMap>[])
 
       const diffs1: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'set', key: 'pheasants', value: 2 }]
       doc = Frontend.applyPatch(doc, { actor: other, seq: 1, diffs: diffs1 })
@@ -395,7 +395,7 @@ describe('Automerge.Frontend', () => {
           deps: {},
           ops: [{ obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24 }],
         },
-      ] as Change[])
+      ] as Change<CountMap>[])
 
       const diffs2: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'set', key: 'blackbirds', value: 24 }]
       doc = Frontend.applyPatch(doc, { actor, seq: 1, diffs: diffs2 })
@@ -458,14 +458,14 @@ describe('Automerge.Frontend', () => {
         seq: 1,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'number', value: 1 }],
-      } as Change)
+      } as Change<NumberBox>)
       assert.deepEqual(req2, {
         requestType: 'change',
         actor,
         seq: 2,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'number', value: 2 }],
-      } as Change)
+      } as Change<NumberBox>)
       const state0 = Backend.init<NumberBox>()
       const [state1, patch1] = Backend.applyLocalChange(state0, req1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
@@ -476,7 +476,7 @@ describe('Automerge.Frontend', () => {
         seq: 3,
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'number', value: 3 }],
-      } as Change)
+      } as Change<NumberBox>)
     })
   })
 

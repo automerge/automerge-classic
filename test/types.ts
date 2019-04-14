@@ -42,6 +42,10 @@ export interface DateBox {
   now: Date
 }
 
+export interface DateList {
+  list: List<Date>
+}
+
 export interface NumberBox {
   number: number
 }
