@@ -33,18 +33,15 @@ declare module 'automerge' {
     sendMsg(docId: UUID, clock: Clock, changes: Change<T>[]): void
   }
 
-  class Table<T> {
-    constructor(columns: string[])
+  class Table<T, KeyOrder extends Array<keyof T>> {
+    constructor(columns: KeyArray<T, KeyOrder>)
     [Symbol.iterator](): {
       next: () => {
         done: boolean
         value: T
       }
     }
-    add(elem: T): UUID
-    // TODO: Doesn't enforce order when passing property values as array
-    // may be able to do this right, see https://stackoverflow.com/questions/55522477/typescript-create-tuple-from-interface/55526906#55526906
-    add<K extends keyof T, V extends T[K]>(values: V[]): UUID
+    add(item: T | TupleFromInterface<T, KeyOrder>): UUID;
     byId(id: UUID): T
     columns: string[]
     count: number
@@ -244,3 +241,35 @@ declare module 'automerge' {
   type DataType = 'counter' | 'timestamp'
 
 }
+
+// TYPE UTILITY FUNCTIONS
+
+type Lookup<T, K> = K extends keyof T ? T[K] : never
+
+// Type utility function: KeyArray
+// Enforces that the array provided for key order only contains keys of T
+type KeyArray<T, KeyOrder extends Array<keyof T>> =
+  keyof T extends KeyOrder[number]
+    ? KeyOrder
+    : Exclude<keyof T, KeyOrder[number]>[]
+
+// Type utility function: TupleFromInterface
+// Generates a tuple containing the types of each property of T, in the order provided by KeyOrder. For example:
+// ```
+// interface Book {
+//   authors: string[]
+//   title: string
+//   date: Date
+// }
+// type BookTuple = TupleFromInterface<Book, ['authors', 'title', 'date']> // [ string[], string, Date ]
+//
+// function add(b: Book | BookTuple): void
+// ```
+// Now the argument for `Table.add` can either be a `Book` object, or an array of values for each 
+// of the properties of `Book`, in the order given. 
+// ```
+// add({authors, title, date}) // valid
+// add([authors, title, date]) // also valid
+// ```
+type TupleFromInterface<T, KeyOrder extends Array<keyof T>> = { [I in keyof KeyOrder]: Lookup<T, KeyOrder[I]> }
+

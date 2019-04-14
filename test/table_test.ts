@@ -1,11 +1,12 @@
 import * as assert from 'assert'
-import { Frontend, UUID } from 'automerge'
+import { Frontend, UUID, Table } from 'automerge'
 import * as Automerge from 'automerge'
 import uuid from 'uuid'
 
 import { assertEqualsOneOf } from './helpers'
 
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+
 
 interface Book {
   authors: string | string[]
@@ -14,7 +15,7 @@ interface Book {
 }
 
 type BookDb = {
-  books: Automerge.Table<Book>
+  books: Table<Book, ['authors', 'title', 'isbn']>
 }
 
 // Example data
@@ -29,12 +30,12 @@ const RSDP: Book = {
   isbn: '3-642-15259-7'
 }
 
-describe('Automerge.Table', () => {
+describe('Table', () => {
   describe('Frontend', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
       const [doc, req] = Frontend.change(Frontend.init<BookDb>(actor), doc => {
-        doc.books = new Automerge.Table<Book>(['authors', 'title'])
+        doc.books = new Table(['authors', 'title', 'isbn'])
       })
       const books = Frontend.getObjectId(doc.books)
       const cols = Frontend.getObjectId(doc.books.columns)
@@ -45,6 +46,8 @@ describe('Automerge.Table', () => {
         {obj: cols, action: 'set', key: `${actor}:1`, value: 'authors'},
         {obj: cols, action: 'ins', elem: 2, key: `${actor}:1`},
         {obj: cols, action: 'set', key: `${actor}:2`, value: 'title'},
+        {obj: cols, action: 'ins', elem: 3, key: `${actor}:2`},
+        {obj: cols, action: 'set', key: `${actor}:3`, value: 'isbn'},
         {obj: books, action: 'link', key: 'columns', value: cols},
         {obj: ROOT_ID, action: 'link', key: 'books', value: books}
       ]})
@@ -53,7 +56,7 @@ describe('Automerge.Table', () => {
     it('should generate ops to insert a row', () => {
       const actor = uuid()
       const [doc1, req1] = Frontend.change(Frontend.init<BookDb>(actor), doc => {
-        doc.books = new Automerge.Table<Book>(['authors', 'title'])
+        doc.books = new Table(['authors', 'title', 'isbn'])
       })
       let rowId
       const [doc2, req2] = Frontend.change(doc1, doc => {
@@ -75,7 +78,7 @@ describe('Automerge.Table', () => {
 
     beforeEach(() => {
       s1 = Automerge.change(Automerge.init<BookDb>(), doc => {
-        doc.books = new Automerge.Table<Book>(['authors', 'title', 'isbn'])
+        doc.books = new Table(['authors', 'title', 'isbn'])
         rowId = doc.books.add(DDIA)
       })
     })
@@ -170,7 +173,7 @@ describe('Automerge.Table', () => {
 
   it('should allow concurrent row insertion', () => {
     const a0 = Automerge.change(Automerge.init<BookDb>(), doc => {
-      doc.books = new Automerge.Table<Book>(['authors', 'title', 'isbn'])
+      doc.books = new Table(['authors', 'title', 'isbn'])
     })
     const b0 = Automerge.merge(Automerge.init<BookDb>(), a0)
 
@@ -187,7 +190,7 @@ describe('Automerge.Table', () => {
 
   it('should allow rows to be sorted in various ways', () => {
     const s = Automerge.change(Automerge.init<BookDb>(), doc => {
-      doc.books = new Automerge.Table<Book>(['authors', 'title', 'isbn'])
+      doc.books = new Table(['authors', 'title', 'isbn'])
       doc.books.add(DDIA)
       doc.books.add(RSDP)
     })
