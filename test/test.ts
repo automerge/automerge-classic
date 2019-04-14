@@ -186,14 +186,12 @@ describe('Automerge', () => {
         }, /Calls to Automerge.change cannot be nested/)
       })
 
-      // TODO: not sure what to do about this test - in a typescript codebase it would be unnecessary
-      // but in this hybrid situation it doesn't even let us express passing a bad type
-
-      // it('should not allow objects as change message', () => {
-      //   assert.throws(() => {
-      //     Automerge.change(s1, { key: 'value' }, doc => (doc.foo = 'bar'))
-      //   }, /Change message must be a string/)
-      // })
+      it('should not allow objects as change message', () => {
+        assert.throws(() => {
+          const message = { key: 'value' } as unknown as string // prevent TypeScript from catching this
+          Automerge.change(s1, message, doc => (doc.foo = 'bar'))
+        }, /Change message must be a string/)
+      })
 
       it('should not interfere with each other when forking', () => {
         s1 = Automerge.change(s1, doc1 => {
