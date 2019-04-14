@@ -23,8 +23,6 @@ declare module 'automerge' {
   function undo<T>(doc: T, message?: string): T
   function getElemId<T=string>(object: List<T> | Text, index: number): UUID
 
-  class Counter extends Frontend.Counter {}
-
   class Connection<T> {
     constructor(docSet: DocSet<T>, sendMsg: (msg: Message) => void)
     close(): void
@@ -34,8 +32,6 @@ declare module 'automerge' {
     receiveMsg(msg: Message): T
     sendMsg(docId: UUID, clock: Clock, changes: Change[]): void
   }
-
-  type Handler<T> = (docId: UUID, doc: T) => void
 
   class Table<T> {
     constructor(columns: string[])
@@ -61,6 +57,11 @@ declare module 'automerge' {
     set(id: UUID, value: T): void
     set(id: 'columns', value: string[]): void
     sort(arg?: Function | string | string[]): void
+  }
+
+  class List<T> extends Array<T> {
+    insertAt?(index: number, ...args: T[]): List<T>
+    deleteAt?(index: number, numDelete?: number): List<T>
   }
 
   class Text extends List<string> {
@@ -90,9 +91,9 @@ declare module 'automerge' {
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
   // can't treat a Counter like a literal number without force-casting it as a number.
   // This won't compile:
-  //   `const foo: number = c + 10` 
+  //   `assert.strictEqual(c + 10, 13) // Operator '+' cannot be applied to types 'Counter' and '10'.ts(2365)`
   // But this will:
-  //   `const foo: number = c as unknown as number + 10`
+  //   `assert.strictEqual(c as unknown as number + 10, 13)`
   class Counter extends Number {
     constructor(value?: number)
     increment(delta?: number): void
@@ -101,30 +102,8 @@ declare module 'automerge' {
     valueOf(): number
     value: number
   }
-  const uuid: UUIDFactory;
 
   namespace Frontend {
-    // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
-    // can't treat a Counter like a literal number without force-casting it as a number.
-    // This won't compile:
-    //   `assert.strictEqual(c + 10, 13) // Operator '+' cannot be applied to types 'Counter' and '10'.ts(2365)`
-    // But this will:
-    //   `assert.strictEqual(c as unknown as number + 10, 13)`
-    class Counter extends Number {
-      constructor(value?: number)
-      increment(delta?: number): void
-      decrement(delta?: number): void
-      toString(): string
-      valueOf(): number
-      value: number
-    }
-
-    interface FrontendOptions<T> {
-      actorId?: UUID
-      deferActorId?: boolean
-      backend: T
-    }
-
     function applyPatch<T>(doc: T, patch: Patch): T
     function canRedo<T>(doc: T): boolean
     function canUndo<T>(doc: T): boolean
@@ -144,135 +123,120 @@ declare module 'automerge' {
     function undo<T>(doc: T, message?: string): any
   }
 
-  type UUIDGenerator = () => UUID;
-  interface UUIDFactory extends UUIDGenerator {
-    setFactory: (generator: UUIDGenerator) => void;
-    reset: () => void;
+  namespace Backend {
+    function applyChanges<T>(state: T, changes: Change[]): [T, Patch]
+    function applyLocalChange<T>(state: T, change: Change): [T, Patch]
+    function getChanges<T>(oldState: T, newState: T): Change[]
+    function getChangesForActor<T>(state: T, actorId: UUID): Change[]
+    function getMissingChanges<T>(state: T, clock: Clock): Change[]
+    function getMissingDeps<T>(state: T): Clock
+    function getPatch<T>(state: T): Patch
+    function init<T>(): T
+    function merge<T>(local: T, remote: T): T
   }
-  const uuid: UUIDFactory;
+
+  type UUIDGenerator = () => UUID
+  interface UUIDFactory extends UUIDGenerator {
+    setFactory: (generator: UUIDGenerator) => void
+    reset: () => void
+  }
+  const uuid: UUIDFactory
+
+  type ChangeFn<T> = (doc: T) => void
+  type Handler<T> = (docId: UUID, doc: T) => void
+  type Key = string | number
+  type UUID = string | number
+  type filterFn<T> = (elem: T) => boolean
+
+  interface Message {
+    docId: UUID
+    clock: Clock
+    changes?: Change[]
+  }
+
+  interface Clock {
+    [actorId: string]: number
+  }
+
+  interface State<T> {
+    change: Change
+    snapshot: T
+  }
+
+  interface Change {
+    message?: string
+    requestType?: RequestType
+    actor: UUID
+    seq: number
+    deps: Clock
+    ops: Op[]
+    before?: any // TODO: make this Change<T> and before?: T
+    diffs?: Diff[]
+  }
+
+  interface Op {
+    action: Action
+    obj: UUID
+    key?: string
+    value?: any
+    datatype?: DataType
+    elem?: number
+  }
+
+  interface Patch {
+    actor?: UUID
+    seq?: number
+    clock?: Clock
+    deps?: Clock
+    canUndo?: boolean
+    canRedo?: boolean
+    diffs: Diff[]
+  }
+
+  interface Diff {
+    action: Action
+    type: CollectionType
+    obj: UUID
+    path?: string[]
+    key?: string
+    index?: number
+    value?: any
+    elemId?: UUID
+    conflicts?: Conflict[]
+    datatype?: DataType
+    link?: boolean
+  }
+
+  interface Conflict {
+    actor: UUID
+    value: any
+    link?: boolean
+  }
+
+  type RequestType =
+    | 'change' //
+    | 'redo'
+    | 'undo'
+
+  type Action =
+    | 'create'
+    | 'del'
+    | 'inc'
+    | 'ins' // TODO are 'ins' and 'insert' different things?
+    | 'insert'
+    | 'link'
+    | 'makeList'
+    | 'makeMap'
+    | 'maxElem'
+    | 'remove'
+    | 'set'
+
+  type CollectionType =
+    | 'list'
+    | 'map' //
+    | 'table'
+    | 'text'
+
+  type DataType = 'counter' | 'timestamp'
 
 }
-
-declare module 'frontend/constants' {
-  const CACHE: symbol
-  const CHANGE: symbol
-  const CONFLICTS: symbol
-  const ELEM_IDS: symbol
-  const INBOUND: symbol
-  const MAX_ELEM: symbol
-  const OBJECT_ID: symbol
-  const STATE: symbol
-}
-
-declare module 'backend' {
-  function applyChanges<T>(state: T, changes: Change[]): [T, Patch]
-  function applyLocalChange<T>(state: T, change: Change): [T, Patch]
-  function getChanges<T>(oldState: T, newState: T): Change[]
-  function getChangesForActor<T>(state: T, actorId: UUID): Change[]
-  function getMissingChanges<T>(state: T, clock: Clock): Change[]
-  function getMissingDeps<T>(state: T): Clock
-  function getPatch<T>(state: T): Patch
-  function init<T>(): T
-  function merge<T>(local: T, remote: T): T
-}
-
-declare type ChangeFn<T> = (doc: T) => void
-declare type Key = string | number
-declare type UUID = string | number
-declare type filterFn<T> = (elem: T) => boolean
-
-declare class List<T> extends Array<T> {
-  insertAt?(index: number, ...args: T[]): List<T>
-  deleteAt?(index: number, numDelete?: number): List<T>
-}
-
-declare interface Message {
-  docId: UUID
-  clock: Clock
-  changes?: Change[]
-}
-
-declare interface Clock {
-  [actorId: string]: number
-}
-
-declare interface State<T> {
-  change: Change
-  snapshot: T
-}
-
-declare interface Change {
-  message?: string
-  requestType?: RequestType
-  actor: UUID
-  seq: number
-  deps: Clock
-  ops: Op[]
-  before?: any // TODO: make this Change<T> and before?: T
-  diffs?: Diff[]
-}
-
-declare interface Op {
-  action: Action
-  obj: UUID
-  key?: string
-  value?: any
-  datatype?: DataType
-  elem?: number
-}
-
-declare interface Patch {
-  actor?: UUID
-  seq?: number
-  clock?: Clock
-  deps?: Clock
-  canUndo?: boolean
-  canRedo?: boolean
-  diffs: Diff[]
-}
-
-declare interface Diff {
-  action: Action
-  type: CollectionType
-  obj: UUID
-  path?: string[]
-  key?: string
-  index?: number
-  value?: any
-  elemId?: UUID
-  conflicts?: Conflict[]
-  datatype?: DataType
-  link?: boolean
-}
-
-declare interface Conflict {
-  actor: UUID
-  value: any
-  link?: boolean
-}
-
-declare type RequestType =
-  | 'change' //
-  | 'redo'
-  | 'undo'
-
-declare type Action =
-  | 'create'
-  | 'del'
-  | 'inc'
-  | 'ins' // TODO are 'ins' and 'insert' different things?
-  | 'insert'
-  | 'link'
-  | 'makeList'
-  | 'makeMap'
-  | 'maxElem'
-  | 'remove'
-  | 'set'
-
-declare type CollectionType =
-  | 'list'
-  | 'map' //
-  | 'table'
-  | 'text'
-
-declare type DataType = 'counter' | 'timestamp'

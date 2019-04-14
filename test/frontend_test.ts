@@ -1,10 +1,9 @@
 import * as assert from 'assert'
-import { Frontend } from 'automerge'
-import * as Backend from 'backend'
-import { STATE } from 'frontend/constants'
+import { Frontend, Backend, Counter, Change, Patch, Diff } from 'automerge'
 import uuid from 'uuid'
 
-import * as TestType from './types'
+import { STATE } from 'frontend/constants'
+import { AnimalMap, BirdBox, BirdCounterMap, BirdList, CounterList, CounterMap, CountMap, DateBox, Foo, NumberBox } from './types'
 
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
@@ -17,7 +16,7 @@ describe('Automerge.Frontend', () => {
   })
 
   it('should allow actorId assignment to be deferred', () => {
-    let doc0 = Frontend.init<TestType.Foo>({ deferActorId: true })
+    let doc0 = Frontend.init<Foo>({ deferActorId: true })
     assert.strictEqual(Frontend.getActorId(doc0), undefined)
     assert.throws(() => {
       Frontend.change(doc0, doc => (doc.foo = 'bar'))
@@ -29,14 +28,14 @@ describe('Automerge.Frontend', () => {
 
   describe('performing changes', () => {
     it('should return the unmodified document if nothing changed', () => {
-      const doc0 = Frontend.init<TestType.Foo>()
+      const doc0 = Frontend.init<Foo>()
       const [doc1, req] = Frontend.change(doc0, doc => {})
       assert.strictEqual(doc1, doc0)
     })
 
     it('should set root object properties', () => {
       const actor = uuid()
-      let [doc, req] = Frontend.change(Frontend.init<TestType.BirdBox>(actor), doc => (doc.bird = 'magpie'))
+      let [doc, req] = Frontend.change(Frontend.init<BirdBox>(actor), doc => (doc.bird = 'magpie'))
       assert.deepEqual(doc, { bird: 'magpie' })
       assert.deepEqual(req, {
         requestType: 'change',
@@ -48,7 +47,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should create nested maps', () => {
-      const [doc, req] = Frontend.change(Frontend.init<TestType.AnimalMap>(), doc => (doc.birds = { wrens: 3 }))
+      const [doc, req] = Frontend.change(Frontend.init<AnimalMap>(), doc => (doc.birds = { wrens: 3 }))
       const birds = Frontend.getObjectId(doc.birds),
         actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, { birds: { wrens: 3 } })
@@ -66,7 +65,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should apply updates inside nested maps', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.AnimalMap>(), doc => (doc.birds = { wrens: 3 }))
+      const [doc1, req1] = Frontend.change(Frontend.init<AnimalMap>(), doc => (doc.birds = { wrens: 3 }))
       const [doc2, req2] = Frontend.change(doc1, doc => (doc.birds.sparrows = 15))
       const birds = Frontend.getObjectId(doc2.birds),
         actor = Frontend.getActorId(doc1)
@@ -83,7 +82,7 @@ describe('Automerge.Frontend', () => {
 
     it('should delete keys in maps', () => {
       const actor = uuid()
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.CountMap>(actor), doc => {
+      const [doc1, req1] = Frontend.change(Frontend.init<CountMap>(actor), doc => {
         doc.magpies = 2
         doc.sparrows = 15
       })
@@ -100,7 +99,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should create lists', () => {
-      const [doc, req] = Frontend.change(Frontend.init<TestType.BirdList>(), doc => (doc.birds = ['chaffinch']))
+      const [doc, req] = Frontend.change(Frontend.init<BirdList>(), doc => (doc.birds = ['chaffinch']))
       const birds = Frontend.getObjectId(doc.birds),
         actor = Frontend.getActorId(doc)
       assert.deepEqual(doc, { birds: ['chaffinch'] })
@@ -119,7 +118,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should apply updates inside lists', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.BirdList>(), doc => (doc.birds = ['chaffinch']))
+      const [doc1, req1] = Frontend.change(Frontend.init<BirdList>(), doc => (doc.birds = ['chaffinch']))
       const [doc2, req2] = Frontend.change(doc1, doc => (doc.birds[0] = 'greenfinch'))
       const birds = Frontend.getObjectId(doc2.birds),
         actor = Frontend.getActorId(doc2)
@@ -135,7 +134,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should delete list elements', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.BirdList>(), doc => (doc.birds = ['chaffinch', 'goldfinch']))
+      const [doc1, req1] = Frontend.change(Frontend.init<BirdList>(), doc => (doc.birds = ['chaffinch', 'goldfinch']))
       const [doc2, req2] = Frontend.change(doc1, doc => doc.birds.deleteAt(0))
       const birds = Frontend.getObjectId(doc2.birds),
         actor = Frontend.getActorId(doc2)
@@ -152,7 +151,7 @@ describe('Automerge.Frontend', () => {
 
     it('should store Date objects as timestamps', () => {
       const now = new Date()
-      const [doc, req] = Frontend.change(Frontend.init<TestType.DateBox>(), doc => (doc.now = now))
+      const [doc, req] = Frontend.change(Frontend.init<DateBox>(), doc => (doc.now = now))
       const actor = Frontend.getActorId(doc)
       assert.strictEqual(doc.now instanceof Date, true)
       assert.strictEqual(doc.now.getTime(), now.getTime())
@@ -168,8 +167,8 @@ describe('Automerge.Frontend', () => {
 
   describe('counters', () => {
     it('should handle counters inside maps', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.CounterMap>(), doc => {
-        doc.wrens = new Frontend.Counter()
+      const [doc1, req1] = Frontend.change(Frontend.init<CounterMap>(), doc => {
+        doc.wrens = new Counter()
         assert.strictEqual(doc.wrens.value, 0)
       })
       const [doc2, req2] = Frontend.change(doc1, doc => {
@@ -177,8 +176,8 @@ describe('Automerge.Frontend', () => {
         assert.strictEqual(doc.wrens.value, 1)
       })
       const actor = Frontend.getActorId(doc2)
-      assert.deepEqual(doc1, { wrens: new Frontend.Counter(0) } as TestType.CounterMap)
-      assert.deepEqual(doc2, { wrens: new Frontend.Counter(1) } as TestType.CounterMap)
+      assert.deepEqual(doc1, { wrens: new Counter(0) } as CounterMap)
+      assert.deepEqual(doc2, { wrens: new Counter(1) } as CounterMap)
       assert.deepEqual(req1, {
         requestType: 'change',
         actor,
@@ -197,7 +196,7 @@ describe('Automerge.Frontend', () => {
 
     it('should handle counters inside lists', () => {
       const [doc1, req1] = Frontend.change(Frontend.init(), doc => {
-        doc.counts = [new Frontend.Counter(1)]
+        doc.counts = [new Counter(1)]
         assert.strictEqual(doc.counts[0].value, 1)
       })
       const [doc2, req2] = Frontend.change(doc1, doc => {
@@ -206,8 +205,8 @@ describe('Automerge.Frontend', () => {
       })
       const counts = Frontend.getObjectId(doc2.counts),
         actor = Frontend.getActorId(doc2)
-      assert.deepEqual(doc1, { counts: [new Frontend.Counter(1)] } as TestType.CounterList)
-      assert.deepEqual(doc2, { counts: [new Frontend.Counter(3)] } as TestType.CounterList)
+      assert.deepEqual(doc1, { counts: [new Counter(1)] } as CounterList)
+      assert.deepEqual(doc2, { counts: [new Counter(3)] } as CounterList)
       assert.deepEqual(req1, {
         requestType: 'change',
         actor,
@@ -230,15 +229,15 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should coalesce assignments and increments', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.BirdCounterMap>(), doc => (doc.birds = {}))
+      const [doc1, req1] = Frontend.change(Frontend.init<BirdCounterMap>(), doc => (doc.birds = {}))
       const [doc2, req2] = Frontend.change(doc1, doc => {
-        doc.birds.wrens = new Frontend.Counter(1)
+        doc.birds.wrens = new Counter(1)
         doc.birds.wrens.increment(2)
       })
       const birds = Frontend.getObjectId(doc2.birds),
         actor = Frontend.getActorId(doc2)
-      assert.deepEqual(doc1, { birds: {} } as TestType.BirdCounterMap)
-      assert.deepEqual(doc2, { birds: { wrens: new Frontend.Counter(3) } } as TestType.BirdCounterMap)
+      assert.deepEqual(doc1, { birds: {} } as BirdCounterMap)
+      assert.deepEqual(doc2, { birds: { wrens: new Counter(3) } } as BirdCounterMap)
       assert.deepEqual(req2, {
         requestType: 'change',
         actor,
@@ -249,7 +248,7 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should coalesce multiple increments', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.BirdCounterMap>(), doc => (doc.birds = { wrens: new Frontend.Counter() }))
+      const [doc1, req1] = Frontend.change(Frontend.init<BirdCounterMap>(), doc => (doc.birds = { wrens: new Counter() }))
       const [doc2, req2] = Frontend.change(doc1, doc => {
         doc.birds.wrens.increment(2)
         doc.birds.wrens.decrement()
@@ -257,8 +256,8 @@ describe('Automerge.Frontend', () => {
       })
       const birds = Frontend.getObjectId(doc2.birds),
         actor = Frontend.getActorId(doc2)
-      assert.deepEqual(doc1, { birds: { wrens: new Frontend.Counter(0) } } as TestType.BirdCounterMap)
-      assert.deepEqual(doc2, { birds: { wrens: new Frontend.Counter(4) } } as TestType.BirdCounterMap)
+      assert.deepEqual(doc1, { birds: { wrens: new Counter(0) } } as BirdCounterMap)
+      assert.deepEqual(doc2, { birds: { wrens: new Counter(4) } } as BirdCounterMap)
       assert.deepEqual(req2, {
         requestType: 'change',
         actor,
@@ -270,19 +269,19 @@ describe('Automerge.Frontend', () => {
 
     it('should refuse to overwrite a property with a counter value', () => {
       interface CounterTest {
-        counter: Frontend.Counter
-        list: Frontend.Counter[]
+        counter: Counter
+        list: Counter[]
       }
       const [doc1, req1] = Frontend.change(Frontend.init<CounterTest>(), doc => {
-        doc.counter = new Frontend.Counter()
-        doc.list = [new Frontend.Counter()]
+        doc.counter = new Counter()
+        doc.list = [new Counter()]
       })
       assert.throws( () => Frontend.change(doc1, doc => ((doc.counter as unknown) as number)++), /Cannot overwrite a Counter object/ )
       assert.throws( () => Frontend.change(doc1, doc => (((doc.list[0] as unknown) as number) = 3)), /Cannot overwrite a Counter object/ )
     })
 
     it('should make counter objects behave like primitive numbers', () => {
-      const [doc1, req1] = Frontend.change(Frontend.init<TestType.CounterMap>(), doc => (doc.birds = new Frontend.Counter(3)))
+      const [doc1, req1] = Frontend.change(Frontend.init<CounterMap>(), doc => (doc.birds = new Counter(3)))
       assert.equal(doc1.birds, 3) // they are equal according to ==, but not strictEqual according to ===
       assert.notStrictEqual(doc1.birds, 3)
 
@@ -318,8 +317,8 @@ describe('Automerge.Frontend', () => {
         deps: { [local]: 4, [remote2]: 41 },
         diffs: [{ action: 'set', obj: ROOT_ID, type: 'map', key: 'blackbirds', value: 24 }],
       }
-      let doc1 = Frontend.applyPatch<TestType.CountMap>(Frontend.init(local), patch1)
-      let [doc2, req] = Frontend.change<TestType.CountMap>(doc1, doc => (doc.partridges = 1))
+      let doc1 = Frontend.applyPatch<CountMap>(Frontend.init(local), patch1)
+      let [doc2, req] = Frontend.change<CountMap>(doc1, doc => (doc.partridges = 1))
       assert.deepEqual(getRequests(doc2), [
         {
           requestType: 'change',
@@ -333,8 +332,8 @@ describe('Automerge.Frontend', () => {
 
     it('should remove pending requests once handled', () => {
       const actor = uuid()
-      let [doc1, change1] = Frontend.change<TestType.CountMap>(Frontend.init(actor), doc => (doc.blackbirds = 24))
-      let [doc2, change2] = Frontend.change<TestType.CountMap>(doc1, doc => (doc.partridges = 1))
+      let [doc1, change1] = Frontend.change<CountMap>(Frontend.init(actor), doc => (doc.blackbirds = 24))
+      let [doc2, change2] = Frontend.change<CountMap>(doc1, doc => (doc.partridges = 1))
       assert.deepEqual(getRequests(doc2), [
         {
           requestType: 'change',
@@ -367,14 +366,14 @@ describe('Automerge.Frontend', () => {
 
       const diffs2: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'set', key: 'partridges', value: 1 }]
       doc2 = Frontend.applyPatch(doc2, { actor, seq: 2, diffs: diffs2 })
-      assert.deepEqual(doc2, { blackbirds: 24, partridges: 1 } as TestType.CountMap)
+      assert.deepEqual(doc2, { blackbirds: 24, partridges: 1 } as CountMap)
       assert.deepEqual(getRequests(doc2), [])
     })
 
     it('should leave the request queue unchanged on remote patches', () => {
       const actor = uuid(),
         other = uuid()
-      let [doc, req] = Frontend.change(Frontend.init<TestType.CountMap>(actor), doc => (doc.blackbirds = 24))
+      let [doc, req] = Frontend.change(Frontend.init<CountMap>(actor), doc => (doc.blackbirds = 24))
       assert.deepEqual(getRequests(doc), [
         {
           requestType: 'change',
@@ -405,8 +404,8 @@ describe('Automerge.Frontend', () => {
     })
 
     it('should not allow request patches to be applied out of order', () => {
-      const [doc1, req1] = Frontend.change<TestType.CountMap>(Frontend.init(), doc => (doc.blackbirds = 24))
-      const [doc2, req2] = Frontend.change<TestType.CountMap>(doc1, doc => (doc.partridges = 1))
+      const [doc1, req1] = Frontend.change<CountMap>(Frontend.init(), doc => (doc.blackbirds = 24))
+      const [doc2, req2] = Frontend.change<CountMap>(doc1, doc => (doc.partridges = 1))
       const actor = Frontend.getActorId(doc2)
       const diffs: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'set', key: 'partridges', value: 1 }]
       assert.throws(() => {
@@ -424,35 +423,35 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
       doc1 = Frontend.applyPatch(doc1, { actor, seq: 1, diffs: diffs1 })
-      assert.deepEqual(doc1, { birds: ['goldfinch'] } as TestType.BirdList)
+      assert.deepEqual(doc1, { birds: ['goldfinch'] } as BirdList)
       assert.deepEqual(getRequests(doc1), [])
 
       const [doc2, req2] = Frontend.change(doc1, doc => {
         doc.birds.insertAt(0, 'chaffinch')
         doc.birds.insertAt(2, 'greenfinch')
       })
-      assert.deepEqual(doc2, { birds: ['chaffinch', 'goldfinch', 'greenfinch'] } as TestType.BirdList)
+      assert.deepEqual(doc2, { birds: ['chaffinch', 'goldfinch', 'greenfinch'] } as BirdList)
 
       const diffs3: Diff[] = [
         { obj: birds, type: 'list', action: 'insert', index: 1, value: 'bullfinch', elemId: `${uuid()}:2` },
       ]
       const doc3 = Frontend.applyPatch(doc2, { actor: uuid(), seq: 1, diffs: diffs3 })
       // TODO this is not correct: order of 'bullfinch' and 'greenfinch' should depend on their elemIds
-      assert.deepEqual(doc3, { birds: ['chaffinch', 'goldfinch', 'bullfinch', 'greenfinch'] } as TestType.BirdList)
+      assert.deepEqual(doc3, { birds: ['chaffinch', 'goldfinch', 'bullfinch', 'greenfinch'] } as BirdList)
 
       const diffs4: Diff[] = [
         { obj: birds, type: 'list', action: 'insert', index: 0, value: 'chaffinch', elemId: `${actor}:2` },
         { obj: birds, type: 'list', action: 'insert', index: 2, value: 'greenfinch', elemId: `${actor}:3` },
       ]
       const doc4 = Frontend.applyPatch(doc3, { actor, seq: 2, diffs: diffs4 })
-      assert.deepEqual(doc4, { birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch'] } as TestType.BirdList)
+      assert.deepEqual(doc4, { birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch'] } as BirdList)
       assert.deepEqual(getRequests(doc4), [])
     })
 
     it('should allow interleaving of patches and changes', () => {
       const actor = uuid()
-      const [doc1, req1] = Frontend.change<TestType.NumberBox>(Frontend.init(actor), doc => (doc.number = 1))
-      const [doc2, req2] = Frontend.change<TestType.NumberBox>(doc1, doc => (doc.number = 2))
+      const [doc1, req1] = Frontend.change<NumberBox>(Frontend.init(actor), doc => (doc.number = 1))
+      const [doc2, req2] = Frontend.change<NumberBox>(doc1, doc => (doc.number = 2))
       assert.deepEqual(req1, {
         requestType: 'change',
         actor,
@@ -467,7 +466,7 @@ describe('Automerge.Frontend', () => {
         deps: {},
         ops: [{ obj: ROOT_ID, action: 'set', key: 'number', value: 2 }],
       } as Change)
-      const state0 = Backend.init<TestType.NumberBox>()
+      const state0 = Backend.init<NumberBox>()
       const [state1, patch1] = Backend.applyLocalChange(state0, req1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const [doc3, req3] = Frontend.change(doc2a, doc => (doc.number = 3))
@@ -484,8 +483,8 @@ describe('Automerge.Frontend', () => {
   describe('applying patches', () => {
     it('should set root object properties', () => {
       const diffs: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'set', key: 'bird', value: 'magpie' }]
-      const doc = Frontend.applyPatch(Frontend.init<TestType.BirdBox>(), { diffs })
-      assert.deepEqual(doc, { bird: 'magpie' } as TestType.BirdBox)
+      const doc = Frontend.applyPatch(Frontend.init<BirdBox>(), { diffs })
+      assert.deepEqual(doc, { bird: 'magpie' } as BirdBox)
     })
 
     it('should reveal conflicts on root object properties', () => {
@@ -500,8 +499,8 @@ describe('Automerge.Frontend', () => {
           conflicts: [{ actor, value: 'robin' }],
         },
       ]
-      const doc: TestType.BirdBox = Frontend.applyPatch(Frontend.init<TestType.BirdBox>(), { diffs })
-      assert.deepEqual(doc, { bird: 'wagtail' } as TestType.BirdBox)
+      const doc: BirdBox = Frontend.applyPatch(Frontend.init<BirdBox>(), { diffs })
+      assert.deepEqual(doc, { bird: 'wagtail' } as BirdBox)
       assert.deepEqual(Frontend.getConflicts(doc, 'bird'), { [actor]: 'robin' })
     })
 
@@ -512,8 +511,8 @@ describe('Automerge.Frontend', () => {
         { obj: birds, type: 'map', action: 'set', key: 'wrens', value: 3 },
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
-      const doc = Frontend.applyPatch(Frontend.init<TestType.AnimalMap>(), { diffs })
-      assert.deepEqual(doc, { birds: { wrens: 3 } } as TestType.AnimalMap)
+      const doc = Frontend.applyPatch(Frontend.init<AnimalMap>(), { diffs })
+      assert.deepEqual(doc, { birds: { wrens: 3 } } as AnimalMap)
     })
 
     it('should apply updates inside nested maps', () => {
@@ -524,10 +523,10 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
       const diffs2: Diff[] = [{ obj: birds, type: 'map', action: 'set', key: 'sparrows', value: 15 }]
-      const doc1 = Frontend.applyPatch(Frontend.init<TestType.AnimalMap>(), { diffs: diffs1 })
+      const doc1 = Frontend.applyPatch(Frontend.init<AnimalMap>(), { diffs: diffs1 })
       const doc2 = Frontend.applyPatch(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { birds: { wrens: 3 } } as TestType.AnimalMap)
-      assert.deepEqual(doc2, { birds: { wrens: 3, sparrows: 15 } } as TestType.AnimalMap)
+      assert.deepEqual(doc1, { birds: { wrens: 3 } } as AnimalMap)
+      assert.deepEqual(doc2, { birds: { wrens: 3, sparrows: 15 } } as AnimalMap)
     })
 
     it('should apply updates inside map key conflicts', () => {
@@ -550,10 +549,10 @@ describe('Automerge.Frontend', () => {
         },
       ]
       const diffs2: Diff[] = [{ obj: birds2, type: 'map', action: 'set', key: 'blackbirds', value: 2 }]
-      const doc1 = Frontend.applyPatch(Frontend.init<TestType.AnimalMap>(), { diffs: diffs1 })
+      const doc1 = Frontend.applyPatch(Frontend.init<AnimalMap>(), { diffs: diffs1 })
       const doc2 = Frontend.applyPatch(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { birds: { wrens: 3 } } as TestType.AnimalMap)
-      assert.deepEqual(doc2, { birds: { wrens: 3 } } as TestType.AnimalMap)
+      assert.deepEqual(doc1, { birds: { wrens: 3 } } as AnimalMap)
+      assert.deepEqual(doc2, { birds: { wrens: 3 } } as AnimalMap)
       assert.deepEqual(Frontend.getConflicts(doc1, 'birds'), { [actor]: { blackbirds: 1 } })
       assert.deepEqual(Frontend.getConflicts(doc2, 'birds'), { [actor]: { blackbirds: 2 } })
     })
@@ -570,10 +569,10 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'mammals', value: mammals, link: true },
       ]
       const diffs2: Diff[] = [{ obj: birds, type: 'map', action: 'set', key: 'sparrows', value: 15 }]
-      const doc1: TestType.AnimalMap = Frontend.applyPatch<TestType.AnimalMap>(Frontend.init(), { diffs: diffs1 })
-      const doc2: TestType.AnimalMap = Frontend.applyPatch<TestType.AnimalMap>(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { birds: { wrens: 3 }, mammals: { badgers: 1 } } as TestType.AnimalMap)
-      assert.deepEqual(doc2, { birds: { wrens: 3, sparrows: 15 }, mammals: { badgers: 1 } } as TestType.AnimalMap)
+      const doc1: AnimalMap = Frontend.applyPatch<AnimalMap>(Frontend.init(), { diffs: diffs1 })
+      const doc2: AnimalMap = Frontend.applyPatch<AnimalMap>(doc1, { diffs: diffs2 })
+      assert.deepEqual(doc1, { birds: { wrens: 3 }, mammals: { badgers: 1 } } as AnimalMap)
+      assert.deepEqual(doc2, { birds: { wrens: 3, sparrows: 15 }, mammals: { badgers: 1 } } as AnimalMap)
       assert.strictEqual(doc1.mammals, doc2.mammals)
     })
 
@@ -583,10 +582,10 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'sparrows', value: 15 },
       ]
       const diffs2: Diff[] = [{ obj: ROOT_ID, type: 'map', action: 'remove', key: 'magpies' }]
-      const doc1: TestType.CountMap = Frontend.applyPatch(Frontend.init<TestType.CountMap>(), { diffs: diffs1 })
-      const doc2: TestType.CountMap = Frontend.applyPatch(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { magpies: 2, sparrows: 15 } as TestType.CountMap)
-      assert.deepEqual(doc2, { sparrows: 15 } as TestType.CountMap)
+      const doc1: CountMap = Frontend.applyPatch(Frontend.init<CountMap>(), { diffs: diffs1 })
+      const doc2: CountMap = Frontend.applyPatch(doc1, { diffs: diffs2 })
+      assert.deepEqual(doc1, { magpies: 2, sparrows: 15 } as CountMap)
+      assert.deepEqual(doc2, { sparrows: 15 } as CountMap)
     })
 
     it('should create lists', () => {
@@ -597,8 +596,8 @@ describe('Automerge.Frontend', () => {
         { obj: birds, type: 'list', action: 'insert', index: 0, value: 'chaffinch', elemId: `${actor}:1` },
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
-      const doc: TestType.BirdList = Frontend.applyPatch(Frontend.init<TestType.BirdList>(), { diffs })
-      assert.deepEqual(doc, { birds: ['chaffinch'] } as TestType.BirdList)
+      const doc: BirdList = Frontend.applyPatch(Frontend.init<BirdList>(), { diffs })
+      assert.deepEqual(doc, { birds: ['chaffinch'] } as BirdList)
     })
 
     it('should apply updates inside lists', () => {
@@ -610,10 +609,10 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
       const diffs2: Diff[] = [{ obj: birds, type: 'list', action: 'set', index: 0, value: 'greenfinch' }]
-      const doc1: TestType.BirdList = Frontend.applyPatch(Frontend.init<TestType.BirdList>(), { diffs: diffs1 })
-      const doc2: TestType.BirdList = Frontend.applyPatch(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { birds: ['chaffinch'] } as TestType.BirdList)
-      assert.deepEqual(doc2, { birds: ['greenfinch'] } as TestType.BirdList)
+      const doc1: BirdList = Frontend.applyPatch(Frontend.init<BirdList>(), { diffs: diffs1 })
+      const doc2: BirdList = Frontend.applyPatch(doc1, { diffs: diffs2 })
+      assert.deepEqual(doc1, { birds: ['chaffinch'] } as BirdList)
+      assert.deepEqual(doc2, { birds: ['greenfinch'] } as BirdList)
     })
 
     it('should apply updates inside list element conflicts', () => {
@@ -667,15 +666,15 @@ describe('Automerge.Frontend', () => {
         { obj: ROOT_ID, type: 'map', action: 'set', key: 'birds', value: birds, link: true },
       ]
       const diffs2: Diff[] = [{ obj: birds, type: 'list', action: 'remove', index: 0 }]
-      const doc1: TestType.BirdList = Frontend.applyPatch(Frontend.init<TestType.BirdList>(), { diffs: diffs1 })
-      const doc2: TestType.BirdList = Frontend.applyPatch(doc1, { diffs: diffs2 })
-      assert.deepEqual(doc1, { birds: ['chaffinch', 'goldfinch'] } as TestType.BirdList)
-      assert.deepEqual(doc2, { birds: ['goldfinch'] } as TestType.BirdList)
+      const doc1: BirdList = Frontend.applyPatch(Frontend.init<BirdList>(), { diffs: diffs1 })
+      const doc2: BirdList = Frontend.applyPatch(doc1, { diffs: diffs2 })
+      assert.deepEqual(doc1, { birds: ['chaffinch', 'goldfinch'] } as BirdList)
+      assert.deepEqual(doc2, { birds: ['goldfinch'] } as BirdList)
     })
 
     it('should apply updates at different levels of the object tree', () => {
       interface BirdSpeciesCounts {
-        counts: TestType.CountMap
+        counts: CountMap
         details: { species: string; family: string }[]
       }
       const counts = uuid(),

@@ -1,5 +1,5 @@
 import * as assert from 'assert'
-import { Frontend } from 'automerge'
+import { Frontend, UUID } from 'automerge'
 import * as Automerge from 'automerge'
 import uuid from 'uuid'
 

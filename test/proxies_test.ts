@@ -1,5 +1,6 @@
 import * as assert from 'assert'
 import Automerge from 'automerge'
+import { List } from 'automerge'
 
 import { assertEqualsOneOf } from './helpers'
 

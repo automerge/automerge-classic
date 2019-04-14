@@ -1,6 +1,6 @@
 import * as Automerge from 'automerge'
 import * as assert from 'assert'
-import { Connection, DocSet } from 'automerge'
+import { Connection, DocSet, Message } from 'automerge'
 import sinon, { SinonSpy } from 'sinon'
 
 describe('Automerge.Connection', () => {

@@ -1,5 +1,6 @@
 import * as assert from 'assert'
 import * as Automerge from 'automerge'
+import { Change } from 'automerge'
 import sinon from 'sinon'
 
 describe('Automerge.WatchableDoc', () => {

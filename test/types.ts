@@ -1,4 +1,4 @@
-import { Frontend } from 'automerge'
+import { List, Counter } from 'automerge'
 
 // Document types used by tests
 export interface Foo {
@@ -23,11 +23,11 @@ export interface AnimalMap {
 }
 
 export interface CounterMap {
-  [name: string]: Frontend.Counter
+  [name: string]: Counter
 }
 
 export interface CounterList {
-  counts: Frontend.Counter[]
+  counts: Counter[]
 }
 
 export interface BirdCounterMap {
@@ -35,7 +35,7 @@ export interface BirdCounterMap {
 }
 
 export interface CounterList {
-  counts: Frontend.Counter[]
+  counts: Counter[]
 }
 
 export interface DateBox {

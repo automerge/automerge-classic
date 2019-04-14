@@ -1,6 +1,6 @@
 import * as assert from 'assert'
 import * as Automerge from 'automerge'
-import * as Backend from 'backend'
+import {Backend, Change} from 'automerge'
 import uuid from 'uuid'
 
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'

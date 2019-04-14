@@ -1,5 +1,6 @@
 import * as assert from 'assert'
 import * as Automerge from 'automerge'
+import { Diff } from 'automerge'
 
 import { assertEqualsOneOf } from './helpers'
 
