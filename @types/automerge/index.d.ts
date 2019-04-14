@@ -21,6 +21,7 @@ declare module 'automerge' {
   function save<T>(doc: T): T
   function setActorId<T>(doc: T, actorId: UUID): T
   function undo<T>(doc: T, message?: string): T
+  function getElemId<T=string>(object: List<T> | Text, index: number): UUID
 
   class Counter extends Frontend.Counter {}
 
@@ -65,7 +66,7 @@ declare module 'automerge' {
   class Text extends List<string> {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
     get?(index: number): string
-    // getElemId(...args: any[]): void
+    getElemId(index: number): UUID
   }
 
   class DocSet<T> {
