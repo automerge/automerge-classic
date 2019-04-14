@@ -148,20 +148,21 @@ describe('Automerge proxy API', () => {
       })
     })
 
-    // TODO Is it important to test this with string indexes?
     it('should allow entries to be fetched by index', () => {
       Automerge.change(root, (doc: ListTestDoc) => {
         assert.strictEqual(doc.numbers[0], 1)
-        // assert.strictEqual(doc.numbers['0'], 1)
         assert.strictEqual(doc.numbers[1], 2)
-        // assert.strictEqual(doc.numbers['1'], 2)
         assert.strictEqual(doc.numbers[2], 3)
-        // assert.strictEqual(doc.numbers['2'], 3)
         assert.strictEqual(doc.numbers[3], undefined)
-        // assert.strictEqual(doc.numbers['3'], undefined)
         assert.strictEqual(doc.numbers[-1], undefined)
-        // assert.strictEqual(doc.numbers.someProperty, undefined)
-        // assert.strictEqual(doc.numbers['someProperty'], undefined)
+
+        const numbers = doc.numbers as unknown as any // sneak past TypeScript
+        assert.strictEqual(numbers['0'], 1)
+        assert.strictEqual(numbers['1'], 2)
+        assert.strictEqual(numbers['2'], 3)
+        assert.strictEqual(numbers['3'], undefined)
+        assert.strictEqual(numbers.someProperty, undefined)
+        assert.strictEqual(numbers['someProperty'], undefined)
       })
     })
 
