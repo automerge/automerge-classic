@@ -175,7 +175,7 @@ declare module 'automerge' {
   }
 
   interface Op {
-    action: Action
+    action: OpAction
     obj: UUID
     key?: string
     value?: any
@@ -194,7 +194,7 @@ declare module 'automerge' {
   }
 
   interface Diff {
-    action: Action
+    action: DiffAction
     type: CollectionType
     obj: UUID
     path?: string[]
@@ -214,26 +214,30 @@ declare module 'automerge' {
   }
 
   type RequestType =
-    | 'change' //
+    | 'change' 
     | 'redo'
     | 'undo'
 
-  type Action =
-    | 'create'
+  type OpAction =
+    | 'ins' 
     | 'del'
     | 'inc'
-    | 'ins' // TODO are 'ins' and 'insert' different things?
-    | 'insert'
     | 'link'
+    | 'set'
+    | 'makeText'
+    | 'makeTable'
     | 'makeList'
     | 'makeMap'
-    | 'maxElem'
-    | 'remove'
+
+  type DiffAction =
+    | 'create'
+    | 'insert'
     | 'set'
+    | 'remove'
 
   type CollectionType =
     | 'list'
-    | 'map' //
+    | 'map' 
     | 'table'
     | 'text'
 
