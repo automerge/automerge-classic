@@ -3,7 +3,7 @@ module.exports = function(config) {
     frameworks: ['mocha', 'karma-typescript'],
     files: ['test/*.ts'],
     preprocessors: {
-      'test/*.ts': ['karma-typescript'],
+      'test/*.ts': ['karma-typescript']
     },
     browsers: ['Chrome', 'Firefox'],
     singleRun: true,
@@ -12,7 +12,7 @@ module.exports = function(config) {
       compilerOptions: {
         allowJs: true,
         sourceMap: true,
-      },
-    },
+      }
+    }
   })
 }
