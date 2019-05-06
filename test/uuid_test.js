@@ -1,5 +1,7 @@
-import * as assert from 'assert'
-import { uuid } from 'automerge'
+const assert = require('assert')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+
+const uuid = Automerge.uuid
 
 describe('uuid', () => {
   afterEach(() => {
@@ -13,7 +15,7 @@ describe('uuid', () => {
   })
 
   describe('custom implementation', () => {
-    let counter: number
+    let counter
 
     function customUuid() {
       return `custom-uuid-${counter++}`

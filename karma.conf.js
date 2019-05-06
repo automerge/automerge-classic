@@ -1,11 +1,13 @@
 module.exports = function(config) {
   config.set({
-    frameworks: ['mocha', 'karma-typescript'],
-    files: ['test/*.ts'],
+    frameworks: ['browserify', 'mocha', 'karma-typescript'],
+    files: ['test/*.js', 'test/*.ts'],
     preprocessors: {
+      'test/*.js': ['browserify'],
       'test/*.ts': ['karma-typescript']
     },
-    browsers: ['Chrome', 'Firefox'],
+    browserify: {debug: true},
+    browsers: ['Chrome', 'Firefox', 'Safari'],
     singleRun: true,
     karmaTypescriptConfig: {
       tsconfig: './tsconfig.json',

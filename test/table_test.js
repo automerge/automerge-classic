@@ -1,41 +1,30 @@
-import * as assert from 'assert'
-import { Frontend, UUID, Table } from 'automerge'
-import * as Automerge from 'automerge'
-import uuid from 'uuid'
-
-import { assertEqualsOneOf } from './helpers'
-
+const assert = require('assert')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+const Frontend = Automerge.Frontend
+const Backend = Automerge.Backend
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
-
-
-interface Book {
-  authors: string | string[]
-  title: string
-  isbn?: string
-}
-
-type BookDb = {
-  books: Table<Book, ['authors', 'title', 'isbn']>
-}
+const uuid = require('../src/uuid')
+const { assertEqualsOneOf } = require('./helpers')
 
 // Example data
-const DDIA: Book = {
+const DDIA = {
   authors: ['Kleppmann, Martin'],
   title: 'Designing Data-Intensive Applications',
   isbn: '1449373321'
 }
-const RSDP: Book = {
+const RSDP = {
   authors: ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
   title: 'Introduction to Reliable and Secure Distributed Programming',
   isbn: '3-642-15259-7'
 }
 
-describe('Table', () => {
+describe('Automerge.Table', () => {
   describe('Frontend', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
-      const [doc, req] = Frontend.change(Frontend.init<BookDb>(actor), doc => {
-        doc.books = new Table(['authors', 'title', 'isbn'])
+      const [doc, req] = Frontend.change(Frontend.init(actor), doc => {
+        // isbn is deliberately not listed, to test use of undeclared columns
+        doc.books = new Automerge.Table(['authors', 'title'])
       })
       const books = Frontend.getObjectId(doc.books)
       const cols = Frontend.getObjectId(doc.books.columns)
@@ -46,8 +35,6 @@ describe('Table', () => {
         {obj: cols, action: 'set', key: `${actor}:1`, value: 'authors'},
         {obj: cols, action: 'ins', elem: 2, key: `${actor}:1`},
         {obj: cols, action: 'set', key: `${actor}:2`, value: 'title'},
-        {obj: cols, action: 'ins', elem: 3, key: `${actor}:2`},
-        {obj: cols, action: 'set', key: `${actor}:3`, value: 'isbn'},
         {obj: books, action: 'link', key: 'columns', value: cols},
         {obj: ROOT_ID, action: 'link', key: 'books', value: books}
       ]})
@@ -55,12 +42,12 @@ describe('Table', () => {
 
     it('should generate ops to insert a row', () => {
       const actor = uuid()
-      const [doc1, req1] = Frontend.change(Frontend.init<BookDb>(actor), doc => {
-        doc.books = new Table(['authors', 'title', 'isbn'])
+      const [doc1, req1] = Frontend.change(Frontend.init(actor), doc => {
+        doc.books = new Automerge.Table(['authors', 'title'])
       })
       let rowId
       const [doc2, req2] = Frontend.change(doc1, doc => {
-        rowId = doc.books.add({ authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications' })
+        rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
       const books = Frontend.getObjectId(doc2.books)
       assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
@@ -73,12 +60,11 @@ describe('Table', () => {
   })
 
   describe('with one row', () => {
-    let s1: BookDb
-    let rowId: UUID
+    let s1, rowId
 
     beforeEach(() => {
-      s1 = Automerge.change(Automerge.init<BookDb>(), doc => {
-        doc.books = new Table(['authors', 'title', 'isbn'])
+      s1 = Automerge.change(Automerge.init(), doc => {
+        doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
         rowId = doc.books.add(DDIA)
       })
     })
@@ -102,17 +88,17 @@ describe('Table', () => {
     })
 
     it('should support standard array methods', () => {
-      assert.deepEqual(s1.books.filter((book: Book) => book.isbn === '1449373321'), [DDIA])
-      assert.deepEqual(s1.books.filter((book: Book) => book.isbn === '9781449373320'), [])
-      assert.deepEqual(s1.books.find((book: Book) => book.isbn === '1449373321'), DDIA)
-      assert.strictEqual(s1.books.find((book: Book) => book.isbn === '9781449373320'), undefined)
-      assert.deepEqual(s1.books.map<string>((book: Book) => book.title), ['Designing Data-Intensive Applications'])
+      assert.deepEqual(s1.books.filter(book => book.isbn === '1449373321'), [DDIA])
+      assert.deepEqual(s1.books.filter(book => book.isbn === '9781449373320'), [])
+      assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), DDIA)
+      assert.strictEqual(s1.books.find(book => book.isbn === '9781449373320'), undefined)
+      assert.deepEqual(s1.books.map(book => book.title), ['Designing Data-Intensive Applications'])
     })
 
     it('should be immutable', () => {
       assert.strictEqual(s1.books.add, undefined)
-      assert.throws(() => s1.books.set('id', DDIA), /can only be modified in a change function/)
-      assert.throws(() => s1.books.remove('id'), /can only be modified in a change function/)
+      assert.throws(() => s1.books.set('id', {}), /can only be modified in a change function/)
+      assert.throws(() => s1.books.remove('id'),  /can only be modified in a change function/)
     })
 
     it('should save and reload', () => {
@@ -172,13 +158,12 @@ describe('Table', () => {
   })
 
   it('should allow concurrent row insertion', () => {
-    const a0 = Automerge.change(Automerge.init<BookDb>(), doc => {
-      doc.books = new Table(['authors', 'title', 'isbn'])
+    const a0 = Automerge.change(Automerge.init(), doc => {
+      doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
     })
-    const b0 = Automerge.merge(Automerge.init<BookDb>(), a0)
+    const b0 = Automerge.merge(Automerge.init(), a0)
 
-    let ddia: UUID
-    let rsdp: UUID
+    let ddia, rsdp
     const a1 = Automerge.change(a0, doc => { ddia = doc.books.add(DDIA) })
     const b1 = Automerge.change(b0, doc => { rsdp = doc.books.add(RSDP) })
     const a2 = Automerge.merge(a1, b1)
@@ -189,16 +174,15 @@ describe('Table', () => {
   })
 
   it('should allow rows to be sorted in various ways', () => {
-    const s = Automerge.change(Automerge.init<BookDb>(), doc => {
-      doc.books = new Table(['authors', 'title', 'isbn'])
+    const s = Automerge.change(Automerge.init(), doc => {
+      doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
       doc.books.add(DDIA)
       doc.books.add(RSDP)
     })
     assert.deepEqual(s.books.sort('title'), [DDIA, RSDP])
     assert.deepEqual(s.books.sort(['authors', 'title']), [RSDP, DDIA])
-    assert.deepEqual(
-      s.books.sort((row1: Book, row2: Book) => {
-        return (row1.isbn === '1449373321') ? -1 : +1
-      }), [DDIA, RSDP])
+    assert.deepEqual(s.books.sort((row1, row2) => {
+      return (row1.isbn === '1449373321') ? -1 : +1
+    }), [DDIA, RSDP])
   })
 })

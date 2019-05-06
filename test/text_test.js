@@ -1,19 +1,11 @@
-import * as assert from 'assert'
-import * as Automerge from 'automerge'
-
-import { assertEqualsOneOf } from './helpers'
-
-type TextDoc = {
-  text: Automerge.Text
-  foo?: string
-}
+const assert = require('assert')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+const { assertEqualsOneOf } = require('./helpers')
 
 describe('Automerge.Text', () => {
-  let s1: TextDoc
-  let s2: TextDoc
-
+  let s1, s2
   beforeEach(() => {
-    s1 = Automerge.change(Automerge.init(), doc => (doc.text = new Automerge.Text()))
+    s1 = Automerge.change(Automerge.init(), doc => doc.text = new Automerge.Text())
     s2 = Automerge.merge(Automerge.init(), s1)
   })
 

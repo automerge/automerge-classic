@@ -34,9 +34,10 @@ module.exports = function(config) {
   }
 
   config.set({
-    frameworks: ['mocha', 'karma-typescript'],
-    files: ['test/*.ts'],
+    frameworks: ['browserify', 'mocha', 'karma-typescript'],
+    files: ['test/*.js', 'test/*.ts'],
     preprocessors: {
+      'test/*.js': ['browserify'],
       'test/*.ts': ['karma-typescript']
     },
     karmaTypescriptConfig: {
@@ -45,6 +46,7 @@ module.exports = function(config) {
         sourceMap: true,
       }
     },
+    browserify: {debug: true},
     port: 9876,
     captureTimeout: 120000,
     sauceLabs: {
