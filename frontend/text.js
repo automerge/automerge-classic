@@ -30,6 +30,14 @@ class Text {
       }
     }
   }
+
+  /**
+   * Returns the content of the Text object as a simple string, so that the
+   * JSON serialization of an Automerge document represents text nicely.
+   */
+  toJSON() {
+    return this.join('')
+  }
 }
 
 // Read-only methods that can delegate to the JavaScript built-in array

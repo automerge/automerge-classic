@@ -208,6 +208,11 @@ describe('Frontend', () => {
         assert.strictEqual(`I saw ${doc1.birds} birds`, 'I saw 3 birds')
         assert.strictEqual(['I saw', doc1.birds, 'birds'].join(' '), 'I saw 3 birds')
       })
+
+      it('should allow counters to be serialized to JSON', () => {
+        const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = new Frontend.Counter())
+        assert.strictEqual(JSON.stringify(doc1), '{"birds":0}')
+      })
     })
   })
 
