@@ -193,6 +193,17 @@ class Table {
     instance.entries = this.entries
     return instance
   }
+
+  /**
+   * Returns an object containing both the table entries (indexed by objectID)
+   * and the columns (under the key `columns`). This provides a nice format
+   * when serializing an Automerge document to JSON.
+   */
+  toJSON() {
+    const rows = {}
+    for (let id of this.ids) rows[id] = this.byId(id)
+    return {columns: this.columns, rows}
+  }
 }
 
 /**

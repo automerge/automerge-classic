@@ -184,4 +184,16 @@ describe('Automerge.Table', () => {
       return (row1.isbn === '1449373321') ? -1 : +1
     }), [DDIA, RSDP])
   })
+
+  it('should allow serialization to JSON', () => {
+    let ddia
+    const s = Automerge.change(Automerge.init(), doc => {
+      doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
+      ddia = doc.books.add(DDIA)
+    })
+    assert.deepEqual(JSON.parse(JSON.stringify(s)), {books: {
+      columns: ['authors', 'title', 'isbn'],
+      rows: {[ddia]: DDIA}
+    }})
+  })
 })
