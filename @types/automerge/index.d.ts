@@ -105,7 +105,7 @@ declare module 'automerge' {
     function canUndo<T>(doc: T): boolean
     function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
     function change<T>(doc: T, callback: ChangeFn<T>): [T, Change<T>]
-    function emptyChange<T>(doc: T, message?: string): T
+    function emptyChange<T>(doc: T, message?: string): [T, Change<T>]
     function getActorId<T>(doc: T): string
     function getBackendState<T>(doc: T): T
     function getConflicts<T>(doc: T, key: Key): any
@@ -114,9 +114,9 @@ declare module 'automerge' {
     function getObjectId<T>(doc: T): UUID
     function init<T>(actorId?: string): T
     function init<T>(options?: any): T
-    function redo<T>(doc: T, message?: string): T
-    function setActorId<T>(doc: T, actorId: string): any
-    function undo<T>(doc: T, message?: string): any
+    function redo<T>(doc: T, message?: string): [T, Change<T>]
+    function setActorId<T>(doc: T, actorId: string): T
+    function undo<T>(doc: T, message?: string): [T, Change<T>]
   }
 
   namespace Backend {
