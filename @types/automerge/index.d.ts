@@ -19,7 +19,6 @@ declare module 'automerge' {
   function merge<T>(localDoc: T, remoteDoc: T): T
   function redo<T>(doc: T, message?: string): T
   function save<T>(doc: T): string
-  function setActorId<T>(doc: T, actorId: string): T
   function undo<T>(doc: T, message?: string): T
   function getElemId<T=string>(object: List<T> | Text, index: number): string
 
