@@ -106,8 +106,7 @@ let doc1 = Automerge.init()
 
 // That initial state is just an empty object: {}.
 // The doc1 object is immutable -- you cannot change it directly (if you try,
-// you'll either get an exception or your change will be silently ignored,
-// depending on your JavaScript engine). To change it, you need to call
+// you'll get an exception. To change it, you need to call
 // Automerge.change() with a callback in which you can mutate the state. You
 // can also include a human-readable description of the change, like a commit
 // message, which is stored in the change history (see below).
