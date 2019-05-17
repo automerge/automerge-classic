@@ -193,7 +193,7 @@ describe('Automerge.Table', () => {
     })
     assert.deepEqual(JSON.parse(JSON.stringify(s)), {books: {
       columns: ['authors', 'title', 'isbn'],
-      [ddia]: DDIA
+      rows: {[ddia]: DDIA}
     }})
   })
 })

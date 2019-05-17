@@ -200,7 +200,9 @@ class Table {
    * when serializing an Automerge document to JSON.
    */
   toJSON() {
-    return Object.assign({}, {columns: this.columns}, this.entries)
+    const rows = {}
+    for (let id of this.ids) rows[id] = this.byId(id)
+    return {columns: this.columns, rows}
   }
 }
 
