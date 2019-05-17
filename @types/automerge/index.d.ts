@@ -7,7 +7,7 @@ declare module 'automerge' {
   function diff<T>(oldDoc: T, newDoc: T): Diff
   function emptyChange<T>(doc: T, message?: string): T
   function equals<T>(val1: T, val2: T): boolean
-  function getActorId<T>(doc: T): UUID
+  function getActorId<T>(doc: T): string
   function getChanges<T>(oldDoc: T, newDoc: T): Change<T>[]
   function getConflicts<T>(doc: T, key: Key): any
   function getHistory<T>(doc: T): State<T>[]
@@ -15,22 +15,22 @@ declare module 'automerge' {
   function getObjectById<T>(doc: T, objectId: UUID): T
   function getObjectId<T>(doc: T): string
   function init<T>(actorId?: string): T
-  function load<T>(doc: T, actorId?: string): T
+  function load<T>(doc: string, actorId?: string): T
   function merge<T>(localDoc: T, remoteDoc: T): T
   function redo<T>(doc: T, message?: string): T
-  function save<T>(doc: T): T
-  function setActorId<T>(doc: T, actorId: UUID): T
+  function save<T>(doc: T): string
+  function setActorId<T>(doc: T, actorId: string): T
   function undo<T>(doc: T, message?: string): T
-  function getElemId<T=string>(object: List<T> | Text, index: number): UUID
+  function getElemId<T=string>(object: List<T> | Text, index: number): string
 
   class Connection<T> {
     constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
     close(): void
-    docChanged(docId: UUID, doc: T): void
-    maybeSendChanges(docId: UUID): void
+    docChanged(docId: string, doc: T): void
+    maybeSendChanges(docId: string): void
     open(): void
     receiveMsg(msg: Message<T>): T
-    sendMsg(docId: UUID, clock: Clock, changes: Change<T>[]): void
+    sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
   }
 
   class Table<T, KeyOrder extends Array<keyof T>> {
@@ -41,7 +41,7 @@ declare module 'automerge' {
         value: T
       }
     }
-    add(item: T | TupleFromInterface<T, KeyOrder>): UUID;
+    add(item: T | TupleFromInterface<T, KeyOrder>): UUID
     byId(id: UUID): T
     columns: string[]
     count: number
@@ -64,14 +64,14 @@ declare module 'automerge' {
   class Text extends List<string> {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
     get?(index: number): string
-    getElemId(index: number): UUID
+    getElemId(index: number): string
   }
 
   class DocSet<T> {
     constructor()
-    applyChanges(docId: UUID, changes: Change<T>[]): T
-    getDoc(docId: UUID): T
-    setDoc(docId: UUID, doc: T): void
+    applyChanges(docId: string, changes: Change<T>[]): T
+    getDoc(docId: string): T
+    setDoc(docId: string, doc: T): void
     registerHandler(handler: Handler<T>): void
     unregisterHandler(handler: Handler<T>): void
   }
@@ -107,16 +107,16 @@ declare module 'automerge' {
     function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
     function change<T>(doc: T, callback: ChangeFn<T>): [T, Change<T>]
     function emptyChange<T>(doc: T, message?: string): T
-    function getActorId<T>(doc: T): UUID
+    function getActorId<T>(doc: T): string
     function getBackendState<T>(doc: T): T
     function getConflicts<T>(doc: T, key: Key): any
-    function getElementIds(list: any): UUID[]
+    function getElementIds(list: any): string[]
     function getObjectById<T>(doc: T, objectId: UUID): T
     function getObjectId<T>(doc: T): UUID
     function init<T>(actorId?: string): T
     function init<T>(options?: any): T
     function redo<T>(doc: T, message?: string): T
-    function setActorId<T>(doc: T, actorId: UUID): any
+    function setActorId<T>(doc: T, actorId: string): any
     function undo<T>(doc: T, message?: string): any
   }
 
@@ -124,7 +124,7 @@ declare module 'automerge' {
     function applyChanges<T>(state: T, changes: Change<T>[]): [T, Patch]
     function applyLocalChange<T>(state: T, change: Change<T>): [T, Patch]
     function getChanges<T>(oldState: T, newState: T): Change<T>[]
-    function getChangesForActor<T>(state: T, actorId: UUID): Change<T>[]
+    function getChangesForActor<T>(state: T, actorId: string): Change<T>[]
     function getMissingChanges<T>(state: T, clock: Clock): Change<T>[]
     function getMissingDeps<T>(state: T): Clock
     function getPatch<T>(state: T): Patch
@@ -140,13 +140,13 @@ declare module 'automerge' {
   const uuid: UUIDFactory
 
   type ChangeFn<T> = (doc: T) => void
-  type Handler<T> = (docId: UUID, doc: T) => void
+  type Handler<T> = (docId: string, doc: T) => void
   type Key = string | number
-  type UUID = string | number
+  type UUID = string
   type filterFn<T> = (elem: T) => boolean
 
   interface Message<T> {
-    docId: UUID
+    docId: string
     clock: Clock
     changes?: Change<T>[]
   }
@@ -163,7 +163,7 @@ declare module 'automerge' {
   interface Change<T> {
     message?: string
     requestType?: RequestType
-    actor: UUID
+    actor: string
     seq: number
     deps: Clock
     ops: Op[]
@@ -181,7 +181,7 @@ declare module 'automerge' {
   }
 
   interface Patch {
-    actor?: UUID
+    actor?: string
     seq?: number
     clock?: Clock
     deps?: Clock
@@ -198,14 +198,14 @@ declare module 'automerge' {
     key?: string
     index?: number
     value?: any
-    elemId?: UUID
+    elemId?: string
     conflicts?: Conflict[]
     datatype?: DataType
     link?: boolean
   }
 
   interface Conflict {
-    actor: UUID
+    actor: string
     value: any
     link?: boolean
   }
