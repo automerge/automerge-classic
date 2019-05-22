@@ -324,7 +324,7 @@ implementing a relational-like table with a primary key.
 
 ### Text editing support
 
-`Automerge.Text` provides experimental support for collaborative text editing.
+`Automerge.Text` provides support for collaborative text editing.
 Under the hood, text is represented as a list of characters, which is edited by inserting or
 deleting individual characters. Compared to using a regular JavaScript array,
 `Automerge.Text` offers better performance.

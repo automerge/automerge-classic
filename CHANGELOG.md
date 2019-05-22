@@ -8,8 +8,13 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.10.1] — 2019-05-17
+
 - **Fixed** [#151]: Exception "Duplicate list element ID" after a list element was added and
   removed again in the same change callback ([@ept], [@minhhien1996])
+- **Changed** [#163]: Calling `JSON.stringify` on an Automerge document containing
+  `Automerge.Text`, `Automerge.Table` or `Automerge.Counter` now serializes those objects in a
+  clean way, rather than dumping the object's internal properties ([@ept])
 
 ## [0.10.0] — 2019-02-04
 
@@ -178,7 +183,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/automerge/automerge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/automerge/automerge/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/automerge/automerge/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/automerge/automerge/compare/v0.9.0...v0.9.1
@@ -202,6 +208,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#163]: https://github.com/automerge/automerge/pull/163
 [#151]: https://github.com/automerge/automerge/issues/151
 [#150]: https://github.com/automerge/automerge/pull/150
 [#148]: https://github.com/automerge/automerge/pull/148

@@ -29,6 +29,14 @@ class Counter {
   toString() {
     return this.valueOf().toString()
   }
+
+  /**
+   * Returns the counter value, so that a JSON serialization of an Automerge
+   * document represents the counter simply as an integer.
+   */
+  toJSON() {
+    return this.value
+  }
 }
 
 /**

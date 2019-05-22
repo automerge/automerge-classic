@@ -39,4 +39,9 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.foo, 'bar')
     assert.strictEqual(s1.text.join(''), 'a')
   })
+
+  it('should serialize to JSON as a simple string', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', '"', 'b'))
+    assert.strictEqual(JSON.stringify(s1), '{"text":"a\\"b"}')
+  })
 })
