@@ -532,4 +532,44 @@ describe('Frontend', () => {
       assert.deepEqual(doc2, {counts: {magpies: 3}, details: [{species: 'Eurasian magpie', family: 'corvidae'}]})
     })
   })
+
+  describe('undo and redo', () => {
+    it('should allow undo in the frontend', () => {
+      const doc0 = Frontend.init(), b0 = Backend.init(), actor = Frontend.getActorId(doc0)
+      assert.strictEqual(Frontend.canUndo(doc0), false)
+      const [doc1, req1] = Frontend.change(doc0, doc => doc.number = 1)
+      const [b1, patch1] = Backend.applyLocalChange(b0, req1)
+      const doc1a = Frontend.applyPatch(doc1, patch1)
+      assert.strictEqual(Frontend.canUndo(doc1a), true)
+      const [doc2, req2] = Frontend.undo(doc1a)
+      assert.deepEqual(req2, {actor, requestType: 'undo', seq: 2, deps: {}})
+      const [b2, patch2] = Backend.applyLocalChange(b1, req2)
+      const doc2a = Frontend.applyPatch(doc2, patch2)
+      assert.deepEqual(doc2a, {})
+    })
+
+    function apply(backend, change) {
+      const [doc, req] = change
+      const [newBackend, patch] = Backend.applyLocalChange(backend, req)
+      return [newBackend, Frontend.applyPatch(doc, patch)]
+    }
+
+    it('should perform multiple undos and redos', () => {
+      const doc0 = Frontend.init(), b0 = Backend.init()
+      const [b1, doc1] = apply(b0, Frontend.change(doc0, doc => doc.number = 1))
+      const [b2, doc2] = apply(b1, Frontend.change(doc1, doc => doc.number = 2))
+      const [b3, doc3] = apply(b2, Frontend.change(doc2, doc => doc.number = 3))
+      const [b4, doc4] = apply(b3, Frontend.undo(doc3))
+      const [b5, doc5] = apply(b4, Frontend.undo(doc4))
+      const [b6, doc6] = apply(b5, Frontend.redo(doc5))
+      const [b7, doc7] = apply(b6, Frontend.redo(doc6))
+      assert.deepEqual(doc1, {number: 1})
+      assert.deepEqual(doc2, {number: 2})
+      assert.deepEqual(doc3, {number: 3})
+      assert.deepEqual(doc4, {number: 2})
+      assert.deepEqual(doc5, {number: 1})
+      assert.deepEqual(doc6, {number: 2})
+      assert.deepEqual(doc7, {number: 3})
+    })
+  })
 })
