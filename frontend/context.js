@@ -75,7 +75,7 @@ class Context {
     if (typeof value[OBJECT_ID] === 'string') return value[OBJECT_ID]
     const objectId = uuid()
 
-    if (value instanceof Text) {
+    if (value.constructor.name === "Text") {
       // Create a new Text object
       if (value.length > 0) {
         throw new RangeError('Assigning a non-empty Text object is not supported')
