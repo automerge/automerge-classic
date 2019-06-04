@@ -4,7 +4,7 @@ declare module 'automerge' {
   function canUndo<T>(doc: T): boolean
   function change<T>(doc: T, message: string, callback: ChangeFn<T>): T
   function change<T>(doc: T, callback: ChangeFn<T>): T
-  function diff<T>(oldDoc: T, newDoc: T): Diff
+  function diff<T>(oldDoc: T, newDoc: T): Diff[]
   function emptyChange<T>(doc: T, message?: string): T
   function equals<T>(val1: T, val2: T): boolean
   function getActorId<T>(doc: T): string
@@ -12,15 +12,14 @@ declare module 'automerge' {
   function getConflicts<T>(doc: T, key: Key): any
   function getHistory<T>(doc: T): State<T>[]
   function getMissingDeps<T>(doc: T): Clock
-  function getObjectById<T>(doc: T, objectId: UUID): T
-  function getObjectId<T>(doc: T): string
+  function getObjectById<T>(doc: T, objectId: UUID): any
+  function getObjectId(object: any): UUID
   function init<T>(actorId?: string): T
   function load<T>(doc: string, actorId?: string): T
   function merge<T>(localDoc: T, remoteDoc: T): T
   function redo<T>(doc: T, message?: string): T
   function save<T>(doc: T): string
   function undo<T>(doc: T, message?: string): T
-  function getElemId<T=string>(object: List<T> | Text, index: number): string
 
   class Connection<T> {
     constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)

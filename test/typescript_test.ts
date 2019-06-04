@@ -4,6 +4,7 @@ import * as Automerge from 'automerge'
 import { Backend, Frontend } from 'automerge'
 
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
+const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 interface BirdList {
   birds: Automerge.List<string>
@@ -160,6 +161,18 @@ describe('TypeScript support', () => {
       const [b1, patch1] = Backend.applyLocalChange(b0, req1)
       const s2 = Frontend.applyPatch(s1, patch1)
       assert.strictEqual(s2.number, 1)
+      assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
+      assert.strictEqual(patch1.seq, 1)
+      assert.deepEqual(patch1.clock, {[Automerge.getActorId(s0)]: 1})
+      assert.strictEqual(patch1.canUndo, true)
+      assert.strictEqual(patch1.canRedo, false)
+      assert.strictEqual(patch1.diffs.length, 1)
+      assert.strictEqual(patch1.diffs[0].action, 'set')
+      assert.strictEqual(patch1.diffs[0].type, 'map')
+      assert.strictEqual(patch1.diffs[0].obj, ROOT_ID)
+      assert.deepEqual(patch1.diffs[0].path, [])
+      assert.strictEqual(patch1.diffs[0].key, 'number')
+      assert.strictEqual(patch1.diffs[0].value, 1)
     })
   })
 
@@ -173,6 +186,18 @@ describe('TypeScript support', () => {
       assert.strictEqual(changes[0].message, 'add chaffinch')
       assert.strictEqual(changes[0].actor, Automerge.getActorId(s2))
       assert.strictEqual(changes[0].seq, 2)
+    })
+
+    it('should include operations in changes', () => {
+      let s1 = Automerge.init<NumberBox>()
+      s1 = Automerge.change(s1, doc => doc.number = 3)
+      const changes = Automerge.getChanges(Automerge.init(), s1)
+      assert.strictEqual(changes.length, 1)
+      assert.strictEqual(changes[0].ops.length, 1)
+      assert.strictEqual(changes[0].ops[0].action, 'set')
+      assert.strictEqual(changes[0].ops[0].obj, ROOT_ID)
+      assert.strictEqual(changes[0].ops[0].key, 'number')
+      assert.strictEqual(changes[0].ops[0].value, 3)
     })
 
     it('should allow changes to be re-applied', () => {
@@ -228,6 +253,59 @@ describe('TypeScript support', () => {
       assert.strictEqual(Automerge.getHistory(s1).length, 3)
       assert.strictEqual(Automerge.getHistory(s1)[2].change.message, 'go back to 3')
       assert.deepEqual(s1, {number: 3})
+    })
+
+    it('should generate undo requests in the frontend', () => {
+      const doc0 = Frontend.init<NumberBox>(), b0 = Backend.init()
+      assert.strictEqual(Frontend.canUndo(doc0), false)
+      const [doc1, req1] = Frontend.change(doc0, doc => doc.number = 1)
+      const [b1, patch1] = Backend.applyLocalChange(b0, req1)
+      const doc1a = Frontend.applyPatch(doc1, patch1)
+      assert.strictEqual(Frontend.canUndo(doc1a), true)
+      const [doc2, req2] = Frontend.undo(doc1a)
+      assert.strictEqual(req2.requestType, 'undo')
+      assert.strictEqual(req2.actor, Frontend.getActorId(doc0))
+      assert.strictEqual(req2.seq, 2)
+      const [b2, patch2] = Backend.applyLocalChange(b1, req2)
+      const doc2a = Frontend.applyPatch(doc2, patch2)
+      assert.deepEqual(doc2a, {})
+    })
+  })
+
+  describe('history inspection', () => {
+    it('should diff two document states', () => {
+      const s1 = Automerge.change(Automerge.init<NumberBox>(), doc => doc.number = 1)
+      const s2 = Automerge.change(s1, doc => doc.number = 2)
+      const diff = Automerge.diff(s1, s2)
+      assert.strictEqual(diff.length, 1)
+      assert.strictEqual(diff[0].action, 'set')
+      assert.strictEqual(diff[0].type, 'map')
+      assert.strictEqual(diff[0].obj, ROOT_ID)
+      assert.deepEqual(diff[0].path, [])
+      assert.strictEqual(diff[0].key, 'number')
+      assert.strictEqual(diff[0].value, 2)
+    })
+
+    it('should inspect document history', () => {
+      const s0 = Automerge.init<NumberBox>()
+      const s1 = Automerge.change(s0, 'one', doc => doc.number = 1)
+      const s2 = Automerge.change(s1, 'two', doc => doc.number = 2)
+      const history = Automerge.getHistory(s2)
+      assert.strictEqual(history.length, 2)
+      assert.strictEqual(history[0].change.message, 'one')
+      assert.strictEqual(history[1].change.message, 'two')
+      assert.strictEqual(history[0].snapshot.number, 1)
+      assert.strictEqual(history[1].snapshot.number, 2)
+    })
+  })
+
+  describe('state inspection', () => {
+    it('should support looking up objects by ID', () => {
+      const s0 = Automerge.init<BirdList>()
+      const s1 = Automerge.change(s0, doc => doc.birds = ['goldfinch'])
+      const obj = Automerge.getObjectId(s1.birds)
+      assert.strictEqual(Automerge.getObjectById(s1, obj).length, 1)
+      assert.strictEqual(Automerge.getObjectById(s1, obj), s1.birds)
     })
   })
 })
