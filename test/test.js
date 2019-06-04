@@ -44,25 +44,27 @@ describe('Automerge', () => {
 
       it('should prevent mutations outside of a change block', () => {
         s2 = Automerge.change(s1, doc => doc.foo = 'bar')
-        if (typeof window === 'object') {
-          // Chrome and Firefox silently ignore modifications of a frozen object
+        try {
           s2.foo = 'lemon'
+        } catch (e) {}
+        assert.strictEqual(s2.foo, 'bar')
+
+        let deleted = false
+        try {
+          deleted = delete s2['foo']
+        } catch (e) {}
+        assert.strictEqual(s2.foo, 'bar')
+        assert.strictEqual(deleted, false)
+
+        Automerge.change(s2, doc => {
+          try {
+            s2.foo = 'lemon'
+          } catch (e) {}
           assert.strictEqual(s2.foo, 'bar')
-          const deleted = delete s2['foo']
-          assert.strictEqual(s2.foo, 'bar')
-          assert.strictEqual(deleted, false)
-          Automerge.change(s2, doc => {
-            s2.foo = 'bar'
-            assert.strictEqual(s2.foo, 'bar')
-          })
-        } else {
-          // Node throws exceptions when trying to modify a frozen object
-          assert.throws(() => { s2.foo = 'lemon' }, /Cannot assign to read only property/)
-          assert.throws(() => { delete s2['foo'] }, /Cannot delete property/)
-          assert.throws(() => { Automerge.change(s2, doc => s2.foo = 'bar') }, /Cannot assign to read only property/)
-        }
+        })
+
         assert.throws(() => { Object.assign(s2, {x: 4}) })
-        assert.notStrictEqual(s2.x, 4)
+        assert.strictEqual(s2.x, undefined)
       })
 
       it('should allow repeated reading and writing of values', () => {
