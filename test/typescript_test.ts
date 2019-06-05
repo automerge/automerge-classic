@@ -308,4 +308,16 @@ describe('TypeScript support', () => {
       assert.strictEqual(Automerge.getObjectById(s1, obj), s1.birds)
     })
   })
+
+  describe('Automerge.Text', () => {
+
+  })
+
+  describe('Automerge.Table', () => {
+
+  })
+
+  describe('Automerge.Counter', () => {
+
+  })
 })
