@@ -621,9 +621,9 @@ The project currently has a number of limitations that you should be aware of:
 * No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause
   the application state on other devices to become corrupted or go out of sync.
 * No security: there is currently no encryption, authentication, or access control.
-* Small number of collaborators: Automerge is designed for small-group collaborations. While there
-  is no hard limit on the number of devices that can update a document, performance will degrade
-  if you go beyond, say, 100 devices or so.
+* Storage overhead: Automerge needs to store additional metadata besides the actual objects you
+  create; for some datatypes, such as text, the overhead is substantial. We are working on
+  improving this.
 * ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
 
 
