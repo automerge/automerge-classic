@@ -198,7 +198,7 @@ class Context {
     }
 
     const maxElem = list[MAX_ELEM] + 1
-    const type = (list instanceof Text) ? 'text' : 'list'
+    const type = (list.constructor.name === "Text") ? 'text' : 'list'
     const prevId = (index === 0) ? '_head' : getElemId(list, index - 1)
     const elemId = `${this.actorId}:${maxElem}`
     this.addOp({action: 'ins', obj: objectId, key: prevId, elem: maxElem})
@@ -229,7 +229,7 @@ class Context {
     // the assignment does not resolve a conflict, do nothing
     if (list[index] !== value || list[CONFLICTS][index] || value === undefined) {
       const elemId = getElemId(list, index)
-      const type = (list instanceof Text) ? 'text' : 'list'
+      const type = (list.constructor.name === "Text") ? 'text' : 'list'
       const valueObj = this.setValue(objectId, elemId, value)
       this.apply(Object.assign({action: 'set', type, obj: objectId, index}, valueObj))
     }
@@ -242,7 +242,7 @@ class Context {
    */
   splice(objectId, start, deletions, insertions) {
     let list = this.getObject(objectId)
-    const type = (list instanceof Text) ? 'text' : 'list'
+    const type = (list.constructor.name === "Text") ? 'text' : 'list'
 
     if (deletions > 0) {
       if (start < 0 || start > list.length - deletions) {
@@ -301,9 +301,9 @@ class Context {
     }
     const value = object[key].value + delta
 
-    if (Array.isArray(object) || object instanceof Text) {
+    if (Array.isArray(object) || object.constructor.name === "Text") {
       const elemId = getElemId(object, key)
-      const type = (object instanceof Text) ? 'text' : 'list'
+      const type = (object.constructor.name === "Text") ? 'text' : 'list'
       this.addOp({action: 'inc', obj: objectId, key: elemId, value: delta})
       this.apply({action: 'set', obj: objectId, type, index: key, value, datatype: 'counter'})
     } else {

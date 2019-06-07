@@ -63,7 +63,7 @@ function makeInstance(objectId, elems, maxElem) {
  * a list object or a Text object.
  */
 function getElemId(object, index) {
-  return (object instanceof Text) ? object.getElemId(index) : object[ELEM_IDS][index]
+  return (object.constructor.name === "Text") ? object.getElemId(index) : object[ELEM_IDS][index]
 }
 
 module.exports = { Text, getElemId }

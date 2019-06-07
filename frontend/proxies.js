@@ -205,7 +205,7 @@ function listProxy(context, objectId) {
  */
 function instantiateProxy(objectId) {
   const object = this.getObject(objectId)
-  if (Array.isArray(object) || (object instanceof Text)) {
+  if (Array.isArray(object) || (object.constructor.name === "Text")) {
     return listProxy(this, objectId)
   } else if (object instanceof Table) {
     return object.getWriteable(this)
