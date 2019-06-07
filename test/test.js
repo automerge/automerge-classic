@@ -42,10 +42,17 @@ describe('Automerge', () => {
         assert.deepEqual(s2, {first: 'one', second: 'two'})
       })
 
+      let platformIgnoresFrozenMutation = true;
+      try {
+        Object.freeze({}).foo = 1;
+      } catch (e) {
+        platformIgnoresFrozenMutation = false;
+      }
+
       it('should prevent mutations outside of a change block', () => {
         s2 = Automerge.change(s1, doc => doc.foo = 'bar')
-        if (typeof window === 'object') {
-          // Chrome and Firefox silently ignore modifications of a frozen object
+        if (platformIgnoresFrozenMutation) {
+          // Chrome, Firefox, and node >= 10 silently ignore modifications of a frozen object
           s2.foo = 'lemon'
           assert.strictEqual(s2.foo, 'bar')
           const deleted = delete s2['foo']
