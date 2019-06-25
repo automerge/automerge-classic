@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Fixed** [#165]: Undo/redo now work when using separate frontend and backend ([@ept])
+
 ## [0.10.1] — 2019-05-17
 
 - **Fixed** [#151]: Exception "Duplicate list element ID" after a list element was added and
@@ -208,6 +210,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
 [#151]: https://github.com/automerge/automerge/issues/151
 [#150]: https://github.com/automerge/automerge/pull/150
