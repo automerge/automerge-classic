@@ -1,7 +1,7 @@
 import * as assert from 'assert'
 import uuid from 'uuid'
 import * as Automerge from 'automerge'
-import { Backend, Frontend } from 'automerge'
+import { Backend, Frontend, Counter} from 'automerge'
 
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
@@ -499,5 +499,119 @@ describe('TypeScript support', () => {
     })
   })
 
-  describe('Automerge.Counter', () => {})
+  describe('Automerge.Counter', () => {
+    interface CountMap {
+      [name: string]: number
+    }
+
+    interface AnimalMap {
+      birds: CountMap
+      mammals?: CountMap
+    }
+
+    interface CounterMap {
+      [name: string]: Counter
+    }
+
+    interface CounterList {
+      counts: Counter[]
+    }
+
+    interface BirdCounterMap {
+      birds: CounterMap
+    }
+
+    it('should handle counters inside maps', () => {
+      const doc1 = Automerge.change(Automerge.init<CounterMap>(), doc => {
+        doc.wrens = new Counter()
+      })
+      assert.equal(doc1.wrens, 0)
+
+      const doc2 = Automerge.change(doc1, doc => {
+        doc.wrens.increment()
+      })
+      assert.equal(doc2.wrens, 1)
+    })
+
+    it('should handle counters inside lists', () => {
+      const doc1 = Automerge.change(Automerge.init<CounterList>(), doc => {
+        doc.counts = [new Counter(1)]
+      })
+      assert.equal(doc1.counts[0], 1)
+
+      const doc2 = Automerge.change(doc1, doc => {
+        doc.counts[0].increment(2)
+      })
+      assert.equal(doc2.counts[0].value, 3)
+    })
+
+    it('should coalesce assignments and increments', () => {
+      const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
+        doc.birds = {}
+      })
+      const doc2 = Automerge.change(doc1, doc => {
+        doc.birds.wrens = new Counter(1)
+        doc.birds.wrens.increment(2)
+      })
+      assert.deepEqual(doc1, { birds: {} })
+      assert.deepEqual(doc2, { birds: { wrens: 3 } })
+    })
+
+    it('should coalesce multiple increments', () => {
+      const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
+        doc.birds = { wrens: new Counter(0) }
+      })
+      const doc2 = Automerge.change(doc1, doc => {
+        doc.birds.wrens.increment(2)
+        doc.birds.wrens.decrement(1)
+        doc.birds.wrens.increment(3)
+      })
+      assert.equal(doc1.birds.wrens, 0)
+      assert.equal(doc2.birds.wrens, 4)
+    })
+
+    describe('counter as numeric primitive', () => {
+      let doc1: CounterMap
+      beforeEach(() => {
+        doc1 = Automerge.change(Automerge.init<CounterMap>(), doc => {
+          doc.birds = new Counter(3)
+        })
+      })
+
+      it('is equal (==) but not strictly equal (===) to its numeric value', () => {
+        assert.equal(doc1.birds, 3)
+        assert.notStrictEqual(doc1.birds, 3)
+      })
+
+      it('has to be explicitly cast to be used as a number', () => {
+        let birdCount: number
+
+        // This is valid javascript, but without the `ts-ignore` flag, it fails to compile:
+        // @ts-ignore
+        birdCount = doc1.birds // Type 'Counter' is not assignable to type 'number'.ts(2322)
+
+        // This is because TypeScript doesn't know about the `.valueOf()` trick.
+        // https://github.com/Microsoft/TypeScript/issues/2361
+
+        // If we want to treat a counter value as a number, we have to explicitly cast it to keep
+        // TypeScript happy. 
+
+        // We can cast by putting a `+` in front of it:
+        birdCount = +doc1.birds
+        assert.equal(birdCount < 4, true)
+        assert.equal(birdCount >= 0, true)
+
+        // Or we can be explicit (have to cast as unknown, then number):
+        birdCount = (doc1.birds as unknown) as number
+        assert.equal(birdCount <= 2, false)
+        assert.equal(birdCount + 10, 13)
+      })
+
+      it('is converted to a string using its numeric value', () => {
+        assert.equal(doc1.birds.toString(), '3')
+        assert.equal(`I saw ${doc1.birds} birds`, 'I saw 3 birds')
+        assert.equal(['I saw', doc1.birds, 'birds'].join(' '), 'I saw 3 birds')
+      })
+    })
+  })
 })
