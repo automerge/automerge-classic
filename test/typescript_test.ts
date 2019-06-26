@@ -33,7 +33,7 @@ describe('TypeScript support', () => {
     })
 
     it('should allow the actorId to be configured', () => {
-      let s1: BirdList = Automerge.init<BirdList>('actor1')
+      let s1 = Automerge.init<BirdList>('actor1')
       assert.strictEqual(Automerge.getActorId(s1), 'actor1')
       let s2 = Automerge.init<BirdList>()
       assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s2)), true)
@@ -55,7 +55,7 @@ describe('TypeScript support', () => {
     })
 
     it('should allow a frontend actorId to be configured', () => {
-      const s0: NumberBox = Frontend.init<NumberBox>('actor1')
+      const s0 = Frontend.init<NumberBox>('actor1')
       assert.strictEqual(Frontend.getActorId(s0), 'actor1')
     })
 
@@ -96,7 +96,7 @@ describe('TypeScript support', () => {
 
   describe('making changes', () => {
     it('should accept an optional message', () => {
-      let s1: BirdList = Automerge.init<BirdList>()
+      let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, 'hello', doc => doc.birds = [])
       assert.strictEqual(Automerge.getHistory(s1)[0].change.message, 'hello')
     })
