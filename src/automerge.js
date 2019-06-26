@@ -22,6 +22,11 @@ function init(actorId) {
   return Frontend.init({actorId, backend: Backend})
 }
 
+function from(initialState) {
+  const [doc] = Frontend.from(initialState)
+  return doc
+}
+
 function change(doc, message, callback) {
   const [newDoc, change] = Frontend.change(doc, message, callback)
   return newDoc
@@ -116,7 +121,7 @@ function getHistory(doc) {
 }
 
 module.exports = {
-  init, change, emptyChange, undo, redo,
+  init, from, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
   equals, getHistory, uuid,
   Frontend, Backend,
@@ -126,6 +131,6 @@ module.exports = {
 }
 
 for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
+  'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }

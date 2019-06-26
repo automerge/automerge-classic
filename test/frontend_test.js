@@ -6,19 +6,39 @@ const uuid = require('../src/uuid')
 const { STATE } = require('../frontend/constants')
 
 describe('Frontend', () => {
-  it('should be an empty object by default', () => {
-    const doc = Frontend.init()
-    assert.deepEqual(doc, {})
-    assert(!!Frontend.getActorId(doc).match(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
-  })
+  describe('initializing', () => {
+    
+    it('should be an empty object by default', () => {
+      const doc = Frontend.init()
+      assert.deepEqual(doc, {})
+      assert(!!Frontend.getActorId(doc).match(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
+    })
 
-  it('should allow actorId assignment to be deferred', () => {
-    let doc0 = Frontend.init({deferActorId: true})
-    assert.strictEqual(Frontend.getActorId(doc0), undefined)
-    assert.throws(() => { Frontend.change(doc0, doc => doc.foo = 'bar') }, /Actor ID must be initialized with setActorId/)
-    const doc1 = Frontend.setActorId(doc0, uuid())
-    const [doc2, req] = Frontend.change(doc1, doc => doc.foo = 'bar')
-    assert.deepEqual(doc2, {foo: 'bar'})
+    it('should allow actorId assignment to be deferred', () => {
+      let doc0 = Frontend.init({ deferActorId: true })
+      assert.strictEqual(Frontend.getActorId(doc0), undefined)
+      assert.throws(() => { Frontend.change(doc0, doc => doc.foo = 'bar') }, /Actor ID must be initialized with setActorId/)
+      const doc1 = Frontend.setActorId(doc0, uuid())
+      const [doc2, req] = Frontend.change(doc1, doc => doc.foo = 'bar')
+      assert.deepEqual(doc2, { foo: 'bar' })
+    })
+
+    it('should allow instantiating from an existing object', () => {
+      const initialState = {
+        birds: {
+          wrens: 3,
+          magpies: 4
+        }
+      }
+      const [doc] = Frontend.from(initialState)
+      assert.deepEqual(doc, initialState)
+    })
+
+    it('should accept an empty object as initial state', () => {
+      const [doc] = Frontend.from({})
+      assert.deepEqual(doc, {})
+    })
+
   })
 
   describe('performing changes', () => {
