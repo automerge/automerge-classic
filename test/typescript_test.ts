@@ -24,12 +24,29 @@ describe('TypeScript support', () => {
       assert.deepEqual(s1, {key: 'value'})
     })
 
-    it('should allow a document type to be specified', () => {
+    it('should allow a document type to be specified as a parameter to `init`', () => {
       let s1 = Automerge.init<BirdList>()
-      assert.strictEqual(s1.birds, undefined)
-      s1 = Automerge.change(s1, doc => doc.birds = ['goldfinch'])
-      assert.strictEqual(s1.birds[0], 'goldfinch')
-      assert.deepEqual(s1, {birds: ['goldfinch']})
+
+      // Note: Technically, `s1` is not really a `BirdList` yet but just an empty object.
+      assert.equal(s1.hasOwnProperty('birds'), false)
+
+      // Since we're pulling the wool over TypeScript's eyes, it can't give us compile-time protection
+      // from something like this:
+      // assert.equal(s1.birds.length, 0) // Runtime error: Cannot read property 'length' of undefined
+
+      // Nevertheless this way seems more ergonomical (than having `init` return a type of `{}` or 
+      // `Partial<T>`, for example) because it allows us to have a single type for the object
+      // throughout its life, rather than having to recast it once its required fields have
+      // been populated. 
+      s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
+      assert.deepEqual(s1.birds, ['goldfinch'])
+    })
+
+    it('should allow a document type to be specified on the result of `init`', () => {
+      // This is 100% equivalent to passing the type parameter to `init`.
+      let s1: BirdList = Automerge.init()
+      let s2 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
+      assert.deepEqual(s2.birds, ['goldfinch'])
     })
 
     it('should allow the actorId to be configured', () => {
