@@ -310,7 +310,63 @@ describe('TypeScript support', () => {
   })
 
   describe('Automerge.Text', () => {
+    interface TextDoc {
+      text: Automerge.Text
+    }
 
+    let doc: TextDoc
+
+    beforeEach(() => {
+      doc = Automerge.change<TextDoc>(Automerge.init(), doc => (doc.text = new Automerge.Text()))
+    })
+
+    describe('insertAt', () => {
+      it('should support inserting a single element', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'abc'))
+        assert.strictEqual(JSON.stringify(doc.text), '"abc"')
+      })
+
+      it('should support inserting multiple elements', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+        assert.strictEqual(JSON.stringify(doc.text), '"abc"')
+      })
+    })
+
+    describe('deleteAt', () => {
+      beforeEach(() => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'c', 'd', 'e', 'f', 'g'))
+      })
+
+      it('should support deleting a single element without specifying `numDelete`', () => {
+        doc = Automerge.change(doc, doc => doc.text.deleteAt(2))
+        assert.strictEqual(JSON.stringify(doc.text), '"abdefg"')
+      })
+
+      it('should support deleting multiple elements', () => {
+        doc = Automerge.change(doc, doc => doc.text.deleteAt(3, 2))
+        assert.strictEqual(JSON.stringify(doc.text), '"abcfg"')
+      })
+  })
+
+    describe('get', () => {
+      it('should get the element at the given index', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'cdefg', 'hi', 'jkl'))
+        assert.strictEqual(doc.text.get(0), 'a')
+        assert.strictEqual(doc.text.get(2), 'cdefg')
+      })
+    })
+
+    describe('delegated read-only operations from `Array`', () => {
+      const a = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+      beforeEach(() => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ...a))
+  })
+
+      it('supports `indexOf`', () => assert.strictEqual(doc.text.indexOf('c'), 2))
+      it('supports `length`', () => assert.strictEqual(doc.text.length, 9))
+      it('supports `concat`', () => assert.strictEqual(doc.text.concat(['j']).length, 10))
+      it('supports `includes`', () => assert.strictEqual(doc.text.includes('q'), false))
+    })
   })
 
   describe('Automerge.Table', () => {
