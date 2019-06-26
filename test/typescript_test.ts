@@ -370,10 +370,117 @@ describe('TypeScript support', () => {
   })
 
   describe('Automerge.Table', () => {
+    const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
+    interface Book {
+      authors: string | string[]
+      title: string
+      isbn?: string
+    }
+
+    interface BookDb {
+      books: Automerge.Table<Book, ['authors', 'title', 'isbn']>
+    }
+
+    // Example data
+    const DDIA: Book = {
+      authors: ['Kleppmann, Martin'],
+      title: 'Designing Data-Intensive Applications',
+      isbn: '1449373321',
+    }
+    const RSDP: Book = {
+      authors: ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
+      title: 'Introduction to Reliable and Secure Distributed Programming',
+      isbn: '3-642-15259-7',
+    }
+
+    let s1: BookDb
+    let id: string
+
+    beforeEach(() => {
+      s1 = Automerge.change(Automerge.init<BookDb>(), doc => {
+        doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
+        id = doc.books.add(DDIA)
+      })
   })
 
-  describe('Automerge.Counter', () => {
+    it('supports `byId`', () => assert.deepEqual(s1.books.byId(id), DDIA))
+    it('supports `count`', () => assert.strictEqual(s1.books.count, 1))
+    it('supports `ids`', () => assert.deepEqual(s1.books.ids, [id]))
+    it('supports iteration', () => assert.deepEqual([...s1.books], [DDIA]))
+    it('supports `columns`', () => assert.deepEqual(s1.books.columns, ['authors', 'title', 'isbn']))
 
+    it('allows modifying the columns array', () => {
+      const s2 = Automerge.change(s1, doc => doc.books.columns.push('publisher'))
+      assert.deepEqual(s2.books.columns, ['authors', 'title', 'isbn', 'publisher'])
+      assert.deepEqual(s2.books.byId(id), DDIA)
+
+      // Note that if we add columns and want to actually use them, we need to recast the table to a
+      // new type e.g. without the `ts-ignore` flag, this would throw a type error:
+      // @ts-ignore
+      const p2 = s2.books.byId(id).publisher // Property 'publisher' does not exist on type book
+
+      // So we need to create new types:
+      interface BookDeluxe extends Book {
+        publisher?: string
+      }
+      interface BookDeluxeDb {
+        books: Automerge.Table<BookDeluxe, ['authors', 'title', 'isbn', 'publisher']>
+      }
+
+      const s3 = Automerge.change(
+        s2 as BookDeluxeDb, // Cast existing table to new type
+        doc => (doc.books.byId(id).publisher = "O'Reilly")
+      )
+      // Now we're off to the races
+      const p3 = s3.books.byId(id).publisher
+      assert.deepEqual(p3, "O'Reilly")
+
+      // and we can even do this:
+      Automerge.change(s3, doc => {
+        doc.books.add([
+          ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
+          'Introduction to Reliable and Secure Distributed Programming',
+          '3-642-15259-7',
+          'Springer',
+        ])
+      })
+    })
+
+    it('supports `remove`', () => {
+      const s2 = Automerge.change(s1, doc => doc.books.remove(id))
+      assert.strictEqual(s2.books.count, 0)
+    })
+
+    describe('supports `add`', () => {
+      it('accepts value passed as correctly-ordered array', () => {
+        let bookId: string
+        const s2 = Automerge.change(s1, doc => {
+          bookId = doc.books.add([
+            ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
+            'Introduction to Reliable and Secure Distributed Programming',
+            '3-642-15259-7',
+          ])
+        })
+        assert.deepEqual(s2.books.byId(bookId), RSDP)
+      })
+
+      it('accepts value passed as object', () => {
+        let bookId: string
+        const s2 = Automerge.change(s1, doc => (bookId = doc.books.add(RSDP)))
+        assert.deepEqual(s2.books.byId(bookId), RSDP)
+      })
+    })
+
+    describe('standard array operations on rows', () => {
+      it('supports `filter`', () =>
+        assert.deepEqual(s1.books.filter(book => book.authors.length === 1), [DDIA]))
+      it('supports `find`', () =>
+        assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), DDIA))
+      it('supports `map`', () =>
+        assert.deepEqual(s1.books.map<string>(book => book.title), [DDIA.title]))
+    })
   })
+
+  describe('Automerge.Counter', () => {})
 })
