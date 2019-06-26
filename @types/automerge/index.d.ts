@@ -61,7 +61,7 @@ declare module 'automerge' {
 
   class Text extends List<string> {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
-    get?(index: number): string
+    get(index: number): string
     getElemId(index: number): string
   }
 
