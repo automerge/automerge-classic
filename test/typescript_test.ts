@@ -387,8 +387,6 @@ describe('TypeScript support', () => {
   })
 
   describe('Automerge.Table', () => {
-    const ROOT_ID = '00000000-0000-0000-0000-000000000000'
-
     interface Book {
       authors: string | string[]
       title: string
@@ -500,15 +498,6 @@ describe('TypeScript support', () => {
   })
 
   describe('Automerge.Counter', () => {
-    interface CountMap {
-      [name: string]: number
-    }
-
-    interface AnimalMap {
-      birds: CountMap
-      mammals?: CountMap
-    }
-
     interface CounterMap {
       [name: string]: Counter
     }
