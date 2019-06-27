@@ -24,7 +24,6 @@ describe('Automerge', () => {
       assert.strictEqual(Automerge.getConflicts(s1, 'foo'), undefined)
     })
 
-    
     describe('initialization ', () => {
       it('should initially be an empty map', () => {
         assert.deepEqual(s1, {})
@@ -44,6 +43,12 @@ describe('Automerge', () => {
       it('should accept an empty object as initial state', () => {
         const doc = Automerge.from({})
         assert.deepEqual(doc, {})
+      })
+
+      it('should allow merging of an object initialized with `from`', () => {
+        let doc1 = Automerge.from({cards: []})
+        let doc2 = Automerge.merge(Automerge.init(), doc1)
+        assert.deepEqual(doc2, {cards: []})
       })
     })
 

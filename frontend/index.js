@@ -235,7 +235,7 @@ function init(options) {
  * https://github.com/automerge/automerge/issues/127#issuecomment-505454250
  */
 function from(initialState) {
-  return change(init(), 'Initialization', doc => doc = Object.assign(doc, initialState))
+  return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
 }
 
 

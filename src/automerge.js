@@ -23,8 +23,7 @@ function init(actorId) {
 }
 
 function from(initialState) {
-  const [doc] = Frontend.from(initialState)
-  return doc
+  return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
 }
 
 function change(doc, message, callback) {
