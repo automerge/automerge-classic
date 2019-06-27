@@ -7,6 +7,7 @@ declare module 'automerge' {
   function diff<T>(oldDoc: T, newDoc: T): Diff[]
   function emptyChange<T>(doc: T, message?: string): T
   function equals<T>(val1: T, val2: T): boolean
+  function from<T>(initialState: T): T
   function getActorId<T>(doc: T): string
   function getChanges<T>(oldDoc: T, newDoc: T): Change<T>[]
   function getConflicts<T>(doc: T, key: Key): any
@@ -105,6 +106,7 @@ declare module 'automerge' {
     function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
     function change<T>(doc: T, callback: ChangeFn<T>): [T, Change<T>]
     function emptyChange<T>(doc: T, message?: string): [T, Change<T>]
+    function from<T>(initialState: T): [T, Change<T>]
     function getActorId<T>(doc: T): string
     function getBackendState<T>(doc: T): T
     function getConflicts<T>(doc: T, key: Key): any

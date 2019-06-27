@@ -49,6 +49,13 @@ describe('TypeScript support', () => {
       assert.deepEqual(s2.birds, ['goldfinch'])
     })
 
+    it('should allow a document to be initialized with `from`', () => {
+      const s1 = Automerge.from<BirdList>({birds: []})
+      assert.strictEqual(s1.birds.length, 0)
+      const s2 = Automerge.change(s1, doc => doc.birds.push('magpie'))
+      assert.strictEqual(s2.birds[0], 'magpie')
+    })
+
     it('should allow the actorId to be configured', () => {
       let s1 = Automerge.init<BirdList>('actor1')
       assert.strictEqual(Automerge.getActorId(s1), 'actor1')
@@ -82,6 +89,13 @@ describe('TypeScript support', () => {
       const s1 = Frontend.setActorId(s0, uuid())
       const [s2, req] = Frontend.change(s1, doc => doc.number = 15)
       assert.deepEqual(s2, {number: 15})
+    })
+
+    it('should allow a frontend to be initialized with `from`', () => {
+      const [s1, req1] = Frontend.from<BirdList>({birds: []})
+      assert.strictEqual(s1.birds.length, 0)
+      const [s2, req2] = Frontend.change(s1, doc => doc.birds.push('magpie'))
+      assert.strictEqual(s2.birds[0], 'magpie')
     })
   })
 
