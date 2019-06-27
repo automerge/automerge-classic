@@ -34,10 +34,10 @@ describe('TypeScript support', () => {
       // from something like this:
       // assert.equal(s1.birds.length, 0) // Runtime error: Cannot read property 'length' of undefined
 
-      // Nevertheless this way seems more ergonomical (than having `init` return a type of `{}` or 
+      // Nevertheless this way seems more ergonomical (than having `init` return a type of `{}` or
       // `Partial<T>`, for example) because it allows us to have a single type for the object
       // throughout its life, rather than having to recast it once its required fields have
-      // been populated. 
+      // been populated.
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
       assert.deepEqual(s1.birds, ['goldfinch'])
     })
@@ -363,7 +363,7 @@ describe('TypeScript support', () => {
         doc = Automerge.change(doc, doc => doc.text.deleteAt(3, 2))
         assert.strictEqual(JSON.stringify(doc.text), '"abcfg"')
       })
-  })
+    })
 
     describe('get', () => {
       it('should get the element at the given index', () => {
@@ -377,7 +377,7 @@ describe('TypeScript support', () => {
       const a = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
       beforeEach(() => {
         doc = Automerge.change(doc, doc => doc.text.insertAt(0, ...a))
-  })
+      })
 
       it('supports `indexOf`', () => assert.strictEqual(doc.text.indexOf('c'), 2))
       it('supports `length`', () => assert.strictEqual(doc.text.length, 9))
@@ -419,7 +419,7 @@ describe('TypeScript support', () => {
         doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
         id = doc.books.add(DDIA)
       })
-  })
+    })
 
     it('supports `byId`', () => assert.deepEqual(s1.books.byId(id), DDIA))
     it('supports `count`', () => assert.strictEqual(s1.books.count, 1))
@@ -594,7 +594,7 @@ describe('TypeScript support', () => {
         // https://github.com/Microsoft/TypeScript/issues/2361
 
         // If we want to treat a counter value as a number, we have to explicitly cast it to keep
-        // TypeScript happy. 
+        // TypeScript happy.
 
         // We can cast by putting a `+` in front of it:
         birdCount = +doc1.birds
