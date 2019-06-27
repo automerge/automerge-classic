@@ -102,35 +102,24 @@ const Automerge = require('automerge')
 
 // Let's say doc1 is the application state on device 1.
 // Further down we'll simulate a second device.
-let doc1 = Automerge.init()
+// We initialize the document to initially contain an empty list of cards.
+let doc1 = Automerge.from({cards: []})
 
-// That initial state is just an empty object: {}.
 // The doc1 object is immutable -- you cannot change it directly (if you try,
 // you'll get an exception. To change it, you need to call
-// Automerge.change() with a callback in which you can mutate the state. You
-// can also include a human-readable description of the change, like a commit
-// message, which is stored in the change history (see below).
-
-doc1 = Automerge.change(doc1, 'Initialize card list', doc => {
-  doc.cards = []
-})
-
-// { cards: [] }
-
-// To change the state, you can use the regular JavaScript array mutation
-// methods such as push(). Internally, Automerge translates this mutable API
-// call into an update of the immutable state object. Note that we must pass in
-// doc1, and get back an updated object which we assign to the same variable
-// doc1. The original document object is not modified.
+// Automerge.change() and pass in the current state. The callback function is
+// then allowed to mutate the state. You can also include a human-readable
+// description of the change, like a commit message.
 
 doc1 = Automerge.change(doc1, 'Add card', doc => {
   doc.cards.push({title: 'Rewrite everything in Clojure', done: false})
 })
 
+// Now the state of doc1 is:
 // { cards: [ { title: 'Rewrite everything in Clojure', done: false } ] }
 
-// Automerge also defines an insertAt() method for inserting a new element at a particular
-// position in a list. You could equally well use splice(), if you prefer.
+// Automerge also defines an insertAt() method for inserting a new element at
+// a particular position in a list. Or you could use splice(), if you prefer.
 doc1 = Automerge.change(doc1, 'Add another card', doc => {
   doc.cards.insertAt(0, {title: 'Rewrite everything in Haskell', done: false})
 })
@@ -181,7 +170,7 @@ let finalDoc = Automerge.merge(doc1, doc2)
 
 Automerge.getHistory(finalDoc)
   .map(state => [state.change.message, state.snapshot.cards.length])
-// [ [ 'Initialize card list', 0 ],
+// [ [ 'Initialization', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],
 //   [ 'Mark card as done', 2 ],
@@ -201,6 +190,9 @@ If you pass in your own `actorId`, you must ensure that there can never be two d
 with the same actor ID. Even if you have two different processes running on the same machine, they
 must have distinct actor IDs. Unless you know what you are doing, it is recommended that you stick
 with the default, and let `actorId` be auto-generated.
+
+`Automerge.from(initialState)` creates a new Automerge document and populates it with the contents
+of the object `initialState`.
 
 `Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
 write to disk. The string contains an encoding of the full change history of the document
@@ -620,9 +612,9 @@ The project currently has a number of limitations that you should be aware of:
 * No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause
   the application state on other devices to become corrupted or go out of sync.
 * No security: there is currently no encryption, authentication, or access control.
-* Small number of collaborators: Automerge is designed for small-group collaborations. While there
-  is no hard limit on the number of devices that can update a document, performance will degrade
-  if you go beyond, say, 100 devices or so.
+* Storage overhead: Automerge needs to store additional metadata besides the actual objects you
+  create; for some datatypes, such as text, the overhead is substantial. We are working on
+  improving this.
 * ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
 
 
