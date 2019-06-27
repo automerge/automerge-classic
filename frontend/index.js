@@ -232,6 +232,14 @@ function init(options) {
 }
 
 /**
+ * Returns a new document object initialized with the given state.
+ */
+function from(initialState) {
+  return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
+}
+
+
+/**
  * Changes a document `doc` according to actions taken by the local user.
  * `message` is an optional descriptive string that is attached to the change.
  * The actual change is made within the callback function `callback`, which is
@@ -457,7 +465,7 @@ function getElementIds(list) {
 }
 
 module.exports = {
-  init, change, emptyChange, applyPatch,
+  init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts,
   getBackendState, getElementIds,

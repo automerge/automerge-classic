@@ -10,10 +10,6 @@ describe('Automerge', () => {
       s1 = Automerge.init()
     })
 
-    it('should initially be an empty map', () => {
-      assert.deepEqual(s1, {})
-    })
-
     it('should not mutate objects', () => {
       s2 = Automerge.change(s1, doc => doc.foo = 'bar')
       assert.strictEqual(s1.foo, undefined)
@@ -26,6 +22,34 @@ describe('Automerge', () => {
       assert.strictEqual(Automerge.getConflicts(s1, 'foo'), undefined)
       s1 = Automerge.change(s1, 'change', doc => doc.foo = 'two')
       assert.strictEqual(Automerge.getConflicts(s1, 'foo'), undefined)
+    })
+
+    describe('initialization ', () => {
+      it('should initially be an empty map', () => {
+        assert.deepEqual(s1, {})
+      })
+
+      it('should allow instantiating from an existing object', () => {
+        const initialState = {
+          birds: {
+            wrens: 3,
+            magpies: 4,
+          },
+        }
+        const doc = Automerge.from(initialState)
+        assert.deepEqual(doc, initialState)
+      })
+
+      it('should accept an empty object as initial state', () => {
+        const doc = Automerge.from({})
+        assert.deepEqual(doc, {})
+      })
+
+      it('should allow merging of an object initialized with `from`', () => {
+        let doc1 = Automerge.from({cards: []})
+        let doc2 = Automerge.merge(Automerge.init(), doc1)
+        assert.deepEqual(doc2, {cards: []})
+      })
     })
 
     describe('changes', () => {
