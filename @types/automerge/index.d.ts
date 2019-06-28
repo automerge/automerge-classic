@@ -1,34 +1,38 @@
 declare module 'automerge' {
-  function applyChanges<T>(doc: T, changes: Change<T>[]): T
-  function canRedo<T>(doc: T): boolean
-  function canUndo<T>(doc: T): boolean
-  function change<T>(doc: T, message: string, callback: ChangeFn<T>): T
-  function change<T>(doc: T, callback: ChangeFn<T>): T
-  function diff<T>(oldDoc: T, newDoc: T): Diff[]
-  function emptyChange<T>(doc: T, message?: string): T
+  type Doc<T> = DeepFreeze<T>
+  type DocShape<D> = D extends Doc<infer T> ? T :
+                     never;
+
+  function applyChanges<D, T = DocShape<D>>(doc: D, changes: Change<T>[]): D
+  function canRedo<T>(doc: Doc<T>): boolean
+  function canUndo<T>(doc: Doc<T>): boolean
+  function change<D, T = DocShape<D>>(doc: D, message: string, callback: ChangeFn<T>): D
+  function change<D, T = DocShape<D>>(doc: D, callback: ChangeFn<T>): D
+  function diff<D extends Doc<any>>(olddoc: D, newdoc: D): Diff[]
+  function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
   function equals<T>(val1: T, val2: T): boolean
-  function from<T>(initialState: T): T
-  function getActorId<T>(doc: T): string
-  function getChanges<T>(oldDoc: T, newDoc: T): Change<T>[]
-  function getConflicts<T>(doc: T, key: Key): any
-  function getHistory<T>(doc: T): State<T>[]
-  function getMissingDeps<T>(doc: T): Clock
-  function getObjectById<T>(doc: T, objectId: UUID): any
+  function from<T>(initialState: T | Doc<T>): Doc<T>
+  function getActorId<T>(doc: Doc<T>): string
+  function getChanges<D, T = DocShape<D>>(olddoc: D, newdoc: D): Change<T>[]
+  function getConflicts<T>(doc: Doc<T>, key: Key): any
+  function getHistory<D, T = DocShape<D>>(doc: Doc<T>): State<T>[]
+  function getMissingDeps<T>(doc: Doc<T>): Clock
+  function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
-  function init<T>(actorId?: string): T
-  function load<T>(doc: string, actorId?: string): T
-  function merge<T>(localDoc: T, remoteDoc: T): T
-  function redo<T>(doc: T, message?: string): T
-  function save<T>(doc: T): string
-  function undo<T>(doc: T, message?: string): T
+  function init<T>(actorId?: string): Doc<T>
+  function load<T>(doc: string, actorId?: string): Doc<T>
+  function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
+  function redo<T>(doc: Doc<T>, message?: string): Doc<T>
+  function save<T>(doc: Doc<T>): string
+  function undo<T>(doc: Doc<T>, message?: string): Doc<T>
 
   class Connection<T> {
     constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
     close(): void
-    docChanged(docId: string, doc: T): void
+    docChanged(docId: string, doc: Doc<T>): void
     maybeSendChanges(docId: string): void
     open(): void
-    receiveMsg(msg: Message<T>): T
+    receiveMsg(msg: Message<T>): Doc<T>
     sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
   }
 
@@ -55,13 +59,29 @@ declare module 'automerge' {
     sort(arg?: Function | string | string[]): void
   }
 
+  type ReadonlyTable<T, KeyOrder extends Array<keyof T>> = Omit<Table<T, KeyOrder>, 'add' | 'remove' | 'set' | 'sort'> & {
+    [Symbol.iterator](): {
+      next: () => {
+        done: boolean
+        value: T
+      }
+    },
+  }
+
   class List<T> extends Array<T> {
     insertAt?(index: number, ...args: T[]): List<T>
     deleteAt?(index: number, numDelete?: number): List<T>
   }
 
+  type ReadonlyList<T> = ReadonlyArray<T>;
+
   class Text extends List<string> {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
+    get(index: number): string
+    getElemId(index: number): string
+  }
+
+  type ReadonlyText = ReadonlyList<string> &  {
     get(index: number): string
     getElemId(index: number): string
   }
@@ -70,16 +90,16 @@ declare module 'automerge' {
     constructor()
     applyChanges(docId: string, changes: Change<T>[]): T
     getDoc(docId: string): T
-    setDoc(docId: string, doc: T): void
+    setDoc(docId: string, doc: Doc<T>): void
     registerHandler(handler: Handler<T>): void
     unregisterHandler(handler: Handler<T>): void
   }
 
-  class WatchableDoc<T> {
-    constructor(doc: T)
-    applyChanges(changes: Change<T>[]): T
-    get(): T
-    set(doc: T): void
+  class WatchableDoc<D, T = DocShape<D>> {
+    constructor(doc: D)
+    applyChanges(changes: Change<T>[]): D
+    get(): D
+    set(doc: D): void
     registerHandler(handler: Handler<T>): void
     unregisterHandler(handler: Handler<T>): void
   }
@@ -100,24 +120,24 @@ declare module 'automerge' {
   }
 
   namespace Frontend {
-    function applyPatch<T>(doc: T, patch: Patch): T
-    function canRedo<T>(doc: T): boolean
-    function canUndo<T>(doc: T): boolean
-    function change<T>(doc: T, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
-    function change<T>(doc: T, callback: ChangeFn<T>): [T, Change<T>]
-    function emptyChange<T>(doc: T, message?: string): [T, Change<T>]
-    function from<T>(initialState: T): [T, Change<T>]
-    function getActorId<T>(doc: T): string
-    function getBackendState<T>(doc: T): T
-    function getConflicts<T>(doc: T, key: Key): any
+    function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
+    function canRedo<T>(doc: Doc<T>): boolean
+    function canUndo<T>(doc: Doc<T>): boolean
+    function change<D, T = DocShape<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [T, Change<T>]
+    function change<D, T = DocShape<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
+    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
+    function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
+    function getActorId<T>(doc: Doc<T>): string
+    function getBackendState<T>(doc: Doc<T>): Doc<T>
+    function getConflicts<T>(doc: Doc<T>, key: Key): any
     function getElementIds(list: any): string[]
-    function getObjectById<T>(doc: T, objectId: UUID): T
-    function getObjectId<T>(doc: T): UUID
-    function init<T>(actorId?: string): T
-    function init<T>(options?: any): T
-    function redo<T>(doc: T, message?: string): [T, Change<T>]
-    function setActorId<T>(doc: T, actorId: string): T
-    function undo<T>(doc: T, message?: string): [T, Change<T>]
+    function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
+    function getObjectId<T>(doc: Doc<T>): UUID
+    function init<T>(actorId?: string): Doc<T>
+    function init<T>(options?: any): Doc<T>
+    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
+    function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
+    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
   }
 
   namespace Backend {
@@ -140,7 +160,7 @@ declare module 'automerge' {
   const uuid: UUIDFactory
 
   type ChangeFn<T> = (doc: T) => void
-  type Handler<T> = (docId: string, doc: T) => void
+  type Handler<T> = (docId: string, doc: Doc<T>) => void
   type Key = string | number
   type UUID = string
   type filterFn<T> = (elem: T) => boolean
@@ -211,12 +231,12 @@ declare module 'automerge' {
   }
 
   type RequestType =
-    | 'change' 
+    | 'change'
     | 'redo'
     | 'undo'
 
   type OpAction =
-    | 'ins' 
+    | 'ins'
     | 'del'
     | 'inc'
     | 'link'
@@ -234,11 +254,32 @@ declare module 'automerge' {
 
   type CollectionType =
     | 'list'
-    | 'map' 
+    | 'map'
     | 'table'
     | 'text'
 
   type DataType = 'counter' | 'timestamp'
+
+
+  // Type utility function: DeepFreeze
+  // Generates a readonly version of a given object, array, or map type applied recursively to the nested members of the root type.
+  // It's like TypeScript's `readonly`, but goes all the way down a tree.
+  type DeepFreeze<T> =
+    T extends Function ? T :
+    T extends Text ? ReadonlyText :
+    T extends List<infer E> ? DeepFreezeList<E> :
+    T extends Table<infer R, infer KeyOrder> ? DeepFreezeTable<R, KeyOrder> :
+    T extends ReadonlyArray<infer R> ? DeepFreezeArray<R> :
+    T extends Map<infer K, infer V> ? DeepFreezeMap<K, V> :
+    T extends object ? DeepFreezeObject<T> :
+    T
+
+
+  interface DeepFreezeList<E> extends ReadonlyList<DeepFreeze<E>> {}
+  interface DeepFreezeTable<R, KeyOrder> extends ReadonlyTable<DeepFreeze<R>, Array<keyof DeepFreeze<R>>> {}
+  interface DeepFreezeArray<T> extends ReadonlyArray<DeepFreeze<T>> {}
+  interface DeepFreezeMap<K, V> extends ReadonlyMap<DeepFreeze<K>, DeepFreeze<V>> {}
+  type DeepFreezeObject<T> = { readonly [P in keyof T]: DeepFreeze<T[P]> }
 
 }
 
@@ -265,11 +306,10 @@ type KeyArray<T, KeyOrder extends Array<keyof T>> =
 //
 // function add(b: Book | BookTuple): void
 // ```
-// Now the argument for `Table.add` can either be a `Book` object, or an array of values for each 
-// of the properties of `Book`, in the order given. 
+// Now the argument for `Table.add` can either be a `Book` object, or an array of values for each
+// of the properties of `Book`, in the order given.
 // ```
 // add({authors, title, date}) // valid
 // add([authors, title, date]) // also valid
 // ```
 type TupleFromInterface<T, KeyOrder extends Array<keyof T>> = { [I in keyof KeyOrder]: Lookup<T, KeyOrder[I]> }
-

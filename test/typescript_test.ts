@@ -1,7 +1,7 @@
 import * as assert from 'assert'
 import uuid from 'uuid'
 import * as Automerge from 'automerge'
-import { Backend, Frontend, Counter} from 'automerge'
+import { Backend, Frontend, Counter, Doc} from 'automerge'
 
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
@@ -44,7 +44,7 @@ describe('TypeScript support', () => {
 
     it('should allow a document type to be specified on the result of `init`', () => {
       // This is 100% equivalent to passing the type parameter to `init`.
-      let s1: BirdList = Automerge.init()
+      let s1: Doc<BirdList> = Automerge.init()
       let s2 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
       assert.deepEqual(s2.birds, ['goldfinch'])
     })
@@ -133,7 +133,7 @@ describe('TypeScript support', () => {
     })
 
     it('should support list modifications', () => {
-      let s1: BirdList = Automerge.init<BirdList>()
+      let s1: Doc<BirdList> = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => doc.birds = ['goldfinch'])
       s1 = Automerge.change(s1, doc => {
         doc.birds.insertAt(1, 'greenfinch', 'bullfinch', 'chaffinch')
@@ -345,7 +345,7 @@ describe('TypeScript support', () => {
       text: Automerge.Text
     }
 
-    let doc: TextDoc
+    let doc: Doc<TextDoc>
 
     beforeEach(() => {
       doc = Automerge.change<TextDoc>(Automerge.init(), doc => (doc.text = new Automerge.Text()))
@@ -423,7 +423,7 @@ describe('TypeScript support', () => {
       isbn: '3-642-15259-7',
     }
 
-    let s1: BookDb
+    let s1: Doc<BookDb>
     let id: string
 
     beforeEach(() => {
