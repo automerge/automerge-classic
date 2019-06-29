@@ -3,9 +3,6 @@ declare module 'automerge' {
   type Proxy<D> = D extends Doc<infer T> ? T : never
   type ChangeFn<T> = (doc: T) => void
   type Handler<T> = (docId: string, doc: Doc<T>) => void
-  type Key = string | number
-  type UUID = string
-  type filterFn<T> = (elem: T) => boolean
 
   // Automerge.* functions
 
@@ -22,7 +19,7 @@ declare module 'automerge' {
 
   function getActorId<T>(doc: Doc<T>): string
   function getChanges<D, T = Proxy<D>>(olddoc: D, newdoc: D): Change<T>[]
-  function getConflicts<T>(doc: Doc<T>, key: Key): any
+  function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Clock
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
@@ -50,7 +47,7 @@ declare module 'automerge' {
     rows(): T[]
     set(id: UUID, value: T): void
     set(id: 'columns', value: string[]): void
-  }
+  }  
 
   class List<T> extends Array<T> {
     insertAt?(index: number, ...args: T[]): List<T>
@@ -126,7 +123,7 @@ declare module 'automerge' {
     function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): Doc<T>
-    function getConflicts<T>(doc: Doc<T>, key: Key): any
+    function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
     function getObjectId<T>(doc: Doc<T>): UUID
@@ -151,6 +148,7 @@ declare module 'automerge' {
 
   // Internals
 
+  type UUID = string
   type UUIDGenerator = () => UUID
   interface UUIDFactory extends UUIDGenerator {
     setFactory: (generator: UUIDGenerator) => void
