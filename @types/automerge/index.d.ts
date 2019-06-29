@@ -12,7 +12,6 @@ declare module 'automerge' {
   type Proxy<D> = D extends Doc<infer T> ? T : never
 
   type ChangeFn<T> = (doc: T) => void
-  type Handler<T> = (docId: string, doc: Doc<T>) => void
 
   // Automerge.* functions
 
@@ -103,22 +102,24 @@ declare module 'automerge' {
     sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
   }
 
+  type DocSetHandler<T> = (docId: string, doc: Doc<T>) => void
   class DocSet<T> {
     constructor()
     applyChanges(docId: string, changes: Change<T>[]): T
     getDoc(docId: string): T
     setDoc(docId: string, doc: Doc<T>): void
-    registerHandler(handler: Handler<T>): void
-    unregisterHandler(handler: Handler<T>): void
+    registerHandler(handler: DocSetHandler<T>): void
+    unregisterHandler(handler: DocSetHandler<T>): void
   }
 
+  type WatchableDocHandler<T> = (doc: Doc<T>) => void
   class WatchableDoc<D, T = Proxy<D>> {
     constructor(doc: D)
     applyChanges(changes: Change<T>[]): D
     get(): D
     set(doc: D): void
-    registerHandler(handler: Handler<T>): void
-    unregisterHandler(handler: Handler<T>): void
+    registerHandler(handler: WatchableDocHandler<T>): void
+    unregisterHandler(handler: WatchableDocHandler<T>): void
   }
 
   // Front & back
