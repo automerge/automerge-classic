@@ -1,6 +1,13 @@
 declare module 'automerge' {
   type Doc<T> = FreezeObject<T>
   type Proxy<D> = D extends Doc<infer T> ? T : never
+  type ChangeFn<T> = (doc: T) => void
+  type Handler<T> = (docId: string, doc: Doc<T>) => void
+  type Key = string | number
+  type UUID = string
+  type filterFn<T> = (elem: T) => boolean
+
+  // Automerge.* functions
 
   function init<T>(actorId?: string): Doc<T>
   function from<T>(initialState: T | Doc<T>): Doc<T>
@@ -30,15 +37,7 @@ declare module 'automerge' {
   function redo<T>(doc: Doc<T>, message?: string): Doc<T>
   function undo<T>(doc: Doc<T>, message?: string): Doc<T>
 
-  class Connection<T> {
-    constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
-    close(): void
-    docChanged(docId: string, doc: Doc<T>): void
-    maybeSendChanges(docId: string): void
-    open(): void
-    receiveMsg(msg: Message<T>): Doc<T>
-    sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
-  }
+  // custom CRDT types
 
   class Table<T, KeyOrder extends Array<keyof T>> {
     constructor(columns: KeyArray<T, KeyOrder>)
@@ -84,16 +83,32 @@ declare module 'automerge' {
     value: number
   }
 
+  // Readonly variants
+
   type ReadonlyTable<T, KeyOrder extends Array<keyof T>> = Omit<
     Table<T, KeyOrder>,
     'add' | 'remove' | 'set' | 'sort'
   > & {
     [Symbol.iterator](): Iterator<T>
   }
+
   type ReadonlyList<T> = ReadonlyArray<T>
+
   type ReadonlyText = ReadonlyList<string> & {
     get(index: number): string
     getElemId(index: number): string
+  }
+
+  // Utility classes
+
+  class Connection<T> {
+    constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
+    close(): void
+    docChanged(docId: string, doc: Doc<T>): void
+    maybeSendChanges(docId: string): void
+    open(): void
+    receiveMsg(msg: Message<T>): Doc<T>
+    sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
   }
 
   class DocSet<T> {
@@ -114,15 +129,13 @@ declare module 'automerge' {
     unregisterHandler(handler: Handler<T>): void
   }
 
+  // Front & back
+
   namespace Frontend {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
     function canRedo<T>(doc: Doc<T>): boolean
     function canUndo<T>(doc: Doc<T>): boolean
-    function change<D, T = Proxy<D>>(
-      doc: D,
-      message: string | undefined,
-      callback: ChangeFn<T>
-    ): [T, Change<T>]
+    function change<D, T = Proxy<D>>( doc: D, message: string | undefined, callback: ChangeFn<T> ): [T, Change<T>]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
     function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
@@ -151,18 +164,14 @@ declare module 'automerge' {
     function merge<T>(local: T, remote: T): T
   }
 
+  // Internals
+
   type UUIDGenerator = () => UUID
   interface UUIDFactory extends UUIDGenerator {
     setFactory: (generator: UUIDGenerator) => void
     reset: () => void
   }
   const uuid: UUIDFactory
-
-  type ChangeFn<T> = (doc: T) => void
-  type Handler<T> = (docId: string, doc: Doc<T>) => void
-  type Key = string | number
-  type UUID = string
-  type filterFn<T> = (elem: T) => boolean
 
   interface Message<T> {
     docId: string
@@ -259,7 +268,8 @@ declare module 'automerge' {
 
   type DataType =
     | 'counter' //..
-    | 'timestamp' 
+    | 'timestamp'
+
 
   // TYPE UTILITY FUNCTIONS
 
@@ -282,34 +292,35 @@ declare module 'automerge' {
   interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
   interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
   type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
+
+  // Type utility function: KeyArray
+  // Enforces that the array provided for key order only contains keys of T
+  type KeyArray<T, KeyOrder extends Array<keyof T>> = keyof T extends KeyOrder[number]
+    ? KeyOrder
+    : Exclude<keyof T, KeyOrder[number]>[]
+
+  // Type utility function: TupleFromInterface
+  // Generates a tuple containing the types of each property of T, in the order provided by KeyOrder. For example:
+  // ```
+  // interface Book {
+  //   authors: string[]
+  //   title: string
+  //   date: Date
+  // }
+  // type BookTuple = TupleFromInterface<Book, ['authors', 'title', 'date']> // [ string[], string, Date ]
+  //
+  // function add(b: Book | BookTuple): void
+  // ```
+  // Now the argument for `Table.add` can either be a `Book` object, or an array of values for each
+  // of the properties of `Book`, in the order given.
+  // ```
+  // add({authors, title, date}) // valid
+  // add([authors, title, date]) // also valid
+  // ```
+  type TupleFromInterface<T, KeyOrder extends Array<keyof T>> = {
+    [I in keyof KeyOrder]: Lookup<T, KeyOrder[I]>
+  }
+
+  type Lookup<T, K> = K extends keyof T ? T[K] : never
+
 }
-
-// Type utility function: KeyArray
-// Enforces that the array provided for key order only contains keys of T
-type KeyArray<T, KeyOrder extends Array<keyof T>> = keyof T extends KeyOrder[number]
-  ? KeyOrder
-  : Exclude<keyof T, KeyOrder[number]>[]
-
-// Type utility function: TupleFromInterface
-// Generates a tuple containing the types of each property of T, in the order provided by KeyOrder. For example:
-// ```
-// interface Book {
-//   authors: string[]
-//   title: string
-//   date: Date
-// }
-// type BookTuple = TupleFromInterface<Book, ['authors', 'title', 'date']> // [ string[], string, Date ]
-//
-// function add(b: Book | BookTuple): void
-// ```
-// Now the argument for `Table.add` can either be a `Book` object, or an array of values for each
-// of the properties of `Book`, in the order given.
-// ```
-// add({authors, title, date}) // valid
-// add([authors, title, date]) // also valid
-// ```
-type TupleFromInterface<T, KeyOrder extends Array<keyof T>> = {
-  [I in keyof KeyOrder]: Lookup<T, KeyOrder[I]>
-}
-
-type Lookup<T, K> = K extends keyof T ? T[K] : never
