@@ -1,6 +1,16 @@
 declare module 'automerge' {
+  /**
+   * The return type of `Automerge.init<T>()`, `Automerge.change<T>()`, etc. where `T` is the
+   * original type. It is a recursively frozen version of the original type.
+   */
   type Doc<T> = FreezeObject<T>
+
+  /**
+   * The argument pased to the callback of a `change` function is a mutable proxy of the original
+   * type. `Proxy<D>` is the inverse of `Doc<T>`: `Proxy<Doc<T>>` is `T`, and `Doc<Proxy<D>>` is `D`.
+   */
   type Proxy<D> = D extends Doc<infer T> ? T : never
+
   type ChangeFn<T> = (doc: T) => void
   type Handler<T> = (docId: string, doc: Doc<T>) => void
 
