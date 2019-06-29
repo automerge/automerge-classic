@@ -1,7 +1,6 @@
 declare module 'automerge' {
   type Doc<T> = DeepFreeze<T>
-  type DocShape<D> = D extends Doc<infer T> ? T :
-                     never;
+  type DocShape<D> = D extends Doc<infer T> ? T : never;
 
   function applyChanges<D, T = DocShape<D>>(doc: D, changes: Change<T>[]): D
   function canRedo<T>(doc: Doc<T>): boolean
@@ -261,6 +260,8 @@ declare module 'automerge' {
   type DataType = 'counter' | 'timestamp'
 
 
+  // TYPE UTILITY FUNCTIONS
+
   // Type utility function: DeepFreeze
   // Generates a readonly version of a given object, array, or map type applied recursively to the nested members of the root type.
   // It's like TypeScript's `readonly`, but goes all the way down a tree.
@@ -282,8 +283,6 @@ declare module 'automerge' {
   type DeepFreezeObject<T> = { readonly [P in keyof T]: DeepFreeze<T[P]> }
 
 }
-
-// TYPE UTILITY FUNCTIONS
 
 type Lookup<T, K> = K extends keyof T ? T[K] : never
 
