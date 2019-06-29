@@ -57,7 +57,7 @@ declare module 'automerge' {
     rows(): T[]
     set(id: UUID, value: T): void
     set(id: 'columns', value: string[]): void
-  }  
+  }
 
   class List<T> extends Array<T> {
     insertAt?(index: number, ...args: T[]): List<T>
@@ -127,7 +127,11 @@ declare module 'automerge' {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
     function canRedo<T>(doc: Doc<T>): boolean
     function canUndo<T>(doc: Doc<T>): boolean
-    function change<D, T = Proxy<D>>( doc: D, message: string | undefined, callback: ChangeFn<T> ): [T, Change<T>]
+    function change<D, T = Proxy<D>>(
+      doc: D,
+      message: string | undefined,
+      callback: ChangeFn<T>
+    ): [T, Change<T>]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
     function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
@@ -263,7 +267,6 @@ declare module 'automerge' {
     | 'counter' //..
     | 'timestamp'
 
-
   // TYPE UTILITY FUNCTIONS
 
   // Type utility function: Freeze
@@ -315,5 +318,4 @@ declare module 'automerge' {
   }
 
   type Lookup<T, K> = K extends keyof T ? T[K] : never
-
 }
