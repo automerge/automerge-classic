@@ -1,5 +1,5 @@
 declare module 'automerge' {
-  type Doc<T> = DeepFreeze<T>
+  type Doc<T> = DeepFreezeObject<T>
   type DocShape<D> = D extends Doc<infer T> ? T : never;
 
   function applyChanges<D, T = DocShape<D>>(doc: D, changes: Change<T>[]): D
@@ -272,9 +272,7 @@ declare module 'automerge' {
     T extends Table<infer R, infer KeyOrder> ? DeepFreezeTable<R, KeyOrder> :
     T extends ReadonlyArray<infer R> ? DeepFreezeArray<R> :
     T extends Map<infer K, infer V> ? DeepFreezeMap<K, V> :
-    T extends object ? DeepFreezeObject<T> :
-    T
-
+    DeepFreezeObject<T> 
 
   interface DeepFreezeList<E> extends ReadonlyList<DeepFreeze<E>> {}
   interface DeepFreezeTable<R, KeyOrder> extends ReadonlyTable<DeepFreeze<R>, Array<keyof DeepFreeze<R>>> {}
