@@ -1,22 +1,22 @@
 declare module 'automerge' {
-  type Doc<T> = DeepFreezeObject<T>
-  type DocShape<D> = D extends Doc<infer T> ? T : never
+  type Doc<T> = FreezeObject<T>
+  type Proxy<D> = D extends Doc<infer T> ? T : never
 
   function init<T>(actorId?: string): Doc<T>
   function from<T>(initialState: T | Doc<T>): Doc<T>
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
-  function change<D, T = DocShape<D>>(doc: D, message: string, callback: ChangeFn<T>): D
-  function change<D, T = DocShape<D>>(doc: D, callback: ChangeFn<T>): D
+  function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
+  function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
-  function applyChanges<D, T = DocShape<D>>(doc: D, changes: Change<T>[]): D
+  function applyChanges<D, T = Proxy<D>>(doc: D, changes: Change<T>[]): D
   function diff<D extends Doc<any>>(olddoc: D, newdoc: D): Diff[]
   function equals<T>(val1: T, val2: T): boolean
 
   function getActorId<T>(doc: Doc<T>): string
-  function getChanges<D, T = DocShape<D>>(olddoc: D, newdoc: D): Change<T>[]
+  function getChanges<D, T = Proxy<D>>(olddoc: D, newdoc: D): Change<T>[]
   function getConflicts<T>(doc: Doc<T>, key: Key): any
-  function getHistory<D, T = DocShape<D>>(doc: Doc<T>): State<T>[]
+  function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Clock
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
@@ -105,7 +105,7 @@ declare module 'automerge' {
     unregisterHandler(handler: Handler<T>): void
   }
 
-  class WatchableDoc<D, T = DocShape<D>> {
+  class WatchableDoc<D, T = Proxy<D>> {
     constructor(doc: D)
     applyChanges(changes: Change<T>[]): D
     get(): D
@@ -118,12 +118,12 @@ declare module 'automerge' {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
     function canRedo<T>(doc: Doc<T>): boolean
     function canUndo<T>(doc: Doc<T>): boolean
-    function change<D, T = DocShape<D>>(
+    function change<D, T = Proxy<D>>(
       doc: D,
       message: string | undefined,
       callback: ChangeFn<T>
     ): [T, Change<T>]
-    function change<D, T = DocShape<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
+    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
     function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
     function getActorId<T>(doc: Doc<T>): string
@@ -263,26 +263,25 @@ declare module 'automerge' {
 
   // TYPE UTILITY FUNCTIONS
 
-  // Type utility function: DeepFreeze
+  // Type utility function: Freeze
   // Generates a readonly version of a given object, array, or map type applied recursively to the nested members of the root type.
   // It's like TypeScript's `readonly`, but goes all the way down a tree.
 
   // prettier-ignore
-  type DeepFreeze<T> = 
+  type Freeze<T> = 
     T extends Function ? T
     : T extends Text ? ReadonlyText
-    : T extends List<infer E> ? DeepFreezeList<E>
-    : T extends Table<infer R, infer KeyOrder> ? DeepFreezeTable<R, KeyOrder>
-    : T extends ReadonlyArray<infer R> ? DeepFreezeArray<R>
-    : T extends Map<infer K, infer V> ? DeepFreezeMap<K, V>
-    : DeepFreezeObject<T>
+    : T extends List<infer E> ? FreezeList<E>
+    : T extends Table<infer R, infer KeyOrder> ? FreezeTable<R, KeyOrder>
+    : T extends ReadonlyArray<infer R> ? FreezeArray<R>
+    : T extends Map<infer K, infer V> ? FreezeMap<K, V>
+    : FreezeObject<T>
 
-  interface DeepFreezeList<T> extends ReadonlyList<DeepFreeze<T>> {}
-  interface DeepFreezeTable<T, KeyOrder>
-    extends ReadonlyTable<DeepFreeze<T>, Array<keyof DeepFreeze<T>>> {}
-  interface DeepFreezeArray<T> extends ReadonlyArray<DeepFreeze<T>> {}
-  interface DeepFreezeMap<K, V> extends ReadonlyMap<DeepFreeze<K>, DeepFreeze<V>> {}
-  type DeepFreezeObject<T> = { readonly [P in keyof T]: DeepFreeze<T[P]> }
+  interface FreezeList<T> extends ReadonlyList<Freeze<T>> {}
+  interface FreezeTable<T, KeyOrder> extends ReadonlyTable<Freeze<T>, Array<keyof Freeze<T>>> {}
+  interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
+  interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
+  type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
 }
 
 // Type utility function: KeyArray
