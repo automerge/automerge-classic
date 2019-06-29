@@ -39,22 +39,17 @@ declare module 'automerge' {
 
   // custom CRDT types
 
-  class Table<T, KeyOrder extends Array<keyof T>> {
+  class Table<T, KeyOrder extends Array<keyof T>> extends Array<T> {
     constructor(columns: KeyArray<T, KeyOrder>)
-    [Symbol.iterator](): Iterator<T>
     add(item: T | TupleFromInterface<T, KeyOrder>): UUID
     byId(id: UUID): T
     columns: string[]
     count: number
     ids: UUID[]
-    filter(fn: filterFn<T>): T[]
-    find(fn: filterFn<T>): T
-    map<U>(fn: (elem: T) => U): U[]
     remove(id: UUID): void
     rows(): T[]
     set(id: UUID, value: T): void
     set(id: 'columns', value: string[]): void
-    sort(arg?: Function | string | string[]): void
   }
 
   class List<T> extends Array<T> {
@@ -85,19 +80,9 @@ declare module 'automerge' {
 
   // Readonly variants
 
-  type ReadonlyTable<T, KeyOrder extends Array<keyof T>> = Omit<
-    Table<T, KeyOrder>,
-    'add' | 'remove' | 'set' | 'sort'
-  > & {
-    [Symbol.iterator](): Iterator<T>
-  }
-
-  type ReadonlyList<T> = ReadonlyArray<T>
-
-  type ReadonlyText = ReadonlyList<string> & {
-    get(index: number): string
-    getElemId(index: number): string
-  }
+  type ReadonlyTable<T, KeyOrder extends Array<keyof T>> = ReadonlyArray<T> & Table<T, KeyOrder>
+  type ReadonlyList<T> = ReadonlyArray<T> & List<T>
+  type ReadonlyText = ReadonlyList<string> & Text
 
   // Utility classes
 
@@ -281,14 +266,14 @@ declare module 'automerge' {
   type Freeze<T> = 
     T extends Function ? T
     : T extends Text ? ReadonlyText
-    : T extends List<infer E> ? FreezeList<E>
-    : T extends Table<infer R, infer KeyOrder> ? FreezeTable<R, KeyOrder>
-    : T extends ReadonlyArray<infer R> ? FreezeArray<R>
+    : T extends Table<infer T, infer KeyOrder> ? FreezeTable<T, KeyOrder>
+    : T extends List<infer T> ? FreezeList<T>
+    : T extends Array<infer T> ? FreezeArray<T>
     : T extends Map<infer K, infer V> ? FreezeMap<K, V>
     : FreezeObject<T>
 
-  interface FreezeList<T> extends ReadonlyList<Freeze<T>> {}
   interface FreezeTable<T, KeyOrder> extends ReadonlyTable<Freeze<T>, Array<keyof Freeze<T>>> {}
+  interface FreezeList<T> extends ReadonlyList<Freeze<T>> {}
   interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
   interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
   type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
