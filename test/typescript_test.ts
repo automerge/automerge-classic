@@ -17,7 +17,7 @@ interface NumberBox {
 describe('TypeScript support', () => {
   describe('Automerge.init()', () => {
     it('should allow a document to be `any`', () => {
-      let s1: any = Automerge.init()
+      let s1 = Automerge.init<any>()
       s1 = Automerge.change(s1, doc => doc.key = 'value')
       assert.strictEqual(s1.key, 'value')
       assert.strictEqual(s1.nonexistent, undefined)
@@ -43,7 +43,8 @@ describe('TypeScript support', () => {
     })
 
     it('should allow a document type to be specified on the result of `init`', () => {
-      // This is 100% equivalent to passing the type parameter to `init`.
+      // This is equivalent to passing the type parameter to `init`; note that the result is a
+      // `Doc`, which is frozen
       let s1: Doc<BirdList> = Automerge.init()
       let s2 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
       assert.deepEqual(s2.birds, ['goldfinch'])
@@ -64,7 +65,7 @@ describe('TypeScript support', () => {
     })
 
     it('should allow a frontend to be `any`', () => {
-      const s0: any = Frontend.init()
+      const s0 = Frontend.init<any>()
       const [s1, req1] = Frontend.change(s0, doc => doc.key = 'value')
       assert.strictEqual(s1.key, 'value')
       assert.strictEqual(s1.nonexistent, undefined)
@@ -101,7 +102,7 @@ describe('TypeScript support', () => {
 
   describe('saving and loading', () => {
     it('should allow an `any` type document to be loaded', () => {
-      let s1: any = Automerge.init()
+      let s1 = Automerge.init<any>()
       s1 = Automerge.change(s1, doc => doc.key = 'value')
       let s2: any = Automerge.load(Automerge.save(s1))
       assert.strictEqual(s2.key, 'value')
@@ -348,7 +349,7 @@ describe('TypeScript support', () => {
     let doc: Doc<TextDoc>
 
     beforeEach(() => {
-      doc = Automerge.change<TextDoc>(Automerge.init(), doc => (doc.text = new Automerge.Text()))
+      doc = Automerge.change(Automerge.init<TextDoc>(), doc => (doc.text = new Automerge.Text()))
     })
 
     describe('insertAt', () => {
