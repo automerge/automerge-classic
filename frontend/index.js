@@ -232,7 +232,8 @@ function init(options) {
 }
 
 /**
- * Returns a new document object initialized with the given state.
+ * Returns a new document object with the given initial state. 
+ * https://github.com/automerge/automerge/issues/127#issuecomment-505454250
  */
 function from(initialState) {
   return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
