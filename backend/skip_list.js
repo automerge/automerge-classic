@@ -25,11 +25,10 @@ class Node {
     this.key = key
     this.value = value
     this.level = level
-    this.prevKey = Object.freeze(prevKey)
-    this.nextKey = Object.freeze(nextKey)
-    this.prevCount = Object.freeze(prevCount)
-    this.nextCount = Object.freeze(nextCount)
-    Object.freeze(this)
+    this.prevKey = prevKey
+    this.nextKey = nextKey
+    this.prevCount = prevCount
+    this.nextCount = nextCount
   }
 
   setValue (key, value) {
@@ -338,7 +337,7 @@ function makeInstance(length, nodes, randomSource) {
   instance.length = length
   instance._nodes = nodes
   instance._randomSource = randomSource
-  return Object.freeze(instance)
+  return instance
 }
 
 module.exports = {SkipList}

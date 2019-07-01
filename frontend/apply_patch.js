@@ -1,5 +1,5 @@
 const { ROOT_ID, isObject, parseElemId } = require('../src/common')
-const { OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
@@ -142,7 +142,7 @@ function parentMapObject(objectId, cache, updated) {
       }
     }
 
-    if (conflictsUpdate) {
+    if (conflictsUpdate && cache[ROOT_ID][OPTIONS].freeze) {
       Object.freeze(conflictsUpdate)
     }
   }
@@ -302,7 +302,7 @@ function parentListObject(objectId, cache, updated) {
       }
     }
 
-    if (conflictsUpdate) {
+    if (conflictsUpdate && cache[ROOT_ID][OPTIONS].freeze) {
       Object.freeze(conflictsUpdate)
     }
   }

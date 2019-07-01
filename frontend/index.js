@@ -25,12 +25,14 @@ function updateRootObject(doc, updated, inbound, state) {
   Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, STATE,    {value: state})
 
-  for (let objectId of Object.keys(updated)) {
-    if (updated[objectId] instanceof Table) {
-      updated[objectId]._freeze()
-    } else {
-      Object.freeze(updated[objectId])
-      Object.freeze(updated[objectId][CONFLICTS])
+  if (doc[OPTIONS].freeze) {
+    for (let objectId of Object.keys(updated)) {
+      if (updated[objectId] instanceof Table) {
+        updated[objectId]._freeze()
+      } else {
+        Object.freeze(updated[objectId])
+        Object.freeze(updated[objectId][CONFLICTS])
+      }
     }
   }
 
@@ -40,8 +42,10 @@ function updateRootObject(doc, updated, inbound, state) {
     }
   }
 
-  Object.freeze(updated)
-  Object.freeze(inbound)
+  if (doc[OPTIONS].freeze) {
+    Object.freeze(updated)
+    Object.freeze(inbound)
+  }
   return newDoc
 }
 
