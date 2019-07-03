@@ -45,7 +45,7 @@ and merging**:
 ## Features and Design Principles
 
 * **Network-agnostic**. Automerge is a pure data structure library that does not care about what kind of
-  network you use: client/server, peer-to-peer, Bluetooth, carrier pigeon, whatever, anything goes.
+  network you use: client/server, peer-to-peer, Bluetooth, USB drive in the mail, whatever, anything goes.
   Bindings to particular networking technologies are handled by separate libraries. For example, see
   [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge in a
   peer-to-peer model using [WebRTC](https://webrtc.org/), and
@@ -54,13 +54,9 @@ and merging**:
 * **Immutable state**. An Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
-  functional reactive programming style of [Redux](http://redux.js.org/) and
-  [Elm](http://elm-lang.org/), for example. Internally, Automerge is built upon Facebook's
-  [Immutable.js](http://facebook.github.io/immutable-js/), but the Automerge API uses regular
-  JavaScript objects (using
-  [`Object.freeze`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze)
-  to prevent accidental mutation).
-* **Automatic merging**. Automerge is a so-called Conflict-Free Replicated Data Type
+  functional reactive programming style of [React](https://reactjs.org) and
+  [Redux](http://redux.js.org/), for example.
+* **Automatic merging**. Automerge is a *Conflict-Free Replicated Data Type*
   ([CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)), which allows
   concurrent changes on different devices to be merged automatically without requiring any central
   server. It is based on [academic research on JSON CRDTs](https://arxiv.org/abs/1608.03960), but
@@ -87,13 +83,19 @@ Otherwise, clone this repository, and then you can use the following commands:
 
 ## Example Usage
 
-The following code samples give a quick overview of how to use Automerge.
 For examples of real-life applications built upon Automerge, check out:
 
-* [Trellis](https://github.com/automerge/trellis), a project management tool
-  in the style of [Trello](https://trello.com/).
+* [Farm](https://github.com/inkandswitch/farm), a programmable, collaborative
+  computing environment
+* [Capstone](https://github.com/inkandswitch/capstone), a tablet-based
+  note-taking and idea-development tool
+  ([blog post](https://www.inkandswitch.com/capstone-manuscript.html))
 * [Pixelpusher](https://github.com/automerge/pixelpusher), a pixel art editor
   ([blog post](https://medium.com/@pvh/pixelpusher-real-time-peer-to-peer-collaboration-with-react-7c7bc8ecbf74)).
+* [Trellis](https://github.com/automerge/trellis), a project management tool
+  in the style of [Trello](https://trello.com/).
+
+The following code sample gives a quick overview of how to use Automerge.
 
 ```js
 // This is how you load Automerge in Node. In a browser, simply including the
