@@ -55,11 +55,7 @@ and merging**:
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
   functional reactive programming style of [Redux](http://redux.js.org/) and
-  [Elm](http://elm-lang.org/), for example. Internally, Automerge is built upon Facebook's
-  [Immutable.js](http://facebook.github.io/immutable-js/), but the Automerge API uses regular
-  JavaScript objects (using
-  [`Object.freeze`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze)
-  to prevent accidental mutation).
+  [Elm](http://elm-lang.org/), for example.
 * **Automatic merging**. Automerge is a so-called Conflict-Free Replicated Data Type
   ([CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)), which allows
   concurrent changes on different devices to be merged automatically without requiring any central
@@ -105,12 +101,11 @@ const Automerge = require('automerge')
 let doc1 = Automerge.init()
 
 // That initial state is just an empty object: {}.
-// The doc1 object is immutable -- you cannot change it directly (if you try,
-// you'll either get an exception or your change will be silently ignored,
-// depending on your JavaScript engine). To change it, you need to call
-// Automerge.change() with a callback in which you can mutate the state. You
-// can also include a human-readable description of the change, like a commit
-// message, which is stored in the change history (see below).
+// The doc1 object is treated as immutable -- you must never change it
+// directly. To change it, you need to call Automerge.change() with a callback
+// in which you can mutate the state. You can also include a human-readable
+// description of the change, like a commit message, which is stored in the
+// change history (see below).
 
 doc1 = Automerge.change(doc1, 'Initialize card list', doc => {
   doc.cards = []
@@ -212,11 +207,17 @@ produced by `Automerge.save()`. The `actorId` argument is optional, and allows y
 a string that uniquely identifies the current node, like with `Automerge.init()`. Unless you know
 what you are doing, it is recommended that you omit the `actorId` argument.
 
+The document object should be treated as immutable, and should only be modified with
+`Automerge.change` as explained below. At the moment, Automerge does not enforce this immutability
+due to the [performance cost](https://github.com/automerge/automerge/issues/177). If you want to
+make the document object strictly immutable you can pass an option: `Automerge.init({freeze: true})`
+or `Automerge.load(string, {freeze: true})`.
+
 ### Manipulating and inspecting state
 
-`Automerge.change(doc, message, callback)` enables you to modify an Automerge document `doc`.
-The `doc` object is not modified directly, since it is immutable; instead, `Automerge.change()`
-returns an updated copy of the document. The `callback` function is called with a mutable copy of
+`Automerge.change(doc, message, callback)` enables you to modify an Automerge document `doc`,
+returning an updated copy of the document. The `doc` object **must never be modified** directly;
+rather, the `callback` function you pass to `Automerge.change()` is called with a mutable version of
 `doc`, as shown below. The `message` argument allows you to attach an arbitrary string to the
 change, which is not interpreted by Automerge, but saved as part of the change history. The `message`
 argument is optional; if you want to omit it, you can simply call `Automerge.change(doc, callback)`.
@@ -226,6 +227,8 @@ document:
 
 ```js
 newDoc = Automerge.change(currentDoc, doc => {
+  // NOTE: never modify `currentDoc` directly, only ever change `doc`!
+
   doc.property    = 'value'  // assigns a string value to a property
   doc['property'] = 'value'  // equivalent to the previous line
 
@@ -277,9 +280,7 @@ The `newDoc` returned by `Automerge.change()` is a regular JavaScript object con
 edits you made in the callback. Any parts of the document that you didn't change are carried over
 unmodified. The only special things about it are:
 
-* All objects in the document are made immutable using
-  [`Object.freeze()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze),
-  to ensure you don't accidentally modify them outside of an `Automerge.change()` callback.
+* It is treated as immutable, so all changes must go through `Automerge.change()`.
 * Every object has a unique ID, which you can get by passing the object to the
   `Automerge.getObjectId()` function. This ID is used by Automerge to track which object is which.
 * Objects also have information about *conflicts*, which is used when several users make changes
