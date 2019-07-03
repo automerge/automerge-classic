@@ -1,4 +1,4 @@
-const { ROOT_ID, isObject, parseElemId } = require('../src/common')
+const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
 const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text } = require('./text')
 const { Table, instantiateTable } = require('./table')
@@ -67,8 +67,8 @@ function cloneMapObject(originalObject, objectId) {
   if (originalObject && originalObject[OBJECT_ID] !== objectId) {
     throw new RangeError(`cloneMapObject ID mismatch: ${originalObject[OBJECT_ID]} !== ${objectId}`)
   }
-  let object = Object.assign({}, originalObject)
-  let conflicts = Object.assign({}, originalObject ? originalObject[CONFLICTS] : undefined)
+  let object = copyObject(originalObject)
+  let conflicts = copyObject(originalObject ? originalObject[CONFLICTS] : undefined)
   Object.defineProperty(object, CONFLICTS, {value: conflicts})
   Object.defineProperty(object, OBJECT_ID, {value: objectId})
   return object
@@ -135,7 +135,7 @@ function parentMapObject(objectId, cache, updated) {
       value = conflicts[actorId]
       if (isObject(value) && updated[value[OBJECT_ID]]) {
         if (!conflictsUpdate) {
-          conflictsUpdate = Object.assign({}, conflicts)
+          conflictsUpdate = copyObject(conflicts)
           object[CONFLICTS][key] = conflictsUpdate
         }
         conflictsUpdate[actorId] = updated[value[OBJECT_ID]]
@@ -295,7 +295,7 @@ function parentListObject(objectId, cache, updated) {
       value = conflicts[actorId]
       if (isObject(value) && updated[value[OBJECT_ID]]) {
         if (!conflictsUpdate) {
-          conflictsUpdate = Object.assign({}, conflicts)
+          conflictsUpdate = copyObject(conflicts)
           list[CONFLICTS][index] = conflictsUpdate
         }
         conflictsUpdate[actorId] = updated[value[OBJECT_ID]]

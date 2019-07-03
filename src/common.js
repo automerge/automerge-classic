@@ -5,6 +5,19 @@ function isObject(obj) {
 }
 
 /**
+ * Returns a shallow copy of the object `obj`. Faster than `Object.assign({}, obj)`.
+ * https://jsperf.com/cloning-large-objects/1
+ */
+function copyObject(obj) {
+  if (!isObject(obj)) return {}
+  let copy = {}
+  for (let key of Object.keys(obj)) {
+    copy[key] = obj[key]
+  }
+  return copy
+}
+
+/**
  * Returns true if all components of `clock1` are less than or equal to those
  * of `clock2` (both clocks given as Immutable.js Map objects). Returns false
  * if there is at least one component in which `clock1` is greater than
@@ -31,5 +44,5 @@ function parseElemId(elemId) {
 }
 
 module.exports = {
-  ROOT_ID, isObject, lessOrEqual, parseElemId
+  ROOT_ID, isObject, copyObject, lessOrEqual, parseElemId
 }

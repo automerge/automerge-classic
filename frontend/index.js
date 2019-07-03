@@ -1,5 +1,5 @@
 const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
-const { ROOT_ID, isObject } = require('../src/common')
+const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
@@ -89,9 +89,9 @@ function makeChange(doc, requestType, context, message) {
   if (!actor) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
   }
-  const state = Object.assign({}, doc[STATE])
+  const state = copyObject(doc[STATE])
   state.seq += 1
-  const deps = Object.assign({}, state.deps)
+  const deps = copyObject(state.deps)
   delete deps[actor]
 
   const request = {requestType, actor, seq: state.seq, deps}
@@ -110,7 +110,7 @@ function makeChange(doc, requestType, context, message) {
 
   } else {
     if (!context) context = new Context(doc, actor)
-    const queuedRequest = Object.assign({}, request)
+    const queuedRequest = copyObject(request)
     queuedRequest.before = doc
     queuedRequest.diffs = context.diffs
     state.requests = state.requests.slice() // shallow clone
@@ -128,7 +128,7 @@ function makeChange(doc, requestType, context, message) {
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
   const actor = getActorId(doc)
-  const inbound = Object.assign({}, doc[INBOUND])
+  const inbound = copyObject(doc[INBOUND])
   const updated = {}
   applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
   updateParentObjects(doc[CACHE], updated, inbound)
@@ -185,7 +185,7 @@ function transformRequest(request, patch) {
 
   local_loop:
   for (let local of request.diffs) {
-    local = Object.assign({}, local)
+    local = copyObject(local)
 
     for (let remote of patch.diffs) {
       // If the incoming patch modifies list indexes (because it inserts or removes),
@@ -310,7 +310,7 @@ function emptyChange(doc, message) {
  * request should be included in the patch, so that we can match them up here.
  */
 function applyPatch(doc, patch) {
-  const state = Object.assign({}, doc[STATE])
+  const state = copyObject(doc[STATE])
   let baseDoc
 
   if (state.requests.length > 0) {
@@ -319,9 +319,9 @@ function applyPatch(doc, patch) {
       if (state.requests[0].seq !== patch.seq) {
         throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${state.requests[0].seq}`)
       }
-      state.requests = state.requests.slice(1).map(req => Object.assign({}, req))
+      state.requests = state.requests.slice(1).map(copyObject)
     } else {
-      state.requests = state.requests.slice().map(req => Object.assign({}, req))
+      state.requests = state.requests.slice().map(copyObject)
     }
   } else {
     baseDoc = doc
