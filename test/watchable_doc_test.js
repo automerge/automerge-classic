@@ -12,8 +12,7 @@ describe('Automerge.WatchableDoc', () => {
     changes = Automerge.getChanges(beforeDoc, afterDoc)
     watchDoc = new WatchableDoc(beforeDoc)
   })
-  
-  it('should have a document inside the docset', () => {
+  it('should have a document', () => {
     assert.strictEqual(watchDoc.get(), beforeDoc)
   })
 
