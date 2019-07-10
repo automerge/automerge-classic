@@ -137,7 +137,7 @@ declare module 'automerge' {
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
     function from<T>(initialState: T | Doc<T>): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
-    function getBackendState<T>(doc: Doc<T>): Doc<T>
+    function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
@@ -150,15 +150,15 @@ declare module 'automerge' {
   }
 
   namespace Backend {
-    function applyChanges<T>(state: T, changes: Change[]): [T, Patch]
-    function applyLocalChange<T>(state: T, change: Change): [T, Patch]
-    function getChanges<T>(oldState: T, newState: T): Change[]
-    function getChangesForActor<T>(state: T, actorId: string): Change[]
-    function getMissingChanges<T>(state: T, clock: Clock): Change[]
-    function getMissingDeps<T>(state: T): Clock
-    function getPatch<T>(state: T): Patch
-    function init<T>(): T
-    function merge<T>(local: T, remote: T): T
+    function applyChanges(state: BackendState, changes: Change[]): [BackendState, Patch]
+    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch]
+    function getChanges(oldState: BackendState, newState: BackendState): Change[]
+    function getChangesForActor(state: BackendState, actorId: string): Change[]
+    function getMissingChanges(state: BackendState, clock: Clock): Change[]
+    function getMissingDeps(state: BackendState): Clock
+    function getPatch(state: BackendState): Patch
+    function init(): BackendState
+    function merge(local: BackendState, remote: BackendState): BackendState
   }
 
   // Internals
@@ -184,6 +184,10 @@ declare module 'automerge' {
   interface State<T> {
     change: Change
     snapshot: T
+  }
+
+  interface BackendState {
+    // no public methods or properties
   }
 
   interface Change {

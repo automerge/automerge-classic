@@ -188,8 +188,7 @@ describe('TypeScript support', () => {
     })
 
     it('should work with split frontend and backend', () => {
-      const s0 = Frontend.init<NumberBox>(),
-        b0 = Backend.init<NumberBox>()
+      const s0 = Frontend.init<NumberBox>(), b0 = Backend.init()
       const [s1, req1] = Frontend.change(s0, doc => (doc.number = 1))
       const [b1, patch1] = Backend.applyLocalChange(b0, req1)
       const s2 = Frontend.applyPatch(s1, patch1)
