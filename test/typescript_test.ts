@@ -625,7 +625,7 @@ describe('TypeScript support', () => {
     let beforeDoc: BirdList
     let afterDoc: BirdList
     let docSet: Automerge.DocSet<BirdList>
-    let changes: Automerge.Change<BirdList>[]
+    let changes: Automerge.Change[]
     let callback: Automerge.DocSetHandler<BirdList>
     const ID = '1'
 
@@ -663,7 +663,7 @@ describe('TypeScript support', () => {
     let beforeDoc: BirdList
     let afterDoc: BirdList
     let watchDoc: Automerge.WatchableDoc<BirdList>
-    let changes: Automerge.Change<BirdList>[]
+    let changes: Automerge.Change[]
     let callback: Automerge.WatchableDocHandler<BirdList>
 
     beforeEach(() => {

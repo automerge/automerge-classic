@@ -22,12 +22,12 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
-  function applyChanges<D, T = Proxy<D>>(doc: D, changes: Change<T>[]): D
+  function applyChanges<T>(doc: Doc<T>, changes: Change[]): Doc<T>
   function diff<D extends Doc<any>>(olddoc: D, newdoc: D): Diff[]
   function equals<T>(val1: T, val2: T): boolean
 
   function getActorId<T>(doc: Doc<T>): string
-  function getChanges<D, T = Proxy<D>>(olddoc: D, newdoc: D): Change<T>[]
+  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Clock
@@ -99,13 +99,13 @@ declare module 'automerge' {
     maybeSendChanges(docId: string): void
     open(): void
     receiveMsg(msg: Message<T>): Doc<T>
-    sendMsg(docId: string, clock: Clock, changes: Change<T>[]): void
+    sendMsg(docId: string, clock: Clock, changes: Change[]): void
   }
 
   type DocSetHandler<T> = (docId: string, doc: Doc<T>) => void
   class DocSet<T> {
     constructor()
-    applyChanges(docId: string, changes: Change<T>[]): T
+    applyChanges(docId: string, changes: Change[]): T
     getDoc(docId: string): T
     setDoc(docId: string, doc: Doc<T>): void
     registerHandler(handler: DocSetHandler<T>): void
@@ -115,7 +115,7 @@ declare module 'automerge' {
   type WatchableDocHandler<T> = (doc: Doc<T>) => void
   class WatchableDoc<D, T = Proxy<D>> {
     constructor(doc: D)
-    applyChanges(changes: Change<T>[]): D
+    applyChanges(changes: Change[]): D
     get(): D
     set(doc: D): void
     registerHandler(handler: WatchableDocHandler<T>): void
@@ -132,10 +132,10 @@ declare module 'automerge' {
       doc: D,
       message: string | undefined,
       callback: ChangeFn<T>
-    ): [T, Change<T>]
-    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change<T>]
-    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
-    function from<T>(initialState: T | Doc<T>): [Doc<T>, Change<T>]
+    ): [T, Change]
+    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
+    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): Doc<T>
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
@@ -144,17 +144,17 @@ declare module 'automerge' {
     function getObjectId<T>(doc: Doc<T>): UUID
     function init<T>(actorId?: string): Doc<T>
     function init<T>(options?: any): Doc<T>
-    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
+    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
-    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change<T>]
+    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
   }
 
   namespace Backend {
-    function applyChanges<T>(state: T, changes: Change<T>[]): [T, Patch]
-    function applyLocalChange<T>(state: T, change: Change<T>): [T, Patch]
-    function getChanges<T>(oldState: T, newState: T): Change<T>[]
-    function getChangesForActor<T>(state: T, actorId: string): Change<T>[]
-    function getMissingChanges<T>(state: T, clock: Clock): Change<T>[]
+    function applyChanges<T>(state: T, changes: Change[]): [T, Patch]
+    function applyLocalChange<T>(state: T, change: Change): [T, Patch]
+    function getChanges<T>(oldState: T, newState: T): Change[]
+    function getChangesForActor<T>(state: T, actorId: string): Change[]
+    function getMissingChanges<T>(state: T, clock: Clock): Change[]
     function getMissingDeps<T>(state: T): Clock
     function getPatch<T>(state: T): Patch
     function init<T>(): T
@@ -174,7 +174,7 @@ declare module 'automerge' {
   interface Message<T> {
     docId: string
     clock: Clock
-    changes?: Change<T>[]
+    changes?: Change[]
   }
 
   interface Clock {
@@ -182,18 +182,17 @@ declare module 'automerge' {
   }
 
   interface State<T> {
-    change: Change<T>
+    change: Change
     snapshot: T
   }
 
-  interface Change<T> {
+  interface Change {
     message?: string
     requestType?: RequestType
     actor: string
     seq: number
     deps: Clock
     ops: Op[]
-    before?: T
     diffs?: Diff[]
   }
 
