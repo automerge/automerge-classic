@@ -93,12 +93,12 @@ declare module 'automerge' {
   // Utility classes
 
   class Connection<T> {
-    constructor(docSet: DocSet<T>, sendMsg: (msg: Message<T>) => void)
+    constructor(docSet: DocSet<T>, sendMsg: (msg: Message) => void)
     close(): void
     docChanged(docId: string, doc: Doc<T>): void
     maybeSendChanges(docId: string): void
     open(): void
-    receiveMsg(msg: Message<T>): Doc<T>
+    receiveMsg(msg: Message): Doc<T>
     sendMsg(docId: string, clock: Clock, changes: Change[]): void
   }
 
@@ -171,7 +171,7 @@ declare module 'automerge' {
   }
   const uuid: UUIDFactory
 
-  interface Message<T> {
+  interface Message {
     docId: string
     clock: Clock
     changes?: Change[]
