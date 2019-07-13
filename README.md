@@ -64,13 +64,17 @@ and merging**:
   planning to publish more detail about it in the future.
 * **Fairly portable**. We're not yet making an effort to support old platforms, but we have tested
   Automerge in Node.js, Chrome, Firefox, Safari, MS Edge, and [Electron](https://electron.atom.io/).
+  For TypeScript users, Automerge comes with
+  [type definitions](https://github.com/automerge/automerge/blob/master/@types/automerge/index.d.ts)
+  that allow you to use Automerge in a type-safe way.
 
 
 ## Setup
 
 If you're using npm, `npm install automerge`.
 If you're using yarn, `yarn add automerge`.
-Then you can import it with `require('automerge')` as in the example below.
+Then you can import it with `require('automerge')` as in the example below
+(or `import * as Automerge from 'automerge'` if using ES2015 or TypeScript).
 
 Otherwise, clone this repository, and then you can use the following commands:
 

@@ -10,6 +10,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 - **Added** [#127]: New `Automerge.from` function creates a new document and initializes it
   with an initial state given as an argument ([@HerbCaudill], [@ept])
+- **Added** [#155]: Type definitions now allow TypeScript applications to use Automerge with
+  static type-checking ([@HerbCaudill], [@airhorns], [@aslakhellesoy], [@ept])
 - **Fixed** [#165]: Undo/redo now work when using separate frontend and backend ([@ept])
 
 ## [0.10.1] — 2019-05-17
@@ -214,6 +216,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 [#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
+[#155]: https://github.com/automerge/automerge/pull/155
 [#151]: https://github.com/automerge/automerge/issues/151
 [#150]: https://github.com/automerge/automerge/pull/150
 [#148]: https://github.com/automerge/automerge/pull/148
@@ -263,6 +266,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#30]: https://github.com/automerge/automerge/pull/30
 [#29]: https://github.com/automerge/automerge/issues/29
 
+[@airhorns]: https://github.com/airhorns
 [@aslakhellesoy]: https://github.com/aslakhellesoy
 [@CGNonofr]: https://github.com/CGNonofr
 [@EthanRBrown]: https://github.com/EthanRBrown
