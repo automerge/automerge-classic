@@ -1,5 +1,5 @@
 const { OBJECT_ID, CONFLICTS } = require('./constants')
-const { isObject } = require('../src/common')
+const { isObject, copyObject } = require('../src/common')
 
 function compareRows(properties, row1, row2) {
   for (let prop of properties) {
@@ -145,7 +145,7 @@ class Table {
     if (!this[OBJECT_ID]) {
       throw new RangeError('clone() requires the objectId to be set')
     }
-    return instantiateTable(this[OBJECT_ID], Object.assign({}, this.entries))
+    return instantiateTable(this[OBJECT_ID], copyObject(this.entries))
   }
 
   /**

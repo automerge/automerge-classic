@@ -67,7 +67,8 @@ describe('Automerge', () => {
         assert.deepEqual(s2, {first: 'one', second: 'two'})
       })
 
-      it('should prevent mutations outside of a change block', () => {
+      it('should freeze objects if desired', () => {
+        s1 = Automerge.init({freeze: true})
         s2 = Automerge.change(s1, doc => doc.foo = 'bar')
         try {
           s2.foo = 'lemon'

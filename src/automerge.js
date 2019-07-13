@@ -7,9 +7,8 @@ const { isObject } = require('./common')
 /**
  * Constructs a new frontend document that reflects the given list of changes.
  */
-function docFromChanges(actorId, changes) {
-  if (!actorId) throw new RangeError('actorId is required in docFromChanges')
-  const doc = Frontend.init({actorId, backend: Backend})
+function docFromChanges(options, changes) {
+  const doc = init(options)
   const [state, _] = Backend.applyChanges(Backend.init(), changes)
   const patch = Backend.getPatch(state)
   patch.state = state
@@ -18,15 +17,22 @@ function docFromChanges(actorId, changes) {
 
 ///// Automerge.* API
 
-function init(actorId) {
-  return Frontend.init({actorId, backend: Backend})
+function init(options) {
+  if (typeof options === 'string') {
+    options = {actorId: options}
+  } else if (typeof options === 'undefined') {
+    options = {}
+  } else if (!isObject(options)) {
+    throw new TypeError(`Unsupported options for init(): ${options}`)
+  }
+  return Frontend.init(Object.assign({backend: Backend}, options))
 }
 
 /**
  * Returns a new document object initialized with the given state.
  */
-function from(initialState) {
-  return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
+function from(initialState, options) {
+  return change(init(options), 'Initialization', doc => Object.assign(doc, initialState))
 }
 
 function change(doc, message, callback) {
@@ -49,8 +55,8 @@ function redo(doc, message) {
   return newDoc
 }
 
-function load(string, actorId) {
-  return docFromChanges(actorId || uuid(), transit.fromJSON(string))
+function load(string, options) {
+  return docFromChanges(options, transit.fromJSON(string))
 }
 
 function save(doc) {

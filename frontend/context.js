@@ -3,7 +3,7 @@ const { applyDiffs } = require('./apply_patch')
 const { Text, getElemId } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { isObject } = require('../src/common')
+const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -17,7 +17,7 @@ class Context {
     this.actorId = actorId
     this.cache = doc[CACHE]
     this.updated = {}
-    this.inbound = Object.assign({}, doc[INBOUND])
+    this.inbound = copyObject(doc[INBOUND])
     this.ops = []
     this.diffs = []
   }

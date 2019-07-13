@@ -63,7 +63,7 @@ describe('Automerge.Table', () => {
     let s1, rowId
 
     beforeEach(() => {
-      s1 = Automerge.change(Automerge.init(), doc => {
+      s1 = Automerge.change(Automerge.init({freeze: true}), doc => {
         doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
         rowId = doc.books.add(DDIA)
       })
