@@ -16,7 +16,8 @@ declare module 'automerge' {
   // Automerge.* functions
 
   function init<T>(actorId?: string): Doc<T>
-  function from<T>(initialState: T | Doc<T>): Doc<T>
+  function init<T>(options: any): Doc<T>
+  function from<T>(initialState: T | Doc<T>, options?: any): Doc<T>
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
   function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
@@ -34,7 +35,7 @@ declare module 'automerge' {
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
 
-  function load<T>(doc: string, actorId?: string): Doc<T>
+  function load<T>(doc: string, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): string
 
   function canRedo<T>(doc: Doc<T>): boolean

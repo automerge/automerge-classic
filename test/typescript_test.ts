@@ -64,6 +64,13 @@ describe('TypeScript support', () => {
       assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s2)), true)
     })
 
+    it('should allow the freeze option to be passed in', () => {
+      let s1 = Automerge.init<BirdList>({freeze: true})
+      let s2 = Automerge.change(s1, doc => (doc.birds = []))
+      assert.strictEqual(Object.isFrozen(s2), true)
+      assert.strictEqual(Object.isFrozen(s2.birds), true)
+    })
+
     it('should allow a frontend to be `any`', () => {
       const s0 = Frontend.init<any>()
       const [s1, req1] = Frontend.change(s0, doc => (doc.key = 'value'))
@@ -123,6 +130,14 @@ describe('TypeScript support', () => {
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
       let s2 = Automerge.load<BirdList>(Automerge.save(s1), 'actor1')
       assert.strictEqual(Automerge.getActorId(s2), 'actor1')
+    })
+
+    it('should allow the freeze option to be passed in', () => {
+      let s1 = Automerge.init<BirdList>()
+      s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
+      let s2 = Automerge.load<BirdList>(Automerge.save(s1), {freeze: true})
+      assert.strictEqual(Object.isFrozen(s2), true)
+      assert.strictEqual(Object.isFrozen(s2.birds), true)
     })
   })
 
