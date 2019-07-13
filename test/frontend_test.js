@@ -4,14 +4,14 @@ const Backend = require('../backend')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const uuid = require('../src/uuid')
 const { STATE } = require('../frontend/constants')
+const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
-describe('Frontend', () => {
+describe('Automerge.Frontend', () => {
   describe('initializing', () => {
-    
     it('should be an empty object by default', () => {
       const doc = Frontend.init()
       assert.deepEqual(doc, {})
-      assert(!!Frontend.getActorId(doc).match(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/))
+      assert(UUID_PATTERN.test(Frontend.getActorId(doc).toString()))
     })
 
     it('should allow actorId assignment to be deferred', () => {
@@ -38,7 +38,6 @@ describe('Frontend', () => {
       const [doc] = Frontend.from({})
       assert.deepEqual(doc, {})
     })
-
   })
 
   describe('performing changes', () => {
@@ -128,7 +127,7 @@ describe('Frontend', () => {
       const now = new Date()
       const [doc, req] = Frontend.change(Frontend.init(), doc => doc.now = now)
       const actor = Frontend.getActorId(doc)
-      assert(doc.now instanceof Date)
+      assert.strictEqual(doc.now instanceof Date, true)
       assert.strictEqual(doc.now.getTime(), now.getTime())
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
@@ -304,7 +303,7 @@ describe('Frontend', () => {
       assert.deepEqual(getRequests(doc), [])
     })
 
-    it('should not allow request patches to be applied out-of-order', () => {
+    it('should not allow request patches to be applied out of order', () => {
       const [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.blackbirds = 24)
       const [doc2, req2] = Frontend.change(doc1, doc => doc.partridges = 1)
       const actor = Frontend.getActorId(doc2)
@@ -332,7 +331,7 @@ describe('Frontend', () => {
 
       const diffs3 = [{obj: birds, type: 'list', action: 'insert', index: 1, value: 'bullfinch', elemId: `${uuid()}:2`}]
       const doc3 = Frontend.applyPatch(doc2, {actor: uuid(), seq: 1, diffs: diffs3})
-      // TODO this is not correct: order of 'bullfinch' and 'greenfinch' should depend on thier elemIds
+      // TODO this is not correct: order of 'bullfinch' and 'greenfinch' should depend on their elemIds
       assert.deepEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'bullfinch', 'greenfinch']})
 
       const diffs4 = [

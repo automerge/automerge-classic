@@ -1,1 +1,5 @@
 --use_strict
+--require ts-node/register
+--require tsconfig-paths/register
+--watch-extensions js,ts
+test/*test*.js test/*test*.ts

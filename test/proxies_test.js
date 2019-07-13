@@ -1,7 +1,8 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
-const { equalsOneOf } = require('./helpers')
+const { assertEqualsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
 describe('Automerge proxy API', () => {
   describe('root object', () => {
@@ -13,7 +14,7 @@ describe('Automerge proxy API', () => {
 
     it('should know its actor ID', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(Automerge.getActorId(doc)))
+        assert(UUID_PATTERN.test(Automerge.getActorId(doc).toString()))
         assert.notEqual(Automerge.getActorId(doc), ROOT_ID)
         assert.strictEqual(Automerge.getActorId(Automerge.init('customActorId')), 'customActorId')
       })
@@ -48,7 +49,7 @@ describe('Automerge proxy API', () => {
         doc.key1 = 'value1'
         assert.deepEqual(Object.keys(doc), ['key1'])
         doc.key2 = 'value2'
-        equalsOneOf(Object.keys(doc), ['key1', 'key2'], ['key2', 'key1'])
+        assertEqualsOneOf(Object.keys(doc), ['key1', 'key2'], ['key2', 'key1'])
       })
     })
 
@@ -58,7 +59,7 @@ describe('Automerge proxy API', () => {
         doc.key1 = 'value1'
         assert.deepEqual(Object.getOwnPropertyNames(doc), ['key1'])
         doc.key2 = 'value2'
-        equalsOneOf(Object.getOwnPropertyNames(doc), ['key1', 'key2'], ['key2', 'key1'])
+        assertEqualsOneOf(Object.getOwnPropertyNames(doc), ['key1', 'key2'], ['key2', 'key1'])
       })
     })
 
@@ -186,7 +187,7 @@ describe('Automerge proxy API', () => {
       })
     })
 
-    describe('should support standard read-only methods', () => {
+    describe('should support standard array read-only operations', () => {
       it('concat()', () => {
         Automerge.change(root, doc => {
           assert.deepEqual(doc.list.concat([4, 5, 6]), [1, 2, 3, 4, 5, 6])

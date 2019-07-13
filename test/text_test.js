@@ -1,6 +1,6 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
-const { equalsOneOf } = require('./helpers')
+const { assertEqualsOneOf } = require('./helpers')
 
 describe('Automerge.Text', () => {
   let s1, s2
@@ -28,7 +28,7 @@ describe('Automerge.Text', () => {
     s2 = Automerge.change(s2, doc => doc.text.insertAt(0, 'x', 'y', 'z'))
     s1 = Automerge.merge(s1, s2)
     assert.strictEqual(s1.text.length, 6)
-    equalsOneOf(s1.text.join(''), 'abcxyz', 'xyzabc')
+    assertEqualsOneOf(s1.text.join(''), 'abcxyz', 'xyzabc')
   })
 
   it('should handle text and other ops in the same change', () => {

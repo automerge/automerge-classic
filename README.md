@@ -108,8 +108,7 @@ const Automerge = require('automerge')
 let doc1 = Automerge.from({cards: []})
 
 // The doc1 object is immutable -- you cannot change it directly (if you try,
-// you'll either get an exception or your change will be silently ignored,
-// depending on your JavaScript engine). To change it, you need to call
+// you'll get an exception. To change it, you need to call
 // Automerge.change() and pass in the current state. The callback function is
 // then allowed to mutate the state. You can also include a human-readable
 // description of the change, like a commit message.

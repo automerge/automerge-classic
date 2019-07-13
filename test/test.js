@@ -1,7 +1,8 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
-const { equalsOneOf } = require('./helpers')
+const { assertEqualsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
+const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
 describe('Automerge', () => {
   describe('sequential use:', () => {
@@ -148,9 +149,9 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.list[0] = 123)
         s2 = Automerge.change(s2, doc => doc.list[0] = 321)
         s1 = Automerge.merge(s1, s2)
-        equalsOneOf(Automerge.getConflicts(s1.list, 0),
-                    {[Automerge.getActorId(s1)]: 123},
-                    {[Automerge.getActorId(s2)]: 321})
+        assertEqualsOneOf(Automerge.getConflicts(s1.list, 0),
+                          {[Automerge.getActorId(s1)]: 123},
+                          {[Automerge.getActorId(s2)]: 321})
         const resolved = Automerge.change(s1, doc => doc.list[0] = s1.list[0])
         assert.deepEqual(resolved, s1)
         assert.notStrictEqual(resolved, s1)
@@ -204,7 +205,7 @@ describe('Automerge', () => {
         let changes = Automerge.getChanges(Automerge.init(), s1)
         changes = JSON.parse(JSON.stringify(changes))
         s2 = Automerge.applyChanges(Automerge.init(), changes)
-        assert(s2.now instanceof Date)
+        assert.strictEqual(s2.now instanceof Date, true)
         assert.strictEqual(s2.now.getTime(), now.getTime())
       })
 
@@ -214,7 +215,7 @@ describe('Automerge', () => {
         let changes = Automerge.getChanges(Automerge.init(), s1)
         changes = JSON.parse(JSON.stringify(changes))
         s2 = Automerge.applyChanges(Automerge.init(), changes)
-        assert(s2.list[0] instanceof Date)
+        assert.strictEqual(s2.list[0] instanceof Date, true)
         assert.strictEqual(s2.list[0].getTime(), now.getTime())
       })
     })
@@ -313,8 +314,7 @@ describe('Automerge', () => {
     describe('nested maps', () => {
       it('should assign a UUID to nested maps', () => {
         s1 = Automerge.change(s1, doc => { doc.nested = {} })
-        const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-        assert(UUID_PATTERN.test(Automerge.getObjectId(s1.nested)))
+        assert.strictEqual(UUID_PATTERN.test(Automerge.getObjectId(s1.nested)), true)
         assert.notEqual(Automerge.getObjectId(s1.nested), ROOT_ID)
       })
 
@@ -625,7 +625,7 @@ describe('Automerge', () => {
       s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.foo, 'bar')
       assert.strictEqual(s3.hello, 'world')
-      assert.deepEqual(s3, {foo: 'bar', hello: 'world' })
+      assert.deepEqual(s3, {foo: 'bar', hello: 'world'})
       assert.strictEqual(Automerge.getConflicts(s3, 'foo'), undefined)
       assert.strictEqual(Automerge.getConflicts(s3, 'hello'), undefined)
     })
@@ -702,7 +702,8 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = ['list'])
       s3 = Automerge.change(s3, doc => doc.field = {thing: 'map'})
       s1 = Automerge.merge(Automerge.merge(s1, s2), s3)
-      equalsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
+      assertEqualsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
+
       if (s1.field === 'string') {
         assert.deepEqual(Automerge.getConflicts(s1, 'field'), {
           [Automerge.getActorId(s2)]: ['list'],
@@ -728,7 +729,7 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.field = {})
       s2 = Automerge.change(s2, doc => doc.field.innerKey = 42)
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.field, 'string', {innerKey: 42})
+      assertEqualsOneOf(s3.field, 'string', {innerKey: 42})
       if (s3.field === 'string') {
         assert.deepEqual(Automerge.getConflicts(s3, 'field'), {
           [Automerge.getActorId(s2)]: {innerKey: 42}
@@ -765,10 +766,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.config = {background: 'blue'})
       s2 = Automerge.change(s2, doc => doc.config = {logo_url: 'logo.png'})
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.config,
-        {background: 'blue'},
-        {logo_url: 'logo.png'}
-      )
+      assertEqualsOneOf(s3.config, {background: 'blue'}, {logo_url: 'logo.png'})
       if (s3.config.background === 'blue') {
         assert.deepEqual(Automerge.getConflicts(s3, 'config'), {
           [Automerge.getActorId(s2)]: {logo_url: 'logo.png'}
@@ -808,7 +806,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.birds.push('starling'))
       s2 = Automerge.change(s2, doc => doc.birds.push('chaffinch'))
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.birds, ['parakeet', 'starling', 'chaffinch'], ['parakeet', 'chaffinch', 'starling'])
+      assertEqualsOneOf(s3.birds, ['parakeet', 'starling', 'chaffinch'], ['parakeet', 'chaffinch', 'starling'])
       s2 = Automerge.merge(s2, s1)
       assert.deepEqual(s2, s3)
     })
@@ -862,7 +860,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.wisdom.push('to', 'be', 'is', 'to', 'do'))
       s2 = Automerge.change(s2, doc => doc.wisdom.push('to', 'do', 'is', 'to', 'be'))
       s3 = Automerge.merge(s1, s2)
-      equalsOneOf(s3.wisdom,
+      assertEqualsOneOf(s3.wisdom,
         ['to', 'be', 'is', 'to', 'do', 'to', 'do', 'is', 'to', 'be'],
         ['to', 'do', 'is', 'to', 'be', 'to', 'be', 'is', 'to', 'do'])
       // In case you're wondering: http://quoteinvestigator.com/2013/09/16/do-be-do/
@@ -1258,8 +1256,8 @@ describe('Automerge', () => {
     it('should generate a new random actor ID', () => {
       let s1 = Automerge.init()
       let s2 = Automerge.load(Automerge.save(s1))
-      assert(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(Automerge.getActorId(s1)))
-      assert(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(Automerge.getActorId(s2)))
+      assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s1).toString()), true)
+      assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s2).toString()), true)
       assert.notEqual(Automerge.getActorId(s1), Automerge.getActorId(s2))
     })
 
@@ -1316,11 +1314,10 @@ describe('Automerge', () => {
       s = Automerge.change(s, doc => doc.birds = ['mallard'])
       s = Automerge.change(s, doc => doc.birds.unshift('oystercatcher'))
       assert.deepEqual(Automerge.getHistory(s).map(state => state.snapshot), [
-                       {config: {background: 'blue'}},
-                       {config: {background: 'blue'},
-                        birds: ['mallard']},
-                       {config: {background: 'blue'},
-                        birds: ['oystercatcher', 'mallard']}])
+        {config: {background: 'blue'}},
+        {config: {background: 'blue'}, birds: ['mallard']},
+        {config: {background: 'blue'}, birds: ['oystercatcher', 'mallard']}
+      ])
     })
 
     it('should make change messages accessible', () => {

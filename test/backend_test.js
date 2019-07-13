@@ -4,7 +4,7 @@ const Backend = require('../backend')
 const uuid = require('../src/uuid')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
-describe('Backend', () => {
+describe('Automerge.Backend', () => {
   describe('incremental diffs', () => {
     it('should assign to a key in a map', () => {
       const actor = uuid()

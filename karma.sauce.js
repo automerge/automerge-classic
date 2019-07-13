@@ -34,10 +34,17 @@ module.exports = function(config) {
   }
 
   config.set({
-    frameworks: ['browserify', 'mocha'],
-    files: ['test/*.js'],
+    frameworks: ['browserify', 'mocha', 'karma-typescript'],
+    files: ['test/*.js', 'test/*.ts'],
     preprocessors: {
-      ['test/*.js']: ['browserify']
+      'test/*.js': ['browserify'],
+      'test/*.ts': ['karma-typescript']
+    },
+    karmaTypescriptConfig: {
+      tsconfig: './tsconfig.json',
+      compilerOptions: {
+        sourceMap: true,
+      }
     },
     browserify: {debug: true},
     port: 9876,

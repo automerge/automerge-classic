@@ -5,12 +5,12 @@ const Connection = Automerge.Connection
 const DocSet = Automerge.DocSet
 
 describe('Automerge.Connection', () => {
-  var doc1, nodes
+  let doc1, nodes
 
   beforeEach(() => {
     doc1 = Automerge.change(Automerge.init(), doc => doc.doc1 = 'doc1')
     nodes = []
-    for (let i=0; i<5; i++) nodes.push(new DocSet())
+    for (let i = 0; i < 5; i++) nodes.push(new DocSet())
   })
 
   // Mini-DSL for describing the message exchanges between nodes
@@ -52,8 +52,9 @@ describe('Automerge.Connection', () => {
 
     function checkCallCount(n1, n2) {
       if (spies[n1][n2].callCount !== count[n1][n2]) {
-        throw new Error('Expected ' + count[n1][n2] + ' messages from node ' + n1 + ' to node ' + n2 +
-                        ', but saw ' + spies[n1][n2].callCount + ' messages')
+        throw new Error(`Expected ${count[n1][n2]} messages from node ${n1} to node ${n2}, ` +
+                        `but saw ${spies[n1][n2].callCount} messages`
+        )
       }
     }
 
@@ -181,7 +182,7 @@ describe('Automerge.Connection', () => {
     ])
 
     assert.strictEqual(nodes[1].getDoc('doc1').doc1, 'doc1++')
-    assert.strictEqual(nodes[1].getDoc('doc1').doc1, 'doc1++')
+    assert.strictEqual(nodes[2].getDoc('doc1').doc1, 'doc1++')
   })
 
   it('should bidirectionally merge divergent document copies', () => {
@@ -225,10 +226,8 @@ describe('Automerge.Connection', () => {
       }}
     ])
 
-    assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {doc1: 'doc1', one: 'one', two: 'two'})
-    assert.deepEqual(nodes[1].getDoc('doc1'),
-                     {doc1: 'doc1', one: 'one', two: 'two'})
+    assert.deepEqual(nodes[1].getDoc('doc1'), {doc1: 'doc1', one: 'one', two: 'two'})
+    assert.deepEqual(nodes[2].getDoc('doc1'), {doc1: 'doc1', one: 'one', two: 'two'})
   })
 
   it('should forward incoming changes to other connections', () => {

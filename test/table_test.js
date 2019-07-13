@@ -4,7 +4,7 @@ const Frontend = Automerge.Frontend
 const Backend = Automerge.Backend
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const uuid = require('../src/uuid')
-const { equalsOneOf } = require('./helpers')
+const { assertEqualsOneOf } = require('./helpers')
 
 // Example data
 const DDIA = {
@@ -23,6 +23,7 @@ describe('Automerge.Table', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
       const [doc, req] = Frontend.change(Frontend.init(actor), doc => {
+        // isbn is deliberately not listed, to test use of undeclared columns
         doc.books = new Automerge.Table(['authors', 'title'])
       })
       const books = Frontend.getObjectId(doc.books)
@@ -169,7 +170,7 @@ describe('Automerge.Table', () => {
     assert.deepEqual(a2.books.byId(ddia), DDIA)
     assert.deepEqual(a2.books.byId(rsdp), RSDP)
     assert.strictEqual(a2.books.count, 2)
-    equalsOneOf(a2.books.ids, [ddia, rsdp], [rsdp, ddia])
+    assertEqualsOneOf(a2.books.ids, [ddia, rsdp], [rsdp, ddia])
   })
 
   it('should allow rows to be sorted in various ways', () => {
