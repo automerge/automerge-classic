@@ -12,6 +12,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   with an initial state given as an argument ([@HerbCaudill], [@ept])
 - **Added** [#155]: Type definitions now allow TypeScript applications to use Automerge with
   static type-checking ([@HerbCaudill], [@airhorns], [@aslakhellesoy], [@ept])
+- **Changed** [#177]: Automerge documents are no longer made immutable with `Object.freeze`
+  by default, due to the performance cost. Use the `{freeze: true}` option to continue
+  using immutable objects. ([@izuchukwu], [@ept])
 - **Fixed** [#165]: Undo/redo now work when using separate frontend and backend ([@ept])
 
 ## [0.10.1] — 2019-05-17
@@ -214,6 +217,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#177]: https://github.com/automerge/automerge/issues/177
 [#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
 [#155]: https://github.com/automerge/automerge/pull/155
@@ -271,6 +275,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@CGNonofr]: https://github.com/CGNonofr
 [@EthanRBrown]: https://github.com/EthanRBrown
 [@HerbCaudill]: https://github.com/HerbCaudill
+[@izuchukwu]: https://github.com/izuchukwu
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept
