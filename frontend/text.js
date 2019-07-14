@@ -1,8 +1,15 @@
 const { OBJECT_ID, ELEM_IDS, MAX_ELEM } = require('./constants')
+const uuid = require('../src/uuid')
+
 
 class Text {
-  constructor (objectId, elems, maxElem) {
-    return makeInstance(objectId, elems, maxElem)
+  constructor (text) {
+    if (text) {
+      const elems = text.split("").map(value => ({value}))
+      return makeTextInstance(undefined, elems, elems.length)
+    } else {
+      return makeTextInstance()
+    }
   }
 
   get length () {
@@ -50,7 +57,7 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
   }
 }
 
-function makeInstance(objectId, elems, maxElem) {
+function makeTextInstance(objectId, elems, maxElem) {
   const instance = Object.create(Text.prototype)
   instance[OBJECT_ID] = objectId
   instance.elems = elems || []
@@ -66,4 +73,4 @@ function getElemId(object, index) {
   return (object instanceof Text) ? object.getElemId(index) : object[ELEM_IDS][index]
 }
 
-module.exports = { Text, getElemId }
+module.exports = { Text, getElemId, makeTextInstance }
