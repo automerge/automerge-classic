@@ -109,6 +109,7 @@ declare module 'automerge' {
     applyChanges(docId: string, changes: Change[]): T
     getDoc(docId: string): T
     setDoc(docId: string, doc: Doc<T>): void
+    docIds: string[]
     registerHandler(handler: DocSetHandler<T>): void
     unregisterHandler(handler: DocSetHandler<T>): void
   }
