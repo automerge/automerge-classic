@@ -179,9 +179,7 @@ declare module 'automerge' {
     changes?: Change[]
   }
 
-  interface Clock {
-    [actorId: string]: number
-  }
+  type Clock = Map<string, number> // actorId => seq
 
   interface State<T> {
     change: Change
