@@ -20,7 +20,11 @@ declare module 'automerge' {
 
   type InitOptions =
     | string // = actorId
-    | { actorId?: string; deferActorId?: boolean }
+    | { 
+      actorId?: string
+      deferActorId?: boolean
+      freeze?: boolean 
+    }
 
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
