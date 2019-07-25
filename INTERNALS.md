@@ -230,9 +230,21 @@ generates the following JSON object describing the change:
 
 
 Applying operations to the local state
------------------------------------
+--------------------------------------
 
-TODO
+When a change is generated (whether locally or remotely), it is immediately
+added to the `queue` list of changes. Automerge then iterates through every
+change in `queue`, performing the following steps for each pending change:
+* The local state is checked to see if the change is causally ready (described
+  below). If a change is not causally ready, then it is skipped and Automerge
+  moves on to the next pending change. If the change is causally ready, then
+  Automerge continues with the next step.
+* The change is applied. This step updates several different parts of the state
+  and is described in depth below.
+
+### TODO
+
+This section is still a work in progress. More to come!
 
 
 Querying the local state
