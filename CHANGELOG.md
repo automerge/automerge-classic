@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Changed** [#183]: `Frontend.from()` now accepts initialization options ([@HerbCaudill], [@ept])
+
 ## [0.11.0] — 2019-07-13
 
 - **Added** [#127]: New `Automerge.from` function creates a new document and initializes it
@@ -220,6 +222,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#183]: https://github.com/automerge/automerge/pull/183
 [#177]: https://github.com/automerge/automerge/issues/177
 [#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
