@@ -364,7 +364,6 @@ function init() {
     .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
     .set('clock',    Map())
     .set('deps',     Map())
-    .set('local',    List())
     .set('undoPos',   0)
     .set('undoStack', List())
     .set('redoStack', List())
