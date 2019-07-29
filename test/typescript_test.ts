@@ -113,6 +113,14 @@ describe('TypeScript support', () => {
       const [s2, req2] = Frontend.change(s1, doc => doc.birds.push('magpie'))
       assert.strictEqual(s2.birds[0], 'magpie')
     })
+
+    it('should allow options to be passed to Frontend.from()', () => {
+      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '123' })
+      assert.strictEqual(Frontend.getActorId(s1), '123')
+      assert.deepEqual(s1, { birds: [] })
+      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '123')
+      assert.strictEqual(Frontend.getActorId(s2), '123')
+    })
   })
 
   describe('saving and loading', () => {

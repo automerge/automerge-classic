@@ -144,15 +144,14 @@ declare module 'automerge' {
     ): [T, Change]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
-    function from<T>(initialState: T | Doc<T>): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
     function getObjectId<T>(doc: Doc<T>): UUID
-    function init<T>(actorId?: string): Doc<T>
-    function init<T>(options?: any): Doc<T>
+    function init<T>(options?: InitOptions): Doc<T>
     function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
     function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
