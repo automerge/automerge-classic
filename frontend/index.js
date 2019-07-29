@@ -238,8 +238,8 @@ function init(options) {
 /**
  * Returns a new document object initialized with the given state.
  */
-function from(initialState) {
-  return change(init(), 'Initialization', doc => Object.assign(doc, initialState))
+function from(initialState, options) {
+  return change(init(options), 'Initialization', doc => Object.assign(doc, initialState))
 }
 
 

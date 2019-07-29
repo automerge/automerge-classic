@@ -15,9 +15,17 @@ declare module 'automerge' {
 
   // Automerge.* functions
 
-  function init<T>(actorId?: string): Doc<T>
-  function init<T>(options: any): Doc<T>
-  function from<T>(initialState: T | Doc<T>, options?: any): Doc<T>
+  function init<T>(options?: InitOptions): Doc<T>
+  function from<T>(initialState: T | Doc<T>, options?: InitOptions): Doc<T>
+
+  type InitOptions =
+    | string // = actorId
+    | { 
+      actorId?: string
+      deferActorId?: boolean
+      freeze?: boolean 
+    }
+
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
   function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D

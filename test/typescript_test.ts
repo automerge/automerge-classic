@@ -57,6 +57,14 @@ describe('TypeScript support', () => {
       assert.strictEqual(s2.birds[0], 'magpie')
     })
 
+    it('should allow passing options when initializing with `from`', () => {
+      const actorId = '123'
+      const s1 = Automerge.from<BirdList>({ birds: [] }, actorId)
+      assert.strictEqual(Automerge.getActorId(s1), '123')
+      const s2 = Automerge.from<BirdList>({ birds: [] }, { actorId })
+      assert.strictEqual(Automerge.getActorId(s2), '123')
+    })
+
     it('should allow the actorId to be configured', () => {
       let s1 = Automerge.init<BirdList>('actor1')
       assert.strictEqual(Automerge.getActorId(s1), 'actor1')

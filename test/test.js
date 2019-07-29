@@ -31,14 +31,15 @@ describe('Automerge', () => {
       })
 
       it('should allow instantiating from an existing object', () => {
-        const initialState = {
-          birds: {
-            wrens: 3,
-            magpies: 4,
-          },
-        }
+        const initialState = { birds: { wrens: 3, magpies: 4 }}
         const doc = Automerge.from(initialState)
         assert.deepEqual(doc, initialState)
+      })
+
+      it('should allow passing an actorId when instantiating from an existing object', () => {
+        const actorId = '123'
+        let doc = Automerge.from({ foo: 1 }, actorId)
+        assert.strictEqual(Automerge.getActorId(doc), '123')
       })
 
       it('should accept an empty object as initial state', () => {
