@@ -1,6 +1,6 @@
 const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
 const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
-const { Text, makeTextInstance } = require('./text')
+const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
@@ -320,9 +320,9 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
     if (cache[objectId]) {
       const elems = cache[objectId].elems.slice()
       const maxElem = cache[objectId][MAX_ELEM]
-      updated[objectId] = makeTextInstance(objectId, elems, maxElem)
+      updated[objectId] = instantiateText(objectId, elems, maxElem)
     } else {
-      updated[objectId] = makeTextInstance(objectId)
+      updated[objectId] = instantiateText(objectId, [], 0)
     }
   }
 
@@ -379,7 +379,7 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
 
     startIndex += 1
   }
-  updated[objectId] = makeTextInstance(objectId, elems, maxElem)
+  updated[objectId] = instantiateText(objectId, elems, maxElem)
 }
 
 /**

@@ -79,14 +79,9 @@ class Context {
       // Create a new Text object
       this.apply({action: 'create', type: 'text', obj: objectId})
       this.addOp({action: 'makeText', obj: objectId})
-      // If non empty Text instance that has no objectId it was initialized
-      // with preset elements which are inserted.
+
       if (value.length > 0) {
-        const [...elems] = value
-        this.splice(objectId, 0, 0, elems)
-        // Get rid of preset elems.
-        value.elems.length = elems.length
-        value.maxElem = elems.length
+        this.splice(objectId, 0, 0, [...value])
       }
 
     } else if (value instanceof Table) {

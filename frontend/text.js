@@ -1,14 +1,17 @@
 const { OBJECT_ID, ELEM_IDS, MAX_ELEM } = require('./constants')
-const uuid = require('../src/uuid')
-
 
 class Text {
   constructor (text) {
-    if (text) {
-      const elems = text.split("").map(value => ({value}))
-      return makeTextInstance(undefined, elems, elems.length)
+    if (typeof text === 'string') {
+      const elems = text.split('').map(value => ({value}))
+      return instantiateText(undefined, elems, undefined)
+    } else if (Array.isArray(text)) {
+      const elems = text.map(value => ({value}))
+      return instantiateText(undefined, elems, undefined)
+    } else if (text === undefined) {
+      return instantiateText(undefined, [], 0)
     } else {
-      return makeTextInstance()
+      throw new TypeError(`Unsupported initial value for Text: ${text}`)
     }
   }
 
@@ -57,11 +60,11 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
   }
 }
 
-function makeTextInstance(objectId, elems, maxElem) {
+function instantiateText(objectId, elems, maxElem) {
   const instance = Object.create(Text.prototype)
   instance[OBJECT_ID] = objectId
-  instance.elems = elems || []
-  instance[MAX_ELEM] = maxElem || 0
+  instance.elems = elems
+  instance[MAX_ELEM] = maxElem
   return instance
 }
 
@@ -73,4 +76,4 @@ function getElemId(object, index) {
   return (object instanceof Text) ? object.getElemId(index) : object[ELEM_IDS][index]
 }
 
-module.exports = { Text, getElemId, makeTextInstance }
+module.exports = { Text, getElemId, instantiateText }
