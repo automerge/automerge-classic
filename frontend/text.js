@@ -48,6 +48,64 @@ class Text {
   toJSON() {
     return this.join('')
   }
+
+  /**
+   * Returns a writeable instance of this object. This instance is returned when
+   * the text object is accessed within a change callback. `context` is the
+   * proxy context that keeps track of the mutations.
+   */
+  getWriteable(context) {
+    if (!this[OBJECT_ID]) {
+      throw new RangeError('getWriteable() requires the objectId to be set')
+    }
+
+    const instance = instantiateText(this[OBJECT_ID], this.elems, this[MAX_ELEM])
+    instance.context = context
+    return instance
+  }
+
+  /**
+   * Updates the list item at position `index` to a new value `value`.
+   */
+  set (index, value) {
+    if (this.context) {
+      this.context.setListIndex(this[OBJECT_ID], index, value)
+    } else if (!this[OBJECT_ID]) {
+      this.elems[index].value = value
+    } else {
+      throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
+    }
+    return this
+  }
+
+  /**
+   * Inserts new list items `values` starting at position `index`.
+   */
+  insertAt(index, ...values) {
+    if (this.context) {
+      this.context.splice(this[OBJECT_ID], index, 0, values)
+    } else if (!this[OBJECT_ID]) {
+      this.elems.splice(index, 0, ...values.map(value => ({value})))
+    } else {
+      throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
+    }
+    return this
+  }
+
+  /**
+   * Deletes `numDelete` list items starting at position `index`.
+   * if `numDelete` is not given, one item is deleted.
+   */
+  deleteAt(index, numDelete) {
+    if (this.context) {
+      this.context.splice(this[OBJECT_ID], index, numDelete || 1, [])
+    } else if (!this[OBJECT_ID]) {
+      this.elems.splice(index, numDelete || 1)
+    } else {
+      throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
+    }
+    return this
+  }
 }
 
 // Read-only methods that can delegate to the JavaScript built-in array

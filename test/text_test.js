@@ -45,6 +45,32 @@ describe('Automerge.Text', () => {
     assert.strictEqual(JSON.stringify(s1), '{"text":"a\\"b"}')
   })
 
+  it('should allow modification before an object is assigned to a document', () => {
+    s1 = Automerge.change(Automerge.init(), doc => {
+      const text = new Automerge.Text()
+      text.insertAt(0, 'a', 'b', 'c', 'd')
+      text.deleteAt(2)
+      doc.text = text
+      assert.strictEqual(doc.text.join(''), 'abd')
+    })
+    assert.strictEqual(s1.text.join(''), 'abd')
+  })
+
+  it('should allow modification after an object is assigned to a document', () => {
+    s1 = Automerge.change(Automerge.init(), doc => {
+      const text = new Automerge.Text()
+      doc.text = text
+      text.insertAt(0, 'a', 'b', 'c', 'd')
+      text.deleteAt(2)
+      assert.strictEqual(doc.text.join(''), 'abd')
+    })
+    assert.strictEqual(s1.text.join(''), 'abd')
+  })
+
+  it('should not allow modification outside of a change callback', () => {
+    assert.throws(() => s1.text.insertAt(0, 'a'), /Text object cannot be modified outside of a change block/)
+  })
+
   describe('with initial value', () => {
     it('should accept a string as initial value', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.text = new Automerge.Text('init'))
@@ -89,8 +115,31 @@ describe('Automerge.Text', () => {
         assert.strictEqual(text.get(0), 'i')
         doc.text = text
         assert.strictEqual(doc.text.length, 4)
-        //assert.strictEqual(doc.text.get(0), 'i') // FIXME
+        assert.strictEqual(doc.text.get(0), 'i')
       })
+    })
+
+    it('should allow pre-assignment modification of the initial value', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => {
+        const text = new Automerge.Text('init')
+        text.deleteAt(3)
+        assert.strictEqual(text.join(''), 'ini')
+        doc.text = text
+        assert.strictEqual(doc.text.join(''), 'ini')
+      })
+      assert.strictEqual(s1.text.join(''), 'ini')
+    })
+
+    it('should allow post-assignment modification of the initial value', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => {
+        const text = new Automerge.Text('init')
+        doc.text = text
+        text.deleteAt(0)
+        doc.text.insertAt(0, 'I')
+        assert.strictEqual(text.join(''), 'Init')
+        assert.strictEqual(doc.text.join(''), 'Init')
+      })
+      assert.strictEqual(s1.text.join(''), 'Init')
     })
   })
 })
