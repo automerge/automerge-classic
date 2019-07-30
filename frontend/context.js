@@ -77,11 +77,20 @@ class Context {
 
     if (value instanceof Text) {
       // Create a new Text object
-      if (value.length > 0) {
-        throw new RangeError('Assigning a non-empty Text object is not supported')
-      }
       this.apply({action: 'create', type: 'text', obj: objectId})
       this.addOp({action: 'makeText', obj: objectId})
+
+      if (value.length > 0) {
+        this.splice(objectId, 0, 0, [...value])
+      }
+
+      // Set object properties so that any subsequent modifications of the Text
+      // object can be applied to the context
+      let text = this.getObject(objectId)
+      value[OBJECT_ID] = objectId
+      value.elems = text.elems
+      value[MAX_ELEM] = text.maxElem
+      value.context = this
 
     } else if (value instanceof Table) {
       // Create a new Table object
