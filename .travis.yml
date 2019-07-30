@@ -1,7 +1,6 @@
 language: node_js
 node_js:
 - '8'
-- '9'
 - '10'
 - '11'
 - '12'
@@ -12,7 +11,7 @@ jobs:
       # Disable browsertest stage on pull requests, since encrypted environment variables
       # are not available in such untrusted build jobs
       if: repo = automerge/automerge AND type != pull_request
-      node_js: 9
+      node_js: 12
       script: 'yarn build && karma start karma.sauce.js'
       env:
         - SAUCE_USERNAME=automerge
@@ -20,7 +19,7 @@ jobs:
       addons:
         sauce_connect: true
     - stage: deploy
-      node_js: 10
+      node_js: 12
       # The script is run before the deploy. As the Travis npm deploy job does not automatically
       # install dependencies, we need to do `yarn install` here first, so that the prepublishOnly
       # script can build the transpiled JavaScript. The deploy stage is run only on tagged commits.

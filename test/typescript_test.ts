@@ -1,5 +1,4 @@
 import * as assert from 'assert'
-import uuid from 'uuid'
 import * as Automerge from 'automerge'
 import { Backend, Frontend, Counter, Doc} from 'automerge'
 
@@ -102,7 +101,7 @@ describe('TypeScript support', () => {
     it('should allow frontend actorId assignment to be deferred', () => {
       const s0 = Frontend.init<NumberBox>({ deferActorId: true })
       assert.strictEqual(Frontend.getActorId(s0), undefined)
-      const s1 = Frontend.setActorId(s0, uuid())
+      const s1 = Frontend.setActorId(s0, 'asdf123')
       const [s2, req] = Frontend.change(s1, doc => (doc.number = 15))
       assert.deepEqual(s2, { number: 15 })
     })
