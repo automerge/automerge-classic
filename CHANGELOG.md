@@ -9,6 +9,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 - **Changed** [#183]: `Frontend.from()` now accepts initialization options ([@HerbCaudill], [@ept])
+- **Changed** [#180]: Mutation methods on `Automerge.Text` are now available without having to
+  assign the object to a document ([@ept])
+- **Added** [#181]: Can now specify an initial value when creating `Automerge.Text` objects
+  ([@Gozala], [@ept])
 
 ## [0.11.0] — 2019-07-13
 
@@ -223,6 +227,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
 [#183]: https://github.com/automerge/automerge/pull/183
+[#181]: https://github.com/automerge/automerge/pull/181
+[#180]: https://github.com/automerge/automerge/issues/180
 [#177]: https://github.com/automerge/automerge/issues/177
 [#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
@@ -280,6 +286,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@aslakhellesoy]: https://github.com/aslakhellesoy
 [@CGNonofr]: https://github.com/CGNonofr
 [@EthanRBrown]: https://github.com/EthanRBrown
+[@Gozala]: https://github.com/Gozala
 [@HerbCaudill]: https://github.com/HerbCaudill
 [@izuchukwu]: https://github.com/izuchukwu
 [@jeffpeterson]: https://github.com/jeffpeterson
