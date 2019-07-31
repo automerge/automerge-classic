@@ -116,7 +116,7 @@ Every change is a JSON document with four properties:
 
 Each operation in the `ops` array is a JSON object. Automerge currently uses the
 following types of operation:
- 
+
 * `{ action: 'makeMap', obj: objectId }`
 
   The user created a new empty map object, and that object will henceforth be
@@ -129,6 +129,19 @@ following types of operation:
 
   The user created a new empty list object, and that list will henceforth be
   identified by the UUID `obj`.
+
+* `{ action: 'makeText', obj: objectId }`
+
+  The user created a new empty text sequence, and that sequence will henceforth
+  be identified by the UUI `obj`. (A text sequence provides better performance
+  for text editing compared with using a regular JavaScript array.)
+
+* `{ action: 'makeTable', obj: objectId }`
+
+  The user created a new empty table, and that table will henceforth be
+  identified by the UUID `obj`. The table does not enforce a schema; the columns
+  that exist in the table depend on the contents of each row. Rows are added in
+  subsequent operations.
 
 * `{ action: 'ins', obj: listId, key: elemId, elem: uint }`
 
@@ -179,7 +192,7 @@ following types of operation:
   from several different places in a document. In principle, you could also
   create reference cycles, but the code currently doesn't handle them, so you'll
   get infinite loops.
-  
+
   `obj` is the UUID of the map or list being modified (i.e. the outer map or
   list in the nesting). `key` is the name of the field (in the case of `obj`
   being a map) or the ID of the list element (if `obj` is a list) being
@@ -192,6 +205,12 @@ following types of operation:
   UUID of the map or list being modified. `key` is the key being removed from
   the map, or the ID of the list element being removed, as appropriate.
   Assigning the value `undefined` is interpreted as a deletion.
+
+* `{ action: 'inc', obj: objectId, value: number }`
+
+  The user incremented or decremented a counter. `obj` is the UUID of the
+  counter being modified. `value` is the amount by which the counter is
+  incremented, with a negative value representing a decrement.
 
 For example, the following code:
 
