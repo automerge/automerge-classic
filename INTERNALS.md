@@ -272,6 +272,14 @@ change in `queue`, performing the following steps for each pending change:
 * The change is applied. This step updates several different parts of the state
   and is described in depth below.
 
+### Determining if a change is causally ready
+
+For each change that it receives, Automerge checks to make sure that every
+sequence number in the change's dependencies is less than or equal to the
+sequence number stored in the local vector clock (`clock` described above). If
+every sequence number satisfies this condition, then the change is considered
+_causally ready_.
+
 ### TODO
 
 This section is still a work in progress. More to come!
