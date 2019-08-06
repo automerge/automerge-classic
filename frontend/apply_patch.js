@@ -1,5 +1,5 @@
 const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, DEFAULT_V, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
@@ -31,24 +31,22 @@ function getValue(patch, object, updated) {
  * `{key1: {actor1: {...}, actor2: {...}}, key2: {actor3: {...}}}`
  * where the outer object is a mapping from property names to inner objects,
  * and the inner objects are a mapping from actor ID to sub-patch.
- * This function interprets that structure and updates the objects `object`,
- * `conflicts` and `defaultV` to reflect it. For each key, the lexicographically
- * greatest actor ID is chosen as the default resolution; that actor ID is
- * assigned to `defaultV[key]` and the corresponding value is assigned to
- * `object[key]`. The remaining actor IDs (if any) are packed into a conflicts
- * object of the form `{actor1: value1, actor2: value2}` and assigned to
- * `conflicts[key]`.
+ * This function interprets that structure and updates the objects `object` and
+ * `conflicts` to reflect it. For each key, the lexicographically greatest
+ * actor ID is chosen as the default resolution; that actor's value is assigned
+ * to `object[key]`. Moreover, all the actor IDs and values are packed into a
+ * conflicts object of the form `{actor1: value1, actor2: value2}` and assigned
+ * to `conflicts[key]`. If there is no conflict, the conflicts object contains
+ * just a single actor-value mapping.
  */
-function applyProperties(props, object, conflicts, defaultV, updated) {
+function applyProperties(props, object, conflicts, updated) {
   if (!props) return
 
   for (let key of Object.keys(props)) {
     const values = {}, actors = Object.keys(props[key]).sort().reverse()
     for (let actor of actors) {
       const subpatch = props[key][actor]
-      if (actor === defaultV[key]) {
-        values[actor] = getValue(subpatch, object[key], updated)
-      } else if (conflicts[key] && conflicts[key][actor]) {
+      if (conflicts[key] && conflicts[key][actor]) {
         values[actor] = getValue(subpatch, conflicts[key][actor], updated)
       } else {
         values[actor] = getValue(subpatch, undefined, updated)
@@ -58,16 +56,9 @@ function applyProperties(props, object, conflicts, defaultV, updated) {
     if (actors.length === 0) {
       delete object[key]
       delete conflicts[key]
-      delete defaultV[key]
     } else {
       object[key] = values[actors[0]]
-      defaultV[key] = actors[0]
-      if (actors.length === 1) {
-        delete conflicts[key]
-      } else {
-        delete values[actors[0]]
-        conflicts[key] = values
-      }
+      conflicts[key] = values
     }
   }
 }
@@ -132,10 +123,8 @@ function iterateEdits(edits, insertCallback, removeCallback) {
 function cloneMapObject(originalObject, objectId) {
   const object    = copyObject(originalObject)
   const conflicts = copyObject(originalObject ? originalObject[CONFLICTS] : undefined)
-  const defaultV  = copyObject(originalObject ? originalObject[DEFAULT_V] : undefined)
   Object.defineProperty(object, OBJECT_ID, {value: objectId})
   Object.defineProperty(object, CONFLICTS, {value: conflicts})
-  Object.defineProperty(object, DEFAULT_V, {value: defaultV})
   return object
 }
 
@@ -151,7 +140,7 @@ function updateMapObject(patch, obj, updated) {
   }
 
   const object = updated[objectId]
-  applyProperties(patch.props, object, object[CONFLICTS], object[DEFAULT_V], updated)
+  applyProperties(patch.props, object, object[CONFLICTS], updated)
   return object
 }
 
@@ -167,7 +156,7 @@ function updateTableObject(patch, obj, updated) {
   }
 
   const object = updated[objectId]
-  applyProperties(patch.props, object, object[CONFLICTS], object[DEFAULT_V], updated)
+  applyProperties(patch.props, object, object[CONFLICTS], updated)
   return object
 }
 
@@ -178,12 +167,10 @@ function updateTableObject(patch, obj, updated) {
 function cloneListObject(originalList, objectId) {
   const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
-  const defaultV  = (originalList && originalList[DEFAULT_V]) ? originalList[DEFAULT_V].slice() : []
   const elemIds   = (originalList && originalList[ELEM_IDS ]) ? originalList[ELEM_IDS ].slice() : []
   const maxElem   = (originalList && originalList[MAX_ELEM] ) ? originalList[MAX_ELEM]          : 0
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
-  Object.defineProperty(list, DEFAULT_V, {value: defaultV})
   Object.defineProperty(list, ELEM_IDS,  {value: elemIds})
   Object.defineProperty(list, MAX_ELEM,  {value: maxElem, writable: true})
   return list
@@ -200,8 +187,7 @@ function updateListObject(patch, obj, updated) {
     updated[objectId] = cloneListObject(obj, objectId)
   }
 
-  const list = updated[objectId], conflicts = list[CONFLICTS]
-  const defaultV = list[DEFAULT_V], elemIds = list[ELEM_IDS]
+  const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
   list[MAX_ELEM] = Math.max(list[MAX_ELEM], patch.maxElem || 0)
 
   iterateEdits(patch.edits,
@@ -209,18 +195,16 @@ function updateListObject(patch, obj, updated) {
       const blanks = new Array(insertions.length)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
-      defaultV .splice(index, 0, ...blanks)
       elemIds  .splice(index, 0, ...insertions)
     },
     (index, count) => { // deletion
       list     .splice(index, count)
       conflicts.splice(index, count)
-      defaultV .splice(index, count)
       elemIds  .splice(index, count)
     }
   )
 
-  applyProperties(patch.props, list, conflicts, defaultV, updated)
+  applyProperties(patch.props, list, conflicts, updated)
   return list
 }
 
@@ -258,6 +242,7 @@ function updateTextObject(patch, obj, updated) {
     const actor = Object.keys(patch.props[key]).sort().reverse()[0]
     if (!actor) throw new RangeError(`No default value at index ${key}`)
 
+    // TODO Text object does not support conflicts. Should it?
     const oldValue = (elems[key].defaultV === actor) ? elems[key].value : undefined
     elems[key].value = getValue(patch.props[key][actor], oldValue, updated)
     elems[key].defaultV = actor

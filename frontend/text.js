@@ -54,13 +54,14 @@ class Text {
    * the text object is accessed within a change callback. `context` is the
    * proxy context that keeps track of the mutations.
    */
-  getWriteable(context, path) { // TODO use path parameter
+  getWriteable(context, path) {
     if (!this[OBJECT_ID]) {
       throw new RangeError('getWriteable() requires the objectId to be set')
     }
 
     const instance = instantiateText(this[OBJECT_ID], this.elems, this[MAX_ELEM])
     instance.context = context
+    instance.path = path // TODO use path parameter
     return instance
   }
 

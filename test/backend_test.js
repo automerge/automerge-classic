@@ -470,7 +470,7 @@ describe('Automerge.Backend', () => {
     })
   })
 
-  describe.skip('getChangesForActor()', () => {
+  describe('getChangesForActor()', () => {
     let oneDoc, twoDoc, mergeDoc
 
     beforeEach(() => {

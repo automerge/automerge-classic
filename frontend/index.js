@@ -425,11 +425,13 @@ function getObjectId(object) {
  * proxy object).
  */
 function getObjectById(doc, objectId) {
-  // It would be nice to return a proxied object in a change callback:
-  //   const context = doc[CHANGE]
-  //   if (context) return context.instantiateObject(path, objectId)
+  // It would be nice to return a proxied object in a change callback.
   // However, that requires knowing the path from the root to the current
   // object, which we don't have if we jumped straight to the object by its ID.
+  // If we maintained an index from object ID to parent ID we could work out the path.
+  if (doc[CHANGE]) {
+    throw new TypeError('Cannot use getObjectById in a change callback')
+  }
   return doc[CACHE][objectId]
 }
 
@@ -455,7 +457,10 @@ function setActorId(doc, actorId) {
  * index; if `object` is a map, then `key` must be a property name.
  */
 function getConflicts(object, key) {
-  return object[CONFLICTS][key]
+  if (object[CONFLICTS] && object[CONFLICTS][key] &&
+      Object.keys(object[CONFLICTS][key]).length > 1) {
+    return object[CONFLICTS][key]
+  }
 }
 
 /**

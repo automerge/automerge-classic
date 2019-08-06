@@ -17,20 +17,20 @@ function parseListIndex(key) {
 function listMethods(context, listId, path) {
   const methods = {
     deleteAt(index, numDelete) {
-      context.splice(path, listId, parseListIndex(index), numDelete || 1, [])
+      context.splice(path, parseListIndex(index), numDelete || 1, [])
       return this
     },
 
     fill(value, start, end) {
       let list = context.getObject(listId)
       for (let index = parseListIndex(start || 0); index < parseListIndex(end || list.length); index++) {
-        context.setListIndex(path, listId, index, value)
+        context.setListIndex(path, index, value)
       }
       return this
     },
 
     insertAt(index, ...values) {
-      context.splice(path, listId, parseListIndex(index), 0, values)
+      context.splice(path, parseListIndex(index), 0, values)
       return this
     },
 
@@ -38,13 +38,13 @@ function listMethods(context, listId, path) {
       let list = context.getObject(listId)
       if (list.length == 0) return
       const last = context.getObjectField(path, listId, list.length - 1)
-      context.splice(path, listId, list.length - 1, 1, [])
+      context.splice(path, list.length - 1, 1, [])
       return last
     },
 
     push(...values) {
       let list = context.getObject(listId)
-      context.splice(path, listId, list.length, 0, values)
+      context.splice(path, list.length, 0, values)
       // need to getObject() again because the list object above may be immutable
       return context.getObject(listId).length
     },
@@ -53,7 +53,7 @@ function listMethods(context, listId, path) {
       let list = context.getObject(listId)
       if (list.length == 0) return
       const first = context.getObjectField(path, listId, 0)
-      context.splice(path, listId, 0, 1, [])
+      context.splice(path, 0, 1, [])
       return first
     },
 
@@ -67,12 +67,12 @@ function listMethods(context, listId, path) {
       for (let n = 0; n < deleteCount; n++) {
         deleted.push(context.getObjectField(path, listId, start + n))
       }
-      context.splice(path, listId, start, deleteCount, values)
+      context.splice(path, start, deleteCount, values)
       return deleted
     },
 
     unshift(...values) {
-      context.splice(path, listId, 0, 0, values)
+      context.splice(path, 0, 0, values)
       return context.getObject(listId).length
     }
   }
@@ -106,13 +106,13 @@ const MapHandler = {
 
   set (target, key, value) {
     const { context, objectId, path } = target
-    context.setMapKey(path, objectId, 'map', key, value)
+    context.setMapKey(path, key, value)
     return true
   },
 
   deleteProperty (target, key) {
     const { context, objectId, path } = target
-    context.deleteMapKey(path, objectId, key)
+    context.deleteMapKey(path, key)
     return true
   },
 
@@ -150,13 +150,13 @@ const ListHandler = {
 
   set (target, key, value) {
     const [context, objectId, path] = target
-    context.setListIndex(path, objectId, parseListIndex(key), value)
+    context.setListIndex(path, parseListIndex(key), value)
     return true
   },
 
   deleteProperty (target, key) {
     const [context, objectId, path] = target
-    context.splice(path, objectId, parseListIndex(key), 1, [])
+    context.splice(path, parseListIndex(key), 1, [])
     return true
   },
 

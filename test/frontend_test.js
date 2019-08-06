@@ -7,7 +7,7 @@ const { STATE } = require('../frontend/constants')
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
 describe('Automerge.Frontend', () => {
-  describe.skip('initializing', () => {
+  describe('initializing', () => {
     it('should be an empty object by default', () => {
       const doc = Frontend.init()
       assert.deepEqual(doc, {})
@@ -40,7 +40,7 @@ describe('Automerge.Frontend', () => {
     })
   })
 
-  describe.skip('performing changes', () => {
+  describe('performing changes', () => {
     it('should return the unmodified document if nothing changed', () => {
       const doc0 = Frontend.init()
       const [doc1, req] = Frontend.change(doc0, doc => {})
@@ -370,7 +370,7 @@ describe('Automerge.Frontend', () => {
       }}}
       const doc = Frontend.applyPatch(Frontend.init(), patch)
       assert.deepEqual(doc, {favoriteBird: 'wagtail'})
-      assert.deepEqual(Frontend.getConflicts(doc, 'favoriteBird'), {actor1: 'robin'})
+      assert.deepEqual(Frontend.getConflicts(doc, 'favoriteBird'), {actor1: 'robin', actor2: 'wagtail'})
     })
 
     it('should create nested maps', () => {
@@ -410,8 +410,8 @@ describe('Automerge.Frontend', () => {
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepEqual(doc1, {favoriteBirds: {wrens: 3}})
       assert.deepEqual(doc2, {favoriteBirds: {wrens: 3}})
-      assert.deepEqual(Frontend.getConflicts(doc1, 'favoriteBirds'), {actor1: {blackbirds: 1}})
-      assert.deepEqual(Frontend.getConflicts(doc2, 'favoriteBirds'), {actor1: {blackbirds: 2}})
+      assert.deepEqual(Frontend.getConflicts(doc1, 'favoriteBirds'), {actor1: {blackbirds: 1}, actor2: {wrens: 3}})
+      assert.deepEqual(Frontend.getConflicts(doc2, 'favoriteBirds'), {actor1: {blackbirds: 2}, actor2: {wrens: 3}})
     })
 
     it('should structure-share unmodified objects', () => {
@@ -494,8 +494,14 @@ describe('Automerge.Frontend', () => {
       assert.deepEqual(doc1, {birds: [{species: 'lapwing', numSeen: 2}]})
       assert.deepEqual(doc2, {birds: [{species: 'lapwing', numSeen: 2}]})
       assert.strictEqual(doc1.birds[0], doc2.birds[0])
-      assert.deepEqual(Frontend.getConflicts(doc1.birds, 0), {actor1: {species: 'woodpecker', numSeen: 1}})
-      assert.deepEqual(Frontend.getConflicts(doc2.birds, 0), {actor1: {species: 'woodpecker', numSeen: 2}})
+      assert.deepEqual(Frontend.getConflicts(doc1.birds, 0), {
+        actor1: {species: 'woodpecker', numSeen: 1},
+        actor2: {species: 'lapwing',    numSeen: 2}
+      })
+      assert.deepEqual(Frontend.getConflicts(doc2.birds, 0), {
+        actor1: {species: 'woodpecker', numSeen: 2},
+        actor2: {species: 'lapwing',    numSeen: 2}
+      })
     })
 
     it('should delete list elements', () => {
@@ -552,7 +558,7 @@ describe('Automerge.Frontend', () => {
     })
   })
 
-  describe.skip('undo and redo', () => {
+  describe('undo and redo', () => {
     it('should allow undo in the frontend', () => {
       const doc0 = Frontend.init(), b0 = Backend.init(), actor = Frontend.getActorId(doc0)
       assert.strictEqual(Frontend.canUndo(doc0), false)

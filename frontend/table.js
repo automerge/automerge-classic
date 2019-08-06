@@ -1,4 +1,4 @@
-const { OBJECT_ID, CONFLICTS, DEFAULT_V } = require('./constants')
+const { OBJECT_ID, CONFLICTS } = require('./constants')
 const { isObject, copyObject } = require('../src/common')
 
 function compareRows(properties, row1, row2) {
@@ -145,7 +145,7 @@ class Table {
     if (!this[OBJECT_ID]) {
       throw new RangeError('clone() requires the objectId to be set')
     }
-    return instantiateTable(this[OBJECT_ID], copyObject(this.entries), copyObject(this[DEFAULT_V]))
+    return instantiateTable(this[OBJECT_ID], copyObject(this.entries))
   }
 
   /**
@@ -245,7 +245,7 @@ class WriteableTable extends Table {
       }
       row = rowObj
     }
-    return this.context.addTableRow(this.path, this[OBJECT_ID], row)
+    return this.context.addTableRow(this.path, row)
   }
 
   /**
@@ -254,7 +254,7 @@ class WriteableTable extends Table {
    */
   remove(id) {
     if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
-      this.context.deleteTableRow(this.path, this[OBJECT_ID], id)
+      this.context.deleteTableRow(this.path, id)
     } else {
       throw new RangeError(`There is no row with ID ${id} in this table`)
     }
@@ -265,11 +265,10 @@ class WriteableTable extends Table {
  * This function is used to instantiate a Table object in the context of
  * applying a patch (see apply_patch.js).
  */
-function instantiateTable(objectId, entries, defaultV) {
+function instantiateTable(objectId, entries) {
   const instance = Object.create(Table.prototype)
   instance[OBJECT_ID] = objectId
   instance[CONFLICTS] = Object.freeze({})
-  instance[DEFAULT_V] = defaultV || {}
   instance.entries = entries || {}
   return instance
 }

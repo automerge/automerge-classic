@@ -4,7 +4,7 @@ const { assertEqualsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
-describe.skip('Automerge proxy API', () => {
+describe('Automerge proxy API', () => {
   describe('root object', () => {
     it('should have a fixed object ID', () => {
       Automerge.change(Automerge.init(), doc => {
@@ -86,18 +86,12 @@ describe.skip('Automerge proxy API', () => {
       let deepObjId, deepListId
 
       const doc = Automerge.change(Automerge.init(), doc => {
-        const rootObj = Automerge.getObjectById(doc, ROOT_ID)
-        assert.strictEqual(Automerge.getObjectId(rootObj), Automerge.getObjectId(doc))
-
-        rootObj.deepObj = {}
+        doc.deepObj = {}
         deepObjId = Automerge.getObjectId(doc.deepObj)
-        const deepObj = Automerge.getObjectById(doc, deepObjId)
-        assert.strictEqual(Automerge.getObjectId(deepObj), deepObjId)
-
-        deepObj.deepList = []
+        doc.deepObj.deepList = []
         deepListId = Automerge.getObjectId(doc.deepObj.deepList)
-        const deepList = Automerge.getObjectById(doc, deepListId)
-        assert.strictEqual(Automerge.getObjectId(deepList), deepListId)
+
+        assert.throws(() => { Automerge.getObjectById(doc, deepObjId) }, /Cannot use getObjectById in a change callback/)
       })
 
       const deepObj = Automerge.getObjectById(doc, deepObjId)
