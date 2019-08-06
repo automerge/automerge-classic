@@ -52,6 +52,29 @@ describe('Automerge', () => {
         let doc2 = Automerge.merge(Automerge.init(), doc1)
         assert.deepEqual(doc2, {cards: []})
       })
+      
+      describe.only('instantiation from large objects', () => {
+        const largeObject = N => {
+          const record = { first: 'Martin', last: 'Kleppmann' }
+          const list = []
+          const map = {}
+          for (let id = 0; id < N; id++) {
+            const r = { id, ...record }
+            list.push(id)
+            map[id] = r
+          }
+          return { list, map }
+        }
+
+        it('should handle 20000 records', () => 
+          assert.doesNotThrow(() => Automerge.from(largeObject(20000)))
+        ).timeout(20000)
+
+        it('should handle 20895 records', () => 
+          assert.doesNotThrow(() => Automerge.from(largeObject(20895)))
+        ).timeout(20000)
+
+      })
     })
 
     describe('changes', () => {
