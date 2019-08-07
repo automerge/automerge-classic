@@ -1,7 +1,7 @@
 import * as assert from 'assert'
 import uuid from 'uuid'
 import * as Automerge from 'automerge'
-import { Backend, Frontend, Counter, Doc} from 'automerge'
+import { Backend, Frontend, Counter, Doc } from 'automerge'
 
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
@@ -65,7 +65,7 @@ describe('TypeScript support', () => {
     })
 
     it('should allow the freeze option to be passed in', () => {
-      let s1 = Automerge.init<BirdList>({freeze: true})
+      let s1 = Automerge.init<BirdList>({ freeze: true })
       let s2 = Automerge.change(s1, doc => (doc.birds = []))
       assert.strictEqual(Object.isFrozen(s2), true)
       assert.strictEqual(Object.isFrozen(s2.birds), true)
@@ -135,7 +135,7 @@ describe('TypeScript support', () => {
     it('should allow the freeze option to be passed in', () => {
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
-      let s2 = Automerge.load<BirdList>(Automerge.save(s1), {freeze: true})
+      let s2 = Automerge.load<BirdList>(Automerge.save(s1), { freeze: true })
       assert.strictEqual(Object.isFrozen(s2), true)
       assert.strictEqual(Object.isFrozen(s2.birds), true)
     })
@@ -203,7 +203,8 @@ describe('TypeScript support', () => {
     })
 
     it('should work with split frontend and backend', () => {
-      const s0 = Frontend.init<NumberBox>(), b0 = Backend.init()
+      const s0 = Frontend.init<NumberBox>(),
+        b0 = Backend.init()
       const [s1, req1] = Frontend.change(s0, doc => (doc.number = 1))
       const [b1, patch1] = Backend.applyLocalChange(b0, req1)
       const s2 = Frontend.applyPatch(s1, patch1)
@@ -647,9 +648,9 @@ describe('TypeScript support', () => {
       beforeDoc = Automerge.change(Automerge.init(), doc => (doc.birds = ['goldfinch']))
       afterDoc = Automerge.change(beforeDoc, doc => (doc.birds = ['swallows']))
       changes = Automerge.getChanges(beforeDoc, afterDoc)
-      docSet = new Automerge.DocSet
+      docSet = new Automerge.DocSet()
       docSet.setDoc(ID, beforeDoc)
-      callback = (_doc) => {}
+      callback = _doc => {}
       docSet.registerHandler(callback)
     })
 
@@ -671,6 +672,10 @@ describe('TypeScript support', () => {
       docSet.unregisterHandler(callback)
       docSet.applyChanges(ID, changes)
     })
+
+    it('should list the ids of its documents', () => {
+      assert.deepEqual(Array.from(docSet.docIds), [ID])
+    })
   })
 
   describe('Automerge.WatchableDoc', () => {
@@ -685,7 +690,7 @@ describe('TypeScript support', () => {
       afterDoc = Automerge.change(beforeDoc, doc => (doc.birds = ['swallows']))
       changes = Automerge.getChanges(beforeDoc, afterDoc)
       watchDoc = new Automerge.WatchableDoc(beforeDoc)
-      callback = (_doc) => {}
+      callback = _doc => {}
       watchDoc.registerHandler(callback)
     })
 
