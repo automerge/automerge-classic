@@ -53,7 +53,7 @@ describe('Automerge', () => {
         assert.deepEqual(doc2, {cards: []})
       })
       
-      describe.only('instantiation from large objects', () => {
+      it('should handle 20895 records', () => {
         const largeObject = N => {
           const record = { first: 'Martin', last: 'Kleppmann' }
           const list = []
@@ -65,16 +65,9 @@ describe('Automerge', () => {
           }
           return { list, map }
         }
+        assert.doesNotThrow(() => Automerge.from(largeObject(20895)))
+      }).timeout(20000)
 
-        it('should handle 20000 records', () => 
-          assert.doesNotThrow(() => Automerge.from(largeObject(20000)))
-        ).timeout(20000)
-
-        it('should handle 20895 records', () => 
-          assert.doesNotThrow(() => Automerge.from(largeObject(20895)))
-        ).timeout(20000)
-
-      })
     })
 
     describe('changes', () => {
