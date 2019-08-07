@@ -230,9 +230,51 @@ generates the following JSON object describing the change:
 
 
 Applying operations to the local state
------------------------------------
+--------------------------------------
 
-TODO
+The local state is comprised of a few different pieces:
+
+* `queue`: A list of pending changes.
+* `history`: A list of all applied changes.
+
+The two pieces of state above represent the single source-of-truth for every
+change that the system has observed. When saving and loading an Automerge CRDT,
+only the `history` is used. The pieces described in the next section below
+contain cached information that would otherwise have to be computed by iterating
+over the entire history.
+
+* `states`: A map keyed by actor IDs. The values are lists, where each element
+  is a change plus all of the changes dependencies, including transitive
+  dependencies. (Since each change only stores direct dependencies, this
+  essentially caches the transitive dependencies for each change.)
+* `byObject`: A map of object IDs to objects. An "object" is a map, a list, or a
+  text sequence.
+* `clock`: A map keyed by actor IDs, with sequence numbers as the values. This
+  represents the current vector clock of the local state.
+* `deps`: A map
+
+Finally, the pieces of state below store the information necessary to support
+undo and redo operations:
+
+* `undoPos`: An integer, representing the current place in the undo stack.
+* `undoStack`: A list of changes that, if applied to the state, would perform an
+  "undo".
+* `redoStack`: A list of changes that, if applied to the state, would perform a
+  "redo".
+
+When a change is generated (whether locally or remotely), it is immediately
+added to the `queue` list of changes. Automerge then iterates through every
+change in `queue`, performing the following steps for each pending change:
+* The local state is checked to see if the change is causally ready (described
+  below). If a change is not causally ready, then it is skipped and Automerge
+  moves on to the next pending change. If the change is causally ready, then
+  Automerge continues with the next step.
+* The change is applied. This step updates several different parts of the state
+  and is described in depth below.
+
+### TODO
+
+This section is still a work in progress. More to come!
 
 
 Querying the local state

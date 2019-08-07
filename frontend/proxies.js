@@ -185,7 +185,7 @@ const ListHandler = {
     const [context, objectId] = target
     const object = context.getObject(objectId)
     let keys = ['length']
-    keys.push(...Object.keys(object))
+    for (let key of Object.keys(object)) keys.push(key)
     return keys
   }
 }
@@ -205,9 +205,9 @@ function listProxy(context, objectId) {
  */
 function instantiateProxy(objectId) {
   const object = this.getObject(objectId)
-  if (Array.isArray(object) || (object instanceof Text)) {
+  if (Array.isArray(object)) {
     return listProxy(this, objectId)
-  } else if (object instanceof Table) {
+  } else if (object instanceof Text || object instanceof Table) {
     return object.getWriteable(this)
   } else {
     return mapProxy(this, objectId)

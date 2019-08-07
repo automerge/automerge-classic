@@ -1,5 +1,4 @@
 import * as assert from 'assert'
-import uuid from 'uuid'
 import * as Automerge from 'automerge'
 import { Backend, Frontend, Counter, Doc } from 'automerge'
 
@@ -57,6 +56,14 @@ describe('TypeScript support', () => {
       assert.strictEqual(s2.birds[0], 'magpie')
     })
 
+    it('should allow passing options when initializing with `from`', () => {
+      const actorId = '123'
+      const s1 = Automerge.from<BirdList>({ birds: [] }, actorId)
+      assert.strictEqual(Automerge.getActorId(s1), '123')
+      const s2 = Automerge.from<BirdList>({ birds: [] }, { actorId })
+      assert.strictEqual(Automerge.getActorId(s2), '123')
+    })
+
     it('should allow the actorId to be configured', () => {
       let s1 = Automerge.init<BirdList>('actor1')
       assert.strictEqual(Automerge.getActorId(s1), 'actor1')
@@ -94,7 +101,7 @@ describe('TypeScript support', () => {
     it('should allow frontend actorId assignment to be deferred', () => {
       const s0 = Frontend.init<NumberBox>({ deferActorId: true })
       assert.strictEqual(Frontend.getActorId(s0), undefined)
-      const s1 = Frontend.setActorId(s0, uuid())
+      const s1 = Frontend.setActorId(s0, 'asdf123')
       const [s2, req] = Frontend.change(s1, doc => (doc.number = 15))
       assert.deepEqual(s2, { number: 15 })
     })
@@ -104,6 +111,14 @@ describe('TypeScript support', () => {
       assert.strictEqual(s1.birds.length, 0)
       const [s2, req2] = Frontend.change(s1, doc => doc.birds.push('magpie'))
       assert.strictEqual(s2.birds[0], 'magpie')
+    })
+
+    it('should allow options to be passed to Frontend.from()', () => {
+      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '123' })
+      assert.strictEqual(Frontend.getActorId(s1), '123')
+      assert.deepEqual(s1, { birds: [] })
+      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '123')
+      assert.strictEqual(Frontend.getActorId(s2), '123')
     })
   })
 
