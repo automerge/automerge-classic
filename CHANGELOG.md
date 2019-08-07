@@ -8,11 +8,14 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.12.0] — 2019-08-07
+
 - **Changed** [#183]: `Frontend.from()` now accepts initialization options ([@HerbCaudill], [@ept])
 - **Changed** [#180]: Mutation methods on `Automerge.Text` are now available without having to
   assign the object to a document ([@ept])
 - **Added** [#181]: Can now specify an initial value when creating `Automerge.Text` objects
   ([@Gozala], [@ept])
+- **Fixed** [#202]: Stack overflow error when making large changes ([@HerbCaudill], [@ept])
 
 ## [0.11.0] — 2019-07-13
 
@@ -200,7 +203,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/automerge/automerge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/automerge/automerge/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/automerge/automerge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/automerge/automerge/compare/v0.9.2...v0.10.0
@@ -226,6 +230,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#202]: https://github.com/automerge/automerge/issues/202
 [#183]: https://github.com/automerge/automerge/pull/183
 [#181]: https://github.com/automerge/automerge/pull/181
 [#180]: https://github.com/automerge/automerge/issues/180
