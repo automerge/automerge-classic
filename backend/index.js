@@ -117,7 +117,7 @@ class MaterializationContext {
     for (let childId of this.children[objectId]) {
       this.makePatch(childId, diffs)
     }
-    diffs.push(...this.diffs[objectId])
+    for (d of this.diffs[objectId]) diffs.push(d)
   }
 }
 
@@ -149,7 +149,7 @@ function apply(state, changes, undoable) {
   for (let change of fromJS(changes)) {
     change = change.remove('requestType')
     const [newOpSet, diff] = OpSet.addChange(opSet, change, undoable)
-    diffs.push(...diff)
+    for (d of diff) diffs.push(d)
     opSet = newOpSet
   }
 
