@@ -185,7 +185,7 @@ const ListHandler = {
     const [context, objectId] = target
     const object = context.getObject(objectId)
     let keys = ['length']
-    keys.push(...Object.keys(object))
+    for (let key of Object.keys(object)) keys.push(key)
     return keys
   }
 }

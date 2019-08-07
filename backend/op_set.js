@@ -294,7 +294,7 @@ function applyOps(opSet, ops) {
     } else {
       throw new RangeError(`Unknown operation type ${action}`)
     }
-    allDiffs.push(...diffs)
+    for (let diff of diffs) allDiffs.push(diff)
   }
   return [opSet, simplifyDiffs(allDiffs)]
 }
@@ -332,7 +332,7 @@ function applyQueuedOps(opSet) {
     for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
         ;[opSet, diff] = applyChange(opSet, change)
-        diffs.push(...diff)
+        for (let d of diff) diffs.push(d)
       } else {
         queue = queue.push(change)
       }
