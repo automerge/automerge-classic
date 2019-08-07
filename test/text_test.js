@@ -2,7 +2,7 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
 
-describe.skip('Automerge.Text', () => {
+describe('Automerge.Text', () => {
   let s1, s2
   beforeEach(() => {
     s1 = Automerge.change(Automerge.init(), doc => doc.text = new Automerge.Text())
@@ -60,8 +60,8 @@ describe.skip('Automerge.Text', () => {
     s1 = Automerge.change(Automerge.init(), doc => {
       const text = new Automerge.Text()
       doc.text = text
-      text.insertAt(0, 'a', 'b', 'c', 'd')
-      text.deleteAt(2)
+      doc.text.insertAt(0, 'a', 'b', 'c', 'd')
+      doc.text.deleteAt(2)
       assert.strictEqual(doc.text.join(''), 'abd')
     })
     assert.strictEqual(s1.text.join(''), 'abd')
@@ -134,9 +134,8 @@ describe.skip('Automerge.Text', () => {
       let s1 = Automerge.change(Automerge.init(), doc => {
         const text = new Automerge.Text('init')
         doc.text = text
-        text.deleteAt(0)
+        doc.text.deleteAt(0)
         doc.text.insertAt(0, 'I')
-        assert.strictEqual(text.join(''), 'Init')
         assert.strictEqual(doc.text.join(''), 'Init')
       })
       assert.strictEqual(s1.text.join(''), 'Init')

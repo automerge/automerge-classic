@@ -6,6 +6,16 @@ version numbers.
 All notable changes to Automerge will be documented in this file, which
 is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
+## Big refactoring
+
+- **Changed**: `Automerge.getConflicts()` now returns *all* conflicting values, including the
+  value chosen as default resolution.
+- **Changed**: Multiple references to the same object in an Automerge document are no longer
+  allowed. In other words, the document is now required to be a tree, not a DAG.
+- **Changed**: The format for patches (returned by `Automerge.diff()` and `Backend.applyChanges()`)
+  and the format for changes (returned by `Automerge.getChanges()`) have changed. The new format
+  will be documented separately.
+
 ## [Unreleased]
 
 - **Changed** [#183]: `Frontend.from()` now accepts initialization options ([@HerbCaudill], [@ept])

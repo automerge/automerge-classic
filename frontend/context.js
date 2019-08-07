@@ -31,6 +31,79 @@ class Context {
   }
 
   /**
+   * Takes a value and returns an object describing the value (in the format used by patches).
+   */
+  getValueDescription(value) {
+    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
+      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    }
+
+    if (isObject(value)) {
+      if (value instanceof Date) {
+        // Date object, represented as milliseconds since epoch
+        return {value: value.getTime(), datatype: 'timestamp'}
+
+      } else if (value instanceof Counter) {
+        // Counter object
+        return {value: value.value, datatype: 'counter'}
+
+      } else {
+        // Nested object (map, list, text, or table)
+        const objectId = value[OBJECT_ID]
+        if (!objectId) {
+          throw new RangeError(`Object ${JSON.stringify(value)} has no objectId`)
+        }
+        return {objectId, type: this.getObjectType(objectId)}
+      }
+    } else {
+      // Primitive value (number, string, boolean, or null)
+      return {value}
+    }
+  }
+
+  /**
+   * Builds the values structure describing a single property in a patch. Finds all the values of
+   * property `key` of `object` (there might be multiple values in the case of a conflict), and
+   * returns an object that maps actorIds to descriptions of values.
+   */
+  getValuesDescriptions(path, object, key) {
+    if (object instanceof Table) {
+      // Table objects don't have conflicts, since rows are identified by their unique objectId
+      const value = object.byId(key)
+      if (value) {
+        return {[object.getActorId(key)]: this.getValueDescription(value)}
+      } else {
+        return {}
+      }
+    } else {
+      // Map, list, or text objects
+      const conflicts = object[CONFLICTS][key], values = {}
+      if (!conflicts) {
+        throw new RangeError(`No children at key ${key} of path ${JSON.stringify(path)}`)
+      }
+      for (let actor of Object.keys(conflicts)) {
+        values[actor] = this.getValueDescription(conflicts[actor])
+      }
+      return values
+    }
+  }
+
+  /**
+   * Returns the value at property `key` of object `object`. In the case of a conflict, returns
+   * the value assigned by the actor with ID `actorId`.
+   */
+  getPropertyValue(object, key, actorId) {
+    if (object instanceof Table) {
+      if (actorId !== object.getActorId(key)) {
+        throw new RangeError(`Mismatched actorId: ${actorId} != ${object.getActorId(key)}`)
+      }
+      return object.byId(key)
+    } else {
+      return object[CONFLICTS][key][actorId]
+    }
+  }
+
+  /**
    * Recurses along `path` into the patch object `patch`, creating nodes along
    * the way as needed. Returns the subpatch at the given path.
    */
@@ -41,40 +114,8 @@ class Context {
       if (!subpatch.props) {
         subpatch.props = {}
       }
-
       if (!subpatch.props[pathElem.key]) {
-        let values = {}
-        subpatch.props[pathElem.key] = values
-
-        const conflicts = object[CONFLICTS][pathElem.key]
-        if (!conflicts) {
-          throw new RangeError(`No children at key ${pathElem.key} of path ${JSON.stringify(path)}`)
-        }
-
-        for (let actor of Object.keys(conflicts)) {
-          const value = conflicts[actor]
-          if (isObject(value)) { // TODO duplicates logic in setValue()
-            if (value instanceof Date) {
-              // Date object, represented as milliseconds since epoch
-              values[actor] = {value: value.getTime(), datatype: 'timestamp'}
-
-            } else if (value instanceof Counter) {
-              // Counter object
-              values[actor] = {value: value.value, datatype: 'counter'}
-
-            } else {
-              // Nested object (map, list, text, or table)
-              const objectId = value[OBJECT_ID]
-              if (!objectId) {
-                throw new RangeError(`Object in path ${JSON.stringify(path)} has no objectId`)
-              }
-              values[actor] = {objectId, type: this.getObjectType(objectId)}
-            }
-          } else {
-            // Primitive value (number, string, boolean, or null)
-            values[actor] = {value}
-          }
-        }
+        subpatch.props[pathElem.key] = this.getValuesDescriptions(path, object, pathElem.key)
       }
 
       let nextActor = null, values = subpatch.props[pathElem.key]
@@ -87,6 +128,7 @@ class Context {
         throw new RangeError(`Cannot find path object with objectId ${pathElem.objectId}`)
       }
       subpatch = values[nextActor]
+      object = this.getPropertyValue(object, pathElem.key, nextActor)
     }
 
     if (!subpatch.props) {
@@ -163,15 +205,6 @@ class Context {
       this.addOp({action: 'makeText', obj, key, child: objectId})
       return this.insertListItems(subpatch.props[index][this.actorId], 0, [...value], true)
 
-      // Set object properties so that any subsequent modifications of the Text
-      // object can be applied to the context FIXME
-      //let text = this.getObject(objectId)
-      //value[OBJECT_ID] = objectId
-      //value.elems = text.elems
-      //value[MAX_ELEM] = text.maxElem
-      //value.context = this
-      //return {objectId, type: 'text'}
-
     } else if (value instanceof Table) {
       // Create a new Table object
       if (value.count > 0) {
@@ -210,7 +243,7 @@ class Context {
    * element ID of the list element being updated, and `index` is the numeric list index
    * being updated. Mutates `subpatch` to reflect the assignment, and also returns a
    * patch describing the new value. The return value is of the form
-   * `{objectId, type, props}` if `value` is an object. or `{value, datatype}` if it is a
+   * `{objectId, type, props}` if `value` is an object, or `{value, datatype}` if it is a
    * primitive value. For string, number, boolean, or null the datatype is omitted.
    */
   setValue(subpatch, key, index, value) {
@@ -218,33 +251,19 @@ class Context {
     if (!obj) {
       throw new RangeError('setValue subpatch needs an objectId')
     }
-    if (!['object', 'boolean', 'number', 'string'].includes(typeof value)) {
-      throw new TypeError(`Unsupported type of value: ${typeof value}`)
+    if (key === '') {
+      throw new RangeError('The key of a map entry must not be an empty string')
     }
 
-    if (isObject(value)) {
-      if (value instanceof Date) {
-        // Date object, translate to timestamp (milliseconds since epoch)
-        const timestamp = value.getTime()
-        this.addOp({action: 'set', obj, key, value: timestamp, datatype: 'timestamp'})
-        subpatch.props[index] = {[this.actorId]: {value: timestamp, datatype: 'timestamp'}}
-        return {value: timestamp, datatype: 'timestamp'}
-
-      } else if (value instanceof Counter) {
-        // Counter object, save current value
-        this.addOp({action: 'set', obj, key, value: value.value, datatype: 'counter'})
-        subpatch.props[index] = {[this.actorId]: {value: value.value, datatype: 'counter'}}
-        return {value: value.value, datatype: 'counter'}
-
-      } else {
-        // Nested object (map, list, text, or table)
-        return this.createNestedObjects(subpatch, key, index, value)
-      }
+    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
+      // Nested object (map, list, text, or table)
+      return this.createNestedObjects(subpatch, key, index, value)
     } else {
-      // Primitive value (number, string, boolean, or null)
-      this.addOp({action: 'set', obj, key, value})
-      subpatch.props[index] = {[this.actorId]: {value}}
-      return {value}
+      // Date or counter object, or primitive value (number, string, boolean, or null)
+      const description = this.getValueDescription(value)
+      this.addOp(Object.assign({action: 'set', obj, key}, description))
+      subpatch.props[index] = {[this.actorId]: description}
+      return description
     }
   }
 
@@ -255,9 +274,6 @@ class Context {
   setMapKey(path, key, value) {
     if (typeof key !== 'string') {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
-    }
-    if (key === '') {
-      throw new RangeError('The key of a map entry must not be an empty string')
     }
 
     const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId

@@ -61,7 +61,7 @@ class Text {
 
     const instance = instantiateText(this[OBJECT_ID], this.elems, this[MAX_ELEM])
     instance.context = context
-    instance.path = path // TODO use path parameter
+    instance.path = path
     return instance
   }
 
@@ -70,7 +70,7 @@ class Text {
    */
   set (index, value) {
     if (this.context) {
-      this.context.setListIndex(this[OBJECT_ID], index, value)
+      this.context.setListIndex(this.path, index, value)
     } else if (!this[OBJECT_ID]) {
       this.elems[index].value = value
     } else {
@@ -84,7 +84,7 @@ class Text {
    */
   insertAt(index, ...values) {
     if (this.context) {
-      this.context.splice(this[OBJECT_ID], index, 0, values)
+      this.context.splice(this.path, index, 0, values)
     } else if (!this[OBJECT_ID]) {
       this.elems.splice(index, 0, ...values.map(value => ({value})))
     } else {
@@ -99,7 +99,7 @@ class Text {
    */
   deleteAt(index, numDelete) {
     if (this.context) {
-      this.context.splice(this[OBJECT_ID], index, numDelete || 1, [])
+      this.context.splice(this.path, index, numDelete || 1, [])
     } else if (!this[OBJECT_ID]) {
       this.elems.splice(index, numDelete || 1)
     } else {

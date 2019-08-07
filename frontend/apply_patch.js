@@ -9,8 +9,10 @@ const { Counter } = require('./counter')
  */
 function getValue(patch, object, updated) {
   if (patch.objectId) {
+    // If the objectId of the existing object does not match the objectId in the patch,
+    // that means the patch is replacing the object with a new one made from scratch
     if (object && object[OBJECT_ID] !== patch.objectId) {
-      throw new RangeError(`Object ID mismatch: ${object[OBJECT_ID]} != ${patch.objectId}`)
+      object = undefined
     }
     return interpretPatch(patch, object, updated)
   } else if (patch.datatype === 'timestamp') {
@@ -156,7 +158,19 @@ function updateTableObject(patch, obj, updated) {
   }
 
   const object = updated[objectId]
-  applyProperties(patch.props, object, object[CONFLICTS], updated)
+
+  for (let key of Object.keys(patch.props)) {
+    const values = {}, actors = Object.keys(patch.props[key])
+
+    if (actors.length === 0) {
+      object.remove(key)
+    } else if (actors.length === 1) {
+      const subpatch = patch.props[key][actors[0]]
+      object.set(key, getValue(subpatch, object.byId(key), updated), actors[0])
+    } else {
+      throw new RangeError('Conflicts are not supported on properties of a table')
+    }
+  }
   return object
 }
 
@@ -231,9 +245,9 @@ function updateTextObject(patch, obj, updated) {
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      elems.splice(index, insertions.map(elemId => ({elemId})))
+      elems.splice(index, 0, ...insertions.map(elemId => ({elemId})))
     },
-    (index, count) => { // deletion
+    (index, deletions) => { // deletion
       elems.splice(index, deletions)
     }
   )
@@ -243,9 +257,9 @@ function updateTextObject(patch, obj, updated) {
     if (!actor) throw new RangeError(`No default value at index ${key}`)
 
     // TODO Text object does not support conflicts. Should it?
-    const oldValue = (elems[key].defaultV === actor) ? elems[key].value : undefined
+    const oldValue = (elems[key].actorId === actor) ? elems[key].value : undefined
     elems[key].value = getValue(patch.props[key][actor], oldValue, updated)
-    elems[key].defaultV = actor
+    elems[key].actorId = actor
   }
 
   updated[objectId] = instantiateText(objectId, elems, maxElem)

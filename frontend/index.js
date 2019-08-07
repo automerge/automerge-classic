@@ -109,6 +109,11 @@ function makeChange(doc, requestType, context, message) {
     const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
     state.backendState = backendState
     state.requests = []
+    // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
+    // context invoking interpretPatch as soon as any change is made, and the second time here
+    // (after a round-trip through the backend). This is perhaps more robust, as changes only take
+    // effect in the form processed by the backend, but the downside is a performance cost.
+    // Should we change this?
     return [applyPatchToDoc(doc, patch, state, true), request]
 
   } else {

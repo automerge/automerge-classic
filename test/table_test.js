@@ -18,7 +18,7 @@ const RSDP = {
   isbn: '3-642-15259-7'
 }
 
-describe.skip('Automerge.Table', () => {
+describe('Automerge.Table', () => {
   describe('Frontend', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
@@ -29,14 +29,12 @@ describe.skip('Automerge.Table', () => {
       const books = Frontend.getObjectId(doc.books)
       const cols = Frontend.getObjectId(doc.books.columns)
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
-        {obj: books, action: 'makeTable'},
-        {obj: cols, action: 'makeList'},
+        {obj: ROOT_ID, action: 'makeTable', key: 'books', child: books},
+        {obj: books, action: 'makeList', key: 'columns', child: cols},
         {obj: cols, action: 'ins', elem: 1, key: '_head'},
         {obj: cols, action: 'set', key: `${actor}:1`, value: 'authors'},
         {obj: cols, action: 'ins', elem: 2, key: `${actor}:1`},
-        {obj: cols, action: 'set', key: `${actor}:2`, value: 'title'},
-        {obj: books, action: 'link', key: 'columns', value: cols},
-        {obj: ROOT_ID, action: 'link', key: 'books', value: books}
+        {obj: cols, action: 'set', key: `${actor}:2`, value: 'title'}
       ]})
     })
 
@@ -51,10 +49,9 @@ describe.skip('Automerge.Table', () => {
       })
       const books = Frontend.getObjectId(doc2.books)
       assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
-        {obj: rowId, action: 'makeMap'},
+        {obj: books, action: 'makeMap', key: rowId, child: rowId},
         {obj: rowId, action: 'set', key: 'authors', value: 'Kleppmann, Martin'},
-        {obj: rowId, action: 'set', key: 'title', value: 'Designing Data-Intensive Applications'},
-        {obj: books, action: 'link', key: rowId, value: rowId}
+        {obj: rowId, action: 'set', key: 'title', value: 'Designing Data-Intensive Applications'}
       ]})
     })
   })

@@ -528,7 +528,7 @@ describe('Proxying context', () => {
 
     beforeEach(() => {
       tableId = uuid()
-      table = instantiateTable(tableId, {})
+      table = instantiateTable(tableId)
       context.cache[tableId] = table
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, books: table, [CONFLICTS]: {books: {actor1: table}}}
     })
