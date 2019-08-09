@@ -13,7 +13,7 @@ interface NumberBox {
   number: number
 }
 
-describe.skip('TypeScript support', () => {
+describe('TypeScript support', () => {
   describe('Automerge.init()', () => {
     it('should allow a document to be `any`', () => {
       let s1 = Automerge.init<any>()
@@ -187,7 +187,7 @@ describe.skip('TypeScript support', () => {
       s2 = Automerge.change(s2, doc => (doc.number = 42))
       let s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.number, 42)
-      assert.deepEqual(Automerge.getConflicts(s3, 'number'), { actor1: 3 })
+      assert.deepEqual(Automerge.getConflicts(s3, 'number'), { actor1: 3, actor2: 42 })
     })
 
     it('should allow changes in the frontend', () => {
@@ -228,13 +228,11 @@ describe.skip('TypeScript support', () => {
       assert.deepEqual(patch1.clock, { [Automerge.getActorId(s0)]: 1 })
       assert.strictEqual(patch1.canUndo, true)
       assert.strictEqual(patch1.canRedo, false)
-      assert.strictEqual(patch1.diffs.length, 1)
-      assert.strictEqual(patch1.diffs[0].action, 'set')
-      assert.strictEqual(patch1.diffs[0].type, 'map')
-      assert.strictEqual(patch1.diffs[0].obj, ROOT_ID)
-      assert.deepEqual(patch1.diffs[0].path, [])
-      assert.strictEqual(patch1.diffs[0].key, 'number')
-      assert.strictEqual(patch1.diffs[0].value, 1)
+      assert.strictEqual(patch1.diffs.objectId, ROOT_ID)
+      assert.strictEqual(patch1.diffs.type, 'map')
+      assert.deepEqual(Object.keys(patch1.diffs.props), ['number'])
+      const value = patch1.diffs.props.number[Automerge.getActorId(s0)]
+      assert.strictEqual((value as Automerge.ValueDiff).value, 1)
     })
   })
 
@@ -340,13 +338,11 @@ describe.skip('TypeScript support', () => {
       const s1 = Automerge.change(Automerge.init<NumberBox>(), doc => (doc.number = 1))
       const s2 = Automerge.change(s1, doc => (doc.number = 2))
       const diff = Automerge.diff(s1, s2)
-      assert.strictEqual(diff.length, 1)
-      assert.strictEqual(diff[0].action, 'set')
-      assert.strictEqual(diff[0].type, 'map')
-      assert.strictEqual(diff[0].obj, ROOT_ID)
-      assert.deepEqual(diff[0].path, [])
-      assert.strictEqual(diff[0].key, 'number')
-      assert.strictEqual(diff[0].value, 2)
+      assert.strictEqual(diff.objectId, ROOT_ID)
+      assert.strictEqual(diff.type, 'map')
+      assert.deepEqual(Object.keys(diff.props), ['number'])
+      const value = diff.props.number[Automerge.getActorId(s1)]
+      assert.strictEqual((value as Automerge.ValueDiff).value, 2)
     })
 
     it('should inspect document history', () => {

@@ -32,7 +32,7 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
   function applyChanges<T>(doc: Doc<T>, changes: Change[]): Doc<T>
-  function diff<D extends Doc<any>>(olddoc: D, newdoc: D): Diff[]
+  function diff<D extends Doc<any>>(olddoc: D, newdoc: D): ObjectDiff
   function equals<T>(val1: T, val2: T): boolean
 
   function getActorId<T>(doc: Doc<T>): string
@@ -205,14 +205,14 @@ declare module 'automerge' {
     seq: number
     deps: Clock
     ops: Op[]
-    diffs?: Diff[]
   }
 
   interface Op {
     action: OpAction
     obj: UUID
-    key?: string
-    value?: any
+    key: string
+    child?: UUID
+    value?: number | boolean | string | null
     datatype?: DataType
     elem?: number
   }
@@ -224,27 +224,26 @@ declare module 'automerge' {
     deps?: Clock
     canUndo?: boolean
     canRedo?: boolean
-    diffs: Diff[]
+    diffs: ObjectDiff
   }
 
-  interface Diff {
-    action: DiffAction
+  interface ObjectDiff {
+    objectId: UUID
     type: CollectionType
-    obj: UUID
-    path?: string[]
-    key?: string
-    index?: number
-    value?: any
-    elemId?: string
-    conflicts?: Conflict[]
-    datatype?: DataType
-    link?: boolean
+    maxElem?: number
+    edits?: Edit[]
+    props?: {[propName: string]: {[actorId: string]: ObjectDiff | ValueDiff}}
   }
 
-  interface Conflict {
-    actor: string
-    value: any
-    link?: boolean
+  interface ValueDiff {
+    value: number | boolean | string | null
+    datatype?: DataType
+  }
+
+  interface Edit {
+    action: 'insert' | 'remove'
+    index: number
+    elemId: string
   }
 
   type RequestType =
@@ -256,18 +255,11 @@ declare module 'automerge' {
     | 'ins'
     | 'del'
     | 'inc'
-    | 'link'
     | 'set'
     | 'makeText'
     | 'makeTable'
     | 'makeList'
     | 'makeMap'
-
-  type DiffAction =
-    | 'create' //..
-    | 'insert'
-    | 'set'
-    | 'remove'
 
   type CollectionType =
     | 'list' //..
