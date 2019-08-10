@@ -991,13 +991,13 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {k1: 'v1', k2: 'v2'})
     })
 
-    it.skip('should undo link deletion by linking the old value', () => {
+    it('should undo link deletion by linking the old value', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.fish = ['trout', 'sea bass'])
       s1 = Automerge.change(s1, doc => doc.birds = ['heron', 'magpie'])
       let s2 = Automerge.change(s1, doc => delete doc['fish'])
       assert.deepEqual(s2, {birds: ['heron', 'magpie']})
       assert.deepEqual(getUndoStack(s2).last().toJS(),
-                       [{action: 'link', obj: ROOT_ID, key: 'fish', value: Automerge.getObjectId(s1.fish)}])
+                       [{action: 'link', obj: ROOT_ID, key: 'fish', child: Automerge.getObjectId(s1.fish)}])
       s2 = Automerge.undo(s2)
       assert.deepEqual(s2, {fish: ['trout', 'sea bass'], birds: ['heron', 'magpie']})
     })
@@ -1040,7 +1040,7 @@ describe('Automerge', () => {
       return Automerge.Frontend.getBackendState(doc).getIn(['opSet', 'redoStack'])
     }
 
-    it.skip('should allow redo if the last change was an undo', () => {
+    it('should allow redo if the last change was an undo', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['peregrine falcon'])
       assert.strictEqual(Automerge.canRedo(s1), false)
       assert.throws(() => Automerge.redo(s1), /there is no prior undo/)
@@ -1119,18 +1119,18 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {})
     })
 
-    it.skip('should undo/redo object creation and linking', () => {
+    it('should undo/redo object creation and linking', () => {
       let s1 = Automerge.init()
       s1 = Automerge.change(s1, doc => doc.settings = {background: 'white', text: 'black'})
       let s2 = Automerge.undo(s1)
       assert.deepEqual(s2, {})
       assert.deepEqual(getRedoStack(s2).last().toJS(),
-                       [{action: 'link', obj: ROOT_ID, key: 'settings', value: Automerge.getObjectId(s1.settings)}])
+                       [{action: 'link', obj: ROOT_ID, key: 'settings', child: Automerge.getObjectId(s1.settings)}])
       s2 = Automerge.redo(s2)
       assert.deepEqual(s2, {settings: {background: 'white', text: 'black'}})
     })
 
-    it.skip('should undo/redo link deletion', () => {
+    it('should undo/redo link deletion', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.fish = ['trout', 'sea bass'])
       s1 = Automerge.change(s1, doc => doc.birds = ['heron', 'magpie'])
       s1 = Automerge.change(s1, doc => delete doc['fish'])

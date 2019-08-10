@@ -148,8 +148,11 @@ function recordUndoHistory(opSet, op) {
   if (op.get('action') === 'inc') {
     undoOps = List.of(Map({action: 'inc', obj: objectId, key, value: -value}))
   } else {
-    undoOps = getFieldOps(opSet, objectId, key)
-      .map(ref => ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype'].includes(k)))
+    undoOps = getFieldOps(opSet, objectId, key).map(ref => {
+      ref = ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype', 'child'].includes(k))
+      if (ref.get('action').startsWith('make')) ref = ref.set('action', 'link')
+      return ref
+    })
   }
   if (undoOps.isEmpty()) {
     undoOps = List.of(Map({action: 'del', obj: objectId, key}))
@@ -162,11 +165,11 @@ function recordUndoHistory(opSet, op) {
  */
 function isChildOp(op) {
   const action = op.get('action')
-  return action.startsWith('make') || action === 'move'
+  return action.startsWith('make') || action === 'link'
 }
 
 /**
- * Processes a 'set', 'del', 'make*', 'move', or 'inc' operation. Mutates `patch`
+ * Processes a 'set', 'del', 'make*', 'link', or 'inc' operation. Mutates `patch`
  * to describe the change and returns an updated `opSet`.
  */
 function applyAssign(opSet, op, patch) {
@@ -199,6 +202,9 @@ function applyAssign(opSet, op, patch) {
     } else {
       opSet = applyMake(opSet, op)
     }
+  }
+  if (action === 'link' && patch) {
+    patch.props[key][op.get('actor')] = constructObject(opSet, op.get('child'))
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -282,21 +288,21 @@ function setPatchProps(opSet, objectId, key, patch) {
 
   const actors = {}
   for (let op of getFieldOps(opSet, objectId, key)) {
-    const actor = op.get('actor'), action = op.get('action'), value = op.get('value')
+    const actor = op.get('actor')
     actors[actor] = true
 
-    if (action === 'set') {
-      patch.props[key][actor] = {value}
+    if (op.get('action') === 'set') {
+      patch.props[key][actor] = {value: op.get('value')}
       if (op.get('datatype')) {
         patch.props[key][actor].datatype = op.get('datatype')
       }
-    } else if (action.startsWith('make')) {
+    } else if (isChildOp(op)) {
       if (!patch.props[key][actor]) {
         const childId = op.get('child')
         patch.props[key][actor] = {objectId: childId, type: getObjectType(opSet, childId)}
       }
     } else {
-      throw new RangeError(`Unexpected operation in field ops: ${action}`)
+      throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
     }
   }
 
@@ -320,7 +326,9 @@ function finalizePatch(opSet, patch) {
     const elemIds = opSet.getIn(['byObject', patch.objectId, '_elemIds'])
     const newProps = {}
     for (let elemId of Object.keys(patch.props)) {
-      if (Object.keys(patch.props[elemId]).length > 0) {
+      if (/^[0-9]+$/.test(elemId)) {
+        newProps[elemId] = patch.props[elemId]
+      } else if (Object.keys(patch.props[elemId]).length > 0) {
         const index = elemIds.indexOf(elemId)
         if (index < 0) throw new RangeError(`List element has no index: ${elemId}`)
         newProps[index] = patch.props[elemId]
@@ -563,7 +571,7 @@ function getPrevious(opSet, objectId, key) {
 }
 
 function constructField(opSet, op) {
-  if (op.get('action').startsWith('make')) {
+  if (isChildOp(op)) {
     return constructObject(opSet, op.get('child'))
   } else if (op.get('action') === 'set') {
     const result = {value: op.get('value')}

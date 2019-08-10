@@ -159,6 +159,7 @@ function undo(state, request) {
       if (!['set', 'del', 'link', 'inc'].includes(op.get('action'))) {
         throw new RangeError(`Unexpected operation type in undo history: ${op}`)
       }
+      // TODO this duplicates OpSet.recordUndoHistory
       const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
       if (op.get('action') === 'inc') {
         redoOps.push(Map({action: 'inc', obj: op.get('obj'), key: op.get('key'), value: -op.get('value')}))
@@ -166,7 +167,9 @@ function undo(state, request) {
         redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
       } else {
         for (let fieldOp of fieldOps) {
-          redoOps.push(fieldOp.remove('actor').remove('seq'))
+          fieldOp = fieldOp.remove('actor').remove('seq')
+          if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
+          redoOps.push(fieldOp)
         }
       }
     }
