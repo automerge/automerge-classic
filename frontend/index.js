@@ -120,9 +120,8 @@ function makeChange(doc, requestType, context, message) {
     if (!context) context = new Context(doc, actor)
     const queuedRequest = copyObject(request)
     queuedRequest.before = doc
-    queuedRequest.diffs = context.diffs
-    state.requests = state.requests.slice() // shallow clone
-    state.requests.push(queuedRequest)
+    queuedRequest.diffs = context.patch.diffs
+    state.requests = state.requests.concat([queuedRequest])
     return [updateRootObject(doc, context.updated, context.inbound, state), request]
   }
 }
@@ -148,69 +147,6 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     state.canRedo = patch.canRedo
   }
   return updateRootObject(doc, updated, inbound, state)
-}
-
-/**
- * Mutates the request object `request` (representing a change made locally but
- * not yet applied by the backend), transforming it past the remote `patch`.
- * The transformed version of `request` can be applied after `patch` has been
- * applied, and its effect is the same as when the original version of `request`
- * is applied to the base document without `patch`.
- *
- * This function implements a simple form of Operational Transformation.
- * However, the implementation here is actually incomplete and incorrect.
- * Fortunately, it's actually not a big problem if the transformation here is
- * not quite right, because the transformed request is only used transiently
- * while waiting for a response from the backend. When the backend responds, the
- * transformation result is discarded and replaced with the backend's version.
- *
- * One scenario that is not handled correctly is insertion at the same index:
- * request = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
- * patch = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
- *
- * Correct behaviour (i.e. consistent with the CRDT) would be to order the two
- * insertions by their elemIds; any subsequent insertions with consecutive
- * indexes may also need to be adjusted accordingly (to keep an insertion
- * sequence by a particular actor uninterrupted).
- *
- * Another scenario that is not handled correctly:
- * requests = [
- *   {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1, value: 'a'}]},
- *   {diffs: [{obj: someList, type: 'list', action: 'set',    index: 1, value: 'b'}]}
- * ]
- * patch = {diffs: [{obj: someList, type: 'list', action: 'remove', index: 1}]}
- *
- * The first request's insertion is correctly left unchanged, but the 'set' action
- * is incorrectly turned into an 'insert' because we don't realise that it is
- * assigning the previously inserted list item (not the deleted item).
- *
- * A third scenario is concurrent assignment to the same list element or map key;
- * this should create a conflict.
- */
-function transformRequest(request, patch) {
-  let transformed = []
-
-  local_loop:
-  for (let local of request.diffs) {
-    local = copyObject(local)
-
-    for (let remote of patch.diffs) {
-      // If the incoming patch modifies list indexes (because it inserts or removes),
-      // adjust the indexes in local diffs accordingly
-      if (local.obj === remote.obj && local.type === 'list' &&
-          ['insert', 'set', 'remove'].includes(local.action)) {
-        if (remote.action === 'insert' && remote.index <=  local.index) local.index += 1
-        if (remote.action === 'remove' && remote.index <   local.index) local.index -= 1
-        if (remote.action === 'remove' && remote.index === local.index) {
-          if (local.action === 'set') local.action = 'insert'
-          if (local.action === 'remove') continue local_loop // drop this diff
-        }
-      }
-    }
-    transformed.push(local)
-  }
-
-  request.diffs = transformed
 }
 
 /**
@@ -344,8 +280,13 @@ function applyPatch(doc, patch) {
 
   let newDoc = applyPatchToDoc(baseDoc, patch, state, true)
   for (let request of state.requests) {
+    // NOTE: technically it is not right to simply re-apply pending patches here: especially if
+    // they describe changes to a list or text, the indexes in the patch may need to be shifted
+    // due to insertions or deletions made by a remote patch. In the past (~v0.12.0) we had a
+    // transformRequest function here that performed a kind of simplistic Operational
+    // Transformation in order to adjust list indexes, but we removed it since there were many
+    // cases it didn't handle correctly, and it added complexity.
     request.before = newDoc
-    transformRequest(request, patch)
     newDoc = applyPatchToDoc(request.before, request, state, false)
   }
   return newDoc
