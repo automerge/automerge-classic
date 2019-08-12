@@ -839,6 +839,24 @@ describe('Automerge', () => {
       assert.deepEqual(s3.birds, ['blackbird', 'starling', 'goldfinch'])
     })
 
+    it('should handle concurrent deletion of the same element', () => {
+      s1 = Automerge.change(s1, doc => doc.birds = ['albatross','buzzard', 'cormorant'])
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.birds.deleteAt(1)) // buzzard
+      s2 = Automerge.change(s2, doc => doc.birds.deleteAt(1)) // buzzard
+      s3 = Automerge.merge(s1, s2)
+      assert.deepEqual(s3.birds, ['albatross','cormorant'])
+    })
+
+    it('should handle concurrent deletion of different elements', () => {
+      s1 = Automerge.change(s1, doc => doc.birds =  ['albatross','buzzard', 'cormorant'])
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => doc.birds.deleteAt(0)) // albatross
+      s2 = Automerge.change(s2, doc => doc.birds.deleteAt(1)) // buzzard
+      s3 = Automerge.merge(s1, s2)
+      assert.deepEqual(s3.birds, ['cormorant'])
+    })
+
     it('should handle concurrent updates at different levels of the tree', () => {
       // A delete higher up in the tree overrides an update in a subtree
       s1 = Automerge.change(s1, doc => doc.animals = {birds: {pink: 'flamingo', black: 'starling'}, mammals: ['badger']})
