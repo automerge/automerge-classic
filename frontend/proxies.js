@@ -88,6 +88,7 @@ function listMethods(context, listId) {
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
+        .map((item, index) => context.getObjectField(listId, index))
       return list[method].call(list, ...args)
     }
   }
