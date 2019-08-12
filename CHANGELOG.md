@@ -8,6 +8,11 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Fixed** [#184]: Corrected TypeScript type definition for `Automerge.DocSet` ([@HerbCaudill])
+- **Fixed** [#174]: If `.filter()`, `.find()` or similar methods are used inside a change callback,
+  the objects they return can now be mutated ([@ept], [@airhorns])
+- **Fixed** [#199]: `Automerge.Text.toString()` now returns the unadulterated text ([@Gozala])
+
 ## [0.12.0] — 2019-08-07
 
 - **Changed** [#183]: `Frontend.from()` now accepts initialization options ([@HerbCaudill], [@ept])
@@ -231,10 +236,13 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
 [#202]: https://github.com/automerge/automerge/issues/202
+[#199]: https://github.com/automerge/automerge/pull/199
+[#184]: https://github.com/automerge/automerge/pull/184
 [#183]: https://github.com/automerge/automerge/pull/183
 [#181]: https://github.com/automerge/automerge/pull/181
 [#180]: https://github.com/automerge/automerge/issues/180
 [#177]: https://github.com/automerge/automerge/issues/177
+[#174]: https://github.com/automerge/automerge/issues/174
 [#165]: https://github.com/automerge/automerge/pull/165
 [#163]: https://github.com/automerge/automerge/pull/163
 [#155]: https://github.com/automerge/automerge/pull/155
