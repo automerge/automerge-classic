@@ -13,6 +13,7 @@ describe('Automerge.Text', () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a'))
     assert.strictEqual(s1.text.length, 1)
     assert.strictEqual(s1.text.get(0), 'a')
+    assert.strictEqual(s1.text.toString(), 'a')
   })
 
   it('should support deletion', () => {
@@ -21,6 +22,7 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.length, 2)
     assert.strictEqual(s1.text.get(0), 'a')
     assert.strictEqual(s1.text.get(1), 'c')
+    assert.strictEqual(s1.text.toString(), 'ac')
   })
 
   it('should handle concurrent insertion', () => {
@@ -28,6 +30,7 @@ describe('Automerge.Text', () => {
     s2 = Automerge.change(s2, doc => doc.text.insertAt(0, 'x', 'y', 'z'))
     s1 = Automerge.merge(s1, s2)
     assert.strictEqual(s1.text.length, 6)
+    assertEqualsOneOf(s1.text.toString(), 'abcxyz', 'xyzabc')
     assertEqualsOneOf(s1.text.join(''), 'abcxyz', 'xyzabc')
   })
 
@@ -37,6 +40,7 @@ describe('Automerge.Text', () => {
       doc.text.insertAt(0, 'a')
     })
     assert.strictEqual(s1.foo, 'bar')
+    assert.strictEqual(s1.text.toString(), 'a')
     assert.strictEqual(s1.text.join(''), 'a')
   })
 
@@ -51,8 +55,10 @@ describe('Automerge.Text', () => {
       text.insertAt(0, 'a', 'b', 'c', 'd')
       text.deleteAt(2)
       doc.text = text
+      assert.strictEqual(doc.text.toString(), 'abd')
       assert.strictEqual(doc.text.join(''), 'abd')
     })
+    assert.strictEqual(s1.text.toString(), 'abd')
     assert.strictEqual(s1.text.join(''), 'abd')
   })
 
@@ -62,6 +68,7 @@ describe('Automerge.Text', () => {
       doc.text = text
       text.insertAt(0, 'a', 'b', 'c', 'd')
       text.deleteAt(2)
+      assert.strictEqual(doc.text.toString(), 'abd')
       assert.strictEqual(doc.text.join(''), 'abd')
     })
     assert.strictEqual(s1.text.join(''), 'abd')
@@ -79,6 +86,7 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.get(1), 'n')
       assert.strictEqual(s1.text.get(2), 'i')
       assert.strictEqual(s1.text.get(3), 't')
+      assert.strictEqual(s1.text.toString(), 'init')
     })
 
     it('should accept an array as initial value', () => {
@@ -88,6 +96,7 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.get(1), 'n')
       assert.strictEqual(s1.text.get(2), 'i')
       assert.strictEqual(s1.text.get(3), 't')
+      assert.strictEqual(s1.text.toString(), 'init')
     })
 
     it('should initialize text in Automerge.from()', () => {
@@ -97,6 +106,7 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.get(1), 'n')
       assert.strictEqual(s1.text.get(2), 'i')
       assert.strictEqual(s1.text.get(3), 't')
+      assert.strictEqual(s1.text.toString(), 'init')
     })
 
     it('should encode the initial value as a change', () => {
@@ -105,6 +115,7 @@ describe('Automerge.Text', () => {
       assert.strictEqual(changes.length, 1)
       const s2 = Automerge.applyChanges(Automerge.init(), changes)
       assert.strictEqual(s2.text instanceof Automerge.Text, true)
+      assert.strictEqual(s2.text.toString(), 'init')
       assert.strictEqual(s2.text.join(''), 'init')
     })
 
@@ -113,9 +124,11 @@ describe('Automerge.Text', () => {
         const text = new Automerge.Text('init')
         assert.strictEqual(text.length, 4)
         assert.strictEqual(text.get(0), 'i')
+        assert.strictEqual(text.toString(), 'init')
         doc.text = text
         assert.strictEqual(doc.text.length, 4)
         assert.strictEqual(doc.text.get(0), 'i')
+        assert.strictEqual(doc.text.toString(), 'init')
       })
     })
 
@@ -126,7 +139,9 @@ describe('Automerge.Text', () => {
         assert.strictEqual(text.join(''), 'ini')
         doc.text = text
         assert.strictEqual(doc.text.join(''), 'ini')
+        assert.strictEqual(doc.text.toString(), 'ini')
       })
+      assert.strictEqual(s1.text.toString(), 'ini')
       assert.strictEqual(s1.text.join(''), 'ini')
     })
 
@@ -137,9 +152,12 @@ describe('Automerge.Text', () => {
         text.deleteAt(0)
         doc.text.insertAt(0, 'I')
         assert.strictEqual(text.join(''), 'Init')
+        assert.strictEqual(text.toString(), 'Init')
         assert.strictEqual(doc.text.join(''), 'Init')
+        assert.strictEqual(doc.text.toString(), 'Init')
       })
       assert.strictEqual(s1.text.join(''), 'Init')
+      assert.strictEqual(s1.text.toString(), 'Init')
     })
   })
 })
