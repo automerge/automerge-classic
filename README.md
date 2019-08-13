@@ -438,7 +438,8 @@ a few options, with more under development:
   node and apply them on another.
 * Use [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js),
   an implementation of a protocol that syncs up two nodes by determining missing changes and
-  sending them to each other.
+  sending them to each other. The [automerge-net](https://github.com/automerge/automerge-net)
+  repository contains an example that runs the Connection protocol over a simple TCP connection.
 * Use [MPL](https://github.com/automerge/mpl), which runs the `Automerge.Connection` protocol
   over WebRTC.
 
@@ -632,12 +633,8 @@ The project currently has a number of limitations that you should be aware of:
 
 ## Meta
 
-Copyright 2017, Ink & Switch LLC, and University of Cambridge.
+Copyright 2017–2019, Ink & Switch LLC, and University of Cambridge.
 Released under the terms of the MIT license (see `LICENSE`).
 
-Created by
-[Martin Kleppmann](http://martin.kleppmann.com/),
-Orion Henry,
-[Peter van Hardenberg](https://twitter.com/pvh),
-[Roshan Choxi](https://www.linkedin.com/in/choxi/), and
-[Adam Wiggins](http://about.adamwiggins.com/).
+Created by [Martin Kleppmann](http://martin.kleppmann.com/) and
+[many great contributors](https://github.com/automerge/automerge/graphs/contributors).
