@@ -170,7 +170,7 @@ const ListHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (key === 'length') return {}
+    if (key === 'length') return {writable: true}
     if (key === OBJECT_ID) return {configurable: false, enumerable: false}
 
     const [context, objectId] = target
