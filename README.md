@@ -71,7 +71,7 @@ and merging**:
 ## Setup
 
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
-can import it with `require('automerge')` as in the example below (or
+can import it with `require('automerge')` as in [the example below](#usage) (or
 `import * as Automerge from 'automerge'` if using ES2015 or TypeScript).
 
 Otherwise, clone this repository, and then you can use the following commands:
@@ -197,7 +197,7 @@ const doc = Automerge.from({ cards: [] }) // doc = { cards: [] }
 The value passed to `Automerge.from` **must always be an object**.
 
 An Automerge document must be treated as immutable. It is **never changed directly**, only with the
-`Automerge.change` function, described below.
+`Automerge.change` function, described [below](#updating-a-document).
 
 > At the moment, Automerge does not enforce this immutability due to the
 > [performance cost](https://github.com/automerge/automerge/issues/177). If you want to make the
@@ -271,8 +271,8 @@ unmodified. The only special things about it are:
 - Every object has a unique ID, which you can get by passing the object to the
   `Automerge.getObjectId()` function. This ID is used by Automerge to track which object is which.
 - Objects also have information about _conflicts_, which is used when several users make changes to
-  the same property concurrently (see below). You can get conflicts using the
-  `Automerge.getConflicts()` function.
+  the same property concurrently (see [below](#conflicting-changes)). You can get conflicts using
+  the `Automerge.getConflicts()` function.
 
 ### Persisting a document
 
@@ -564,7 +564,8 @@ Compared to using a regular JavaScript array, `Automerge.Text` offers better per
 > [skintone modifier](http://www.unicode.org/reports/tr51/) is a combining mark).
 
 You can create a Text object inside a change callback. Then you can use `insertAt()` and
-`deleteAt()` to insert and delete characters (same API as for list modifications, shown above):
+`deleteAt()` to insert and delete characters (same API as for list modifications, shown
+[above](#updating-a-document)):
 
 ```js
 newDoc = Automerge.change(currentDoc, doc => {
