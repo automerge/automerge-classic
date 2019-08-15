@@ -405,38 +405,40 @@ Automerge will arbitrarily place one of the insertions first and the other secon
 that the final order is the same on all nodes.
 
 The only case Automerge cannot handle automatically, because there is no well-defined resolution, is
-when users concurrently update the same property in the same object (or, similarly, the same index
-in the same list). In this case, Automerge arbitrarily picks one of the concurrently written values
-as the "winner":
+**when users concurrently update the same property in the same object** (or, similarly, the same
+index in the same list). In this case, Automerge arbitrarily picks one of the concurrently written
+values as the "winner":
 
 ```js
-let doc1 = Automerge.change(Automerge.init(), doc => {
+// Initialize documents with known actor IDs
+let doc1 = Automerge.change(Automerge.init('actor-1'), doc => {
   doc.x = 1
 })
-let doc2 = Automerge.change(Automerge.init(), doc => {
+let doc2 = Automerge.change(Automerge.init('actor-2'), doc => {
   doc.x = 2
 })
 doc1 = Automerge.merge(doc1, doc2)
 doc2 = Automerge.merge(doc2, doc1)
+
 // Now, doc1 might be either {x: 1} or {x: 2} -- the choice is random.
 // However, doc2 will be the same, whichever value is chosen as winner.
+assert.deepEqual(doc1, doc2)
 ```
 
 Although only one of the concurrently written values shows up in the object, the other values are
-not lost. They are merely relegated to a conflicts object:
+not lost. They are merely relegated to a conflicts object. Suppose `doc.x = 2` is chosen as the
+"winning" value:
 
 ```js
 doc1 // {x: 2}
 doc2 // {x: 2}
-Automerge.getConflicts(doc1, 'x') // {'0506162a-ac6e-4567-bc16-a12618b71940': 1}
-Automerge.getConflicts(doc2, 'x') // {'0506162a-ac6e-4567-bc16-a12618b71940': 1}
+Automerge.getConflicts(doc1, 'x') // {'actor-1': 1}
+Automerge.getConflicts(doc2, 'x') // {'actor-1': 1}
 ```
 
-Here, the conflicts object contains the property `x`, which matches the name of the property on
-which the concurrent assignments happened. The nested key `0506162a-ac6e-4567-bc16-a12618b71940` is
-the actor ID that performed the assignment, and the associated value is the value it assigned to the
-property `x`. You might use the information in the conflicts object to show the conflict in the user
-interface.
+Here, we've recorded a conflict on property `x`. The key `actor-1` is the actor ID that "lost" the
+conflict. The associated value is the value `actor-1` assigned to the property `x`. You might use
+the information in the conflicts object to show the conflict in the user interface.
 
 The next time you assign to a conflicting property, the conflict is automatically considered to be
 resolved, and the conflict disappears from the object returned by `Automerge.getConflicts()`.
@@ -444,13 +446,13 @@ resolved, and the conflict disappears from the object returned by `Automerge.get
 ### Examining document history
 
 An Automerge document internally saves a complete history of all the changes that were ever made to
-it. This enables a nice feature: looking at the document state at past points in time, a.k.a. _time
-travel!_
+it. This enables a nice feature: looking at the document state at past points in time, a.k.a. "time
+travel"!
 
 `Automerge.getHistory(doc)` returns a list of all edits made to a document. Each edit is an object
-with two properties: `change` is the internal representation of the change (in the same form as
-`Automerge.getChanges()` returns), and `snapshot` is the state of the document at the moment just
-after that change had been applied.
+with two properties: `change` is the internal representation of the change (in the same form that
+`Automerge.getChanges()` returns), and `snapshot` is the state of the document immediately after the
+change was applied.
 
 ```js
 Automerge.getHistory(doc2)
