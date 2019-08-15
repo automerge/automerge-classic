@@ -179,31 +179,25 @@ Automerge.getHistory(finalDoc).map(state => [state.change.message, state.snapsho
 
 ## Documentation
 
-### Automerge document lifecycle
+### Initializing a document
 
-`Automerge.init()` creates a new, empty Automerge document. You can optionally pass in an
-`actorId`, which is a string that uniquely identifies the current node; if you omit `actorId`, a
-random UUID is generated.
+`Automerge.init()` creates a new, empty Automerge document.
 
-> If you pass in your own `actorId`, you must ensure that there can never be two different processes
-with the same actor ID. Even if you have two different processes running on the same machine, they
-must have distinct actor IDs. Unless you know what you are doing, it is recommended that you stick
-with the default, and let `actorId` be auto-generated.
+```js
+const doc = Automerge.init() // doc = {}
+```
 
 `Automerge.from(initialState)` creates a new Automerge document and populates it with the contents
 of the object `initialState`.
 
-`Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
-write to disk. The string contains an encoding of the full change history of the document (a bit
-like a git repository).
+```js
+const doc = Automerge.from({ cards: [] }) // doc = { cards: [] }
+```
 
-`Automerge.load(string, actorId)` unserializes an Automerge document from a `string` that was
-produced by `Automerge.save()`. The `actorId` argument is optional, and allows you to specify a
-string that uniquely identifies the current node, like with `Automerge.init()`. Unless you know what
-you are doing, it is recommended that you omit the `actorId` argument.
+The value passed to `Automerge.from` **must always be an object**.
 
-The document object should be treated as immutable, and should only be modified with
-`Automerge.change` as explained [below](#conflicting-changes).
+An Automerge document must be treated as immutable. It is **never changed directly**, only with the
+`Automerge.change` function, described below.
 
 > At the moment, Automerge does not enforce this immutability due to the
 > [performance cost](https://github.com/automerge/automerge/issues/177). If you want to make the
