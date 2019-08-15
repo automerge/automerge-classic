@@ -1,5 +1,5 @@
 const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
@@ -66,11 +66,10 @@ function applyProperties(props, object, conflicts, updated) {
 }
 
 /**
- * `edits` is an array of edits to a list data structure, each of which is an
- * object of the form either `{action: 'insert', index, elemId}` or
- * `{action: 'remove', index, elemId}`. This merges adjacent edits and calls
- * `insertCallback(index, elemIds)` or `removeCallback(index, count)`, as
- * appropriate, for each sequence of insertions or removals.
+ * `edits` is an array of edits to a list data structure, each of which is an object of the form
+ * either `{action: 'insert', index}` or `{action: 'remove', index}`. This merges adjacent edits
+ * and calls `insertCallback(index, count)` or `removeCallback(index, count)`, as appropriate,
+ * for each sequence of insertions or removals.
  */
 function iterateEdits(edits, insertCallback, removeCallback) {
   if (!edits) return
@@ -83,9 +82,9 @@ function iterateEdits(edits, insertCallback, removeCallback) {
       if (splicePos < 0) {
         splicePos = index
         deletions = 0
-        insertions = []
+        insertions = 0
       }
-      insertions.push(edit.elemId)
+      insertions += 1
 
       // If there are multiple consecutive insertions at successive indexes,
       // accumulate them and then process them in a single insertCallback
@@ -100,7 +99,7 @@ function iterateEdits(edits, insertCallback, removeCallback) {
       if (splicePos < 0) {
         splicePos = index
         deletions = 0
-        insertions = []
+        insertions = 0
       }
       deletions += 1
 
@@ -181,12 +180,8 @@ function updateTableObject(patch, obj, updated) {
 function cloneListObject(originalList, objectId) {
   const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
-  const elemIds   = (originalList && originalList[ELEM_IDS ]) ? originalList[ELEM_IDS ].slice() : []
-  const maxElem   = (originalList && originalList[MAX_ELEM] ) ? originalList[MAX_ELEM]          : 0
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
-  Object.defineProperty(list, ELEM_IDS,  {value: elemIds})
-  Object.defineProperty(list, MAX_ELEM,  {value: maxElem, writable: true})
   return list
 }
 
@@ -201,20 +196,17 @@ function updateListObject(patch, obj, updated) {
     updated[objectId] = cloneListObject(obj, objectId)
   }
 
-  const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
-  list[MAX_ELEM] = Math.max(list[MAX_ELEM], patch.maxElem || 0)
+  const list = updated[objectId], conflicts = list[CONFLICTS]
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      const blanks = new Array(insertions.length)
+      const blanks = new Array(insertions)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
-      elemIds  .splice(index, 0, ...insertions)
     },
     (index, count) => { // deletion
       list     .splice(index, count)
       conflicts.splice(index, count)
-      elemIds  .splice(index, count)
     }
   )
 
@@ -229,23 +221,20 @@ function updateListObject(patch, obj, updated) {
  */
 function updateTextObject(patch, obj, updated) {
   const objectId = patch.objectId
-  let elems, maxElem
+  let elems
   if (updated[objectId]) {
     elems = updated[objectId].elems
-    maxElem = updated[objectId][MAX_ELEM]
   } else if (obj) {
     elems = obj.elems.slice()
-    maxElem = obj[MAX_ELEM]
   } else {
     elems = []
-    maxElem = 0
   }
-
-  maxElem = Math.max(maxElem, patch.maxElem || 0)
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      elems.splice(index, 0, ...insertions.map(elemId => ({elemId})))
+      const blanks = []
+      for (let i = 0; i < insertions; i++) blanks.push({})
+      elems.splice(index, 0, ...blanks)
     },
     (index, deletions) => { // deletion
       elems.splice(index, deletions)
@@ -262,7 +251,7 @@ function updateTextObject(patch, obj, updated) {
     elems[key].actorId = actor
   }
 
-  updated[objectId] = instantiateText(objectId, elems, maxElem)
+  updated[objectId] = instantiateText(objectId, elems)
   return updated[objectId]
 }
 

@@ -1,7 +1,104 @@
 const { Map, List, fromJS } = require('immutable')
-const { isObject, lessOrEqual, parseElemId } = require('../src/common')
+const { isObject, copyObject, lessOrEqual, parseElemId } = require('../src/common')
 const OpSet = require('./op_set')
+const { SkipList } = require('./skip_list')
 
+/**
+ * Filters a list of operations `ops` such that, if there are multiple assignment
+ * operations for the same object and key, we keep only the most recent. Returns
+ * the filtered list of operations.
+ */
+function ensureSingleAssignment(ops) {
+  let assignments = {}, result = []
+
+  for (let i = ops.length - 1; i >= 0; i--) {
+    const op = ops[i], { obj, key, action } = op
+    if (['set', 'del', 'link', 'inc'].includes(action)) {
+      if (!assignments[obj]) {
+        assignments[obj] = {[key]: op}
+        result.push(op)
+      } else if (!assignments[obj][key]) {
+        assignments[obj][key] = op
+        result.push(op)
+      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
+        assignments[obj][key].action = action
+        assignments[obj][key].value += op.value
+        if (op.datatype) assignments[obj][key].datatype = op.datatype
+      }
+    } else {
+      result.push(op)
+    }
+  }
+  return result.reverse()
+}
+
+/**
+ * Processes a change request `request` that is incoming from the frontend. Translates index-based
+ * addressing of lists into identifier-based addressing used by the CRDT.
+ */
+function processChangeRequest(state, request) {
+  const { actor, seq, deps } = request
+  const change = { actor, seq, deps }, ops = []
+  if (request.message) change.message = request.message
+
+  // Check whether the incoming request was made in a frontend whose state matches the current
+  // backend state. If the backend has applied a change that the frontend had not yet seen at the
+  // time it generated the request, throw an exception. (That additional change seen by the backend
+  // would have to be a remote change, since only the frontend can generate local changes.) It is
+  // impossible for the frontend to have seen a change that the backend has not seen.
+  state.getIn(['opSet', 'deps']).forEach((depSeq, depActor) => {
+    if (depActor === actor && depSeq !== seq - 1) {
+      throw new RangeError(`Bad dependency for own actor ${actor}: ${depSeq} != ${seq - 1}`)
+    }
+    if (depActor !== actor && depSeq > (deps[depActor] || 0)) {
+      throw new RangeError('Backend is ahead of frontend')
+    }
+  })
+
+  let objectTypes = {}, elemIds = {}, maxElem = {}
+  for (let op of request.ops) {
+    if (op.action.startsWith('make')) {
+      objectTypes[op.child] = op.action
+    }
+
+    const objType = objectTypes[op.obj] || state.getIn(['opSet', 'byObject', op.obj, '_init', 'action'])
+    if (objType === 'makeList' || objType === 'makeText') {
+      if (!elemIds[op.obj]) {
+        elemIds[op.obj] = state.getIn(['opSet', 'byObject', op.obj, '_elemIds']) || new SkipList()
+        maxElem[op.obj] = state.getIn(['opSet', 'byObject', op.obj, '_maxElem'], 0)
+      }
+
+      if (typeof op.key !== 'number') {
+        throw new TypeError(`Unexpected operation key: ${op.key}`)
+      }
+      op = copyObject(op)
+
+      if (op.action === 'ins') {
+        maxElem[op.obj] += 1
+        op.elem = maxElem[op.obj]
+        const elemId = `${actor}:${maxElem[op.obj]}`
+
+        if (op.key === 0) {
+          op.key = '_head'
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(null, elemId)
+        } else {
+          op.key = elemIds[op.obj].keyOf(op.key - 1)
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(op.key, elemId)
+        }
+      } else {
+        op.key = elemIds[op.obj].keyOf(op.key)
+        if (op.action === 'del') {
+          elemIds[op.obj] = elemIds[op.obj].removeKey(op.key)
+        }
+      }
+    }
+
+    ops.push(op)
+  }
+
+  change.ops = ensureSingleAssignment(ops)
+  return apply(state, [change], true, true)
+}
 
 /**
  * Returns an empty node state.
@@ -49,34 +146,34 @@ function applyChanges(state, changes) {
 }
 
 /**
- * Takes a single change request `change` made by the local user, and applies
- * it to the node state `state`. The difference to `applyChange()` is that this
+ * Takes a single change request `request` made by the local user, and applies
+ * it to the node state `state`. The difference to `applyChanges()` is that this
  * function adds the change to the undo history, so it can be undone (whereas
  * remote changes are not normally added to the undo history). Returns a
  * two-element array `[state, patch]` where `state` is the updated node state,
  * and `patch` confirms the modifications to the document objects.
  */
-function applyLocalChange(state, change) {
-  if (typeof change.actor !== 'string' || typeof change.seq !== 'number') {
+function applyLocalChange(state, request) {
+  if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
   }
   // Throw error if we have already applied this change request
-  if (change.seq <= state.getIn(['opSet', 'clock', change.actor], 0)) {
+  if (request.seq <= state.getIn(['opSet', 'clock', request.actor], 0)) {
     throw new RangeError('Change request has already been applied')
   }
 
   let patch
-  if (change.requestType === 'change') {
-    ;[state, patch] = apply(state, [change], true, true)
-  } else if (change.requestType === 'undo') {
-    ;[state, patch] = undo(state, change)
-  } else if (change.requestType === 'redo') {
-    ;[state, patch] = redo(state, change)
+  if (request.requestType === 'change') {
+    ;[state, patch] = processChangeRequest(state, request)
+  } else if (request.requestType === 'undo') {
+    ;[state, patch] = undo(state, request)
+  } else if (request.requestType === 'redo') {
+    ;[state, patch] = redo(state, request)
   } else {
-    throw new RangeError(`Unknown requestType: ${change.requestType}`)
+    throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
-  patch.actor = change.actor
-  patch.seq   = change.seq
+  patch.actor = request.actor
+  patch.seq   = request.seq
   return [state, patch]
 }
 

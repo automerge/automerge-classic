@@ -15,6 +15,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Changed**: The format for patches (returned by `Automerge.diff()` and `Backend.applyChanges()`)
   and the format for changes (returned by `Automerge.getChanges()`) have changed. The new format
   will be documented separately.
+- **Removed**: `Frontend.getElementIds` is no longer available because the necessary metadata is
+  now maintained by the backend.
 
 ## [Unreleased]
 

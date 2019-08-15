@@ -31,10 +31,10 @@ describe('Automerge.Table', () => {
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeTable', key: 'books', child: books},
         {obj: books, action: 'makeList', key: 'columns', child: cols},
-        {obj: cols, action: 'ins', elem: 1, key: '_head'},
-        {obj: cols, action: 'set', key: `${actor}:1`, value: 'authors'},
-        {obj: cols, action: 'ins', elem: 2, key: `${actor}:1`},
-        {obj: cols, action: 'set', key: `${actor}:2`, value: 'title'}
+        {obj: cols, action: 'ins', key: 0},
+        {obj: cols, action: 'set', key: 0, value: 'authors'},
+        {obj: cols, action: 'ins', key: 1},
+        {obj: cols, action: 'set', key: 1, value: 'title'}
       ]})
     })
 

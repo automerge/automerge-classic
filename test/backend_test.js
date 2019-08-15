@@ -284,6 +284,23 @@ describe('Automerge.Backend', () => {
       assert.throws(() => Backend.applyLocalChange(s2, change1), /Change request has already been applied/)
       assert.throws(() => Backend.applyLocalChange(s2, change2), /Change request has already been applied/)
     })
+
+    it.skip('should handle frontend and backend changes happening concurrently', () => {
+      const actor1 = uuid(), actor2 = uuid()
+      const local1 = {requestType: 'change', actor: actor1, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      ]}
+      const local2 = {requestType: 'change', actor: actor1, seq: 2, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      ]}
+      const remote1 = {actor: actor2, seq: 1, deps: {}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'fish', value: 'goldfish'}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, local1)
+      const [s2, patch2] = Backend.applyChanges(s1, [remote1])
+      const [s3, patch3] = Backend.applyLocalChange(s2, local2)
+    })
   })
 
   describe('getPatch()', () => {

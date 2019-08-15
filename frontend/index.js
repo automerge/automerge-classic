@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
+const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -53,34 +53,6 @@ function updateRootObject(doc, updated, inbound, state) {
 }
 
 /**
- * Filters a list of operations `ops` such that, if there are multiple assignment
- * operations for the same object and key, we keep only the most recent. Returns
- * the filtered list of operations.
- */
-function ensureSingleAssignment(ops) {
-  let assignments = {}, result = []
-
-  for (let i = ops.length - 1; i >= 0; i--) {
-    const op = ops[i], { obj, key, action } = op
-    if (['set', 'del', 'link', 'inc'].includes(action)) {
-      if (!assignments[obj]) {
-        assignments[obj] = {[key]: op}
-        result.push(op)
-      } else if (!assignments[obj][key]) {
-        assignments[obj][key] = op
-        result.push(op)
-      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
-        assignments[obj][key].action = action
-        assignments[obj][key].value += op.value
-      }
-    } else {
-      result.push(op)
-    }
-  }
-  return result.reverse()
-}
-
-/**
  * Adds a new change request to the list of pending requests, and returns an
  * updated document root object. `requestType` is a string indicating the type
  * of request, which may be "change", "undo", or "redo". For the "change" request
@@ -102,7 +74,7 @@ function makeChange(doc, requestType, context, message) {
     request.message = message
   }
   if (context) {
-    request.ops = ensureSingleAssignment(context.ops)
+    request.ops = context.ops
   }
 
   if (doc[OPTIONS].backend) {
@@ -417,14 +389,10 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
-function getElementIds(list) {
-  return list[ELEM_IDS]
-}
-
 module.exports = {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts,
-  getBackendState, getElementIds,
+  getBackendState,
   Text, Table, Counter
 }

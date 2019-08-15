@@ -585,7 +585,7 @@ describe('TypeScript support', () => {
         doc.birds.wrens.increment(2)
       })
       assert.deepEqual(doc1, { birds: {} })
-      assert.deepEqual(doc2, { birds: { wrens: 3 } })
+      assert.deepEqual(doc2, { birds: { wrens: new Counter(3) } })
     })
 
     it('should coalesce multiple increments', () => {

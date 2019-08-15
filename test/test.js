@@ -613,6 +613,37 @@ describe('Automerge', () => {
         }, /Cannot create a reference to an existing document object/)
       })
     })
+
+    describe('counters', () => {
+      it('should coalesce assignments and increments', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {})
+        const s2 = Automerge.change(s1, doc => {
+          doc.birds.wrens = new Automerge.Counter(1)
+          doc.birds.wrens.increment(2)
+        })
+        assert.deepEqual(s1, {birds: {}})
+        assert.deepEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
+        const changes = Automerge.getChanges(s1, s2)
+        assert.deepEqual(changes, [{actor: Automerge.getActorId(s2), seq: 2, deps: {}, ops: [
+          {obj: Automerge.getObjectId(s2.birds), action: 'set', key: 'wrens', value: 3, datatype: 'counter'}
+        ]}])
+      })
+
+      it('should coalesce multiple increments', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter()})
+        const s2 = Automerge.change(s1, doc => {
+          doc.birds.wrens.increment(2)
+          doc.birds.wrens.decrement()
+          doc.birds.wrens.increment(3)
+        })
+        assert.deepEqual(s1, {birds: {wrens: new Automerge.Counter(0)}})
+        assert.deepEqual(s2, {birds: {wrens: new Automerge.Counter(4)}})
+        const changes = Automerge.getChanges(s1, s2)
+        assert.deepEqual(changes, [{actor: Automerge.getActorId(s2), seq: 2, deps: {}, ops: [
+          {obj: Automerge.getObjectId(s2.birds), action: 'inc', key: 'wrens', value: 4}
+        ]}])
+      })
+    })
   })
 
   describe('concurrent use', () => {
@@ -1006,20 +1037,20 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.push('D'))
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
-      const elemId = Automerge.Frontend.getElementIds(s1.list)[3]
+      const actor = Automerge.Frontend.getActorId(s1)
       assert.deepEqual(getUndoStack(s1).last().toJS(),
-                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: elemId}])
+                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `${actor}:4`}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
 
     it('should undo list element deletion by re-assigning the old value', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
-      const elemId = Automerge.Frontend.getElementIds(s1.list)[1]
+      const actor = Automerge.Frontend.getActorId(s1)
       s1 = Automerge.change(s1, doc => doc.list.splice(1, 1))
       assert.deepEqual(s1, {list: ['A', 'C']})
       assert.deepEqual(getUndoStack(s1).last().toJS(),
-                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: elemId, value: 'B'}])
+                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `${actor}:2`, value: 'B'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
@@ -1145,11 +1176,11 @@ describe('Automerge', () => {
     it('should undo/redo a list element insertion', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.push('D'))
-      const elemId = Automerge.Frontend.getElementIds(s1.list)[3]
+      const actor = Automerge.Frontend.getActorId(s1)
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
       assert.deepEqual(getRedoStack(s1).last().toJS(),
-                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: elemId, value: 'D'}])
+                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `${actor}:4`, value: 'D'}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
     })
@@ -1158,10 +1189,10 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.list = ['A', 'B', 'C'])
       s1 = Automerge.change(s1, doc => doc.list.deleteAt(1))
       s1 = Automerge.undo(s1)
-      const elemId = Automerge.Frontend.getElementIds(s1.list)[1]
+      const actor = Automerge.Frontend.getActorId(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
       assert.deepEqual(getRedoStack(s1).last().toJS(),
-                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: elemId}])
+                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `${actor}:2`}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'C']})
     })
@@ -1265,14 +1296,22 @@ describe('Automerge', () => {
     })
 
     it('should reconstitute element ID counters', () => {
-      let s = Automerge.init('actorid')
-      s = Automerge.change(s, doc => doc.list = ['a'])
-      assert.strictEqual(Automerge.Frontend.getElementIds(s.list)[0], 'actorid:1')
-      s = Automerge.change(s, doc => doc.list.deleteAt(0))
-      s = Automerge.load(Automerge.save(s), 'actorid')
-      s = Automerge.change(s, doc => doc.list.push('b'))
-      assert.deepEqual(s, {list: ['b']})
-      assert.strictEqual(Automerge.Frontend.getElementIds(s.list)[0], 'actorid:2')
+      const s1 = Automerge.init('actorid')
+      const s2 = Automerge.change(s1, doc => doc.list = ['a'])
+      const listId = Automerge.getObjectId(s2.list)
+      assert.deepEqual(Automerge.getChanges(s1, s2), [{actor: 'actorid', seq: 1, deps: {}, ops: [
+        {obj: ROOT_ID, action: 'makeList', key: 'list',      child: listId},
+        {obj: listId,  action: 'ins',      key: '_head',     elem: 1},
+        {obj: listId,  action: 'set',      key: 'actorid:1', value: 'a'}
+      ]}])
+      const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
+      const s4 = Automerge.load(Automerge.save(s3), 'actorid')
+      const s5 = Automerge.change(s4, doc => doc.list.push('b'))
+      assert.deepEqual(s5, {list: ['b']})
+      assert.deepEqual(Automerge.getChanges(s4, s5), [{actor: 'actorid', seq: 3, deps: {}, ops: [
+        {obj: listId,  action: 'ins',      key: '_head',     elem: 2},
+        {obj: listId,  action: 'set',      key: 'actorid:2', value: 'b'}
+      ]}])
     })
 
     it('should allow a reloaded list to be mutated', () => {

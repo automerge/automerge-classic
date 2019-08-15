@@ -1,15 +1,15 @@
-const { OBJECT_ID, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OBJECT_ID } = require('./constants')
 
 class Text {
   constructor (text) {
     if (typeof text === 'string') {
       const elems = text.split('').map(value => ({value}))
-      return instantiateText(undefined, elems, undefined)
+      return instantiateText(undefined, elems)
     } else if (Array.isArray(text)) {
       const elems = text.map(value => ({value}))
-      return instantiateText(undefined, elems, undefined)
+      return instantiateText(undefined, elems)
     } else if (text === undefined) {
-      return instantiateText(undefined, [], 0)
+      return instantiateText(undefined, [])
     } else {
       throw new TypeError(`Unsupported initial value for Text: ${text}`)
     }
@@ -21,10 +21,6 @@ class Text {
 
   get (index) {
     return this.elems[index].value
-  }
-
-  getElemId (index) {
-    return this.elems[index].elemId
   }
 
   [Symbol.iterator] () {
@@ -59,7 +55,7 @@ class Text {
       throw new RangeError('getWriteable() requires the objectId to be set')
     }
 
-    const instance = instantiateText(this[OBJECT_ID], this.elems, this[MAX_ELEM])
+    const instance = instantiateText(this[OBJECT_ID], this.elems)
     instance.context = context
     instance.path = path
     return instance
@@ -119,20 +115,11 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
   }
 }
 
-function instantiateText(objectId, elems, maxElem) {
+function instantiateText(objectId, elems) {
   const instance = Object.create(Text.prototype)
   instance[OBJECT_ID] = objectId
   instance.elems = elems
-  instance[MAX_ELEM] = maxElem
   return instance
 }
 
-/**
- * Returns the elemId of the `index`-th element. `object` may be either
- * a list object or a Text object.
- */
-function getElemId(object, index) {
-  return (object instanceof Text) ? object.getElemId(index) : object[ELEM_IDS][index]
-}
-
-module.exports = { Text, getElemId, instantiateText }
+module.exports = { Text, instantiateText }
