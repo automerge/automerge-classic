@@ -302,13 +302,13 @@ like a git repository).
 > **Unless you know what you are doing, you should stick with the default**, and let `actorId` be
 > auto-generated.
 
-### Undo and Redo
+### Undo and redo
 
 Automerge makes it easy to support an undo/redo feature in your application. Note that undo is a
 somewhat tricky concept in a collaborative application! Here, "undo" is taken as meaning "what the
-user expects to happen when they hit Ctrl-Z/Cmd-Z". In particular, the undo feature undoes the most
-recent change _by the local user_; it cannot currently be used to revert changes made by other
-users.
+user expects to happen when they hit <kbd>ctrl+Z</kbd>/<kbd>⌘ Z</kbd>". In particular, the undo
+feature undoes the most recent change _by the local user_; it cannot currently be used to revert
+changes made by other users.
 
 Moreover, undo is not the same as jumping back to a previous version of a document; see
 [the next section](#examining-document-history) on how to examine document history. Undo works by
@@ -342,7 +342,7 @@ doc = Automerge.redo(doc) // now doc is {birds: ['blackbird', 'robin']}
 
 You can pass an optional `message` as second argument to `Automerge.undo(doc, message)` and
 `Automerge.redo(doc, message)`. This string is used as "commit message" that describes the undo/redo
-change, and it appears in the change history (see next section).
+change, and it appears in the [change history](#examining-document-history).
 
 ### Sending and receiving changes
 
