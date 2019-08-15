@@ -356,7 +356,7 @@ options, with more under development:
   [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js), an
   implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
-  contains an example that runs the Connection protocol over a simple TCP connection.
+  contains an example that runs the Connection protocol over a simple WebSockets connection.
 - Use [MPL](https://github.com/automerge/mpl), which runs the `Automerge.Connection` protocol over
   WebRTC.
 
@@ -389,8 +389,8 @@ and it is the essence of what Automerge is all about.
 `Automerge.merge(doc1, doc2)` is a related function that is useful for testing. It looks for any
 changes that appear in `doc2` but not in `doc1`, and applies them to `doc1`, returning an updated
 version of `doc1`. This function requires that `doc1` and `doc2` have different actor IDs (that is,
-they originated from different calls to `Automerge.init()`). See the Example Usage section above for
-an example using `Automerge.merge()`.
+they originated from different calls to `Automerge.init()`). See the [Usage](#usage) section above
+for an example using `Automerge.merge()`.
 
 ### Conflicting changes
 
