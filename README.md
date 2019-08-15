@@ -41,7 +41,7 @@ and merging**:
 
   (Different from git: **no merge conflicts to resolve!**)
 
-## Features and Design Principles
+## Features and design principles
 
 - **Network-agnostic**. Automerge is a pure data structure library that does not care about what
   kind of network you use: client/server, peer-to-peer, Bluetooth, USB drive in the mail, whatever,
@@ -82,7 +82,7 @@ Otherwise, clone this repository, and then you can use the following commands:
 - `yarn build` — creates a bundled JS file `dist/automerge.js` for web browsers. It includes the
   dependencies and is set up so that you can load through a script tag.
 
-## Example Usage
+## Usage
 
 For examples of real-life applications built upon Automerge, check out:
 
@@ -507,11 +507,22 @@ For `type: 'list'` and `type: 'text'`, the possible actions are:
 
 ## Custom CRDT types
 
-### Counters
+### Counter
 
 If you have a numeric value that is only ever changed by adding or subtracting (e.g. counting how
-many times the user has done a particular thing), it is recommmended that you use the
-`Automerge.Counter` datatype instead of a plain number. You set it up like this:
+many times the user has done a particular thing), you should use the `Automerge.Counter` datatype
+instead of a plain number, because it deals with concurrent changes correctly.
+
+> **Note:** Using the `Automerge.Counter` datatype is safer than changing a number value yourself
+> using the `++` or `+= 1` operators. For example, suppose the value is currently **3**:
+>
+> - If two users increment it concurrently, they will both register **4** as the new value, whereas
+>   the two increments should result in a value of **5**.
+> - If one user increments twice and the other user increments three times before the documents are
+>   merged, we will now have [conflicting changes](#conflicting-changes) (**5** vs. **6**), rather
+>   than the desired value of **8** (3 + 2 + 3).
+
+To set up a `Counter`:
 
 ```js
 state = Automerge.change(state, doc => {
@@ -532,30 +543,25 @@ state = Automerge.change(state, doc => {
 })
 ```
 
-Using the `Automerge.Counter` datatype is safer than changing a number value using the `++` or
-`+= 1` operators: if several users concurrently change a `Automerge.Counter` value, all the changes
-are added up as you'd expect, whereas concurrent `++` or `+= 1` operations will result in conflicts
-that need to be resolved (see "Conflicting changes" below).
+> **Note:** In relational databases it is common to use an auto-incrementing counter to generate
+> primary keys for rows in a table, but this is not safe in Automerge, since several users may end
+> up generating the same counter value! See the [Table](#table) datatype below for implementing a
+> relational-like table with a primary key.
 
-Another note: in relational databases it is common to use an auto-incrementing counter to generate
-primary keys for rows in a table, but this is not safe in Automerge, since several users may end up
-generating the same counter value! See the section "Relational table support" below for implementing
-a relational-like table with a primary key.
-
-### Text editing support
+### Text
 
 `Automerge.Text` provides support for collaborative text editing. Under the hood, text is
 represented as a list of characters, which is edited by inserting or deleting individual characters.
 Compared to using a regular JavaScript array, `Automerge.Text` offers better performance.
 
-(Side note: technically, text should be represented as a list of
-[Unicode _grapheme clusters_](http://www.unicode.org/reports/tr29/). What the user thinks of as a
-"character" may actually be a series of several Unicode code points, including accents, diacritics,
-and other combining marks. A grapheme cluster is the smallest editable unit of text: that is, the
-thing that gets deleted if you press the delete key once, or the thing that the cursor skips over if
-you press the right-arrow key once. Emoji make a good test case, since many emoji consist of a
-sequence of several Unicode code points — for example, the
-[skintone modifier](http://www.unicode.org/reports/tr51/) is a combining mark.)
+> **Note:** Technically, text should be represented as a list of
+> [Unicode _grapheme clusters_](http://www.unicode.org/reports/tr29/). What the user thinks of as a
+> "character" may actually be a series of several Unicode code points, including accents,
+> diacritics, and other combining marks. A grapheme cluster is the smallest editable unit of text:
+> that is, the thing that gets deleted if you press the delete key once, or the thing that the
+> cursor skips over if you press the right-arrow key once. Emoji make a good test case, since many
+> emoji consist of a sequence of several Unicode code points (for example, the
+> [skintone modifier](http://www.unicode.org/reports/tr51/) is a combining mark).
 
 You can create a Text object inside a change callback. Then you can use `insertAt()` and
 `deleteAt()` to insert and delete characters (same API as for list modifications, shown above):
@@ -579,7 +585,7 @@ newDoc.text.join('') // returns 'Hello', the concatenation of all characters
 for (let char of newDoc.text) console.log(char) // iterates over all characters
 ```
 
-### Relational table support
+### Table
 
 `Automerge.Table` provides a collection datatype that is similar to a table in a relational
 database. It is intended for a set of objects (_rows_) that have the same properties (_columns_ in a
