@@ -204,15 +204,17 @@ An Automerge document must be treated as immutable. It is **never changed direct
 > document object strictly immutable you can pass an option: `Automerge.init({freeze: true})` or
 > `Automerge.load(string, {freeze: true})`.
 
-### Manipulating and inspecting state
+### Updating a document
 
-`Automerge.change(doc, message, callback)` enables you to modify an Automerge document `doc`,
-returning an updated copy of the document. The `doc` object **must never be modified** directly;
-rather, the `callback` function you pass to `Automerge.change()` is called with a mutable version of
-`doc`, as shown below. The `message` argument allows you to attach an arbitrary string to the
-change, which is not interpreted by Automerge, but saved as part of the change history. The
-`message` argument is optional; if you want to omit it, you can simply call
-`Automerge.change(doc, callback)`.
+`Automerge.change(doc, message, changeFn)` enables you to modify an Automerge document `doc`,
+returning an updated copy of the document.
+
+The `changeFn` function you pass to `Automerge.change()` is called with a mutable version of `doc`,
+as shown below.
+
+The optional `message` argument allows you to attach an arbitrary string to the change, which is not
+interpreted by Automerge, but saved as part of the change history. You can omit the `message`
+argument and simply call `Automerge.change(doc, callback)`.
 
 Within the callback you can use standard JavaScript object manipulation operations to change the
 document:
@@ -226,7 +228,8 @@ newDoc = Automerge.change(currentDoc, doc => {
 
   delete doc['property'] // removes a property
 
-  doc.stringValue = 'value' // all JSON primitive datatypes are supported
+  // all JSON primitive datatypes are supported
+  doc.stringValue = 'value'
   doc.numberValue = 1
   doc.boolValue = true
   doc.nullValue = null
@@ -234,19 +237,10 @@ newDoc = Automerge.change(currentDoc, doc => {
   doc.nestedObject = {} // creates a nested object
   doc.nestedObject.property = 'value'
 
-  // you can also assign an object that already has some properties:
+  // you can also assign an object that already has some properties
   doc.otherObject = { key: 'value', number: 42 }
-})
-```
 
-The top-level Automerge document is always an object (i.e. a mapping from properties to values). You
-can use arrays (lists) by assigning a JavaScript array object to a property within a document. Then
-you can use most of the standard
-[Array functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)
-to manipulate the array:
-
-```js
-newDoc = Automerge.change(currentDoc, doc => {
+  // Arrays are fully supported
   doc.list = [] // creates an empty list object
   doc.list.push(2, 3) // push() adds elements to the end
   doc.list.unshift(0, 1) // unshift() adds elements at the beginning
@@ -257,14 +251,15 @@ newDoc = Automerge.change(currentDoc, doc => {
   for (let i = 0; i < doc.list.length; i++) doc.list[i] *= 2
   // now doc.list is [0, 2, 4, 6.283185307179586]
 
-  doc.list.insertAt(1, 'hello', 'world') // inserts elements at given index
-  doc.list.deleteAt(5) // deletes element at given index
-  // now doc.list is [0, 'hello', 'world', 2, 4]
-
-  doc.list.splice(2, 2, 'automerge') // like JS standard Array.splice()
+  doc.list.splice(2, 2, 'automerge')
   // now doc.list is [0, 'hello', 'automerge', 4]
 
   doc.list[4] = { key: 'value' } // objects can be nested inside lists as well
+
+  // Arrays in Automerge offer the convenience functions `insertAt` and `deleteAt`
+  doc.list.insertAt(1, 'hello', 'world') // inserts elements at given index
+  doc.list.deleteAt(5) // deletes element at given index
+  // now doc.list is [0, 'hello', 'world', 2, 4]
 })
 ```
 
