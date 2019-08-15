@@ -283,6 +283,25 @@ like a git repository).
 `Automerge.load(str)` unserializes an Automerge document from a string that was produced by
 `Automerge.save()`.
 
+> ### Note: Specifying `actorId`
+>
+> The Automerge `init`, `from`, and `load` functions take an optional `actorId` parameter:
+>
+> ```js
+> const actorId = '1234-abcd-56789-qrstuv'
+> const doc1 = Automerge.init(actorId)
+> const doc2 = Automerge.from({ foo: 1 }, actorId)
+> const doc3 = Automerge.load(str, actorId)
+> ```
+>
+> The `actorId` is a string that uniquely identifies the current node; if you omit `actorId`, a
+> random UUID is generated. If you pass in your own `actorId`, you must ensure that there can never
+> be two different processes with the same actor ID. Even if you have two different processes
+> running on the same machine, they must have distinct actor IDs.
+>
+> **Unless you know what you are doing, you should stick with the default**, and let `actorId` be
+> auto-generated.
+
 ### Undo and Redo
 
 Automerge makes it easy to support an undo/redo feature in your application. Note that undo is a
