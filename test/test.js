@@ -30,12 +30,12 @@ describe('Automerge', () => {
         assert.strictEqual(Automerge.getActorId(doc), '123')
       })
 
-      it('should accept an empty object as initial state', () => {
+      it('accepts an empty object as initial state', () => {
         const doc = Automerge.from({})
         assert.deepEqual(doc, {})
       })
 
-      it('accpets an array as initial state, but converts it to an object', () => {
+      it('accepts an array as initial state, but converts it to an object', () => {
         const doc = Automerge.from(['a', 'b', 'c'])
         assert.deepEqual(doc, { '0': 'a', '1': 'b', '2': 'c' })
       })
@@ -59,7 +59,7 @@ describe('Automerge', () => {
     })
 
 
-  describe('sequential use:', () => {
+  describe('sequential use', () => {
     let s1, s2
     beforeEach(() => {
       s1 = Automerge.init()
@@ -950,7 +950,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('Automerge.undo()', () => {
+  describe('.undo()', () => {
     function getUndoStack(doc) {
       return Automerge.Frontend.getBackendState(doc).getIn(['opSet', 'undoStack'])
     }
@@ -1099,7 +1099,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('Automerge.redo()', () => {
+  describe('.redo()', () => {
     function getRedoStack(doc) {
       return Automerge.Frontend.getBackendState(doc).getIn(['opSet', 'redoStack'])
     }
