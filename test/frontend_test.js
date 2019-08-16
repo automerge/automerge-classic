@@ -287,7 +287,7 @@ describe('Automerge.Frontend', () => {
       let [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = ['goldfinch'])
       const birds = Frontend.getObjectId(doc1.birds), actor = Frontend.getActorId(doc1)
       doc1 = Frontend.applyPatch(doc1, {actor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list', maxElem: 1,
+        birds: {[actor]: {objectId: birds, type: 'list',
           edits: [{action: 'insert', index: 0}],
           props: {0: {[actor]: {value: 'goldfinch'}}}
         }}
@@ -303,7 +303,7 @@ describe('Automerge.Frontend', () => {
 
       const remoteActor = uuid()
       const doc3 = Frontend.applyPatch(doc2, {actor: remoteActor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list', maxElem: 2,
+        birds: {[actor]: {objectId: birds, type: 'list',
           edits: [{action: 'insert', index: 1}],
           props: {1: {[remoteActor]: {value: 'bullfinch'}}}
         }}
@@ -311,7 +311,7 @@ describe('Automerge.Frontend', () => {
       assert.deepEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
 
       const doc4 = Frontend.applyPatch(doc3, {actor, seq: 2, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list', maxElem: 3,
+        birds: {[actor]: {objectId: birds, type: 'list',
           edits: [{action: 'insert', index: 0}, {action: 'insert', index: 2}],
           props: {0: {[actor]: {value: 'chaffinch'}}, 2: {[actor]: {value: 'greenfinch'}}}
         }}
@@ -427,7 +427,7 @@ describe('Automerge.Frontend', () => {
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
       const patch = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', maxElem: 1,
+        objectId: birds, type: 'list',
         edits: [{action: 'insert', index: 0}],
         props: {0: {[actor]: {value: 'chaffinch'}}}
       }}}}}
@@ -438,7 +438,7 @@ describe('Automerge.Frontend', () => {
     it('should apply updates inside lists', () => {
       const birds = uuid(), actor = uuid()
       const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', maxElem: 1,
+        objectId: birds, type: 'list',
         edits: [{action: 'insert', index: 0}],
         props: {0: {[actor]: {value: 'chaffinch'}}}
       }}}}}
@@ -455,7 +455,7 @@ describe('Automerge.Frontend', () => {
     it('should apply updates inside list element conflicts', () => {
       const birds = uuid(), item1 = uuid(), item2 = uuid(), actor = uuid()
       const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', maxElem: 1,
+        objectId: birds, type: 'list',
         edits: [{action: 'insert', index: 0}],
         props: {0: {
           actor1: {objectId: item1, type: 'map', props: {species: {actor1: {value: 'woodpecker'}}, numSeen: {actor1: {value: 1}}}},
@@ -487,7 +487,7 @@ describe('Automerge.Frontend', () => {
     it('should delete list elements', () => {
       const birds = uuid(), actor = uuid()
       const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', maxElem: 2,
+        objectId: birds, type: 'list',
         edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
         props: {
           0: {[actor]: {value: 'chaffinch'}},
@@ -510,7 +510,7 @@ describe('Automerge.Frontend', () => {
         counts: {[actor]: {objectId: counts, type: 'map', props: {
           magpies: {[actor]: {value: 2}}
         }}},
-        details: {[actor]: {objectId: details, type: 'list', maxElem: 1,
+        details: {[actor]: {objectId: details, type: 'list',
           edits: [{action: 'insert', index: 0}],
           props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
             species: {[actor]: {value: 'magpie'}},

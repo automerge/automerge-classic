@@ -73,9 +73,8 @@ declare module 'automerge' {
   }
 
   class Text extends List<string> {
-    constructor(objectId?: UUID, elems?: string[], maxElem?: number)
+    constructor(text?: string | string[])
     get(index: number): string
-    getElemId(index: number): string
   }
 
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
@@ -229,7 +228,6 @@ declare module 'automerge' {
   interface ObjectDiff {
     objectId: UUID
     type: CollectionType
-    maxElem?: number
     edits?: Edit[]
     props?: {[propName: string]: {[actorId: string]: ObjectDiff | ValueDiff}}
   }

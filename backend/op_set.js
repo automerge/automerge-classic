@@ -91,7 +91,6 @@ function applyInsert(opSet, op, patch) {
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
-  if (patch) patch.maxElem = maxElem
   return opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
     .setIn(['byObject', objectId, '_maxElem'], maxElem)
@@ -602,7 +601,6 @@ function constructList(opSet, objectId, type) {
   while (true) {
     elemId = getNext(opSet, objectId, elemId)
     if (!elemId) {
-      patch.maxElem = maxCounter
       return patch
     }
     maxCounter = Math.max(maxCounter, parseElemId(elemId).counter)

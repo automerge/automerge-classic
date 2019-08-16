@@ -1371,13 +1371,13 @@ describe('Automerge', () => {
       let s3 = Automerge.change(s2, doc => doc.birds.push('Wagtail'))
       const objectId = Automerge.getObjectId(s1.birds), actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId, type: 'list', maxElem: 1,
+        birds: {[actorId]: {objectId, type: 'list',
           edits: [{action: 'insert', index: 0}],
           props: {0: {[actorId]: {value: 'Robin'}}}
         }}
       }})
       assert.deepEqual(Automerge.diff(s1, s3), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId, type: 'list', maxElem: 2,
+        birds: {[actorId]: {objectId, type: 'list',
           edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
           props: {0: {[actorId]: {value: 'Robin'}}, 1: {[actorId]: {value: 'Wagtail'}}}
         }}
@@ -1401,7 +1401,7 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => doc.birds = [{name: 'Chaffinch'}])
       const actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId: Automerge.getObjectId(s2.birds), type: 'list', maxElem: 1,
+        birds: {[actorId]: {objectId: Automerge.getObjectId(s2.birds), type: 'list',
           edits: [{action: 'insert', index: 0}],
           props: {
             0: {[actorId]: {objectId: Automerge.getObjectId(s2.birds[0]), type: 'map', props: {
@@ -1419,7 +1419,7 @@ describe('Automerge', () => {
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
         birds: {[actorId]: {objectId: Automerge.getObjectId(s1.birds), type: 'list', props: {
           0: {[actorId]: {objectId: Automerge.getObjectId(s1.birds[0]), type: 'map', props: {
-            habitat: {[actorId]: {objectId: Automerge.getObjectId(s1.birds[0].habitat), type: 'list', maxElem: 2,
+            habitat: {[actorId]: {objectId: Automerge.getObjectId(s1.birds[0].habitat), type: 'list',
               edits: [{action: 'insert', index: 1}],
               props: {1: {[actorId]: {value: 'gardens'}}}
             }}
