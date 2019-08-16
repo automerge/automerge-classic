@@ -110,7 +110,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
   if (index >= 0) {
     if (ops.isEmpty()) {
       elemIds = elemIds.removeIndex(index)
-      if (patch) patch.edits.push({action: 'remove', elemId, index})
+      if (patch) patch.edits.push({action: 'remove', index})
     } else {
       elemIds = elemIds.setValue(elemId, ops.first().get('value'))
     }
@@ -130,7 +130,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    if (patch) patch.edits.push({action: 'insert', elemId, index})
+    if (patch) patch.edits.push({action: 'insert', index})
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -609,7 +609,7 @@ function constructList(opSet, objectId, type) {
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {
-      patch.edits.push({action: 'insert', elemId, index})
+      patch.edits.push({action: 'insert', index})
       patch.props[index] = {}
       for (let op of fieldOps) {
         patch.props[index][op.get('actor')] = constructField(opSet, op)
