@@ -136,28 +136,24 @@ declare module 'automerge' {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
     function canRedo<T>(doc: Doc<T>): boolean
     function canUndo<T>(doc: Doc<T>): boolean
-    function change<D, T = Proxy<D>>(
-      doc: D,
-      message: string | undefined,
-      callback: ChangeFn<T>
-    ): [T, Change]
-    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
-    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
-    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
+    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Request]
+    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Request]
+    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Request]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
     function getObjectId<T>(doc: Doc<T>): UUID
     function init<T>(options?: InitOptions): Doc<T>
-    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
-    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
   }
 
   namespace Backend {
     function applyChanges(state: BackendState, changes: Change[]): [BackendState, Patch]
-    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch]
+    function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
     function getChanges(oldState: BackendState, newState: BackendState): Change[]
     function getChangesForActor(state: BackendState, actorId: string): Change[]
     function getMissingChanges(state: BackendState, clock: Clock): Change[]
@@ -196,9 +192,18 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
+  // A change request, sent from the frontend to the backend
+  interface Request {
+    requestType: RequestType
+    message?: string
+    actor: string
+    seq: number
+    version: number
+    ops: Op[]
+  }
+
   interface Change {
     message?: string
-    requestType?: RequestType
     actor: string
     seq: number
     deps: Clock
@@ -208,7 +213,7 @@ declare module 'automerge' {
   interface Op {
     action: OpAction
     obj: UUID
-    key: string
+    key: string | number
     child?: UUID
     value?: number | boolean | string | null
     datatype?: DataType
@@ -219,7 +224,7 @@ declare module 'automerge' {
     actor?: string
     seq?: number
     clock?: Clock
-    deps?: Clock
+    version: number
     canUndo?: boolean
     canRedo?: boolean
     diffs: ObjectDiff

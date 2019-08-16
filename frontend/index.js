@@ -66,10 +66,8 @@ function makeChange(doc, requestType, context, message) {
   }
   const state = copyObject(doc[STATE])
   state.seq += 1
-  const deps = copyObject(state.deps)
-  delete deps[actor]
 
-  const request = {requestType, actor, seq: state.seq, deps}
+  const request = {requestType, actor, seq: state.seq, version: state.version}
   if (message !== undefined) {
     request.message = message
   }
@@ -114,7 +112,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
   if (fromBackend) {
     const seq = patch.clock ? patch.clock[actor] : undefined
     if (seq && seq > state.seq) state.seq = seq
-    state.deps = patch.deps
+    state.version = patch.version
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
   }
@@ -137,7 +135,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], deps: {}, canUndo: false, canRedo: false}
+  const state = {seq: 0, requests: [], version: 0, canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }

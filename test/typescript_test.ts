@@ -225,7 +225,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(s2.number, 1)
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
       assert.strictEqual(patch1.seq, 1)
-      assert.deepEqual(patch1.clock, { [Automerge.getActorId(s0)]: 1 })
+      assert.strictEqual(patch1.version, 1)
       assert.strictEqual(patch1.canUndo, true)
       assert.strictEqual(patch1.canRedo, false)
       assert.strictEqual(patch1.diffs.objectId, ROOT_ID)

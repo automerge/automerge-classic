@@ -28,7 +28,7 @@ describe('Automerge.Table', () => {
       })
       const books = Frontend.getObjectId(doc.books)
       const cols = Frontend.getObjectId(doc.books.columns)
-      assert.deepEqual(req, {requestType: 'change', actor, seq: 1, deps: {}, ops: [
+      assert.deepEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
         {obj: ROOT_ID, action: 'makeTable', key: 'books', child: books},
         {obj: books, action: 'makeList', key: 'columns', child: cols},
         {obj: cols, action: 'ins', key: 0},
@@ -48,7 +48,7 @@ describe('Automerge.Table', () => {
         rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
       const books = Frontend.getObjectId(doc2.books)
-      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, deps: {}, ops: [
+      assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
         {obj: books, action: 'makeMap', key: rowId, child: rowId},
         {obj: rowId, action: 'set', key: 'authors', value: 'Kleppmann, Martin'},
         {obj: rowId, action: 'set', key: 'title', value: 'Designing Data-Intensive Applications'}

@@ -97,42 +97,63 @@ function processChangeRequest(state, request) {
   }
 
   change.ops = ensureSingleAssignment(ops)
-  return apply(state, [change], true, true)
+  return apply(state, [change], request, true, true)
 }
 
 /**
  * Returns an empty node state.
  */
 function init() {
-  return Map({opSet: OpSet.init()})
+  return Map({opSet: OpSet.init(), versions: List.of(Map({version: 0, deps: Map()}))})
 }
 
 /**
  * Constructs a patch object from the current node state `state` and the list
  * of object modifications `diffs`.
  */
-function makePatch(state, diffs) {
+function makePatch(state, diffs, request, isIncremental) {
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
-  const clock = state.getIn(['opSet', 'clock']).toJS()
-  const deps = state.getIn(['opSet', 'deps']).toJS()
-  return {clock, deps, canUndo, canRedo, diffs}
+
+  if (isIncremental) {
+    let version
+    if (state.get('versions').size > 0) {
+      version = state.get('versions').last().get('version') + 1
+    } else {
+      version = 1
+    }
+
+    const versionObj = Map({version, deps: state.getIn(['opSet', 'deps'])})
+    state = state.update('versions', versions => versions.push(versionObj))
+
+    const patch = {version, canUndo, canRedo}
+    if (patch && request) {
+      patch.actor = request.actor
+      patch.seq   = request.seq
+    }
+    patch.diffs = diffs
+    return [state, patch]
+
+  } else {
+    const clock = state.getIn(['opSet', 'clock']).toJS()
+    return [state, {version: 0, clock, canUndo, canRedo, diffs}]
+  }
 }
 
 /**
  * The implementation behind `applyChanges()` and `applyLocalChange()`.
  */
-function apply(state, changes, undoable, incremental) {
-  let diffs = incremental ? {} : null
+function apply(state, changes, request, isLocal, isIncremental) {
+  let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
   for (let change of fromJS(changes)) {
     change = change.remove('requestType')
-    opSet = OpSet.addChange(opSet, change, undoable, diffs)
+    opSet = OpSet.addChange(opSet, change, isLocal, diffs)
   }
 
   OpSet.finalizePatch(opSet, diffs)
   state = state.set('opSet', opSet)
-  return [state, incremental ? makePatch(state, diffs) : null]
+  return isIncremental ? makePatch(state, diffs, request, true) : [state, null]
 }
 
 /**
@@ -142,7 +163,7 @@ function apply(state, changes, undoable, incremental) {
  * to the document objects to reflect these changes.
  */
 function applyChanges(state, changes) {
-  return apply(state, changes, false, true)
+  return apply(state, changes, null, false, true)
 }
 
 /**
@@ -162,19 +183,23 @@ function applyLocalChange(state, request) {
     throw new RangeError('Change request has already been applied')
   }
 
-  let patch
+  const versionObj = state.get('versions').find(v => v.get('version') === request.version)
+  if (!versionObj) {
+    throw new RangeError(`Unknown base document version ${request.version}`)
+  }
+  const deps = versionObj.get('deps').remove(request.actor).toJS()
+  request = Object.assign(request, {deps})
+  state = state.update('versions', versions => versions.filter(v => v.get('version') >= request.version))
+
   if (request.requestType === 'change') {
-    ;[state, patch] = processChangeRequest(state, request)
+    return processChangeRequest(state, request)
   } else if (request.requestType === 'undo') {
-    ;[state, patch] = undo(state, request)
+    return undo(state, request)
   } else if (request.requestType === 'redo') {
-    ;[state, patch] = redo(state, request)
+    return redo(state, request)
   } else {
     throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
-  patch.actor = request.actor
-  patch.seq   = request.seq
-  return [state, patch]
 }
 
 /**
@@ -185,8 +210,9 @@ function applyLocalChange(state, request) {
  * been loaded, you can use `getPatch()` to construct the latest document state.
  */
 function loadChanges(state, changes) {
-  const [newState, patch] = apply(state, changes, false, false)
-  return newState
+  const [newState, patch] = apply(state, changes, null, false, false)
+  const versionObj = Map({version: 0, deps: newState.getIn(['opSet', 'deps'])})
+  return newState.set('versions', List.of(versionObj))
 }
 
 /**
@@ -195,7 +221,8 @@ function loadChanges(state, changes) {
  */
 function getPatch(state) {
   const diffs = OpSet.constructObject(state.get('opSet'), OpSet.ROOT_ID)
-  return makePatch(state, diffs)
+  const [_, patch] = makePatch(state, diffs, null, false)
+  return patch
 }
 
 function getChanges(oldState, newState) {
@@ -280,7 +307,7 @@ function undo(state, request) {
   opSet = OpSet.addChange(opSet, change, false, diffs)
   state = state.set('opSet', opSet)
   OpSet.finalizePatch(opSet, diffs)
-  return [state, makePatch(state, diffs)]
+  return makePatch(state, diffs, request, true)
 }
 
 /**
@@ -305,7 +332,7 @@ function redo(state, request) {
   opSet = OpSet.addChange(opSet, change, false, diffs)
   state = state.set('opSet', opSet)
   OpSet.finalizePatch(opSet, diffs)
-  return [state, makePatch(state, diffs)]
+  return makePatch(state, diffs, request, true)
 }
 
 module.exports = {
