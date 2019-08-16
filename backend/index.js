@@ -36,24 +36,10 @@ function ensureSingleAssignment(ops) {
  * Processes a change request `request` that is incoming from the frontend. Translates index-based
  * addressing of lists into identifier-based addressing used by the CRDT.
  */
-function processChangeRequest(state, request) {
+function processChangeRequest(opSet, request) {
   const { actor, seq, deps } = request
   const change = { actor, seq, deps }, ops = []
   if (request.message) change.message = request.message
-
-  // Check whether the incoming request was made in a frontend whose state matches the current
-  // backend state. If the backend has applied a change that the frontend had not yet seen at the
-  // time it generated the request, throw an exception. (That additional change seen by the backend
-  // would have to be a remote change, since only the frontend can generate local changes.) It is
-  // impossible for the frontend to have seen a change that the backend has not seen.
-  state.getIn(['opSet', 'deps']).forEach((depSeq, depActor) => {
-    if (depActor === actor && depSeq !== seq - 1) {
-      throw new RangeError(`Bad dependency for own actor ${actor}: ${depSeq} != ${seq - 1}`)
-    }
-    if (depActor !== actor && depSeq > (deps[depActor] || 0)) {
-      throw new RangeError('Backend is ahead of frontend')
-    }
-  })
 
   let objectTypes = {}, elemIds = {}, maxElem = {}
   for (let op of request.ops) {
@@ -61,11 +47,11 @@ function processChangeRequest(state, request) {
       objectTypes[op.child] = op.action
     }
 
-    const objType = objectTypes[op.obj] || state.getIn(['opSet', 'byObject', op.obj, '_init', 'action'])
+    const objType = objectTypes[op.obj] || opSet.getIn(['byObject', op.obj, '_init', 'action'])
     if (objType === 'makeList' || objType === 'makeText') {
       if (!elemIds[op.obj]) {
-        elemIds[op.obj] = state.getIn(['opSet', 'byObject', op.obj, '_elemIds']) || new SkipList()
-        maxElem[op.obj] = state.getIn(['opSet', 'byObject', op.obj, '_maxElem'], 0)
+        elemIds[op.obj] = opSet.getIn(['byObject', op.obj, '_elemIds']) || new SkipList()
+        maxElem[op.obj] = opSet.getIn(['byObject', op.obj, '_maxElem'], 0)
       }
 
       if (typeof op.key !== 'number') {
@@ -97,14 +83,15 @@ function processChangeRequest(state, request) {
   }
 
   change.ops = ensureSingleAssignment(ops)
-  return apply(state, [change], request, true, true)
+  return fromJS(change)
 }
 
 /**
  * Returns an empty node state.
  */
 function init() {
-  return Map({opSet: OpSet.init(), versions: List.of(Map({version: 0, deps: Map()}))})
+  const opSet = OpSet.init(), versionObj = Map({version: 0, localOnly: true, opSet})
+  return Map({opSet, versions: List.of(versionObj)})
 }
 
 /**
@@ -112,48 +99,48 @@ function init() {
  * of object modifications `diffs`.
  */
 function makePatch(state, diffs, request, isIncremental) {
+  const version = state.get('versions').last().get('version')
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
 
   if (isIncremental) {
-    let version
-    if (state.get('versions').size > 0) {
-      version = state.get('versions').last().get('version') + 1
-    } else {
-      version = 1
-    }
-
-    const versionObj = Map({version, deps: state.getIn(['opSet', 'deps'])})
-    state = state.update('versions', versions => versions.push(versionObj))
-
     const patch = {version, canUndo, canRedo}
     if (patch && request) {
       patch.actor = request.actor
       patch.seq   = request.seq
     }
     patch.diffs = diffs
-    return [state, patch]
+    return patch
 
   } else {
     const clock = state.getIn(['opSet', 'clock']).toJS()
-    return [state, {version: 0, clock, canUndo, canRedo, diffs}]
+    return {version, clock, canUndo, canRedo, diffs}
   }
 }
 
 /**
  * The implementation behind `applyChanges()` and `applyLocalChange()`.
  */
-function apply(state, changes, request, isLocal, isIncremental) {
+function apply(state, changes, request, isUndoable, isIncremental) {
   let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
-  for (let change of fromJS(changes)) {
-    change = change.remove('requestType')
-    opSet = OpSet.addChange(opSet, change, isLocal, diffs)
+  for (let change of changes) {
+    opSet = OpSet.addChange(opSet, change, isUndoable, diffs)
   }
 
   OpSet.finalizePatch(opSet, diffs)
   state = state.set('opSet', opSet)
-  return isIncremental ? makePatch(state, diffs, request, true) : [state, null]
+
+  if (isIncremental) {
+    const version = state.get('versions').last().get('version') + 1
+    const versionObj = Map({version, localOnly: true, opSet})
+    state = state.update('versions', versions => versions.push(versionObj))
+  } else {
+    const versionObj = Map({version: 0, localOnly: true, opSet})
+    state = state.set('versions', List.of(versionObj))
+  }
+
+  return [state, isIncremental ? makePatch(state, diffs, request, true) : null]
 }
 
 /**
@@ -163,7 +150,11 @@ function apply(state, changes, request, isLocal, isIncremental) {
  * to the document objects to reflect these changes.
  */
 function applyChanges(state, changes) {
-  return apply(state, changes, null, false, true)
+  // The localOnly flag on a version object is set to true if all changes since that version have
+  // been local changes. Since we are applying a remote change here, we have to set that flag to
+  // false on all existing version objects.
+  state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
+  return apply(state, fromJS(changes), null, false, true)
 }
 
 /**
@@ -187,19 +178,43 @@ function applyLocalChange(state, request) {
   if (!versionObj) {
     throw new RangeError(`Unknown base document version ${request.version}`)
   }
-  const deps = versionObj.get('deps').remove(request.actor).toJS()
+  const deps = versionObj.getIn(['opSet', 'deps']).remove(request.actor).toJS()
   request = Object.assign(request, {deps})
-  state = state.update('versions', versions => versions.filter(v => v.get('version') >= request.version))
 
+  let change
   if (request.requestType === 'change') {
-    return processChangeRequest(state, request)
+    change = processChangeRequest(versionObj.get('opSet'), request)
   } else if (request.requestType === 'undo') {
-    return undo(state, request)
+    ;[state, change] = undo(state, request)
   } else if (request.requestType === 'redo') {
-    return redo(state, request)
+    ;[state, change] = redo(state, request)
   } else {
     throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
+
+  let patch, isUndoable = (request.requestType === 'change')
+  ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
+
+  state = state.update('versions', versions => {
+    // Remove any versions before the one referenced by the current request, since future requests
+    // will always reference a version number that is greater than or equal to the current
+    return versions.filter(v => v.get('version') >= request.version)
+      // Update the list of past versions so that if a future change request from the frontend
+      // refers to one of these versions, we know exactly what state the frontend was in when it
+      // made the change. If there have only been local updates since a given version, then the
+      // frontend is in sync with the backend (since the frontend has applied the same change
+      // locally). However, if there have also been remote updates, then we construct a special
+      // opSet that contains only the local changes but excludes the remote ones. This opSet should
+      // match the state of the frontend (which has not yet seen the remote update).
+      .map(v => {
+        if (v.get('localOnly')) {
+          return v.set('opSet', state.get('opSet'))
+        } else {
+          return v.set('opSet', OpSet.addChange(v.get('opSet'), change, false, null))
+        }
+      })
+  })
+  return [state, patch]
 }
 
 /**
@@ -210,9 +225,8 @@ function applyLocalChange(state, request) {
  * been loaded, you can use `getPatch()` to construct the latest document state.
  */
 function loadChanges(state, changes) {
-  const [newState, patch] = apply(state, changes, null, false, false)
-  const versionObj = Map({version: 0, deps: newState.getIn(['opSet', 'deps'])})
-  return newState.set('versions', List.of(versionObj))
+  const [newState, _] = apply(state, fromJS(changes), null, false, false)
+  return newState
 }
 
 /**
@@ -221,8 +235,7 @@ function loadChanges(state, changes) {
  */
 function getPatch(state) {
   const diffs = OpSet.constructObject(state.get('opSet'), OpSet.ROOT_ID)
-  const [_, patch] = makePatch(state, diffs, null, false)
-  return patch
+  return makePatch(state, diffs, null, false)
 }
 
 function getChanges(oldState, newState) {
@@ -265,8 +278,8 @@ function merge(local, remote) {
  * Undoes the last change by the local user in the node state `state`. The
  * `request` object contains all parts of the change except the operations;
  * this function fetches the operations from the undo stack, pushes a record
- * onto the redo stack, and applies the change, returning a two-element list
- * containing `[state, patch]`.
+ * onto the redo stack, and returns a two-element list `[state, change]`
+ * where `change` is the change to be applied.
  */
 function undo(state, request) {
   const undoPos = state.getIn(['opSet', 'undoPos'])
@@ -302,19 +315,14 @@ function undo(state, request) {
   opSet = opSet
     .set('undoPos', undoPos - 1)
     .update('redoStack', stack => stack.push(redoOps))
-
-  let diffs = {}
-  opSet = OpSet.addChange(opSet, change, false, diffs)
-  state = state.set('opSet', opSet)
-  OpSet.finalizePatch(opSet, diffs)
-  return makePatch(state, diffs, request, true)
+  return [state.set('opSet', opSet), change]
 }
 
 /**
  * Redoes the last `undo()` in the node state `state`. The `request` object
  * contains all parts of the change except the operations; this function
- * fetches the operations from the redo stack, and applies the change,
- * returning a two-element list `[state, patch]`.
+ * fetches the operations from the redo stack, and returns two-element list
+ * `[state, change]` where `change` is the change to be applied.
  */
 function redo(state, request) {
   const redoOps = state.getIn(['opSet', 'redoStack']).last()
@@ -327,12 +335,7 @@ function redo(state, request) {
   let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)
     .update('redoStack', stack => stack.pop())
-
-  let diffs = {}
-  opSet = OpSet.addChange(opSet, change, false, diffs)
-  state = state.set('opSet', opSet)
-  OpSet.finalizePatch(opSet, diffs)
-  return makePatch(state, diffs, request, true)
+  return [state.set('opSet', opSet), change]
 }
 
 module.exports = {

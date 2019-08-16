@@ -284,7 +284,7 @@ describe('Automerge.Backend', () => {
       assert.throws(() => Backend.applyLocalChange(s2, change2), /Change request has already been applied/)
     })
 
-    it.skip('should handle frontend and backend changes happening concurrently', () => {
+    it('should handle frontend and backend changes happening concurrently', () => {
       const actor1 = uuid(), actor2 = uuid()
       const local1 = {requestType: 'change', actor: actor1, seq: 1, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
@@ -300,6 +300,41 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [remote1])
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
     })
+
+    it('should transform list indexes into element IDs', () => {
+      const birds = uuid()
+      const remote1 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+        {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds}
+      ]}
+      const remote2 = {actor: 'actor2', seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'ins', key: '_head', elem: 1},
+        {obj: birds, action: 'set', key: 'actor2:1', value: 'magpie'}
+      ]}
+      const local1 = {requestType: 'change', actor: 'actor1', seq: 1, version: 1, ops: [
+        {obj: birds, action: 'ins', key: 0},
+        {obj: birds, action: 'set', key: 0, value: 'goldfinch'}
+      ]}
+      const local2 = {requestType: 'change', actor: 'actor1', seq: 2, version: 1, ops: [
+        {obj: birds, action: 'ins', key: 1},
+        {obj: birds, action: 'set', key: 1, value: 'wagtail'}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [remote1])
+      const [s2, patch2] = Backend.applyLocalChange(s1, local1)
+      const [s3, patch3] = Backend.applyChanges(s2, [remote2])
+      const [s4, patch4] = Backend.applyLocalChange(s3, local2)
+      assert.deepEqual(Backend.getChanges(s1, s2), [{actor: 'actor1', seq: 1, deps: {actor2: 1}, ops: [
+        {obj: birds, action: 'ins', key: '_head', elem: 1},
+        {obj: birds, action: 'set', key: 'actor1:1', value: 'goldfinch'}
+      ]}])
+      assert.deepEqual(Backend.getChanges(s3, s4), [{actor: 'actor1', seq: 2, deps: {}, ops: [
+        {obj: birds, action: 'ins', key: 'actor1:1', elem: 2},
+        {obj: birds, action: 'set', key: 'actor1:2', value: 'wagtail'}
+      ]}])
+      const elemIds = s3.getIn(['opSet', 'byObject', birds, '_elemIds'])
+      assert.strictEqual(elemIds.keyOf(0), 'actor2:1')
+      assert.strictEqual(elemIds.keyOf(1), 'actor1:1')
+    })
   })
 
   describe('getPatch()', () => {
@@ -311,8 +346,7 @@ describe('Automerge.Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 2}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
@@ -328,8 +362,7 @@ describe('Automerge.Backend', () => {
       const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {actor1: 1, actor2: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
@@ -346,8 +379,7 @@ describe('Automerge.Backend', () => {
       const change2 = {actor, seq: 2, deps: {}, ops: [
         {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 2}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
@@ -366,8 +398,7 @@ describe('Automerge.Backend', () => {
         {action: 'del',     obj: birds,   key: 'wrens'},
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 2}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
@@ -383,8 +414,7 @@ describe('Automerge.Backend', () => {
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1])
+      const s1 = Backend.loadChanges(Backend.init(), [change1])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
@@ -410,8 +440,7 @@ describe('Automerge.Backend', () => {
         {action: 'set',      obj: birds,   key: `${actor}:3`, value: 'greenfinch'},
         {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinches!!'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change1, change2])
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 2}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
@@ -431,8 +460,7 @@ describe('Automerge.Backend', () => {
         {action: 'set',      obj: item,    key: 'title',     value: 'water plants'},
         {action: 'set',      obj: item,    key: 'done',      value: false}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change])
+      const s1 = Backend.loadChanges(Backend.init(), [change])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {todos: {[actor]: {
@@ -453,8 +481,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change])
+      const s1 = Backend.loadChanges(Backend.init(), [change])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
@@ -470,8 +497,7 @@ describe('Automerge.Backend', () => {
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
         {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'}
       ]}
-      const s0 = Backend.init()
-      const [s1, patch] = Backend.applyChanges(s0, [change])
+      const s1 = Backend.loadChanges(Backend.init(), [change])
       assert.deepEqual(Backend.getPatch(s1), {
         version: 0, clock: {[actor]: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[actor]: {
