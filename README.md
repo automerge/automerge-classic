@@ -45,12 +45,8 @@ and merging**:
 
 - **Network-agnostic**. Automerge is a pure data structure library that does not care about what
   kind of network you use: client/server, peer-to-peer, Bluetooth, USB drive in the mail, whatever,
-  anything goes. Bindings to particular networking technologies are handled by separate libraries.
-  For example, see [MPL](https://github.com/automerge/mpl) for an implementation that uses Automerge
-  in a peer-to-peer model using [WebRTC](https://webrtc.org/), and
-  [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that uses
-  [Hypercore](https://github.com/mafintosh/hypercore), part of the
-  [Dat project](https://datproject.org/).
+  anything goes. Bindings to particular networking technologies are handled by separate libraries;
+  see the section on [Sending and receiving changes](#sending-and-receiving-changes) for examples.
 - **Immutable state**. An Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
@@ -352,13 +348,15 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- Use
-  [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js), an
-  implementation of a protocol that syncs up two nodes by determining missing changes and sending
+- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js), is
+  an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
-  contains an example that runs the Connection protocol over a simple WebSockets connection.
-- Use [MPL](https://github.com/automerge/mpl), which runs the `Automerge.Connection` protocol over
-  WebRTC.
+  contains an example that runs the Connection protocol over a simple TCP connection.
+- [MPL](https://github.com/automerge/mpl) runs the `Automerge.Connection` protocol over
+  [WebRTC](https://webrtc.org/).
+- [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
+  combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
+  [Dat project](https://datproject.org/).
 
 The `getChanges()/applyChanges()` API works as follows:
 
