@@ -4,44 +4,16 @@ const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 
 /**
- * Filters a list of operations `ops` such that, if there are multiple assignment
- * operations for the same object and key, we keep only the most recent. Returns
- * the filtered list of operations.
- */
-function ensureSingleAssignment(ops) {
-  let assignments = {}, result = []
-
-  for (let i = ops.length - 1; i >= 0; i--) {
-    const op = ops[i], { obj, key, action } = op
-    if (['set', 'del', 'link', 'inc'].includes(action)) {
-      if (!assignments[obj]) {
-        assignments[obj] = {[key]: op}
-        result.push(op)
-      } else if (!assignments[obj][key]) {
-        assignments[obj][key] = op
-        result.push(op)
-      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
-        assignments[obj][key].action = action
-        assignments[obj][key].value += op.value
-        if (op.datatype) assignments[obj][key].datatype = op.datatype
-      }
-    } else {
-      result.push(op)
-    }
-  }
-  return result.reverse()
-}
-
-/**
  * Processes a change request `request` that is incoming from the frontend. Translates index-based
- * addressing of lists into identifier-based addressing used by the CRDT.
+ * addressing of lists into identifier-based addressing used by the CRDT, and removes duplicate
+ * assignments to the same object and key.
  */
 function processChangeRequest(opSet, request) {
   const { actor, seq, deps } = request
-  const change = { actor, seq, deps }, ops = []
+  const change = { actor, seq, deps, ops: [] }
   if (request.message) change.message = request.message
 
-  let objectTypes = {}, elemIds = {}, maxElem = {}
+  let objectTypes = {}, elemIds = {}, maxElem = {}, assignments = {}
   for (let op of request.ops) {
     if (op.action.startsWith('make')) {
       objectTypes[op.child] = op.action
@@ -79,10 +51,24 @@ function processChangeRequest(opSet, request) {
       }
     }
 
-    ops.push(op)
+    // Detect duplicate assignments to the same object and key
+    if (['set', 'del', 'link', 'inc'].includes(op.action)) {
+      if (!assignments[op.obj]) {
+        assignments[op.obj] = {[op.key]: op}
+      } else if (!assignments[op.obj][op.key]) {
+        assignments[op.obj][op.key] = op
+      } else if (op.action === 'inc') {
+        assignments[op.obj][op.key].value += op.value
+        continue
+      } else {
+        Object.assign(assignments[op.obj][op.key], op)
+        continue
+      }
+    }
+
+    change.ops.push(op)
   }
 
-  change.ops = ensureSingleAssignment(ops)
   return fromJS(change)
 }
 
