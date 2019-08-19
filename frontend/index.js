@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -9,12 +9,11 @@ const { Table } = require('./table')
 const { Counter } = require('./counter')
 
 /**
- * Takes a set of objects that have been updated (in `updated`) and an updated
- * mapping from child objectId to parent objectId (in `inbound`), and returns
- * a new immutable document root object based on `doc` that reflects those
- * updates. The state object `state` is attached to the new root object.
+ * Takes a set of objects that have been updated (in `updated`) and an updated state object
+ * `state`, and returns a new immutable document root object based on `doc` that reflects
+ * those updates.
  */
-function updateRootObject(doc, updated, inbound, state) {
+function updateRootObject(doc, updated, state) {
   let newDoc = updated[ROOT_ID]
   if (!newDoc) {
     newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
@@ -22,7 +21,6 @@ function updateRootObject(doc, updated, inbound, state) {
   }
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
-  Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, STATE,    {value: state})
 
   if (doc[OPTIONS].freeze) {
@@ -47,7 +45,6 @@ function updateRootObject(doc, updated, inbound, state) {
 
   if (doc[OPTIONS].freeze) {
     Object.freeze(updated)
-    Object.freeze(inbound)
   }
   return newDoc
 }
@@ -90,7 +87,7 @@ function makeChange(doc, requestType, context, message) {
     const queuedRequest = copyObject(request)
     queuedRequest.before = doc
     state.requests = state.requests.concat([queuedRequest])
-    return [updateRootObject(doc, context.updated, context.inbound, state), request]
+    return [updateRootObject(doc, context.updated, state), request]
   }
 }
 
@@ -103,9 +100,8 @@ function makeChange(doc, requestType, context, message) {
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
   const actor = getActorId(doc)
-  const inbound = copyObject(doc[INBOUND])
   const updated = {}
-  interpretPatch(patch.diffs, doc, updated, inbound)
+  interpretPatch(patch.diffs, doc, updated)
 
   if (fromBackend) {
     const seq = patch.clock ? patch.clock[actor] : undefined
@@ -114,7 +110,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
   }
-  return updateRootObject(doc, updated, inbound, state)
+  return updateRootObject(doc, updated, state)
 }
 
 /**
@@ -141,7 +137,6 @@ function init(options) {
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
-  Object.defineProperty(root, INBOUND,   {value: Object.freeze({})})
   Object.defineProperty(root, STATE,     {value: Object.freeze(state)})
   return Object.freeze(root)
 }
@@ -251,7 +246,7 @@ function applyPatch(doc, patch) {
     return newDoc
   } else {
     state.requests[0].before = newDoc
-    return updateRootObject(doc, {}, doc[INBOUND], state)
+    return updateRootObject(doc, {}, state)
   }
 }
 
@@ -357,7 +352,7 @@ function getActorId(doc) {
  */
 function setActorId(doc, actorId) {
   const state = Object.assign({}, doc[STATE], {actorId})
-  return updateRootObject(doc, {}, doc[INBOUND], state)
+  return updateRootObject(doc, {}, state)
 }
 
 /**

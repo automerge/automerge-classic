@@ -1,4 +1,4 @@
-const { CACHE, INBOUND, OBJECT_ID, CONFLICTS } = require('./constants')
+const { CACHE, OBJECT_ID, CONFLICTS } = require('./constants')
 const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')

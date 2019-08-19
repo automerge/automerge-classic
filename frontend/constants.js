@@ -1,7 +1,6 @@
 // Properties of the document root object
 const OPTIONS   = Symbol('_options')   // object containing options passed to init()
 const CACHE     = Symbol('_cache')     // map from objectId to immutable object
-const INBOUND   = Symbol('_inbound')   // map from child objectId to parent objectId
 const STATE     = Symbol('_state')     // object containing metadata about current state (e.g. sequence numbers)
 
 // Properties of all Automerge objects
@@ -10,5 +9,5 @@ const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type)
 const CHANGE    = Symbol('_change')    // the context object on proxy objects used in change callback
 
 module.exports = {
-  OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE
+  OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE
 }
