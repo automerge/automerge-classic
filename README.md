@@ -580,7 +580,7 @@ callback):
 ```js
 newDoc.text.length // returns 5, the number of characters
 newDoc.text.get(0) // returns 'H', the 0th character in the text
-newDoc.text.join('') // returns 'Hello', the concatenation of all characters
+newDoc.text.toString() // returns 'Hello', the concatenation of all characters
 for (let char of newDoc.text) console.log(char) // iterates over all characters
 ```
 
