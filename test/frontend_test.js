@@ -263,7 +263,7 @@ describe('Automerge.Frontend', () => {
       doc = Frontend.applyPatch(doc, {actor: other, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
         pheasants: {[other]: {value: 2}}
       }}})
-      assert.deepEqual(doc, {blackbirds: 24, pheasants: 2})
+      assert.deepEqual(doc, {blackbirds: 24})
       assert.deepEqual(getRequests(doc), [
         {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
       ])
@@ -308,7 +308,9 @@ describe('Automerge.Frontend', () => {
           props: {1: {[remoteActor]: {value: 'bullfinch'}}}
         }}
       }}})
-      assert.deepEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
+      // The addition of 'bullfinch' does not take effect yet: it is queued up until the pending
+      // request has made its round-trip through the backend.
+      assert.deepEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'greenfinch']})
 
       const doc4 = Frontend.applyPatch(doc3, {actor, seq: 2, diffs: {objectId: ROOT_ID, type: 'map', props: {
         birds: {[actor]: {objectId: birds, type: 'list',

@@ -78,7 +78,6 @@ function makeChange(doc, requestType, context, message) {
   if (doc[OPTIONS].backend) {
     const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
     state.backendState = backendState
-    state.requests = []
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
     // context invoking interpretPatch as soon as any change is made, and the second time here
     // (after a round-trip through the backend). This is perhaps more robust, as changes only take
@@ -90,7 +89,6 @@ function makeChange(doc, requestType, context, message) {
     if (!context) context = new Context(doc, actor)
     const queuedRequest = copyObject(request)
     queuedRequest.before = doc
-    queuedRequest.diffs = context.patch.diffs
     state.requests = state.requests.concat([queuedRequest])
     return [updateRootObject(doc, context.updated, context.inbound, state), request]
   }
@@ -222,6 +220,15 @@ function emptyChange(doc, message) {
  */
 function applyPatch(doc, patch) {
   const state = copyObject(doc[STATE])
+
+  if (doc[OPTIONS].backend) {
+    if (!patch.state) {
+      throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
+    }
+    state.backendState = patch.state
+    return applyPatchToDoc(doc, patch, state, true)
+  }
+
   let baseDoc
 
   if (state.requests.length > 0) {
@@ -239,27 +246,13 @@ function applyPatch(doc, patch) {
     state.requests = []
   }
 
-  if (doc[OPTIONS].backend) {
-    if (!patch.state) {
-      throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
-    }
-    state.backendState = patch.state
-    state.requests = []
-    return applyPatchToDoc(doc, patch, state, true)
-  }
-
   let newDoc = applyPatchToDoc(baseDoc, patch, state, true)
-  for (let request of state.requests) {
-    // NOTE: technically it is not right to simply re-apply pending patches here: especially if
-    // they describe changes to a list or text, the indexes in the patch may need to be shifted
-    // due to insertions or deletions made by a remote patch. In the past (~v0.12.0) we had a
-    // transformRequest function here that performed a kind of simplistic Operational
-    // Transformation in order to adjust list indexes, but we removed it since there were many
-    // cases it didn't handle correctly, and it added complexity.
-    request.before = newDoc
-    newDoc = applyPatchToDoc(request.before, request, state, false)
+  if (state.requests.length === 0) {
+    return newDoc
+  } else {
+    state.requests[0].before = newDoc
+    return updateRootObject(doc, {}, doc[INBOUND], state)
   }
-  return newDoc
 }
 
 /**
