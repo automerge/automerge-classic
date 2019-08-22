@@ -8,7 +8,7 @@ describe('Automerge.Backend', () => {
   describe('incremental diffs', () => {
     it('should assign to a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
       const s0 = Backend.init()
@@ -23,10 +23,10 @@ describe('Automerge.Backend', () => {
 
     it('should increment a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
       ]}
       const s0 = Backend.init()
@@ -41,10 +41,10 @@ describe('Automerge.Backend', () => {
     })
 
     it('should make a conflict on assignment to the same key', () => {
-      const change1 = {actor: 'actor1', seq: 1, deps: {}, ops: [
+      const change1 = {actor: 'actor1', seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+      const change2 = {actor: 'actor2', seq: 1, startOp: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s0 = Backend.init()
@@ -60,10 +60,10 @@ describe('Automerge.Backend', () => {
 
     it('should delete a key from a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'del', obj: ROOT_ID, key: 'bird'}
       ]}
       const s0 = Backend.init()
@@ -77,7 +77,7 @@ describe('Automerge.Backend', () => {
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
@@ -93,11 +93,11 @@ describe('Automerge.Backend', () => {
 
     it('should assign to keys in nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 3, deps: {}, ops: [
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
       const s0 = Backend.init()
@@ -113,7 +113,7 @@ describe('Automerge.Backend', () => {
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
@@ -132,12 +132,12 @@ describe('Automerge.Backend', () => {
 
     it('should apply updates inside lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 4, deps: {}, ops: [
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'greenfinch'}
       ]}
       const s0 = Backend.init()
@@ -154,12 +154,12 @@ describe('Automerge.Backend', () => {
 
     it('should delete list elements', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 4, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`}
       ]}
       const s0 = Backend.init()
@@ -176,10 +176,10 @@ describe('Automerge.Backend', () => {
 
     it('should handle list element insertion and deletion in the same change', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds', child: birds}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'ins', obj: birds, key: '_head', elem: 1},
         {action: 'del', obj: birds, key: `${actor}:1`}
       ]}
@@ -196,13 +196,13 @@ describe('Automerge.Backend', () => {
 
     it('should handle changes within conflicted objects', () => {
       const list = uuid(), map = uuid(), actor1 = uuid(), actor2 = uuid()
-      const change1 = {actor: actor1, seq: 1, deps: {}, ops: [
+      const change1 = {actor: actor1, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'conflict', child: list}
       ]}
-      const change2 = {actor: actor2, seq: 1, deps: {}, ops: [
+      const change2 = {actor: actor2, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeMap',  obj: ROOT_ID, key: 'conflict', child: map}
       ]}
-      const change3 = {actor: actor2, seq: 2, deps: {}, ops: [
+      const change3 = {actor: actor2, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'set', obj: map, key: 'sparrows', value: 12}
       ]}
       const s0 = Backend.init()
@@ -220,7 +220,7 @@ describe('Automerge.Backend', () => {
 
     it('should support Date objects at the root', () => {
       const now = new Date()
-      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+      const actor = uuid(), change = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s0 = Backend.init()
@@ -235,7 +235,7 @@ describe('Automerge.Backend', () => {
 
     it('should support Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'list',       child: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
         {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'}
@@ -292,7 +292,7 @@ describe('Automerge.Backend', () => {
       const local2 = {requestType: 'change', actor: actor1, seq: 2, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
       ]}
-      const remote1 = {actor: actor2, seq: 1, deps: {}, ops: [
+      const remote1 = {actor: actor2, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'fish', value: 'goldfish'}
       ]}
       const s0 = Backend.init()
@@ -303,10 +303,10 @@ describe('Automerge.Backend', () => {
 
     it('should transform list indexes into element IDs', () => {
       const birds = uuid()
-      const remote1 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+      const remote1 = {actor: 'actor2', seq: 1, startOp: 1, deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds}
       ]}
-      const remote2 = {actor: 'actor2', seq: 2, deps: {}, ops: [
+      const remote2 = {actor: 'actor2', seq: 2, startOp: 2, deps: {}, ops: [
         {obj: birds, action: 'ins', key: '_head', elem: 1},
         {obj: birds, action: 'set', key: 'actor2:1', value: 'magpie'}
       ]}
@@ -323,11 +323,11 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyLocalChange(s1, local1)
       const [s3, patch3] = Backend.applyChanges(s2, [remote2])
       const [s4, patch4] = Backend.applyLocalChange(s3, local2)
-      assert.deepEqual(Backend.getChanges(s1, s2), [{actor: 'actor1', seq: 1, deps: {actor2: 1}, ops: [
+      assert.deepEqual(Backend.getChanges(s1, s2), [{actor: 'actor1', seq: 1, startOp: 2, deps: {actor2: 1}, ops: [
         {obj: birds, action: 'ins', key: '_head', elem: 1},
         {obj: birds, action: 'set', key: 'actor1:1', value: 'goldfinch'}
       ]}])
-      assert.deepEqual(Backend.getChanges(s3, s4), [{actor: 'actor1', seq: 2, deps: {}, ops: [
+      assert.deepEqual(Backend.getChanges(s3, s4), [{actor: 'actor1', seq: 2, startOp: 4, deps: {}, ops: [
         {obj: birds, action: 'ins', key: 'actor1:1', elem: 2},
         {obj: birds, action: 'set', key: 'actor1:2', value: 'wagtail'}
       ]}])
@@ -340,10 +340,10 @@ describe('Automerge.Backend', () => {
   describe('getPatch()', () => {
     it('should include the most recent value for a key', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
@@ -356,10 +356,10 @@ describe('Automerge.Backend', () => {
     })
 
     it('should include conflicting values for a key', () => {
-      const change1 = {actor: 'actor1', seq: 1, deps: {}, ops: [
+      const change1 = {actor: 'actor1', seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, deps: {}, ops: [
+      const change2 = {actor: 'actor2', seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird'}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
@@ -373,10 +373,10 @@ describe('Automerge.Backend', () => {
 
     it('should handle counter increments at a key in a map', () => {
       const actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 2, deps: {}, ops: [
         {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2])
@@ -390,11 +390,11 @@ describe('Automerge.Backend', () => {
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeMap', obj: ROOT_ID, key: 'birds', child: birds},
         {action: 'set',     obj: birds,   key: 'wrens', value: 3}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 3, deps: {}, ops: [
         {action: 'del',     obj: birds,   key: 'wrens'},
         {action: 'set',     obj: birds,   key: 'sparrows', value: 15}
       ]}
@@ -409,7 +409,7 @@ describe('Automerge.Backend', () => {
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'}
@@ -427,14 +427,14 @@ describe('Automerge.Backend', () => {
 
     it('should include the latest state of a list', () => {
       const birds = uuid(), actor = uuid()
-      const change1 = {actor, seq: 1, deps: {}, ops: [
+      const change1 = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'birds',      child: birds},
         {action: 'ins',      obj: birds,   key: '_head',      elem: 1},
         {action: 'set',      obj: birds,   key: `${actor}:1`, value: 'chaffinch'},
         {action: 'ins',      obj: birds,   key: `${actor}:1`, elem: 2},
         {action: 'set',      obj: birds,   key: `${actor}:2`, value: 'goldfinch'}
       ]}
-      const change2 = {actor, seq: 2, deps: {}, ops: [
+      const change2 = {actor, seq: 2, startOp: 6, deps: {}, ops: [
         {action: 'del',      obj: birds,   key: `${actor}:1`},
         {action: 'ins',      obj: birds,   key: `${actor}:1`, elem: 3},
         {action: 'set',      obj: birds,   key: `${actor}:3`, value: 'greenfinch'},
@@ -453,7 +453,7 @@ describe('Automerge.Backend', () => {
 
     it('should handle nested maps in lists', () => {
       const todos = uuid(), item = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'todos',     child: todos},
         {action: 'ins',      obj: todos,   key: '_head',     elem: 1},
         {action: 'makeMap',  obj: todos,   key:`${actor}:1`, child: item},
@@ -478,7 +478,7 @@ describe('Automerge.Backend', () => {
 
     it('should include Date objects at the root', () => {
       const now = new Date()
-      const actor = uuid(), change = {actor, seq: 1, deps: {}, ops: [
+      const actor = uuid(), change = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change])
@@ -492,7 +492,7 @@ describe('Automerge.Backend', () => {
 
     it('should include Date objects in a list', () => {
       const now = new Date(), list = uuid(), actor = uuid()
-      const change = {actor, seq: 1, deps: {}, ops: [
+      const change = {actor, seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeList', obj: ROOT_ID, key: 'list',       child: list},
         {action: 'ins',      obj: list,    key: '_head',      elem: 1},
         {action: 'set',      obj: list,    key: `${actor}:1`, value: now.getTime(), datatype: 'timestamp'}

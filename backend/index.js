@@ -179,6 +179,7 @@ function applyLocalChange(state, request) {
   }
 
   let patch, isUndoable = (request.requestType === 'change')
+  change = change.set('startOp', state.getIn(['opSet', 'maxOp'], 0) + 1)
   ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
 
   state = state.update('versions', versions => {
@@ -290,7 +291,7 @@ function undo(state, request) {
         redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
       } else {
         for (let fieldOp of fieldOps) {
-          fieldOp = fieldOp.remove('actor').remove('seq')
+          fieldOp = fieldOp.remove('actor').remove('seq').remove('opId')
           if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
           redoOps.push(fieldOp)
         }

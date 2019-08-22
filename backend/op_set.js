@@ -380,19 +380,31 @@ function applyOps(opSet, ops, patch) {
  * the changes. Returns the updated `opSet`.
  */
 function applyChange(opSet, change, patch) {
-  const actor = change.get('actor'), seq = change.get('seq')
+  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
+  if (typeof actor !== 'string' || typeof seq !== 'number' || typeof startOp !== 'number') {
+    throw new TypeError(`Missing change metadata: actor = ${actor}, seq = ${seq}, startOp = ${startOp}`)
+  }
+
   const prior = opSet.getIn(['states', actor], List())
   if (seq <= prior.size) {
     if (!prior.get(seq - 1).get('change').equals(change)) {
-      throw new Error('Inconsistent reuse of sequence number ' + seq + ' by ' + actor)
+      throw new RangeError(`Inconsistent reuse of sequence number ${seq} by ${actor}`)
     }
     return opSet // change already applied, return unchanged
+  }
+  if (seq > 1) {
+    const prevChange = prior.get(seq - 2).get('change')
+    const minExpected = prevChange.get('startOp') + prevChange.get('ops').size
+    if (startOp < minExpected) {
+      throw new RangeError(`Operation ID counter moved backwards: ${startOp} < ${minExpected}`)
+    }
   }
 
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
 
-  let ops = change.get('ops').map(op => op.merge({actor, seq}))
+  let ops = change.get('ops')
+    .map((op, index) => op.merge({actor, seq, opId: `${startOp + index}@${actor}`}))
   opSet = applyOps(opSet, ops, patch)
 
   const remainingDeps = opSet.get('deps')
@@ -402,6 +414,7 @@ function applyChange(opSet, change, patch) {
   opSet = opSet
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
+    .update('maxOp', maxOp => Math.max(maxOp, startOp + ops.size - 1))
     .update('history', history => history.push(change))
   return opSet
 }
@@ -443,6 +456,7 @@ function init() {
     .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
     .set('clock',    Map())
     .set('deps',     Map())
+    .set('maxOp',     0)
     .set('undoPos',   0)
     .set('undoStack', List())
     .set('redoStack', List())
