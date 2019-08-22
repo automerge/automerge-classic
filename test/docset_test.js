@@ -42,4 +42,9 @@ describe('Automerge.DocSet', () => {
     docSet.applyChanges(ID, changes)
     assert.strictEqual(callback.notCalled, true)
   })
+
+  it('should allow removing a document', () => {
+    docSet.removeDoc(ID)
+    assert.strictEqual(docSet.getDoc(ID), undefined)
+  })
 })

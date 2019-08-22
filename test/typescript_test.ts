@@ -688,6 +688,11 @@ describe('TypeScript support', () => {
       docSet.applyChanges(ID, changes)
     })
 
+    it('should allow removing a document', () => {
+      docSet.removeDoc(ID)
+      assert.strictEqual(docSet.getDoc(ID), undefined)
+    })
+  
     it('should list the ids of its documents', () => {
       assert.deepEqual(Array.from(docSet.docIds), [ID])
     })
