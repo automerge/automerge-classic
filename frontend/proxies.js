@@ -88,6 +88,7 @@ function listMethods(context, listId, path) {
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
+        .map((item, index) => context.getObjectField(path, listId, index))
       return list[method].call(list, ...args)
     }
   }
@@ -169,7 +170,7 @@ const ListHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (key === 'length') return {}
+    if (key === 'length') return {writable: true}
     if (key === OBJECT_ID) return {configurable: false, enumerable: false}
 
     const [context, objectId, path] = target
@@ -185,7 +186,7 @@ const ListHandler = {
     const [context, objectId, path] = target
     const object = context.getObject(objectId)
     let keys = ['length']
-    keys.push(...Object.keys(object))
+    for (let key of Object.keys(object)) keys.push(key)
     return keys
   }
 }

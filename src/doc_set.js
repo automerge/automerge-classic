@@ -17,6 +17,10 @@ class DocSet {
     return this.docs.get(docId)
   }
 
+  removeDoc (docId) {
+    this.docs = this.docs.delete(docId)
+  }
+
   setDoc (docId, doc) {
     this.docs = this.docs.set(docId, doc)
     this.handlers.forEach(handler => handler(docId, doc))

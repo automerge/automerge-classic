@@ -38,6 +38,12 @@ class Text {
   }
 
   /**
+   * Returns the content of the Text object as a simple string.
+   */
+  toString() {
+    return this.join('')
+  }
+  /**
    * Returns the content of the Text object as a simple string, so that the
    * JSON serialization of an Automerge document represents text nicely.
    */
@@ -108,7 +114,7 @@ class Text {
 // Read-only methods that can delegate to the JavaScript built-in array
 for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach', 'includes',
                     'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
-                    'slice', 'some', 'toLocaleString', 'toString']) {
+                    'slice', 'some', 'toLocaleString']) {
   Text.prototype[method] = function (...args) {
     const array = [...this]
     return array[method].call(array, ...args)

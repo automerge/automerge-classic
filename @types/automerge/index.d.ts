@@ -114,8 +114,10 @@ declare module 'automerge' {
   class DocSet<T> {
     constructor()
     applyChanges(docId: string, changes: Change[]): T
-    getDoc(docId: string): T
+    getDoc(docId: string): Doc<T>
+    removeDoc(docId: string): void
     setDoc(docId: string, doc: Doc<T>): void
+    docIds: string[]
     registerHandler(handler: DocSetHandler<T>): void
     unregisterHandler(handler: DocSetHandler<T>): void
   }
