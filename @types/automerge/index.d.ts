@@ -216,6 +216,7 @@ declare module 'automerge' {
     action: OpAction
     obj: UUID
     key: string | number
+    insert?: boolean
     child?: UUID
     value?: number | boolean | string | null
     datatype?: DataType
@@ -255,10 +256,10 @@ declare module 'automerge' {
     | 'undo'
 
   type OpAction =
-    | 'ins'
     | 'del'
     | 'inc'
     | 'set'
+    | 'link'
     | 'makeText'
     | 'makeTable'
     | 'makeList'

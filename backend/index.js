@@ -31,7 +31,7 @@ function processChangeRequest(opSet, request) {
       }
       op = copyObject(op)
 
-      if (op.action === 'ins') {
+      if (op.insert) {
         maxElem[op.obj] += 1
         op.elem = maxElem[op.obj]
         const elemId = `${actor}:${maxElem[op.obj]}`
@@ -52,7 +52,7 @@ function processChangeRequest(opSet, request) {
     }
 
     // Detect duplicate assignments to the same object and key
-    if (['set', 'del', 'link', 'inc'].includes(op.action)) {
+    if (['set', 'del', 'link', 'inc'].includes(op.action) && !op.insert) {
       if (!assignments[op.obj]) {
         assignments[op.obj] = {[op.key]: op}
       } else if (!assignments[op.obj][op.key]) {
@@ -61,7 +61,8 @@ function processChangeRequest(opSet, request) {
         assignments[op.obj][op.key].value += op.value
         continue
       } else {
-        Object.assign(assignments[op.obj][op.key], op)
+        assignments[op.obj][op.key].action = op.action
+        assignments[op.obj][op.key].value = op.value
         continue
       }
     }
@@ -284,14 +285,16 @@ function undo(state, request) {
         throw new RangeError(`Unexpected operation type in undo history: ${op}`)
       }
       // TODO this duplicates OpSet.recordUndoHistory
-      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), op.get('key'))
+      const key = OpSet.getOperationKey(op)
+      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), key)
       if (op.get('action') === 'inc') {
-        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key: op.get('key'), value: -op.get('value')}))
+        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key, value: -op.get('value')}))
       } else if (fieldOps.isEmpty()) {
-        redoOps.push(Map({action: 'del', obj: op.get('obj'), key: op.get('key')}))
+        redoOps.push(Map({action: 'del', obj: op.get('obj'), key}))
       } else {
         for (let fieldOp of fieldOps) {
           fieldOp = fieldOp.remove('actor').remove('seq').remove('opId')
+          if (fieldOp.get('insert')) fieldOp = fieldOp.remove('insert').remove('elem').set('key', key)
           if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
           redoOps.push(fieldOp)
         }

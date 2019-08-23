@@ -8,6 +8,7 @@ function isConcurrent(opSet, op1, op2) {
   const [actor1, seq1] = [op1.get('actor'), op1.get('seq')]
   const [actor2, seq2] = [op2.get('actor'), op2.get('seq')]
   if (!actor1 || !actor2 || !seq1 || !seq2) return false
+  if (actor1 === actor2 && seq1 === seq2) return false
 
   const clock1 = opSet.getIn(['states', actor1, seq1 - 1, 'allDeps'])
   const clock2 = opSet.getIn(['states', actor2, seq2 - 1, 'allDeps'])
@@ -82,12 +83,11 @@ function applyMake(opSet, op, patch) {
   return opSet
 }
 
-// Processes an 'ins' operation. Does not produce an insertion diff because the new list element
-// only becomes visible through a subsequent 'set' or 'link' operation.
-function applyInsert(opSet, op, patch) {
+// Processes an insertion operation. Does not modify any patch because the new list element
+// only becomes visible through the assignment of a value to the new list element.
+function applyInsert(opSet, op) {
   const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
   const maxElem = Math.max(elem, opSet.getIn(['byObject', objectId, '_maxElem'], 0))
-  const type = (opSet.getIn(['byObject', objectId, '_init', 'action']) === 'makeText') ? 'text' : 'list'
   if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
   if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
 
@@ -141,13 +141,14 @@ function updateListElement(opSet, objectId, elemId, patch) {
  */
 function recordUndoHistory(opSet, op) {
   if (!opSet.has('undoLocal')) return opSet
-  const objectId = op.get('obj'), key = op.get('key'), value = op.get('value')
+  const objectId = op.get('obj'), key = getOperationKey(op), value = op.get('value')
 
   let undoOps
   if (op.get('action') === 'inc') {
     undoOps = List.of(Map({action: 'inc', obj: objectId, key, value: -value}))
   } else {
     undoOps = getFieldOps(opSet, objectId, key).map(ref => {
+      if (ref.get('insert')) ref = ref.set('key', key)
       ref = ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype', 'child'].includes(k))
       if (ref.get('action').startsWith('make')) ref = ref.set('action', 'link')
       return ref
@@ -168,11 +169,19 @@ function isChildOp(op) {
 }
 
 /**
+ * Returns the key that is updated by the given operation. In the case of lists and text,
+ * the key is the element ID; in the case of maps, it is the property name.
+ */
+function getOperationKey(op) {
+  return op.get('insert') ? `${op.get('actor')}:${op.get('elem')}` : op.get('key')
+}
+
+/**
  * Processes a 'set', 'del', 'make*', 'link', or 'inc' operation. Mutates `patch`
  * to describe the change and returns an updated `opSet`.
  */
 function applyAssign(opSet, op, patch) {
-  const objectId = op.get('obj'), action = op.get('action'), key = op.get('key')
+  const objectId = op.get('obj'), action = op.get('action'), key = getOperationKey(op)
   if (!opSet.get('byObject').has(objectId)) throw new RangeError(`Modification of unknown object ${objectId}`)
   const type = getObjectType(opSet, objectId)
 
@@ -253,8 +262,8 @@ function applyAssign(opSet, op, patch) {
  * operation.
  */
 function initializePatch(opSet, pathOp, patch) {
-  const objectId = pathOp.get('obj'), type = getObjectType(opSet, objectId)
-  const key = pathOp.get('key'), actor = pathOp.get('actor')
+  const objectId = pathOp.get('obj'), actor = pathOp.get('actor'), key = getOperationKey(pathOp)
+  const type = getObjectType(opSet, objectId)
   patch.objectId = patch.objectId || objectId
   patch.type     = patch.type     || type
 
@@ -350,7 +359,9 @@ function finalizePatch(opSet, patch) {
 function applyOps(opSet, ops, patch) {
   let newObjects = Set()
   for (let op of ops) {
-    const action = op.get('action')
+    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(op.get('action'))) {
+      throw new RangeError(`Unknown operation action: ${op.get('action')}`)
+    }
     let localPatch = patch
     if (patch) {
       for (let pathOp of getPath(opSet, op.get('obj'))) {
@@ -358,18 +369,16 @@ function applyOps(opSet, ops, patch) {
       }
     }
 
-    if (action.startsWith('make')) {
+    if (op.get('insert')) {
+      opSet = applyInsert(opSet, op)
+    }
+    if (op.get('action').startsWith('make')) {
       newObjects = newObjects.add(op.get('child'))
     }
-
-    if (action === 'ins') {
-      opSet = applyInsert(opSet, op, localPatch)
-    } else {
-      if (!newObjects.contains(op.get('obj'))) {
-        opSet = recordUndoHistory(opSet, op)
-      }
-      opSet = applyAssign(opSet, op, localPatch)
+    if (!newObjects.contains(op.get('obj'))) {
+      opSet = recordUndoHistory(opSet, op)
     }
+    opSet = applyAssign(opSet, op, localPatch)
   }
   return opSet
 }
@@ -541,8 +550,7 @@ function insertionsAfter(opSet, objectId, parentId, childId) {
 
   return opSet
     .getIn(['byObject', objectId, '_following', parentId], List())
-    .filter(op => (op.get('action') === 'ins'))
-    .filter(op => !childKey || lamportCompare(op, childKey) < 0)
+    .filter(op => op.get('insert') && (!childKey || lamportCompare(op, childKey) < 0))
     .sort(lamportCompare)
     .reverse() // descending order
     .map(op => op.get('actor') + ':' + op.get('elem'))
@@ -644,5 +652,5 @@ function constructObject(opSet, objectId) {
 
 module.exports = {
   init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
-  constructObject, getFieldOps, finalizePatch, ROOT_ID
+  constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
 }

@@ -94,8 +94,7 @@ describe('Automerge.Frontend', () => {
       assert.deepEqual(doc, {birds: ['chaffinch']})
       assert.deepEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds},
-        {obj: birds,   action: 'ins',      key: 0},
-        {obj: birds,   action: 'set',      key: 0, value: 'chaffinch'},
+        {obj: birds, action: 'set', key: 0, insert: true, value: 'chaffinch'}
       ]})
     })
 
@@ -167,8 +166,7 @@ describe('Automerge.Frontend', () => {
         assert.deepEqual(doc2, {counts: [new Frontend.Counter(3)]})
         assert.deepEqual(req1, {requestType: 'change', actor, seq: 1, version: 0, ops: [
           {obj: ROOT_ID, action: 'makeList', key: 'counts', child: counts},
-          {obj: counts,  action: 'ins',      key: 0},
-          {obj: counts,  action: 'set',      key: 0, value: 1, datatype: 'counter'}
+          {obj: counts, action: 'set', key: 0, insert: true, value: 1, datatype: 'counter'}
         ]})
         assert.deepEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
           {obj: counts, action: 'inc', key: 0, value: 2}

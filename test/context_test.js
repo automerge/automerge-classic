@@ -122,10 +122,8 @@ describe('Proxying context', () => {
       }})
       assert.deepEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', child: objectId},
-        {obj: objectId, action: 'ins', key: 0},
-        {obj: objectId, action: 'set', key: 0, value: 'sparrow'},
-        {obj: objectId, action: 'ins', key: 1},
-        {obj: objectId, action: 'set', key: 1, value: 'goldfinch'}
+        {obj: objectId, action: 'set', key: 0, insert: true, value: 'sparrow'},
+        {obj: objectId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
       ])
     })
 
@@ -143,10 +141,8 @@ describe('Proxying context', () => {
       }})
       assert.deepEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeText', key: 'text', child: objectId},
-        {obj: objectId, action: 'ins', key: 0},
-        {obj: objectId, action: 'set', key: 0, value: 'h'},
-        {obj: objectId, action: 'ins', key: 1},
-        {obj: objectId, action: 'set', key: 1, value: 'i'}
+        {obj: objectId, action: 'set', key: 0, insert: true, value: 'h'},
+        {obj: objectId, action: 'set', key: 1, insert: true, value: 'i'}
       ])
     })
 
@@ -168,10 +164,8 @@ describe('Proxying context', () => {
       assert.deepEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeTable', key: 'books', child: objectId},
         {obj: objectId, action: 'makeList', key: 'columns', child: columnsId},
-        {obj: columnsId, action: 'ins', key: 0},
-        {obj: columnsId, action: 'set', key: 0, value: 'author'},
-        {obj: columnsId, action: 'ins', key: 1},
-        {obj: columnsId, action: 'set', key: 1, value: 'title'}
+        {obj: columnsId, action: 'set', key: 0, insert: true, value: 'author'},
+        {obj: columnsId, action: 'set', key: 1, insert: true, value: 'title'}
       ])
     })
 
@@ -287,8 +281,7 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepEqual(context.ops, [
-        {obj: listId, action: 'ins', key: 2},
-        {obj: listId, action: 'makeMap', key: 2, child: nestedId},
+        {obj: listId, action: 'makeMap', key: 2, insert: true, child: nestedId},
         {obj: nestedId, action: 'set', key: 'english', value: 'goldfinch'},
         {obj: nestedId, action: 'set', key: 'latin', value: 'carduelis'}
       ])
@@ -323,10 +316,8 @@ describe('Proxying context', () => {
       }})
       assert.deepEqual(context.ops, [
         {obj: listId, action: 'del', key: 0},
-        {obj: listId, action: 'ins', key: 0},
-        {obj: listId, action: 'set', key: 0, value: 'starling'},
-        {obj: listId, action: 'ins', key: 1},
-        {obj: listId, action: 'set', key: 1, value: 'goldfinch'}
+        {obj: listId, action: 'set', key: 0, insert: true, value: 'starling'},
+        {obj: listId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
       ])
     })
   })

@@ -182,10 +182,12 @@ class Context {
   /**
    * Recursively creates Automerge versions of all the objects and nested objects in `value`,
    * constructing a patch and operations that describe the object tree. The new object is
-   * assigned to the property `key` in the object with ID `obj`. If `key` is null, the ID of
-   * the new object is used as key (this construction is used by Automerge.Table).
+   * assigned to the property `key` in the object with ID `obj`. If `insert` is true, a new
+   * list element is created at index `key`, and the new object is assigned to that list
+   * element. If `key` is null, the ID of the new object is used as key (this construction
+   * is used by Automerge.Table).
    */
-  createNestedObjects(obj, key, value) {
+  createNestedObjects(obj, key, value, insert) {
     if (value[OBJECT_ID]) {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
@@ -194,8 +196,11 @@ class Context {
 
     if (value instanceof Text) {
       // Create a new Text object
+      const operation = {action: 'makeText', obj, key, child}
+      if (insert) operation.insert = true
+      this.addOp(operation)
+
       const subpatch = {objectId: child, type: 'text', edits: [], props: {}}
-      this.addOp({action: 'makeText', obj, key, child})
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
 
@@ -204,24 +209,33 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      this.addOp({action: 'makeTable', obj, key, child})
-      const columns = this.setValue(child, 'columns', value.columns)
+      const operation = {action: 'makeTable', obj, key, child}
+      if (insert) operation.insert = true
+      this.addOp(operation)
+
+      const columns = this.setValue(child, 'columns', value.columns, false)
       return {objectId: child, type: 'table', props: {columns: {[this.actorId]: columns}}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
+      const operation = {action: 'makeList', obj, key, child}
+      if (insert) operation.insert = true
+      this.addOp(operation)
+
       const subpatch = {objectId: child, type: 'list', edits: [], props: {}}
-      this.addOp({action: 'makeList', obj, key, child})
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
-      this.addOp({action: 'makeMap', obj, key, child})
+      const operation = {action: 'makeMap', obj, key, child}
+      if (insert) operation.insert = true
+      this.addOp(operation)
+
       let props = {}
       for (let nested of Object.keys(value)) {
-        const result = this.setValue(child, nested, value[nested])
-        props[nested] = {[this.actorId]: result}
+        const valuePatch = this.setValue(child, nested, value[nested], false)
+        props[nested] = {[this.actorId]: valuePatch}
       }
       return {objectId: child, type: 'map', props}
     }
@@ -230,12 +244,13 @@ class Context {
   /**
    * Records an assignment to a particular key in a map, or a particular index in a list.
    * `objectId` is the ID of the object being modified, `key` is the property name or list
-   * index being updated, and `value` is the new value being assigned. Returns a
-   * patch describing the new value. The return value is of the form
+   * index being updated, and `value` is the new value being assigned. If `insert` is true,
+   * a new list element is inserted at index `key`, and `value` is assigned to that new list
+   * element. Returns a patch describing the new value. The return value is of the form
    * `{objectId, type, props}` if `value` is an object, or `{value, datatype}` if it is a
    * primitive value. For string, number, boolean, or null the datatype is omitted.
    */
-  setValue(objectId, key, value) {
+  setValue(objectId, key, value, insert) {
     if (!objectId) {
       throw new RangeError('setValue needs an objectId')
     }
@@ -245,11 +260,13 @@ class Context {
 
     if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
       // Nested object (map, list, text, or table)
-      return this.createNestedObjects(objectId, key, value)
+      return this.createNestedObjects(objectId, key, value, insert)
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      this.addOp(Object.assign({action: 'set', obj: objectId, key}, description))
+      const operation = Object.assign({action: 'set', obj: objectId, key}, description)
+      if (insert) operation.insert = true
+      this.addOp(operation)
       return description
     }
   }
@@ -283,7 +300,8 @@ class Context {
     // the assignment does not resolve a conflict, do nothing
     if (object[key] !== value || Object.keys(object[CONFLICTS][key] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
-        subpatch.props[key] = {[this.actorId]: this.setValue(objectId, key, value)}
+        const valuePatch = this.setValue(objectId, key, value, false)
+        subpatch.props[key] = {[this.actorId]: valuePatch}
       })
     }
   }
@@ -316,9 +334,9 @@ class Context {
     }
 
     for (let offset = 0; offset < values.length; offset++) {
-      this.addOp({action: 'ins', obj: subpatch.objectId, key: index + offset})
+      const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true)
       subpatch.edits.push({action: 'insert', index: index + offset})
-      subpatch.props[index + offset] = {[this.actorId]: this.setValue(subpatch.objectId, index + offset, values[offset])}
+      subpatch.props[index + offset] = {[this.actorId]: valuePatch}
     }
   }
 
@@ -343,7 +361,8 @@ class Context {
     // the assignment does not resolve a conflict, do nothing
     if (list[index] !== value || Object.keys(list[CONFLICTS][index] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
-        subpatch.props[index] = {[this.actorId]: this.setValue(objectId, index, value)}
+        const valuePatch = this.setValue(objectId, index, value, false)
+        subpatch.props[index] = {[this.actorId]: valuePatch}
       })
     }
   }
@@ -389,11 +408,11 @@ class Context {
       throw new TypeError('Cannot reuse an existing object as table row')
     }
 
-    const newValue = this.setValue(path[path.length - 1].objectId, null, row)
+    const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false)
     this.applyAtPath(path, subpatch => {
-      subpatch.props[newValue.objectId] = {[this.actorId]: newValue}
+      subpatch.props[valuePatch.objectId] = {[this.actorId]: valuePatch}
     })
-    return newValue.objectId
+    return valuePatch.objectId
   }
 
   /**
