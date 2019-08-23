@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const { isObject, copyObject, lessOrEqual, parseElemId } = require('../src/common')
+const { copyObject, lessOrEqual } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 
@@ -8,12 +8,12 @@ const { SkipList } = require('./skip_list')
  * addressing of lists into identifier-based addressing used by the CRDT, and removes duplicate
  * assignments to the same object and key.
  */
-function processChangeRequest(opSet, request) {
+function processChangeRequest(opSet, request, startOp) {
   const { actor, seq, deps } = request
-  const change = { actor, seq, deps, ops: [] }
+  const change = { actor, seq, startOp, deps, ops: [] }
   if (request.message) change.message = request.message
 
-  let objectTypes = {}, elemIds = {}, maxElem = {}, assignments = {}
+  let objectTypes = {}, elemIds = {}, assignments = {}
   for (let op of request.ops) {
     if (op.action.startsWith('make')) {
       objectTypes[op.child] = op.action
@@ -23,7 +23,6 @@ function processChangeRequest(opSet, request) {
     if (objType === 'makeList' || objType === 'makeText') {
       if (!elemIds[op.obj]) {
         elemIds[op.obj] = opSet.getIn(['byObject', op.obj, '_elemIds']) || new SkipList()
-        maxElem[op.obj] = opSet.getIn(['byObject', op.obj, '_maxElem'], 0)
       }
 
       if (typeof op.key !== 'number') {
@@ -32,16 +31,14 @@ function processChangeRequest(opSet, request) {
       op = copyObject(op)
 
       if (op.insert) {
-        maxElem[op.obj] += 1
-        op.elem = maxElem[op.obj]
-        const elemId = `${actor}:${maxElem[op.obj]}`
+        const opId = `${startOp + change.ops.length}@${actor}`
 
         if (op.key === 0) {
           op.key = '_head'
-          elemIds[op.obj] = elemIds[op.obj].insertAfter(null, elemId)
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(null, opId)
         } else {
           op.key = elemIds[op.obj].keyOf(op.key - 1)
-          elemIds[op.obj] = elemIds[op.obj].insertAfter(op.key, elemId)
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(op.key, opId)
         }
       } else {
         op.key = elemIds[op.obj].keyOf(op.key)
@@ -168,19 +165,18 @@ function applyLocalChange(state, request) {
   const deps = versionObj.getIn(['opSet', 'deps']).remove(request.actor).toJS()
   request = Object.assign(request, {deps})
 
-  let change
+  let change, startOp = state.getIn(['opSet', 'maxOp'], 0) + 1
   if (request.requestType === 'change') {
-    change = processChangeRequest(versionObj.get('opSet'), request)
+    change = processChangeRequest(versionObj.get('opSet'), request, startOp)
   } else if (request.requestType === 'undo') {
-    ;[state, change] = undo(state, request)
+    ;[state, change] = undo(state, request, startOp)
   } else if (request.requestType === 'redo') {
-    ;[state, change] = redo(state, request)
+    ;[state, change] = redo(state, request, startOp)
   } else {
     throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
 
   let patch, isUndoable = (request.requestType === 'change')
-  change = change.set('startOp', state.getIn(['opSet', 'maxOp'], 0) + 1)
   ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
 
   state = state.update('versions', versions => {
@@ -269,14 +265,14 @@ function merge(local, remote) {
  * onto the redo stack, and returns a two-element list `[state, change]`
  * where `change` is the change to be applied.
  */
-function undo(state, request) {
+function undo(state, request, startOp) {
   const undoPos = state.getIn(['opSet', 'undoPos'])
   const undoOps = state.getIn(['opSet', 'undoStack', undoPos - 1])
   if (undoPos < 1 || !undoOps) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
   const { actor, seq, deps, message } = request
-  const change = Map({ actor, seq, deps: fromJS(deps), message, ops: undoOps })
+  const change = Map({ actor, seq, startOp, deps: fromJS(deps), message, ops: undoOps })
 
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
@@ -294,7 +290,7 @@ function undo(state, request) {
       } else {
         for (let fieldOp of fieldOps) {
           fieldOp = fieldOp.remove('actor').remove('seq').remove('opId')
-          if (fieldOp.get('insert')) fieldOp = fieldOp.remove('insert').remove('elem').set('key', key)
+          if (fieldOp.get('insert')) fieldOp = fieldOp.remove('insert').set('key', key)
           if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
           redoOps.push(fieldOp)
         }
@@ -314,13 +310,13 @@ function undo(state, request) {
  * fetches the operations from the redo stack, and returns two-element list
  * `[state, change]` where `change` is the change to be applied.
  */
-function redo(state, request) {
+function redo(state, request, startOp) {
   const redoOps = state.getIn(['opSet', 'redoStack']).last()
   if (!redoOps) {
     throw new RangeError('Cannot redo: the last change was not an undo')
   }
   const { actor, seq, deps, message } = request
-  const change = Map({ actor, seq, deps: fromJS(deps), message, ops: redoOps })
+  const change = Map({ actor, seq, startOp, deps: fromJS(deps), message, ops: redoOps })
 
   let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)

@@ -1057,7 +1057,7 @@ describe('Automerge', () => {
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
       const actor = Automerge.Frontend.getActorId(s1)
       assert.deepEqual(getUndoStack(s1).last().toJS(),
-                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `${actor}:4`}])
+                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `5@${actor}`}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
@@ -1068,7 +1068,7 @@ describe('Automerge', () => {
       s1 = Automerge.change(s1, doc => doc.list.splice(1, 1))
       assert.deepEqual(s1, {list: ['A', 'C']})
       assert.deepEqual(getUndoStack(s1).last().toJS(),
-                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `${actor}:2`, value: 'B'}])
+                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `3@${actor}`, value: 'B'}])
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
     })
@@ -1198,7 +1198,7 @@ describe('Automerge', () => {
       s1 = Automerge.undo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
       assert.deepEqual(getRedoStack(s1).last().toJS(),
-                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `${actor}:4`, value: 'D'}])
+                       [{action: 'set', obj: Automerge.getObjectId(s1.list), key: `5@${actor}`, value: 'D'}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C', 'D']})
     })
@@ -1210,7 +1210,7 @@ describe('Automerge', () => {
       const actor = Automerge.Frontend.getActorId(s1)
       assert.deepEqual(s1, {list: ['A', 'B', 'C']})
       assert.deepEqual(getRedoStack(s1).last().toJS(),
-                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `${actor}:2`}])
+                       [{action: 'del', obj: Automerge.getObjectId(s1.list), key: `3@${actor}`}])
       s1 = Automerge.redo(s1)
       assert.deepEqual(s1, {list: ['A', 'C']})
     })
@@ -1319,14 +1319,14 @@ describe('Automerge', () => {
       const listId = Automerge.getObjectId(s2.list)
       assert.deepEqual(Automerge.getChanges(s1, s2), [{actor: 'actorid', seq: 1, startOp: 1, deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'list', child: listId},
-        {obj: listId,  action: 'set', key: '_head', insert: true, elem: 1, value: 'a'}
+        {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a'}
       ]}])
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
       const s4 = Automerge.load(Automerge.save(s3), 'actorid')
       const s5 = Automerge.change(s4, doc => doc.list.push('b'))
       assert.deepEqual(s5, {list: ['b']})
       assert.deepEqual(Automerge.getChanges(s4, s5), [{actor: 'actorid', seq: 3, startOp: 4, deps: {}, ops: [
-        {obj: listId, action: 'set', key: '_head', insert: true, elem: 2, value: 'b'}
+        {obj: listId, action: 'set', key: '_head', insert: true, value: 'b'}
       ]}])
     })
 

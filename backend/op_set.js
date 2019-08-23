@@ -1,6 +1,6 @@
 const { Map, List, Set } = require('immutable')
 const { SkipList } = require('./skip_list')
-const { ROOT_ID, parseElemId } = require('../src/common')
+const { ROOT_ID, parseOpId } = require('../src/common')
 
 // Returns true if the two operations are concurrent, that is, they happened without being aware of
 // each other (neither happened before the other). Returns false if one supersedes the other.
@@ -86,15 +86,13 @@ function applyMake(opSet, op, patch) {
 // Processes an insertion operation. Does not modify any patch because the new list element
 // only becomes visible through the assignment of a value to the new list element.
 function applyInsert(opSet, op) {
-  const objectId = op.get('obj'), elem = op.get('elem'), elemId = op.get('actor') + ':' + elem
-  const maxElem = Math.max(elem, opSet.getIn(['byObject', objectId, '_maxElem'], 0))
-  if (!opSet.get('byObject').has(objectId)) throw new Error('Modification of unknown object ' + objectId)
-  if (opSet.hasIn(['byObject', objectId, '_insertion', elemId])) throw new Error('Duplicate list element ID ' + elemId)
+  const objectId = op.get('obj'), opId = op.get('opId')
+  if (!opSet.get('byObject').has(objectId)) throw new Error(`Modification of unknown object ${objectId}`)
+  if (opSet.hasIn(['byObject', objectId, '_insertion', opId])) throw new Error(`Duplicate list element ID ${opId}`)
 
   return opSet
     .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
-    .setIn(['byObject', objectId, '_maxElem'], maxElem)
-    .setIn(['byObject', objectId, '_insertion', elemId], op)
+    .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
 function updateListElement(opSet, objectId, elemId, patch) {
@@ -173,7 +171,7 @@ function isChildOp(op) {
  * the key is the element ID; in the case of maps, it is the property name.
  */
 function getOperationKey(op) {
-  return op.get('insert') ? `${op.get('actor')}:${op.get('elem')}` : op.get('key')
+  return op.get('insert') ? op.get('opId') : op.get('key')
 }
 
 /**
@@ -529,31 +527,29 @@ function getFieldOps(opSet, objectId, key) {
 function getParent(opSet, objectId, key) {
   if (key === '_head') return
   const insertion = opSet.getIn(['byObject', objectId, '_insertion', key])
-  if (!insertion) throw new TypeError('Missing index entry for list element ' + key)
+  if (!insertion) throw new TypeError(`Missing index entry for list element ${key}`)
   return insertion.get('key')
 }
 
 function lamportCompare(op1, op2) {
-  if (op1.get('elem' ) < op2.get('elem' )) return -1
-  if (op1.get('elem' ) > op2.get('elem' )) return  1
-  if (op1.get('actor') < op2.get('actor')) return -1
-  if (op1.get('actor') > op2.get('actor')) return  1
+  const time1 = parseOpId(op1.get('opId')), time2 = parseOpId(op2.get('opId'))
+  if (time1.counter < time2.counter) return -1
+  if (time1.counter > time2.counter) return  1
+  if (time1.actorId < time2.actorId) return -1
+  if (time1.actorId > time2.actorId) return  1
   return 0
 }
 
 function insertionsAfter(opSet, objectId, parentId, childId) {
   let childKey = null
-  if (childId) {
-    const parsedId = parseElemId(childId)
-    childKey = Map({actor: parsedId.actorId, elem: parsedId.counter})
-  }
+  if (childId) childKey = Map({opId: childId})
 
   return opSet
     .getIn(['byObject', objectId, '_following', parentId], List())
     .filter(op => op.get('insert') && (!childKey || lamportCompare(op, childKey) < 0))
     .sort(lamportCompare)
     .reverse() // descending order
-    .map(op => op.get('actor') + ':' + op.get('elem'))
+    .map(op => op.get('opId'))
 }
 
 function getNext(opSet, objectId, key) {
@@ -625,7 +621,7 @@ function constructList(opSet, objectId, type) {
     if (!elemId) {
       return patch
     }
-    maxCounter = Math.max(maxCounter, parseElemId(elemId).counter)
+    maxCounter = Math.max(maxCounter, parseOpId(elemId).counter)
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {

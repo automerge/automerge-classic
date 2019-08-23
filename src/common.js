@@ -31,18 +31,17 @@ function lessOrEqual(clock1, clock2) {
 }
 
 /**
- * Takes a string in the form that is used to identify list elements (an actor
- * ID concatenated with a counter, separated by a colon) and returns an object
- * of the structure `{counter, actorId}`.
+ * Takes a string in the form that is used to identify operations (a counter concatenated
+ * with an actor ID, separated by an `@` sign) and returns an object `{counter, actorId}`.
  */
-function parseElemId(elemId) {
-  const match = /^(.*):(\d+)$/.exec(elemId || '')
+function parseOpId(opId) {
+  const match = /^(\d+)@(.*)$/.exec(opId || '')
   if (!match) {
-    throw new RangeError(`Not a valid elemId: ${elemId}`)
+    throw new RangeError(`Not a valid opId: ${opId}`)
   }
-  return {counter: parseInt(match[2]), actorId: match[1]}
+  return {counter: parseInt(match[1]), actorId: match[2]}
 }
 
 module.exports = {
-  ROOT_ID, isObject, copyObject, lessOrEqual, parseElemId
+  ROOT_ID, isObject, copyObject, lessOrEqual, parseOpId
 }

@@ -220,7 +220,6 @@ declare module 'automerge' {
     child?: UUID
     value?: number | boolean | string | null
     datatype?: DataType
-    elem?: number
   }
 
   interface Patch {

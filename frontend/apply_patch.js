@@ -1,4 +1,4 @@
-const { ROOT_ID, isObject, copyObject, parseElemId } = require('../src/common')
+const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const { OPTIONS, OBJECT_ID, CONFLICTS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
