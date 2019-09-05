@@ -31,7 +31,7 @@ class Node {
     this.nextCount = nextCount
   }
 
-  setValue (key, value) {
+  setValue (value) {
     return new Node(this.key, value, this.level, this.prevKey, this.nextKey,
                     this.prevCount, this.nextCount)
   }
@@ -300,7 +300,7 @@ class SkipList {
     let node = this._nodes.get(key)
     if (!node) throw new RangeError('The referenced key does not exist')
 
-    node = node.setValue(key, value)
+    node = node.setValue(value)
     return makeInstance(this.length, this._nodes.set(key, node), this._randomSource)
   }
 
