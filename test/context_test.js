@@ -337,7 +337,7 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {actor1: {objectId: tableId, type: 'table', props: {
-          [rowId]: {[context.actorId]: {objectId: rowId, type: 'map', props: {
+          [rowId]: {[rowId]: {objectId: rowId, type: 'map', props: {
             author: {[context.actorId]: {value: 'Mary Shelley'}},
             title: {[context.actorId]: {value: 'Frankenstein'}}
           }}}

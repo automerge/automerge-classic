@@ -62,14 +62,14 @@ class Context {
   /**
    * Builds the values structure describing a single property in a patch. Finds all the values of
    * property `key` of `object` (there might be multiple values in the case of a conflict), and
-   * returns an object that maps actorIds to descriptions of values.
+   * returns an object that maps operation IDs to descriptions of values.
    */
   getValuesDescriptions(path, object, key) {
     if (object instanceof Table) {
       // Table objects don't have conflicts, since rows are identified by their unique objectId
       const value = object.byId(key)
       if (value) {
-        return {[object.getActorId(key)]: this.getValueDescription(value)}
+        return {[key]: this.getValueDescription(value)}
       } else {
         return {}
       }
@@ -92,9 +92,6 @@ class Context {
    */
   getPropertyValue(object, key, opId) {
     if (object instanceof Table) {
-      if (opId !== object.getActorId(key)) {
-        throw new RangeError(`Mismatched opId: ${opId} != ${object.getActorId(key)}`)
-      }
       return object.byId(key)
     } else {
       return object[CONFLICTS][key][opId]
@@ -410,7 +407,7 @@ class Context {
 
     const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false)
     this.applyAtPath(path, subpatch => {
-      subpatch.props[valuePatch.objectId] = {[this.actorId]: valuePatch}
+      subpatch.props[valuePatch.objectId] = {[valuePatch.objectId]: valuePatch}
     })
     return valuePatch.objectId
   }

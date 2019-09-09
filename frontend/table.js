@@ -34,7 +34,6 @@ class Table {
     }
     this.columns = columns
     this.entries = Object.freeze({})
-    this.actorIds = Object.freeze({})
     Object.freeze(this)
   }
 
@@ -43,13 +42,6 @@ class Table {
    */
   byId(id) {
     return this.entries[id]
-  }
-
-  /**
-   * Returns the ID of the actor that added the row with object ID `id`.
-   */
-  getActorId(id) {
-    return this.actorIds[id]
   }
 
   /**
@@ -153,19 +145,17 @@ class Table {
     if (!this[OBJECT_ID]) {
       throw new RangeError('clone() requires the objectId to be set')
     }
-    return instantiateTable(this[OBJECT_ID], copyObject(this.entries), copyObject(this.actorIds))
+    return instantiateTable(this[OBJECT_ID], copyObject(this.entries))
   }
 
   /**
-   * Sets the entry with key `id` to `value`. `actorId` is the ID of the actor
-   * that performed this assignment.
+   * Sets the entry with key `id` to `value`.
    */
-  set(id, value, actorId) {
+  set(id, value) {
     if (Object.isFrozen(this.entries)) {
       throw new Error('A table can only be modified in a change function')
     }
     this.entries[id] = value
-    this.actorIds[id] = actorId
     if (id === 'columns') this.columns = value
   }
 
@@ -177,7 +167,6 @@ class Table {
       throw new Error('A table can only be modified in a change function')
     }
     delete this.entries[id]
-    delete this.actorIds[id]
   }
 
   /**
@@ -278,7 +267,7 @@ class WriteableTable extends Table {
  * This function is used to instantiate a Table object in the context of
  * applying a patch (see apply_patch.js).
  */
-function instantiateTable(objectId, entries, actorIds) {
+function instantiateTable(objectId, entries) {
   const instance = Object.create(Table.prototype)
   if (!objectId) {
     throw new RangeError('instantiateTable requires an objectId to be given')
@@ -286,7 +275,6 @@ function instantiateTable(objectId, entries, actorIds) {
   instance[OBJECT_ID] = objectId
   instance[CONFLICTS] = Object.freeze({})
   instance.entries = entries || {}
-  instance.actorIds = actorIds || {}
   return instance
 }
 
