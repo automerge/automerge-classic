@@ -289,7 +289,7 @@ function undo(state, request, startOp) {
         redoOps.push(Map({action: 'del', obj: op.get('obj'), key}))
       } else {
         for (let fieldOp of fieldOps) {
-          fieldOp = fieldOp.remove('actor').remove('seq').remove('opId').remove('pred')
+          fieldOp = fieldOp.remove('opId').remove('pred')
           if (fieldOp.get('insert')) fieldOp = fieldOp.remove('insert').set('key', key)
           if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
           redoOps.push(fieldOp)

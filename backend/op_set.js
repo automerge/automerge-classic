@@ -2,20 +2,6 @@ const { Map, List, Set } = require('immutable')
 const { SkipList } = require('./skip_list')
 const { ROOT_ID, parseOpId } = require('../src/common')
 
-// Returns true if the two operations are concurrent, that is, they happened without being aware of
-// each other (neither happened before the other). Returns false if one supersedes the other.
-function isConcurrent(opSet, op1, op2) {
-  const [actor1, seq1] = [op1.get('actor'), op1.get('seq')]
-  const [actor2, seq2] = [op2.get('actor'), op2.get('seq')]
-  if (!actor1 || !actor2 || !seq1 || !seq2) return false
-  if (actor1 === actor2 && seq1 === seq2) return false
-
-  const clock1 = opSet.getIn(['states', actor1, seq1 - 1, 'allDeps'])
-  const clock2 = opSet.getIn(['states', actor2, seq2 - 1, 'allDeps'])
-
-  return clock1.get(actor2, 0) < seq2 && clock2.get(actor1, 0) < seq1
-}
-
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
 function causallyReady(opSet, change) {
@@ -220,16 +206,16 @@ function applyAssign(opSet, op, patch) {
     overwritten = List()
     remaining = ops.map(other => {
       if (other.get('action') === 'set' && typeof other.get('value') === 'number' &&
-          other.get('datatype') === 'counter' && !isConcurrent(opSet, other, op)) {
+          other.get('datatype') === 'counter' && op.get('pred').includes(other.get('opId'))) {
         return other.set('value', other.get('value') + op.get('value'))
       } else {
         return other
       }
     })
   } else {
-    const priorOpsConcurrent = ops.groupBy(other => !!isConcurrent(opSet, other, op))
-    overwritten = priorOpsConcurrent.get(false, List())
-    remaining   = priorOpsConcurrent.get(true,  List())
+    const priorOpsOverwritten = ops.groupBy(other => op.get('pred').includes(other.get('opId')))
+    overwritten = priorOpsOverwritten.get(true,  List())
+    remaining   = priorOpsOverwritten.get(false, List())
   }
 
   // If any child object references were overwritten, remove them from the index of inbound links
@@ -385,7 +371,7 @@ function applyOps(opSet, change, isLocal, patch) {
       }
     }
 
-    const opWithId = op.merge({actor, seq, opId})
+    const opWithId = op.merge({opId})
     if (insert) {
       opSet = applyInsert(opSet, opWithId)
     }
@@ -427,16 +413,15 @@ function applyChange(opSet, change, isLocal, patch) {
     }
   }
 
-  const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
-  opSet = opSet.setIn(['states', actor], prior.push(Map({allDeps})))
   ;[opSet, change] = applyOps(opSet, change, isLocal, patch)
 
+  const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
   opSet = opSet
-    .setIn(['states', actor, seq - 1, 'change'], change)
+    .setIn(['states', actor], prior.push(Map({allDeps, change})))
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
     .update('maxOp', maxOp => Math.max(maxOp, startOp + change.get('ops').size - 1))
