@@ -109,7 +109,7 @@ function apply(state, changes, request, isUndoable, isIncremental) {
   let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
-    opSet = OpSet.addChange(opSet, change, isUndoable, diffs)
+    opSet = OpSet.addChange(opSet, change, !!request, isUndoable, diffs)
   }
 
   OpSet.finalizePatch(opSet, diffs)
@@ -194,7 +194,7 @@ function applyLocalChange(state, request) {
         if (v.get('localOnly')) {
           return v.set('opSet', state.get('opSet'))
         } else {
-          return v.set('opSet', OpSet.addChange(v.get('opSet'), change, false, null))
+          return v.set('opSet', OpSet.addChange(v.get('opSet'), change, true, false, null))
         }
       })
   })
@@ -289,7 +289,7 @@ function undo(state, request, startOp) {
         redoOps.push(Map({action: 'del', obj: op.get('obj'), key}))
       } else {
         for (let fieldOp of fieldOps) {
-          fieldOp = fieldOp.remove('actor').remove('seq').remove('opId')
+          fieldOp = fieldOp.remove('actor').remove('seq').remove('opId').remove('pred')
           if (fieldOp.get('insert')) fieldOp = fieldOp.remove('insert').set('key', key)
           if (fieldOp.get('action').startsWith('make')) fieldOp = fieldOp.set('action', 'link')
           redoOps.push(fieldOp)

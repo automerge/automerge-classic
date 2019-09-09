@@ -351,34 +351,54 @@ function finalizePatch(opSet, patch) {
 }
 
 /**
- * Applies the operations in the list `ops` to `opSet`. As a side-effect, `patch`
- * is mutated to describe the changes. Returns the updated `opSet`.
+ * Applies the operations in the `change` to `opSet`. As a side-effect, `patch`
+ * is mutated to describe the changes. Returns a two-element array containing
+ * the updated `opSet` and the `change`. In the change that is returned, the
+ * operations' `pred` properties have been filled in (if `isLocal` is true).
  */
-function applyOps(opSet, ops, patch) {
+function applyOps(opSet, change, isLocal, patch) {
+  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
   let newObjects = Set()
-  for (let op of ops) {
-    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(op.get('action'))) {
-      throw new RangeError(`Unknown operation action: ${op.get('action')}`)
+  const ops = change.get('ops').map((op, index) => {
+    const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
+    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
+      throw new RangeError(`Unknown operation action: ${action}`)
     }
+
+    let opId = `${startOp + index}@${actor}`
+
+    if (isLocal) {
+      if (op.get('pred')) {
+        throw new RangeError(`Unexpected 'pred' field in local operation ${op}`)
+      }
+      const key = insert ? opId : op.get('key')
+      const fieldOps = getFieldOps(opSet, obj, key)
+      op = op.set('pred', fieldOps.map(fieldOp => fieldOp.get('opId')))
+    } else if (!op.get('pred')) {
+      throw new RangeError(`Missing 'pred' field in remote operation ${op}`)
+    }
+
     let localPatch = patch
     if (patch) {
-      for (let pathOp of getPath(opSet, op.get('obj'))) {
+      for (let pathOp of getPath(opSet, obj)) {
         localPatch = initializePatch(opSet, pathOp, localPatch)
       }
     }
 
-    if (op.get('insert')) {
-      opSet = applyInsert(opSet, op)
+    const opWithId = op.merge({actor, seq, opId})
+    if (insert) {
+      opSet = applyInsert(opSet, opWithId)
     }
-    if (op.get('action').startsWith('make')) {
+    if (action.startsWith('make')) {
       newObjects = newObjects.add(op.get('child'))
     }
-    if (!newObjects.contains(op.get('obj'))) {
-      opSet = recordUndoHistory(opSet, op)
+    if (!newObjects.contains(obj)) {
+      opSet = recordUndoHistory(opSet, opWithId)
     }
-    opSet = applyAssign(opSet, op, localPatch)
-  }
-  return opSet
+    opSet = applyAssign(opSet, opWithId, localPatch)
+    return op
+  })
+  return [opSet, change.set('ops', ops)]
 }
 
 /**
@@ -386,7 +406,7 @@ function applyOps(opSet, ops, patch) {
  * in which case we do nothing). As a side-effect, `patch` is mutated to describe
  * the changes. Returns the updated `opSet`.
  */
-function applyChange(opSet, change, patch) {
+function applyChange(opSet, change, isLocal, patch) {
   const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
   if (typeof actor !== 'string' || typeof seq !== 'number' || typeof startOp !== 'number') {
     throw new TypeError(`Missing change metadata: actor = ${actor}, seq = ${seq}, startOp = ${startOp}`)
@@ -408,20 +428,18 @@ function applyChange(opSet, change, patch) {
   }
 
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
-  opSet = opSet.setIn(['states', actor], prior.push(Map({change, allDeps})))
-
-  let ops = change.get('ops')
-    .map((op, index) => op.merge({actor, seq, opId: `${startOp + index}@${actor}`}))
-  opSet = applyOps(opSet, ops, patch)
+  opSet = opSet.setIn(['states', actor], prior.push(Map({allDeps})))
+  ;[opSet, change] = applyOps(opSet, change, isLocal, patch)
 
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
   opSet = opSet
+    .setIn(['states', actor, seq - 1, 'change'], change)
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
-    .update('maxOp', maxOp => Math.max(maxOp, startOp + ops.size - 1))
+    .update('maxOp', maxOp => Math.max(maxOp, startOp + change.get('ops').size - 1))
     .update('history', history => history.push(change))
   return opSet
 }
@@ -431,7 +449,7 @@ function applyQueuedOps(opSet, patch) {
   while (true) {
     for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
-        opSet = applyChange(opSet, change, patch)
+        opSet = applyChange(opSet, change, false, patch)
       } else {
         queue = queue.push(change)
       }
@@ -471,17 +489,21 @@ function init() {
 }
 
 /**
- * Adds `change` to `opSet`. If `isUndoable` is true, an undo history entry is created.
+ * Adds `change` to `opSet`. If `isLocal` is true, the operations are extended with
+ * `pred` properties. If `isUndoable` is true, an undo history entry is created.
  * `patch` is mutated to describe the change (in the format used by patches).
  */
-function addChange(opSet, change, isUndoable, patch) {
-  opSet = opSet.update('queue', queue => queue.push(change))
-
-  if (isUndoable) {
-    opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
-    opSet = applyQueuedOps(opSet, patch)
-    opSet = pushUndoHistory(opSet)
+function addChange(opSet, change, isLocal, isUndoable, patch) {
+  if (isLocal) {
+    if (isUndoable) {
+      opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
+      opSet = applyChange(opSet, change, true, patch)
+      opSet = pushUndoHistory(opSet)
+    } else {
+      opSet = applyChange(opSet, change, true, patch)
+    }
   } else {
+    opSet = opSet.update('queue', queue => queue.push(change))
     opSet = applyQueuedOps(opSet, patch)
   }
   return opSet
