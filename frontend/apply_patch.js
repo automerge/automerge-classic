@@ -1,4 +1,4 @@
-const { ROOT_ID, isObject, copyObject } = require('../src/common')
+const { ROOT_ID, isObject, copyObject, parseOpId } = require('../src/common')
 const { OPTIONS, OBJECT_ID, CONFLICTS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
@@ -29,37 +29,52 @@ function getValue(patch, object, updated) {
 }
 
 /**
+ * Compares two strings, interpreted as Lamport timestamps of the form
+ * 'counter@actorId'. Returns 1 if ts1 is greater, or -1 if ts2 is greater.
+ */
+function lamportCompare(ts1, ts2) {
+  const regex = /^(\d+)@(.*)$/
+  const time1 = regex.test(ts1) ? parseOpId(ts1) : {counter: 0, actorId: ts1}
+  const time2 = regex.test(ts2) ? parseOpId(ts2) : {counter: 0, actorId: ts2}
+  if (time1.counter < time2.counter) return -1
+  if (time1.counter > time2.counter) return  1
+  if (time1.actorId < time2.actorId) return -1
+  if (time1.actorId > time2.actorId) return  1
+  return 0
+}
+
+/**
  * `props` is an object of the form:
- * `{key1: {actor1: {...}, actor2: {...}}, key2: {actor3: {...}}}`
+ * `{key1: {opId1: {...}, opId2: {...}}, key2: {opId3: {...}}}`
  * where the outer object is a mapping from property names to inner objects,
- * and the inner objects are a mapping from actor ID to sub-patch.
+ * and the inner objects are a mapping from operation ID to sub-patch.
  * This function interprets that structure and updates the objects `object` and
- * `conflicts` to reflect it. For each key, the lexicographically greatest
- * actor ID is chosen as the default resolution; that actor's value is assigned
- * to `object[key]`. Moreover, all the actor IDs and values are packed into a
- * conflicts object of the form `{actor1: value1, actor2: value2}` and assigned
+ * `conflicts` to reflect it. For each key, the greatest opId (by Lamport TS
+ * order) is chosen as the default resolution; that op's value is assigned
+ * to `object[key]`. Moreover, all the opIds and values are packed into a
+ * conflicts object of the form `{opId1: value1, opId2: value2}` and assigned
  * to `conflicts[key]`. If there is no conflict, the conflicts object contains
- * just a single actor-value mapping.
+ * just a single opId-value mapping.
  */
 function applyProperties(props, object, conflicts, updated) {
   if (!props) return
 
   for (let key of Object.keys(props)) {
-    const values = {}, actors = Object.keys(props[key]).sort().reverse()
-    for (let actor of actors) {
-      const subpatch = props[key][actor]
-      if (conflicts[key] && conflicts[key][actor]) {
-        values[actor] = getValue(subpatch, conflicts[key][actor], updated)
+    const values = {}, opIds = Object.keys(props[key]).sort(lamportCompare).reverse()
+    for (let opId of opIds) {
+      const subpatch = props[key][opId]
+      if (conflicts[key] && conflicts[key][opId]) {
+        values[opId] = getValue(subpatch, conflicts[key][opId], updated)
       } else {
-        values[actor] = getValue(subpatch, undefined, updated)
+        values[opId] = getValue(subpatch, undefined, updated)
       }
     }
 
-    if (actors.length === 0) {
+    if (opIds.length === 0) {
       delete object[key]
       delete conflicts[key]
     } else {
-      object[key] = values[actors[0]]
+      object[key] = values[opIds[0]]
       conflicts[key] = values
     }
   }
@@ -159,13 +174,13 @@ function updateTableObject(patch, obj, updated) {
   const object = updated[objectId]
 
   for (let key of Object.keys(patch.props)) {
-    const values = {}, actors = Object.keys(patch.props[key])
+    const values = {}, opIds = Object.keys(patch.props[key])
 
-    if (actors.length === 0) {
+    if (opIds.length === 0) {
       object.remove(key)
-    } else if (actors.length === 1) {
-      const subpatch = patch.props[key][actors[0]]
-      object.set(key, getValue(subpatch, object.byId(key), updated), actors[0])
+    } else if (opIds.length === 1) {
+      const subpatch = patch.props[key][opIds[0]]
+      object.set(key, getValue(subpatch, object.byId(key), updated), opIds[0])
     } else {
       throw new RangeError('Conflicts are not supported on properties of a table')
     }
@@ -242,13 +257,13 @@ function updateTextObject(patch, obj, updated) {
   )
 
   for (let key of Object.keys(patch.props || {})) {
-    const actor = Object.keys(patch.props[key]).sort().reverse()[0]
-    if (!actor) throw new RangeError(`No default value at index ${key}`)
+    const opId = Object.keys(patch.props[key]).sort(lamportCompare).reverse()[0]
+    if (!opId) throw new RangeError(`No default value at index ${key}`)
 
     // TODO Text object does not support conflicts. Should it?
-    const oldValue = (elems[key].actorId === actor) ? elems[key].value : undefined
-    elems[key].value = getValue(patch.props[key][actor], oldValue, updated)
-    elems[key].actorId = actor
+    const oldValue = (elems[key].opId === opId) ? elems[key].value : undefined
+    elems[key].value = getValue(patch.props[key][opId], oldValue, updated)
+    elems[key].opId = opId
   }
 
   updated[objectId] = instantiateText(objectId, elems)

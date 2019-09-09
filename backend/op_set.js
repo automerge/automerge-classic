@@ -203,14 +203,14 @@ function applyAssign(opSet, op, patch) {
 
   if (action.startsWith('make')) {
     if (patch) {
-      patch.props[key][op.get('actor')] = {}
-      opSet = applyMake(opSet, op, patch.props[key][op.get('actor')])
+      patch.props[key][op.get('opId')] = {}
+      opSet = applyMake(opSet, op, patch.props[key][op.get('opId')])
     } else {
       opSet = applyMake(opSet, op)
     }
   }
   if (action === 'link' && patch) {
-    patch.props[key][op.get('actor')] = constructObject(opSet, op.get('child'))
+    patch.props[key][op.get('opId')] = constructObject(opSet, op.get('child'))
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -243,7 +243,7 @@ function applyAssign(opSet, op, patch) {
   if (action === 'set' || isChildOp(op)) {
     remaining = remaining.push(op)
   }
-  remaining = remaining.sortBy(op => op.get('actor')).reverse()
+  remaining = remaining.sort(lamportCompare).reverse()
   opSet = opSet.setIn(['byObject', objectId, '_keys', key], remaining)
   setPatchProps(opSet, objectId, key, patch)
 
@@ -260,7 +260,7 @@ function applyAssign(opSet, op, patch) {
  * operation.
  */
 function initializePatch(opSet, pathOp, patch) {
-  const objectId = pathOp.get('obj'), actor = pathOp.get('actor'), key = getOperationKey(pathOp)
+  const objectId = pathOp.get('obj'), opId = pathOp.get('opId'), key = getOperationKey(pathOp)
   const type = getObjectType(opSet, objectId)
   patch.objectId = patch.objectId || objectId
   patch.type     = patch.type     || type
@@ -273,10 +273,10 @@ function initializePatch(opSet, pathOp, patch) {
   }
   setPatchProps(opSet, objectId, key, patch)
 
-  if (patch.props[key][actor] === undefined) {
-    throw new RangeError(`field ops for ${key} did not contain actor ${actor}`)
+  if (patch.props[key][opId] === undefined) {
+    throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
   }
-  return patch.props[key][actor]
+  return patch.props[key][opId]
 }
 
 /**
@@ -292,20 +292,20 @@ function setPatchProps(opSet, objectId, key, patch) {
     patch.props[key] = {}
   }
 
-  const actors = {}
+  const ops = {}
   for (let op of getFieldOps(opSet, objectId, key)) {
-    const actor = op.get('actor')
-    actors[actor] = true
+    const opId = op.get('opId')
+    ops[opId] = true
 
     if (op.get('action') === 'set') {
-      patch.props[key][actor] = {value: op.get('value')}
+      patch.props[key][opId] = {value: op.get('value')}
       if (op.get('datatype')) {
-        patch.props[key][actor].datatype = op.get('datatype')
+        patch.props[key][opId].datatype = op.get('datatype')
       }
     } else if (isChildOp(op)) {
-      if (!patch.props[key][actor]) {
+      if (!patch.props[key][opId]) {
         const childId = op.get('child')
-        patch.props[key][actor] = {objectId: childId, type: getObjectType(opSet, childId)}
+        patch.props[key][opId] = {objectId: childId, type: getObjectType(opSet, childId)}
       }
     } else {
       throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
@@ -313,9 +313,9 @@ function setPatchProps(opSet, objectId, key, patch) {
   }
 
   // Remove any values that appear in the patch, but were not returned by getFieldOps()
-  for (let actor of Object.keys(patch.props[key])) {
-    if (!actors[actor]) {
-      delete patch.props[key][actor]
+  for (let opId of Object.keys(patch.props[key])) {
+    if (!ops[opId]) {
+      delete patch.props[key][opId]
     }
   }
 }
@@ -344,8 +344,8 @@ function finalizePatch(opSet, patch) {
   }
 
   for (let key of Object.keys(patch.props)) {
-    for (let actor of Object.keys(patch.props[key])) {
-      finalizePatch(opSet, patch.props[key][actor])
+    for (let opId of Object.keys(patch.props[key])) {
+      finalizePatch(opSet, patch.props[key][opId])
     }
   }
 }
@@ -605,7 +605,7 @@ function constructMap(opSet, objectId, type) {
     if (!fieldOps.isEmpty()) {
       patch.props[key] = {}
       for (let op of fieldOps) {
-        patch.props[key][op.get('actor')] = constructField(opSet, op)
+        patch.props[key][op.get('opId')] = constructField(opSet, op)
       }
     }
   }
@@ -628,7 +628,7 @@ function constructList(opSet, objectId, type) {
       patch.edits.push({action: 'insert', index})
       patch.props[index] = {}
       for (let op of fieldOps) {
-        patch.props[index][op.get('actor')] = constructField(opSet, op)
+        patch.props[index][op.get('opId')] = constructField(opSet, op)
       }
       index += 1
     }

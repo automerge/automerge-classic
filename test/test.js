@@ -152,8 +152,8 @@ describe('Automerge', () => {
         s2 = Automerge.change(s2, doc => doc.list[0] = 321)
         s1 = Automerge.merge(s1, s2)
         assert.deepEqual(Automerge.getConflicts(s1.list, 0), {
-          [Automerge.getActorId(s1)]: 123,
-          [Automerge.getActorId(s2)]: 321
+          [`3@${Automerge.getActorId(s1)}`]: 123,
+          [`3@${Automerge.getActorId(s2)}`]: 321
         })
         const resolved = Automerge.change(s1, doc => doc.list[0] = s1.list[0])
         assert.deepEqual(resolved, s1)
@@ -689,8 +689,8 @@ describe('Automerge', () => {
         assert.deepEqual(s3, {counter: new Automerge.Counter(103)})
       }
       assert.deepEqual(Automerge.getConflicts(s3, 'counter'), {
-        [Automerge.getActorId(s1)]: new Automerge.Counter(1),
-        [Automerge.getActorId(s2)]: new Automerge.Counter(103)
+        [`1@${Automerge.getActorId(s1)}`]: new Automerge.Counter(1),
+        [`1@${Automerge.getActorId(s2)}`]: new Automerge.Counter(103)
       })
     })
 
@@ -704,8 +704,8 @@ describe('Automerge', () => {
         assert.deepEqual(s3, {field: 'two'})
       }
       assert.deepEqual(Automerge.getConflicts(s3, 'field'), {
-        [Automerge.getActorId(s1)]: 'one',
-        [Automerge.getActorId(s2)]: 'two'
+        [`1@${Automerge.getActorId(s1)}`]: 'one',
+        [`1@${Automerge.getActorId(s2)}`]: 'two'
       })
     })
 
@@ -721,8 +721,8 @@ describe('Automerge', () => {
         assert.deepEqual(s3.birds, ['goldfinch'])
       }
       assert.deepEqual(Automerge.getConflicts(s3.birds, 0), {
-        [Automerge.getActorId(s1)]: 'greenfinch',
-        [Automerge.getActorId(s2)]: 'goldfinch'
+        [`3@${Automerge.getActorId(s1)}`]: 'greenfinch',
+        [`3@${Automerge.getActorId(s2)}`]: 'goldfinch'
       })
     })
 
@@ -733,9 +733,9 @@ describe('Automerge', () => {
       s1 = Automerge.merge(Automerge.merge(s1, s2), s3)
       assertEqualsOneOf(s1.field, 'string', ['list'], {thing: 'map'})
       assert.deepEqual(Automerge.getConflicts(s1, 'field'), {
-        [Automerge.getActorId(s1)]: 'string',
-        [Automerge.getActorId(s2)]: ['list'],
-        [Automerge.getActorId(s3)]: {thing: 'map'}
+        [`1@${Automerge.getActorId(s1)}`]: 'string',
+        [`1@${Automerge.getActorId(s2)}`]: ['list'],
+        [`1@${Automerge.getActorId(s3)}`]: {thing: 'map'}
       })
     })
 
@@ -746,8 +746,8 @@ describe('Automerge', () => {
       s3 = Automerge.merge(s1, s2)
       assertEqualsOneOf(s3.field, 'string', {innerKey: 42})
       assert.deepEqual(Automerge.getConflicts(s3, 'field'), {
-        [Automerge.getActorId(s1)]: 'string',
-        [Automerge.getActorId(s2)]: {innerKey: 42}
+        [`1@${Automerge.getActorId(s1)}`]: 'string',
+        [`1@${Automerge.getActorId(s2)}`]: {innerKey: 42}
       })
     })
 
@@ -765,8 +765,8 @@ describe('Automerge', () => {
         assert.deepEqual(s3.list, [{map2: true, key: 2}])
       }
       assert.deepEqual(Automerge.getConflicts(s3.list, 0), {
-        [Automerge.getActorId(s1)]: {map1: true, key: 1},
-        [Automerge.getActorId(s2)]: {map2: true, key: 2}
+        [`3@${Automerge.getActorId(s1)}`]: {map1: true, key: 1},
+        [`3@${Automerge.getActorId(s2)}`]: {map2: true, key: 2}
       })
     })
 
@@ -776,8 +776,8 @@ describe('Automerge', () => {
       s3 = Automerge.merge(s1, s2)
       assertEqualsOneOf(s3.config, {background: 'blue'}, {logo_url: 'logo.png'})
       assert.deepEqual(Automerge.getConflicts(s3, 'config'), {
-        [Automerge.getActorId(s1)]: {background: 'blue'},
-        [Automerge.getActorId(s2)]: {logo_url: 'logo.png'}
+        [`1@${Automerge.getActorId(s1)}`]: {background: 'blue'},
+        [`1@${Automerge.getActorId(s2)}`]: {logo_url: 'logo.png'}
       })
     })
 
@@ -1309,8 +1309,8 @@ describe('Automerge', () => {
       let s3 = Automerge.load(Automerge.save(s1))
       assert.strictEqual(s1.x, 5)
       assert.strictEqual(s3.x, 5)
-      assert.deepEqual(Automerge.getConflicts(s1, 'x'), {actor1: 3, actor2: 5})
-      assert.deepEqual(Automerge.getConflicts(s3, 'x'), {actor1: 3, actor2: 5})
+      assert.deepEqual(Automerge.getConflicts(s1, 'x'), {'1@actor1': 3, '1@actor2': 5})
+      assert.deepEqual(Automerge.getConflicts(s3, 'x'), {'1@actor1': 3, '1@actor2': 5})
     })
 
     it('should reconstitute element ID counters', () => {
@@ -1387,15 +1387,15 @@ describe('Automerge', () => {
       let s3 = Automerge.change(s2, doc => doc.birds.push('Wagtail'))
       const objectId = Automerge.getObjectId(s1.birds), actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId, type: 'list',
+        birds: {[`1@${actorId}`]: {objectId, type: 'list',
           edits: [{action: 'insert', index: 0}],
-          props: {0: {[actorId]: {value: 'Robin'}}}
+          props: {0: {[`2@${actorId}`]: {value: 'Robin'}}}
         }}
       }})
       assert.deepEqual(Automerge.diff(s1, s3), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId, type: 'list',
+        birds: {[`1@${actorId}`]: {objectId, type: 'list',
           edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
-          props: {0: {[actorId]: {value: 'Robin'}}, 1: {[actorId]: {value: 'Wagtail'}}}
+          props: {0: {[`2@${actorId}`]: {value: 'Robin'}}, 1: {[`3@${actorId}`]: {value: 'Wagtail'}}}
         }}
       }})
     })
@@ -1405,9 +1405,9 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => { doc.birds[1] = 'Pied Wagtail'; doc.birds.shift() })
       const objectId = Automerge.getObjectId(s1.birds), actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId, type: 'list',
+        birds: {[`1@${actorId}`]: {objectId, type: 'list',
           edits: [{action: 'remove', index: 0}],
-          props: {0: {[actorId]: {value: 'Pied Wagtail'}}}
+          props: {0: {[`4@${actorId}`]: {value: 'Pied Wagtail'}}}
         }}
       }})
     })
@@ -1417,11 +1417,11 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => doc.birds = [{name: 'Chaffinch'}])
       const actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId: Automerge.getObjectId(s2.birds), type: 'list',
+        birds: {[`1@${actorId}`]: {objectId: Automerge.getObjectId(s2.birds), type: 'list',
           edits: [{action: 'insert', index: 0}],
           props: {
-            0: {[actorId]: {objectId: Automerge.getObjectId(s2.birds[0]), type: 'map', props: {
-              name: {[actorId]: {value: 'Chaffinch'}}
+            0: {[`2@${actorId}`]: {objectId: Automerge.getObjectId(s2.birds[0]), type: 'map', props: {
+              name: {[`3@${actorId}`]: {value: 'Chaffinch'}}
             }}}
           }
         }}
@@ -1433,11 +1433,11 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => doc.birds[0].habitat.push('gardens'))
       const actorId = Automerge.getActorId(s1)
       assert.deepEqual(Automerge.diff(s1, s2), {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actorId]: {objectId: Automerge.getObjectId(s1.birds), type: 'list', props: {
-          0: {[actorId]: {objectId: Automerge.getObjectId(s1.birds[0]), type: 'map', props: {
-            habitat: {[actorId]: {objectId: Automerge.getObjectId(s1.birds[0].habitat), type: 'list',
+        birds: {[`1@${actorId}`]: {objectId: Automerge.getObjectId(s1.birds), type: 'list', props: {
+          0: {[`2@${actorId}`]: {objectId: Automerge.getObjectId(s1.birds[0]), type: 'map', props: {
+            habitat: {[`4@${actorId}`]: {objectId: Automerge.getObjectId(s1.birds[0].habitat), type: 'list',
               edits: [{action: 'insert', index: 1}],
-              props: {1: {[actorId]: {value: 'gardens'}}}
+              props: {1: {[`6@${actorId}`]: {value: 'gardens'}}}
             }}
           }}}
         }}}

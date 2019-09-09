@@ -187,7 +187,9 @@ describe('TypeScript support', () => {
       s2 = Automerge.change(s2, doc => (doc.number = 42))
       let s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.number, 42)
-      assert.deepEqual(Automerge.getConflicts(s3, 'number'), { actor1: 3, actor2: 42 })
+      assert.deepEqual(
+        Automerge.getConflicts(s3, 'number'),
+        { '1@actor1': 3, '1@actor2': 42 })
     })
 
     it('should allow changes in the frontend', () => {
@@ -232,7 +234,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(patch1.diffs.objectId, ROOT_ID)
       assert.strictEqual(patch1.diffs.type, 'map')
       assert.deepEqual(Object.keys(patch1.diffs.props), ['number'])
-      const value = patch1.diffs.props.number[Automerge.getActorId(s0)]
+      const value = patch1.diffs.props.number[`1@${Automerge.getActorId(s0)}`]
       assert.strictEqual((value as Automerge.ValueDiff).value, 1)
     })
   })
@@ -342,7 +344,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(diff.objectId, ROOT_ID)
       assert.strictEqual(diff.type, 'map')
       assert.deepEqual(Object.keys(diff.props), ['number'])
-      const value = diff.props.number[Automerge.getActorId(s1)]
+      const value = diff.props.number[`2@${Automerge.getActorId(s1)}`]
       assert.strictEqual((value as Automerge.ValueDiff).value, 2)
     })
 

@@ -79,8 +79,8 @@ class Context {
       if (!conflicts) {
         throw new RangeError(`No children at key ${key} of path ${JSON.stringify(path)}`)
       }
-      for (let actor of Object.keys(conflicts)) {
-        values[actor] = this.getValueDescription(conflicts[actor])
+      for (let opId of Object.keys(conflicts)) {
+        values[opId] = this.getValueDescription(conflicts[opId])
       }
       return values
     }
@@ -88,16 +88,16 @@ class Context {
 
   /**
    * Returns the value at property `key` of object `object`. In the case of a conflict, returns
-   * the value assigned by the actor with ID `actorId`.
+   * the value whose assignment operation has the ID `opId`.
    */
-  getPropertyValue(object, key, actorId) {
+  getPropertyValue(object, key, opId) {
     if (object instanceof Table) {
-      if (actorId !== object.getActorId(key)) {
-        throw new RangeError(`Mismatched actorId: ${actorId} != ${object.getActorId(key)}`)
+      if (opId !== object.getActorId(key)) {
+        throw new RangeError(`Mismatched opId: ${opId} != ${object.getActorId(key)}`)
       }
       return object.byId(key)
     } else {
-      return object[CONFLICTS][key][actorId]
+      return object[CONFLICTS][key][opId]
     }
   }
 
@@ -116,17 +116,17 @@ class Context {
         subpatch.props[pathElem.key] = this.getValuesDescriptions(path, object, pathElem.key)
       }
 
-      let nextActor = null, values = subpatch.props[pathElem.key]
-      for (let actor of Object.keys(values)) {
-        if (values[actor].objectId === pathElem.objectId) {
-          nextActor = actor
+      let nextOpId = null, values = subpatch.props[pathElem.key]
+      for (let opId of Object.keys(values)) {
+        if (values[opId].objectId === pathElem.objectId) {
+          nextOpId = opId
         }
       }
-      if (!nextActor) {
+      if (!nextOpId) {
         throw new RangeError(`Cannot find path object with objectId ${pathElem.objectId}`)
       }
-      subpatch = values[nextActor]
-      object = this.getPropertyValue(object, pathElem.key, nextActor)
+      subpatch = values[nextOpId]
+      object = this.getPropertyValue(object, pathElem.key, nextOpId)
     }
 
     if (!subpatch.props) {
