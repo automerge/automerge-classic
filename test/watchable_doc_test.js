@@ -21,13 +21,13 @@ describe('Automerge.WatchableDoc', () => {
   it('should call the handler via set', () => {
     watchDoc.set(afterDoc)
     assert.strictEqual(callback.calledOnce, true)
-    assert.deepEqual(watchDoc.get(), afterDoc)
+    assert.deepStrictEqual(watchDoc.get(), afterDoc)
   })
 
   it('should call the handler via applyChanges', () => {
     watchDoc.applyChanges(changes)
     assert.strictEqual(callback.calledOnce, true)
-    assert.deepEqual(watchDoc.get(), afterDoc)
+    assert.deepStrictEqual(watchDoc.get(), afterDoc)
   })
 
   it('should allow removing the handler', () => {

@@ -20,39 +20,39 @@ describe('Proxying context', () => {
     it('should assign a primitive value to a map key', () => {
       context.setMapKey([], 'sparrows', 5)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         sparrows: {[context.actorId]: {value: 5}}
       }})
-      assert.deepEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'sparrows', value: 5}])
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'sparrows', value: 5}])
     })
 
     it('should do nothing if the value was not changed', () => {
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, goldfinches: 3, [CONFLICTS]: {goldfinches: {actor1: 3}}}
       context.setMapKey([], 'goldfinches', 3)
       assert(applyPatch.notCalled)
-      assert.deepEqual(context.ops, [])
+      assert.deepStrictEqual(context.ops, [])
     })
 
     it('should allow a conflict to be resolved', () => {
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, goldfinches: 5, [CONFLICTS]: {goldfinches: {actor1: 3, actor2: 5}}}
       context.setMapKey([], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         goldfinches: {[context.actorId]: {value: 3}}
       }})
-      assert.deepEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'goldfinches', value: 3}])
     })
 
     it('should create nested maps', () => {
       context.setMapKey([], 'birds', {goldfinches: 3})
       assert(applyPatch.calledOnce)
       const objectId = applyPatch.firstCall.args[0].props.birds[context.actorId].objectId
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {[context.actorId]: {objectId, type: 'map', props: {
           goldfinches: {[context.actorId]: {value: 3}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: objectId},
         {obj: objectId, action: 'set', key: 'goldfinches', value: 3}
       ])
@@ -64,12 +64,12 @@ describe('Proxying context', () => {
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, [CONFLICTS]: {birds: {actor1: child}}, birds: child}
       context.setMapKey([{key: 'birds', objectId}], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId, type: 'map', props: {
           goldfinches: {[context.actorId]: {value: 3}}
         }}}
       }})
-      assert.deepEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
     })
 
     it('should perform assignment inside conflicted maps', () => {
@@ -81,13 +81,13 @@ describe('Proxying context', () => {
         [CONFLICTS]: {birds: {actor1: child1, actor2: child2}}}
       context.setMapKey([{key: 'birds', objectId: objectId2}], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {birds: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {birds: {
         actor1: {objectId: objectId1, type: 'map'},
         actor2: {objectId: objectId2, type: 'map', props: {
           goldfinches: {[context.actorId]: {value: 3}}
         }}
       }}})
-      assert.deepEqual(context.ops, [{obj: objectId2, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId2, action: 'set', key: 'goldfinches', value: 3}])
     })
 
     it('should handle conflict values of various types', () => {
@@ -98,21 +98,21 @@ describe('Proxying context', () => {
       }}}
       context.setMapKey([{key: 'values', objectId}], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {values: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {values: {
         actor1: {value: dateValue.getTime(), datatype: 'timestamp'},
         actor2: {value: 0, datatype: 'counter'},
         actor3: {value: 42},
         actor4: {value: null},
         actor5: {objectId, type: 'map', props: {goldfinches: {[context.actorId]: {value: 3}}}}
       }}})
-      assert.deepEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
     })
 
     it('should create nested lists', () => {
       context.setMapKey([], 'birds', ['sparrow', 'goldfinch'])
       assert(applyPatch.calledOnce)
       const objectId = applyPatch.firstCall.args[0].props.birds[context.actorId].objectId
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {[context.actorId]: {objectId, type: 'list', props: {
           0: {[context.actorId]: {value: 'sparrow'}},
           1: {[context.actorId]: {value: 'goldfinch'}}
@@ -120,7 +120,7 @@ describe('Proxying context', () => {
           {action: 'insert', index: 0}, {action: 'insert', index: 1}
         ]}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', child: objectId},
         {obj: objectId, action: 'set', key: 0, insert: true, value: 'sparrow'},
         {obj: objectId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
@@ -131,7 +131,7 @@ describe('Proxying context', () => {
       context.setMapKey([], 'text', new Text('hi'))
       const objectId = applyPatch.firstCall.args[0].props.text[context.actorId].objectId
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         text: {[context.actorId]: {objectId, type: 'text', props: {
           0: {[context.actorId]: {value: 'h'}},
           1: {[context.actorId]: {value: 'i'}}
@@ -139,7 +139,7 @@ describe('Proxying context', () => {
           {action: 'insert', index: 0}, {action: 'insert', index: 1}
         ]}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeText', key: 'text', child: objectId},
         {obj: objectId, action: 'set', key: 0, insert: true, value: 'h'},
         {obj: objectId, action: 'set', key: 1, insert: true, value: 'i'}
@@ -151,7 +151,7 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       const objectId = applyPatch.firstCall.args[0].props.books[context.actorId].objectId
       const columnsId = applyPatch.firstCall.args[0].props.books[context.actorId].props.columns[context.actorId].objectId
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {[context.actorId]: {objectId, type: 'table', props: {
           columns: {[context.actorId]: {objectId: columnsId, type: 'list', props: {
             0: {[context.actorId]: {value: 'author'}},
@@ -161,7 +161,7 @@ describe('Proxying context', () => {
           ]}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'makeTable', key: 'books', child: objectId},
         {obj: objectId, action: 'makeList', key: 'columns', child: columnsId},
         {obj: columnsId, action: 'set', key: 0, insert: true, value: 'author'},
@@ -173,10 +173,10 @@ describe('Proxying context', () => {
       const now = new Date()
       context.setMapKey([], 'now', now)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         now: {[context.actorId]: {value: now.getTime(), datatype: 'timestamp'}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
       ])
     })
@@ -185,10 +185,10 @@ describe('Proxying context', () => {
       const counter = new Counter(3)
       context.setMapKey([], 'counter', counter)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         counter: {[context.actorId]: {value: 3, datatype: 'counter'}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: ROOT_ID, action: 'set', key: 'counter', value: 3, datatype: 'counter'}
       ])
     })
@@ -199,8 +199,8 @@ describe('Proxying context', () => {
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, goldfinches: 3, [CONFLICTS]: {goldfinches: {actor1: 3}}}
       context.deleteMapKey([], 'goldfinches')
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {goldfinches: {}}})
-      assert.deepEqual(context.ops, [{obj: ROOT_ID, action: 'del', key: 'goldfinches'}])
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {goldfinches: {}}})
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'del', key: 'goldfinches'}])
     })
 
     it('should do nothing if the key does not exist', () => {
@@ -208,7 +208,7 @@ describe('Proxying context', () => {
       context.deleteMapKey([], 'sparrows')
       const expected = {objectId: ROOT_ID, type: 'map'}
       assert(applyPatch.notCalled)
-      assert.deepEqual(context.ops, [])
+      assert.deepStrictEqual(context.ops, [])
     })
 
     it('should update a nested object', () => {
@@ -217,10 +217,10 @@ describe('Proxying context', () => {
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, [CONFLICTS]: {birds: {actor1: child}}, birds: child}
       context.deleteMapKey([{key: 'birds', objectId}], 'goldfinches')
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId, type: 'map', props: {goldfinches: {}}}}
       }})
-      assert.deepEqual(context.ops, [{obj: objectId, action: 'del', key: 'goldfinches'}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'del', key: 'goldfinches'}])
     })
   })
 
@@ -239,19 +239,19 @@ describe('Proxying context', () => {
     it('should overwrite an existing list element', () => {
       context.setListIndex([{key: 'birds', objectId: listId}], 0, 'starling')
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', props: {
           0: {[context.actorId]: {value: 'starling'}}
         }}}
       }})
-      assert.deepEqual(context.ops, [{obj: listId, action: 'set', key: 0, value: 'starling'}])
+      assert.deepStrictEqual(context.ops, [{obj: listId, action: 'set', key: 0, value: 'starling'}])
     })
 
     it('should create nested objects on assignment', () => {
       context.setListIndex([{key: 'birds', objectId: listId}], 1, {english: 'goldfinch', latin: 'carduelis'})
       assert(applyPatch.calledOnce)
       const nestedId = applyPatch.firstCall.args[0].props.birds.actor1.props[1][context.actorId].objectId
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', props: {
           1: {[context.actorId]: {objectId: nestedId, type: 'map', props: {
             english: {[context.actorId]: {value: 'goldfinch'}},
@@ -259,7 +259,7 @@ describe('Proxying context', () => {
           }}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: listId, action: 'makeMap', key: 1, child: nestedId},
         {obj: nestedId, action: 'set', key: 'english', value: 'goldfinch'},
         {obj: nestedId, action: 'set', key: 'latin', value: 'carduelis'}
@@ -270,7 +270,7 @@ describe('Proxying context', () => {
       context.splice([{key: 'birds', objectId: listId}], 2, 0, [{english: 'goldfinch', latin: 'carduelis'}])
       assert(applyPatch.calledOnce)
       const nestedId = applyPatch.firstCall.args[0].props.birds.actor1.props[2][context.actorId].objectId
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', edits: [
           {action: 'insert', index: 2}
         ], props: {
@@ -280,7 +280,7 @@ describe('Proxying context', () => {
           }}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: listId, action: 'makeMap', key: 2, insert: true, child: nestedId},
         {obj: nestedId, action: 'set', key: 'english', value: 'goldfinch'},
         {obj: nestedId, action: 'set', key: 'latin', value: 'carduelis'}
@@ -290,12 +290,12 @@ describe('Proxying context', () => {
     it('should support deleting list elements', () => {
       context.splice([{key: 'birds', objectId: listId}], 0, 2, [])
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', props: {}, edits: [
           {action: 'remove', index: 0}, {action: 'remove', index: 0}
         ]}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: listId, action: 'del', key: 0},
         {obj: listId, action: 'del', key: 0}
       ])
@@ -304,7 +304,7 @@ describe('Proxying context', () => {
     it('should support list splicing', () => {
       context.splice([{key: 'birds', objectId: listId}], 0, 1, ['starling', 'goldfinch'])
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', edits: [
           {action: 'remove', index: 0},
           {action: 'insert', index: 0},
@@ -314,7 +314,7 @@ describe('Proxying context', () => {
           1: {[context.actorId]: {value: 'goldfinch'}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: listId, action: 'del', key: 0},
         {obj: listId, action: 'set', key: 0, insert: true, value: 'starling'},
         {obj: listId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
@@ -335,7 +335,7 @@ describe('Proxying context', () => {
     it('should add a table row', () => {
       const rowId = context.addTableRow([{key: 'books', objectId: tableId}], {author: 'Mary Shelley', title: 'Frankenstein'})
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {actor1: {objectId: tableId, type: 'table', props: {
           [rowId]: {[rowId]: {objectId: rowId, type: 'map', props: {
             author: {[context.actorId]: {value: 'Mary Shelley'}},
@@ -343,7 +343,7 @@ describe('Proxying context', () => {
           }}}
         }}}
       }})
-      assert.deepEqual(context.ops, [
+      assert.deepStrictEqual(context.ops, [
         {obj: tableId, action: 'makeMap', key: rowId, child: rowId},
         {obj: rowId, action: 'set', key: 'author', value: 'Mary Shelley'},
         {obj: rowId, action: 'set', key: 'title', value: 'Frankenstein'}
@@ -357,10 +357,10 @@ describe('Proxying context', () => {
       table.entries[rowId] = row
       context.deleteTableRow([{key: 'books', objectId: tableId}], rowId)
       assert(applyPatch.calledOnce)
-      assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {actor1: {objectId: tableId, type: 'table', props: {[rowId]: {}}}}
       }})
-      assert.deepEqual(context.ops, [{obj: tableId, action: 'del', key: rowId}])
+      assert.deepStrictEqual(context.ops, [{obj: tableId, action: 'del', key: rowId}])
     })
   })
 
@@ -369,9 +369,9 @@ describe('Proxying context', () => {
     context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, counter, [CONFLICTS]: {counter: {actor1: counter}}}
     context.increment([], 'counter', 1)
     assert(applyPatch.calledOnce)
-    assert.deepEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
+    assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
       counter: {[context.actorId]: {value: 1, datatype: 'counter'}}
     }})
-    assert.deepEqual(context.ops, [{obj: ROOT_ID, action: 'inc', key: 'counter', value: 1}])
+    assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'inc', key: 'counter', value: 1}])
   })
 })

@@ -28,13 +28,13 @@ describe('Automerge.DocSet', () => {
   it('should call the handler via set', () => {
     docSet.setDoc(ID, afterDoc)
     assert.strictEqual(callback.calledOnce, true)
-    assert.deepEqual(docSet.getDoc(ID), afterDoc)
+    assert.deepStrictEqual(docSet.getDoc(ID), afterDoc)
   })
 
   it('should call the handler via applyChanges', () => {
     docSet.applyChanges(ID, changes)
     assert.strictEqual(callback.calledOnce, true)
-    assert.deepEqual(docSet.getDoc(ID), afterDoc)
+    assert.deepStrictEqual(docSet.getDoc(ID), afterDoc)
   })
 
   it('should allow removing the handler', () => {

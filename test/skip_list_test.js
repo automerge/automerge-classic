@@ -154,17 +154,17 @@ describe('SkipList', () => {
   describe('iterators', () => {
     it('should iterate over values by default', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s], ['value1', 'value2'])
+      assert.deepStrictEqual([...s], ['value1', 'value2'])
     })
 
     it('should support iterating over keys', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s.iterator('keys')], ['key1', 'key2'])
+      assert.deepStrictEqual([...s.iterator('keys')], ['key1', 'key2'])
     })
 
     it('should support iterating over entries', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s.iterator('entries')], [['key1', 'value1'], ['key2', 'value2']])
+      assert.deepStrictEqual([...s.iterator('entries')], [['key1', 'value1'], ['key2', 'value2']])
     })
   })
 
