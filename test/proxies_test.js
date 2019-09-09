@@ -83,21 +83,17 @@ describe('Automerge proxy API', () => {
     })
 
     it('should allow access to an object by id', () => {
-      let deepObjId, deepListId
-
       const doc = Automerge.change(Automerge.init(), doc => {
         doc.deepObj = {}
-        deepObjId = Automerge.getObjectId(doc.deepObj)
         doc.deepObj.deepList = []
-        deepListId = Automerge.getObjectId(doc.deepObj.deepList)
-
-        assert.throws(() => { Automerge.getObjectById(doc, deepObjId) }, /Cannot use getObjectById in a change callback/)
+        const listId = Automerge.getObjectId(doc.deepObj.deepList)
+        assert.throws(() => { Automerge.getObjectById(doc, listId) }, /Cannot use getObjectById in a change callback/)
       })
 
-      const deepObj = Automerge.getObjectById(doc, deepObjId)
-      assert.strictEqual(Automerge.getObjectId(deepObj), Automerge.getObjectId(doc.deepObj))
-      const deepList = Automerge.getObjectById(doc, deepListId)
-      assert.strictEqual(Automerge.getObjectId(deepList), Automerge.getObjectId(doc.deepObj.deepList))
+      const objId = Automerge.getObjectId(doc.deepObj)
+      assert.strictEqual(Automerge.getObjectById(doc, objId), doc.deepObj)
+      const listId = Automerge.getObjectId(doc.deepObj.deepList)
+      assert.strictEqual(Automerge.getObjectById(doc, listId), doc.deepObj.deepList)
     })
   })
 

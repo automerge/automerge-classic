@@ -3,6 +3,7 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 const { assertEqualsOneOf } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
+const OPID_PATTERN = /^[0-9]+@[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
 describe('Automerge', () => {
   describe('sequential use:', () => {
@@ -315,9 +316,9 @@ describe('Automerge', () => {
     })
 
     describe('nested maps', () => {
-      it('should assign a UUID to nested maps', () => {
+      it('should assign an objectId to nested maps', () => {
         s1 = Automerge.change(s1, doc => { doc.nested = {} })
-        assert.strictEqual(UUID_PATTERN.test(Automerge.getObjectId(s1.nested)), true)
+        assert.strictEqual(OPID_PATTERN.test(Automerge.getObjectId(s1.nested)), true)
         assert.notEqual(Automerge.getObjectId(s1.nested), ROOT_ID)
       })
 
@@ -1318,7 +1319,7 @@ describe('Automerge', () => {
       const s2 = Automerge.change(s1, doc => doc.list = ['a'])
       const listId = Automerge.getObjectId(s2.list)
       assert.deepEqual(Automerge.getChanges(s1, s2), [{actor: 'actorid', seq: 1, startOp: 1, deps: {}, ops: [
-        {obj: ROOT_ID, action: 'makeList', key: 'list', child: listId, pred: []},
+        {obj: ROOT_ID, action: 'makeList', key: 'list', pred: []},
         {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a', pred: []}
       ]}])
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))

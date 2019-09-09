@@ -53,7 +53,7 @@ function getObjectType(opSet, objectId) {
 
 // Processes a 'makeMap', 'makeList', 'makeTable', or 'makeText' operation
 function applyMake(opSet, op, patch) {
-  const objectId = op.get('child'), action = op.get('action')
+  const objectId = getChildId(op), action = op.get('action')
   if (opSet.hasIn(['byObject', objectId, '_keys'])) throw new Error(`Duplicate creation of object ${objectId}`)
 
   let object = Map({_init: op, _inbound: Set(), _keys: Map()})
@@ -132,9 +132,13 @@ function recordUndoHistory(opSet, op) {
     undoOps = List.of(Map({action: 'inc', obj: objectId, key, value: -value}))
   } else {
     undoOps = getFieldOps(opSet, objectId, key).map(ref => {
-      if (ref.get('insert')) ref = ref.set('key', key)
+      if (ref.get('insert')) {
+        ref = ref.set('key', key)
+      }
+      if (ref.get('action').startsWith('make')) {
+        ref = ref.set('action', 'link').set('child', getChildId(ref))
+      }
       ref = ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype', 'child'].includes(k))
-      if (ref.get('action').startsWith('make')) ref = ref.set('action', 'link')
       return ref
     })
   }
@@ -150,6 +154,13 @@ function recordUndoHistory(opSet, op) {
 function isChildOp(op) {
   const action = op.get('action')
   return action.startsWith('make') || action === 'link'
+}
+
+/**
+ * Returns the object ID of the child introduced by `op`.
+ */
+function getChildId(op) {
+  return op.get('child', op.get('opId'))
 }
 
 /**
@@ -196,7 +207,7 @@ function applyAssign(opSet, op, patch) {
     }
   }
   if (action === 'link' && patch) {
-    patch.props[key][op.get('opId')] = constructObject(opSet, op.get('child'))
+    patch.props[key][op.get('opId')] = constructObject(opSet, getChildId(op))
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -220,13 +231,13 @@ function applyAssign(opSet, op, patch) {
 
   // If any child object references were overwritten, remove them from the index of inbound links
   for (let old of overwritten.filter(isChildOp)) {
-    opSet = opSet.updateIn(['byObject', old.get('child'), '_inbound'], ops => ops.remove(old))
+    opSet = opSet.updateIn(['byObject', getChildId(old), '_inbound'], ops => ops.remove(old))
   }
 
   if (isChildOp(op)) {
-    opSet = opSet.updateIn(['byObject', op.get('child'), '_inbound'], Set(), ops => ops.add(op))
+    opSet = opSet.updateIn(['byObject', getChildId(op), '_inbound'], Set(), ops => ops.add(op))
   }
-  if (action === 'set' || isChildOp(op)) {
+  if (action === 'set' || isChildOp(op)) { // not 'inc' or 'del'
     remaining = remaining.push(op)
   }
   remaining = remaining.sort(lamportCompare).reverse()
@@ -290,7 +301,7 @@ function setPatchProps(opSet, objectId, key, patch) {
       }
     } else if (isChildOp(op)) {
       if (!patch.props[key][opId]) {
-        const childId = op.get('child')
+        const childId = getChildId(op)
         patch.props[key][opId] = {objectId: childId, type: getObjectType(opSet, childId)}
       }
     } else {
@@ -376,7 +387,7 @@ function applyOps(opSet, change, isLocal, patch) {
       opSet = applyInsert(opSet, opWithId)
     }
     if (action.startsWith('make')) {
-      newObjects = newObjects.add(op.get('child'))
+      newObjects = newObjects.add(getChildId(opWithId))
     }
     if (!newObjects.contains(obj)) {
       opSet = recordUndoHistory(opSet, opWithId)
@@ -596,7 +607,7 @@ function getPrevious(opSet, objectId, key) {
 
 function constructField(opSet, op) {
   if (isChildOp(op)) {
-    return constructObject(opSet, op.get('child'))
+    return constructObject(opSet, getChildId(op))
   } else if (op.get('action') === 'set') {
     const result = {value: op.get('value')}
     if (op.get('datatype')) result.datatype = op.get('datatype')
