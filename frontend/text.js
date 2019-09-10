@@ -56,6 +56,26 @@ class Text {
     return chars.join('')
   }
 
+  toSpans() {
+    let spans = []
+    let chars = []
+    for (let elem of this.elems) {
+      if (typeof elem.value === 'string') {
+        chars.push(elem.value)
+      } else {
+        if (chars.length > 0) {
+          spans.push(chars.join(''))
+          chars = []
+        }
+        spans.push(elem.value)
+      }
+    }
+    if (chars.length > 0) { 
+      spans.push(chars.join(''))
+    }
+    return spans
+  } 
+
   /**
    * Returns the content of the Text object as a simple string, so that the
    * JSON serialization of an Automerge document represents text nicely.

@@ -183,5 +183,54 @@ describe('Automerge.Text', () => {
     it('should exclude control characters from toString()', () => {
       assert.strictEqual(s1.text.toString(), 'a')
     })
+
+    describe('spans interface to Text', () => {
+      it('should return a simple string as a single span', () =>{
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('hello world')
+        })
+        assert.deepEqual(s1.text.toSpans(), ['hello world'])
+      })
+      it('should return an empty string as an empty array', () =>{
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text()
+        })
+        assert.deepEqual(s1.text.toSpans(), [])
+      })
+      it('should split a span at a control character', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('hello world')
+          doc.text.insertAt(5, {attribute: 'bold'})
+        })
+        assert.deepEqual(s1.text.toSpans(), 
+          ['hello', {attribute: 'bold'}, ' world'])
+      })
+      it('should allow consecutive control characters', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('hello world')
+          doc.text.insertAt(5, {attribute: 'bold'})
+          doc.text.insertAt(6, {attribute: 'italic'})
+        })
+        assert.deepEqual(s1.text.toSpans(), 
+          ['hello', 
+           { attribute: 'bold' }, 
+           { attribute: 'italic' },
+           ' world'
+          ])
+      })
+      it('should allow non-consecutive control characters', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('hello world')
+          doc.text.insertAt(5, {attribute: 'bold'})
+          doc.text.insertAt(12, {attribute: 'italic'})
+        })
+        assert.deepEqual(s1.text.toSpans(), 
+          ['hello', 
+           { attribute: 'bold' }, 
+           ' world',
+           { attribute: 'italic' },
+          ])
+      })
+    })
   })
 })
