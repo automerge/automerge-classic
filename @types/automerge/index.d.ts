@@ -76,6 +76,7 @@ declare module 'automerge' {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
     get(index: number): string
     getElemId(index: number): string
+    toSpans(): (string | any)[]
   }
 
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
