@@ -159,17 +159,26 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.join(''), 'Init')
       assert.strictEqual(s1.text.toString(), 'Init')
     })
-
-    it('should allow non-textual characters', () => {
-      let s1 = Automerge.change(Automerge.init(), doc => {
-        doc.text = new Automerge.Text()
-        doc.text.insertAt(0, 'a')
-        doc.text.insertAt(1, { attribute: 'bold' })
+  })
+  describe('non-textual control characters', () => {
+    let s1
+    beforeEach(() => {
+      s1 = Automerge.change(Automerge.init(), doc => {
+      doc.text = new Automerge.Text()
+      doc.text.insertAt(0, 'a')
+      doc.text.insertAt(1, { attribute: 'bold' })
       })
+    })
+    it('should allow fetching non-textual characters', () => {
+      assert.deepEqual(s1.text.get(1), { attribute: 'bold' })
+    })
 
+    it('should include control characters in string length', () => {
       assert.strictEqual(s1.text.length, 2)
       assert.strictEqual(s1.text.get(0), 'a')
-      assert.deepEqual(s1.text.get(1), { attribute: 'bold' })
+    })
+
+    it('should exclude control characters from toString()', () => {
       assert.strictEqual(s1.text.toString(), 'a')
     })
   })
