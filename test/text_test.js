@@ -27,8 +27,6 @@ function isEquivalent(a, b) {
       }
   }
 
-  // If we made it this far, objects
-  // are considered equivalent
   return true;
 }
 
@@ -56,32 +54,71 @@ function accumulateAttributes(span, accumulatedAttributes) {
 
 function AutomergeTextToDeltaDoc(text) {
   let ops = []
-  let accumulatedAttributes = {}
+  let controlState = {}
   let currentString = ""
   let attributes = {}
   text.toSpans().forEach((span) => {
     if (typeof span === 'string') {
-      let nextAttributes = attributeStateToAttributes(accumulatedAttributes)
+      let next = attributeStateToAttributes(controlState)
 
-      if (isEquivalent(nextAttributes, attributes)) {
+      if (isEquivalent(next, attributes)) {
         currentString = currentString + span
       } else {
-        if(currentString) {
+        if (currentString) {
           ops.push(opFrom(currentString, attributes))
         }
-        attributes = nextAttributes
+        attributes = next
         currentString = span
       } 
     } else {
-      accumulatedAttributes = accumulateAttributes(span, accumulatedAttributes)
+      controlState = accumulateAttributes(span, controlState)
     }
   })
 
+  // at the end, flush any accumulated string out
   if (currentString) {
     ops.push(opFrom(currentString, attributes))
   }
+
   let deltaDoc = { ops }
   return deltaDoc
+}
+
+function inverseAttributes(attributes) {
+  let invertedAttributes = {}
+  Object.keys(attributes).forEach((key) => {
+    invertedAttributes[key] = null
+  })
+  return invertedAttributes
+}
+
+// XXX: uhhhhh, why can't I pass in text?
+function ApplyDeltaToAutomergeText(delta, doc) {
+  let offset = 0
+
+  let ops = delta.ops
+  if (ops && ops.length) {
+    ops.forEach(op => {
+      // console.log(doc.text.length, doc.text.slice(0, offset).join('') + "|" + doc.text.slice(offset).join(''), op)
+      if (op.retain) {
+        offset += op.retain
+      } else if (op.delete) {
+        doc.text.deleteAt(offset, op.delete)
+      } else if (op.insert) {
+        doc.text.insertAt(offset, ...op.insert.split(''))
+        if (op.attributes) {
+          doc.text.insertAt(offset, op.attributes)
+          offset += 1
+        }
+        offset += op.insert.length // +1 for good luck and the control character
+        if (op.attributes) {
+          doc.text.insertAt(offset, inverseAttributes(op.attributes))
+          offset += 1
+        }
+      }
+    })
+  }
+  console.log("After:", doc.text.toString())
 }
 
 describe('Automerge.Text', () => {
@@ -366,6 +403,50 @@ describe('Automerge.Text', () => {
         }
 
         assert.deepEqual(deltaDoc, expectedDoc)
+      })
+
+      it('should apply an insert', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Hello world')
+        })
+
+        const delta = { ops: [
+          { retain: 6 },
+          { insert: 'reader' },
+          { delete: 5 }
+        ]}
+
+        let s2 = Automerge.change(s1, doc => {
+          ApplyDeltaToAutomergeText(delta, doc)
+        })
+        
+        assert.strictEqual(s2.text.join(''), 'Hello reader')
+      })
+      
+      it('should apply an insert with control characters', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Hello world')
+        })
+
+        const delta = { ops: [
+          { retain: 6 },
+          { insert: 'reader', attributes: { bold: true } },
+          { delete: 5 },
+          { insert: '!' }
+        ]}
+
+        let s2 = Automerge.change(s1, doc => {
+          ApplyDeltaToAutomergeText(delta, doc)
+        })
+        
+        assert.strictEqual(s2.text.toString(), 'Hello reader!')
+        assert.deepEqual(s2.text.toSpans(), [
+          "Hello ",
+          { bold: true },
+          "reader",
+          { bold: null },
+          "!"
+        ])
       })
     })
   })
