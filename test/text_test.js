@@ -2,6 +2,39 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
 
+function AutomergeTextToDeltaDoc(text) {
+  let ops = []
+  let currentAttributes = {}
+  text.toSpans().forEach((span) => {
+    if (typeof span === 'string') {
+      let attributes = {}
+      Object.entries(currentAttributes).forEach(([key, values]) => {
+        if (values.length) {
+          attributes[key] = values[0]
+        }
+      })
+      let op = { insert: span }
+      if (Object.keys(attributes).length > 0) {
+        op.attributes = attributes
+      }
+      ops.push(op)
+    } else {
+      Object.entries(span).forEach(([key, value]) => {
+        if (!currentAttributes[key]) {
+          currentAttributes[key] = []
+        }
+        if (value === null) {
+          currentAttributes[key].shift()
+        } else {
+          currentAttributes[key].unshift(value)
+        }
+      })
+    }
+  })
+  let deltaDoc = { ops }
+  return deltaDoc
+}
+
 describe('Automerge.Text', () => {
   let s1, s2
   beforeEach(() => {
@@ -230,6 +263,29 @@ describe('Automerge.Text', () => {
            ' world',
            { attribute: 'italic' },
           ])
+      })
+
+      it('should be convertable into a Quill delta', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Gandalf the Grey')
+          doc.text.insertAt(0,  { bold: true })
+          doc.text.insertAt(7+1, { bold: null })
+          doc.text.insertAt(12+2, { color: '#cccccc' })
+        })
+
+        let deltaDoc = AutomergeTextToDeltaDoc(s1.text)
+        
+        // From https://quilljs.com/docs/delta/
+        let expectedDoc = {
+          ops: [
+            { insert: 'Gandalf', attributes: { bold: true } },
+            { insert: ' the ' },
+            { insert: 'Grey', attributes: { color: '#cccccc' } }
+          ]
+        }        
+
+        assert.deepEqual(deltaDoc, expectedDoc)
+        
       })
     })
   })
