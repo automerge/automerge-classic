@@ -2,35 +2,84 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
 
-function AutomergeTextToDeltaDoc(text) {
-  let ops = []
-  let currentAttributes = {}
-  text.toSpans().forEach((span) => {
-    if (typeof span === 'string') {
-      let attributes = {}
-      Object.entries(currentAttributes).forEach(([key, values]) => {
-        if (values.length) {
-          attributes[key] = values[0]
-        }
-      })
-      let op = { insert: span }
-      if (Object.keys(attributes).length > 0) {
-        op.attributes = attributes
-      }
-      ops.push(op)
-    } else {
-      Object.entries(span).forEach(([key, value]) => {
-        if (!currentAttributes[key]) {
-          currentAttributes[key] = []
-        }
-        if (value === null) {
-          currentAttributes[key].shift()
-        } else {
-          currentAttributes[key].unshift(value)
-        }
-      })
+function attributeStateToAttributes(accumulatedAttributes) {
+  const attributes = {}
+  Object.entries(accumulatedAttributes).forEach(([key, values]) => {
+    if (values.length) {
+      attributes[key] = values[0]
     }
   })
+  return attributes
+}
+
+function isEquivalent(a, b) {
+  var aProps = Object.getOwnPropertyNames(a);
+  var bProps = Object.getOwnPropertyNames(b);
+
+  if (aProps.length != bProps.length) {
+      return false;
+  }
+
+  for (var i = 0; i < aProps.length; i++) {
+      var propName = aProps[i];
+      if (a[propName] !== b[propName]) {
+          return false;
+      }
+  }
+
+  // If we made it this far, objects
+  // are considered equivalent
+  return true;
+}
+
+function opFrom(text, attributes) {
+  let op = { insert: text }
+  if (Object.keys(attributes).length > 0) {
+      op.attributes = attributes
+  }
+  return op
+}
+
+function accumulateAttributes(span, accumulatedAttributes) {
+  Object.entries(span).forEach(([key, value]) => {
+    if (!accumulatedAttributes[key]) {
+      accumulatedAttributes[key] = []
+    }
+    if (value === null) {
+      accumulatedAttributes[key].shift()
+    } else {
+      accumulatedAttributes[key].unshift(value)
+    }
+  })
+  return accumulatedAttributes
+}
+
+function AutomergeTextToDeltaDoc(text) {
+  let ops = []
+  let accumulatedAttributes = {}
+  let currentString = ""
+  let attributes = {}
+  text.toSpans().forEach((span) => {
+    if (typeof span === 'string') {
+      let nextAttributes = attributeStateToAttributes(accumulatedAttributes)
+
+      if (isEquivalent(nextAttributes, attributes)) {
+        currentString = currentString + span
+      } else {
+        if(currentString) {
+          ops.push(opFrom(currentString, attributes))
+        }
+        attributes = nextAttributes
+        currentString = span
+      } 
+    } else {
+      accumulatedAttributes = accumulateAttributes(span, accumulatedAttributes)
+    }
+  })
+
+  if (currentString) {
+    ops.push(opFrom(currentString, attributes))
+  }
   let deltaDoc = { ops }
   return deltaDoc
 }
@@ -274,7 +323,7 @@ describe('Automerge.Text', () => {
         })
 
         let deltaDoc = AutomergeTextToDeltaDoc(s1.text)
-        
+
         // From https://quilljs.com/docs/delta/
         let expectedDoc = {
           ops: [
@@ -286,6 +335,37 @@ describe('Automerge.Text', () => {
 
         assert.deepEqual(deltaDoc, expectedDoc)
         
+      })
+
+      it('should handle concurrent overlapping spans', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Gandalf the Grey')
+        })
+
+        let s2 = Automerge.merge(Automerge.init(), s1)
+
+        let s3 = Automerge.change(s1, doc => {
+          doc.text.insertAt(8,  { bold: true })
+          doc.text.insertAt(16+1, { bold: null })
+        })
+
+        let s4 = Automerge.change(s2, doc => {
+          doc.text.insertAt(0,  { bold: true })
+          doc.text.insertAt(11+1, { bold: null })
+        })
+
+        let merged = Automerge.merge(s3, s4)
+
+        let deltaDoc = AutomergeTextToDeltaDoc(merged.text)
+
+        // From https://quilljs.com/docs/delta/
+        let expectedDoc = {
+          ops: [
+            { insert: 'Gandalf the Grey', attributes: { bold: true } },
+          ]
+        }
+
+        assert.deepEqual(deltaDoc, expectedDoc)
       })
     })
   })
