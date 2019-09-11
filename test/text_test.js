@@ -92,43 +92,60 @@ function inverseAttributes(attributes) {
   return invertedAttributes
 }
 
+function applyDeleteOp(text, offset, op) {
+  let length = op.delete
+  while (length > 0) {
+    if (typeof text.get(offset) === 'string') {
+      // we need to not delete control characters
+      text.deleteAt(offset, 1)
+      length -= 1
+    } else {
+      offset += 1
+    }
+  }
+  return [text, offset]
+}
+
+function applyRetainOp(text, offset, op) {
+  let slice = text.slice(offset, offset + op.retain)
+  slice.forEach((i) => {
+    // don't count control characters towards length
+    if (typeof i !== 'string') {
+      offset += 1
+    }
+  })
+  offset += op.retain
+  return [text, offset]
+}
+
+function applyInsertOp(text, offset, op) {
+  text.insertAt(offset, ...op.insert.split(''))
+  if (op.attributes) {
+    text.insertAt(offset, op.attributes)
+    offset += 1
+  }
+  offset += op.insert.length
+  if (op.attributes) {
+    text.insertAt(offset, inverseAttributes(op.attributes))
+    offset += 1
+  }
+  return [text, offset]
+}
+
 // XXX: uhhhhh, why can't I pass in text?
 function ApplyDeltaToAutomergeText(delta, doc) {
   let offset = 0
+  let text = doc.text
 
   let ops = delta.ops
   if (ops && ops.length) {
     ops.forEach(op => {
       if (op.retain) {
-        let slice = doc.text.slice(offset, offset + op.retain)
-        slice.forEach((i) => {
-          if (typeof i !== 'string') {
-            offset += 1
-          }
-        })
-        offset += op.retain
+        [text, offset] = applyRetainOp(doc.text, offset, op)
       } else if (op.delete) {
-        let length = op.delete
-        while (length > 0) {
-          if (typeof doc.text.get(offset) === 'string') {
-            // we need to not delete control characters
-            doc.text.deleteAt(offset, 1)
-            length -= 1
-          } else {
-            offset += 1
-          }
-        }
+        [text, offset] = applyDeleteOp(doc.text, offset, op)
       } else if (op.insert) {
-        doc.text.insertAt(offset, ...op.insert.split(''))
-        if (op.attributes) {
-          doc.text.insertAt(offset, op.attributes)
-          offset += 1
-        }
-        offset += op.insert.length // +1 for good luck and the control character
-        if (op.attributes) {
-          doc.text.insertAt(offset, inverseAttributes(op.attributes))
-          offset += 1
-        }
+        [text, offset] = applyInsertOp(doc.text, offset, op)
       }
     })
   }
