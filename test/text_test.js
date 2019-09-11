@@ -63,18 +63,28 @@ function automergeTextToDeltaDoc(text) {
     } else {
       let next = attributeStateToAttributes(controlState)
 
-      if (typeof span === 'string') {
-        // if the next span has the same calculated attributes as the current span
-        // don't bother outputting it as a separate span, just let it ride
-        if (isEquivalent(next, attributes)) {
+      // if the next span has the same calculated attributes as the current span
+      // don't bother outputting it as a separate span, just let it ride
+      if (typeof span === 'string' && isEquivalent(next, attributes)) {
           currentString = currentString + span
-        } else {
-          if (currentString) {
-            ops.push(opFrom(currentString, attributes))
-          }
-          attributes = next
-          currentString = span
-        }
+          return
+      }
+
+      if (currentString) {
+        ops.push(opFrom(currentString, attributes))
+      }
+
+      // If we've got a string, we might be able to concatenate it to another
+      // same-attributed-string, so remember it and go to the next iteration.
+      if (typeof span === 'string') {
+        currentString = span
+        attributes = next
+      } else {
+        // otherwise we have an embed "character" and should output it immediately.
+        // embeds are always one-"character" in length.
+        ops.push(opFrom(span, next))
+        currentString = ''
+        attributes = {}
       }
     }
   })
@@ -420,10 +430,10 @@ describe('Automerge.Text', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text('')
           doc.text.insertAt(0, { attributes: { link: 'https://quilljs.com' } })
-          doc.text.insertAt(0, {
+          doc.text.insertAt(1, {
             image: 'https://quilljs.com/assets/images/icon.png'
           })
-          doc.text.insertAt(1, { attributes: { link: null } })
+          doc.text.insertAt(2, { attributes: { link: null } })
         })
 
         let deltaDoc = automergeTextToDeltaDoc(s1.text)
