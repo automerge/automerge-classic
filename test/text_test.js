@@ -99,11 +99,25 @@ function ApplyDeltaToAutomergeText(delta, doc) {
   let ops = delta.ops
   if (ops && ops.length) {
     ops.forEach(op => {
-      // console.log(doc.text.length, doc.text.slice(0, offset).join('') + "|" + doc.text.slice(offset).join(''), op)
       if (op.retain) {
+        let slice = doc.text.slice(offset, offset + op.retain)
+        slice.forEach((i) => {
+          if (typeof i !== 'string') {
+            offset += 1
+          }
+        })
         offset += op.retain
       } else if (op.delete) {
-        doc.text.deleteAt(offset, op.delete)
+        let length = op.delete
+        while (length > 0) {
+          if (typeof doc.text.get(offset) === 'string') {
+            // we need to not delete control characters
+            doc.text.deleteAt(offset, 1)
+            length -= 1
+          } else {
+            offset += 1
+          }
+        }
       } else if (op.insert) {
         doc.text.insertAt(offset, ...op.insert.split(''))
         if (op.attributes) {
@@ -118,7 +132,6 @@ function ApplyDeltaToAutomergeText(delta, doc) {
       }
     })
   }
-  console.log("After:", doc.text.toString())
 }
 
 describe('Automerge.Text', () => {
@@ -445,6 +458,37 @@ describe('Automerge.Text', () => {
           { bold: true },
           "reader",
           { bold: null },
+          "!"
+        ])
+      })
+
+      it('should account for control characters in retain/delete lengths', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Hello world')
+          doc.text.insertAt(4, { color: '#ccc' })
+          doc.text.insertAt(10, { color: '#f00' })
+        })
+
+        const delta = { ops: [
+          { retain: 6 },
+          { insert: 'reader', attributes: { bold: true } },
+          { delete: 5 },
+          { insert: '!' }
+        ]}
+
+        let s2 = Automerge.change(s1, doc => {
+          ApplyDeltaToAutomergeText(delta, doc)
+        })
+
+        assert.strictEqual(s2.text.toString(), 'Hello reader!')
+        assert.deepEqual(s2.text.toSpans(), [
+          "Hell",
+          { color: '#ccc'},
+          "o ",
+          { bold: true },
+          "reader",
+          { bold: null },
+          { color: '#f00'},
           "!"
         ])
       })
