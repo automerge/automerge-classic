@@ -13,21 +13,25 @@ function attributeStateToAttributes(accumulatedAttributes) {
 }
 
 function isEquivalent(a, b) {
-  var aProps = Object.getOwnPropertyNames(a);
-  var bProps = Object.getOwnPropertyNames(b);
+  var aProps = Object.getOwnPropertyNames(a)
+  var bProps = Object.getOwnPropertyNames(b)
 
   if (aProps.length != bProps.length) {
-      return false;
+      return false
   }
 
   for (var i = 0; i < aProps.length; i++) {
-      var propName = aProps[i];
+      var propName = aProps[i]
       if (a[propName] !== b[propName]) {
-          return false;
+          return false
       }
   }
 
-  return true;
+  return true
+}
+
+function isControlMarker(pseudoCharacter) {
+  return typeof pseudoCharacter === 'object' && pseudoCharacter.attributes
 }
 
 function opFrom(text, attributes) {
@@ -58,7 +62,7 @@ function automergeTextToDeltaDoc(text) {
   let currentString = ""
   let attributes = {}
   text.toSpans().forEach((span) => {
-    if (typeof span === 'object' && span.attributes ) {
+    if (isControlMarker(span)) {
       controlState = accumulateAttributes(span.attributes, controlState)
     } else {
       let next = attributeStateToAttributes(controlState)
@@ -109,12 +113,12 @@ function inverseAttributes(attributes) {
 function applyDeleteOp(text, offset, op) {
   let length = op.delete
   while (length > 0) {
-    if (typeof text.get(offset) === 'string') {
-      // we need to not delete control characters
+    if (isControlMarker(text.get(offset))) {
+      offset += 1
+    } else {
+      // we need to not delete control characters, but we do delete embed characters
       text.deleteAt(offset, 1)
       length -= 1
-    } else {
-      offset += 1
     }
   }
   return [text, offset]
@@ -124,7 +128,7 @@ function applyRetainOp(text, offset, op) {
   let slice = text.slice(offset, offset + op.retain)
   slice.forEach((i) => {
     // don't count control characters towards length
-    if (typeof i !== 'string') {
+    if (isControlMarker(i)) {
       offset += 1
     }
   })
