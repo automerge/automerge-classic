@@ -5,7 +5,7 @@ const { assertEqualsOneOf } = require('./helpers')
 function attributeStateToAttributes(accumulatedAttributes) {
   const attributes = {}
   Object.entries(accumulatedAttributes).forEach(([key, values]) => {
-    if (values.length) {
+    if (values.length && values[0] !== null) {
       attributes[key] = values[0]
     }
   })
@@ -48,9 +48,17 @@ function accumulateAttributes(span, accumulatedAttributes) {
       accumulatedAttributes[key] = []
     }
     if (value === null) {
-      accumulatedAttributes[key].shift()
+      if (accumulatedAttributes[key].length === 0 || accumulatedAttributes[key] === null) {
+        accumulatedAttributes[key].unshift(null)
+      } else {
+        accumulatedAttributes[key].shift()
+      }
     } else {
-      accumulatedAttributes[key].unshift(value)
+      if (accumulatedAttributes[key][0] === null) {
+        accumulatedAttributes[key].shift()
+      } else {
+        accumulatedAttributes[key].unshift(value)
+      }
     }
   })
   return accumulatedAttributes
@@ -98,8 +106,7 @@ function automergeTextToDeltaDoc(text) {
     ops.push(opFrom(currentString, attributes))
   }
 
-  let deltaDoc = { ops }
-  return deltaDoc
+  return ops
 }
 
 function inverseAttributes(attributes) {
@@ -125,16 +132,30 @@ function applyDeleteOp(text, offset, op) {
 }
 
 function applyRetainOp(text, offset, op) {
-  let slice = text.slice(offset, offset + op.retain)
-  slice.forEach((i) => {
-    // don't count control characters towards length
-    if (isControlMarker(i)) {
-      offset += 1
+  let length = op.retain
+
+  if (op.attributes) {
+    console.log(op)
+    text.insertAt(offset, { attributes: op.attributes })
+    offset += 1
+  }
+
+  while (length > 0) {
+    const char = text.get(offset)
+    offset += 1
+    if (!isControlMarker(char)) {
+      length -= 1
     }
-  })
-  offset += op.retain
+  }
+
+  if (op.attributes) {
+    text.insertAt(offset, { attributes: inverseAttributes(op.attributes) })
+    offset += 1
+  }
+
   return [text, offset]
 }
+
 
 function applyInsertOp(text, offset, op) {
   let originalOffset = offset
@@ -164,18 +185,15 @@ function applyDeltaDocToAutomergeText(delta, doc) {
   let offset = 0
   let text = doc.text
 
-  let ops = delta.ops
-  if (ops && ops.length) {
-    ops.forEach(op => {
-      if (op.retain) {
-        [text, offset] = applyRetainOp(doc.text, offset, op)
-      } else if (op.delete) {
-        [text, offset] = applyDeleteOp(doc.text, offset, op)
-      } else if (op.insert) {
-        [text, offset] = applyInsertOp(doc.text, offset, op)
-      }
-    })
-  }
+  delta.forEach(op => {
+    if (op.retain) {
+      [text, offset] = applyRetainOp(doc.text, offset, op)
+    } else if (op.delete) {
+      [text, offset] = applyDeleteOp(doc.text, offset, op)
+    } else if (op.insert) {
+      [text, offset] = applyInsertOp(doc.text, offset, op)
+    }
+  })
 }
 
 describe('Automerge.Text', () => {
@@ -419,13 +437,11 @@ describe('Automerge.Text', () => {
         let deltaDoc = automergeTextToDeltaDoc(s1.text)
 
         // From https://quilljs.com/docs/delta/
-        let expectedDoc = {
-          ops: [
-            { insert: 'Gandalf', attributes: { bold: true } },
-            { insert: ' the ' },
-            { insert: 'Grey', attributes: { color: '#cccccc' } }
-          ]
-        }
+        let expectedDoc = [
+          { insert: 'Gandalf', attributes: { bold: true } },
+          { insert: ' the ' },
+          { insert: 'Grey', attributes: { color: '#cccccc' } }
+        ]
 
         assert.deepEqual(deltaDoc, expectedDoc)
       })
@@ -443,17 +459,15 @@ describe('Automerge.Text', () => {
         let deltaDoc = automergeTextToDeltaDoc(s1.text)
 
         // From https://quilljs.com/docs/delta/
-        let expectedDoc = {
-          ops: [{
-            // An image link
-            insert: {
-              image: 'https://quilljs.com/assets/images/icon.png'
-            },
-            attributes: {
-              link: 'https://quilljs.com'
-            }
-          }]
-        }
+        let expectedDoc = [{
+          // An image link
+          insert: {
+            image: 'https://quilljs.com/assets/images/icon.png'
+          },
+          attributes: {
+            link: 'https://quilljs.com'
+          }
+        }]
 
         assert.deepEqual(deltaDoc, expectedDoc)
       })
@@ -480,11 +494,77 @@ describe('Automerge.Text', () => {
         let deltaDoc = automergeTextToDeltaDoc(merged.text)
 
         // From https://quilljs.com/docs/delta/
-        let expectedDoc = {
-          ops: [
-            { insert: 'Gandalf the Grey', attributes: { bold: true } },
-          ]
-        }
+        let expectedDoc = [
+          { insert: 'Gandalf the Grey', attributes: { bold: true } },
+        ]
+
+        assert.deepEqual(deltaDoc, expectedDoc)
+      })
+
+      it('should handle debolding spans', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Gandalf the Grey')
+        })
+
+        let s2 = Automerge.merge(Automerge.init(), s1)
+
+        let s3 = Automerge.change(s1, doc => {
+          doc.text.insertAt(0,  { attributes: { bold: true } })
+          doc.text.insertAt(16+1, { attributes: { bold: null } })
+        })
+
+        let s4 = Automerge.change(s2, doc => {
+          doc.text.insertAt(8,  { attributes: { bold: null } })
+          doc.text.insertAt(11+1, { attributes: { bold: true } })
+        })
+
+        
+        let merged = Automerge.merge(s3, s4)
+
+        let deltaDoc = automergeTextToDeltaDoc(merged.text)
+
+        // From https://quilljs.com/docs/delta/
+        let expectedDoc = [
+          { insert: 'Gandalf ', attributes: { bold: true } },
+          { insert: 'the' },
+          { insert: ' Grey', attributes: { bold: true } },
+        ]
+
+        assert.deepEqual(deltaDoc, expectedDoc)
+      })
+
+      // xxx: how would this work for colors?
+      it('should handle destyling across destyled spans', () => {
+        let s1 = Automerge.change(Automerge.init(), doc => {
+          doc.text = new Automerge.Text('Gandalf the Grey')
+        })
+
+        let s2 = Automerge.merge(Automerge.init(), s1)
+
+        let s3 = Automerge.change(s1, doc => {
+          doc.text.insertAt(0,  { attributes: { bold: true } })
+          doc.text.insertAt(16+1, { attributes: { bold: null } })
+        })
+
+        let s4 = Automerge.change(s2, doc => {
+          doc.text.insertAt(8,  { attributes: { bold: null } })
+          doc.text.insertAt(11+1, { attributes: { bold: true } })
+        })
+
+        let merged = Automerge.merge(s3, s4)
+
+        let final = Automerge.change(merged, doc => {
+          doc.text.insertAt(3+1, { attributes: { bold: null } })
+          doc.text.insertAt(doc.text.length, { attributes: { bold: true } })
+        })
+
+        let deltaDoc = automergeTextToDeltaDoc(final.text)
+
+        // From https://quilljs.com/docs/delta/
+        let expectedDoc = [
+          { insert: 'Gan', attributes: { bold: true } },
+          { insert: 'dalf the Grey' },
+        ]
 
         assert.deepEqual(deltaDoc, expectedDoc)
       })
@@ -494,11 +574,11 @@ describe('Automerge.Text', () => {
           doc.text = new Automerge.Text('Hello world')
         })
 
-        const delta = { ops: [
+        const delta = [
           { retain: 6 },
           { insert: 'reader' },
           { delete: 5 }
-        ]}
+        ]
 
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(delta, doc)
@@ -512,12 +592,12 @@ describe('Automerge.Text', () => {
           doc.text = new Automerge.Text('Hello world')
         })
 
-        const delta = { ops: [
+        const delta = [
           { retain: 6 },
           { insert: 'reader', attributes: { bold: true } },
           { delete: 5 },
           { insert: '!' }
-        ]}
+        ]
 
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(delta, doc)
@@ -540,12 +620,12 @@ describe('Automerge.Text', () => {
           doc.text.insertAt(10, { attributes: { color: '#f00' } })
         })
 
-        const delta = { ops: [
+        const delta = [
           { retain: 6 },
           { insert: 'reader', attributes: { bold: true } },
           { delete: 5 },
           { insert: '!' }
-        ]}
+        ]
 
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(delta, doc)
@@ -569,17 +649,15 @@ describe('Automerge.Text', () => {
           doc.text = new Automerge.Text('')
         })
 
-        let deltaDoc = {
-          ops: [{
-            // An image link
-            insert: {
-              image: 'https://quilljs.com/assets/images/icon.png'
-            },
-            attributes: {
-              link: 'https://quilljs.com'
-            }
-          }]
-        }
+        let deltaDoc = [{
+          // An image link
+          insert: {
+            image: 'https://quilljs.com/assets/images/icon.png'
+          },
+          attributes: {
+            link: 'https://quilljs.com'
+          }
+        }]
 
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(deltaDoc, doc)
