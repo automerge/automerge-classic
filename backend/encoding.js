@@ -48,6 +48,7 @@ class Encoder {
    * Returns the byte array containing the encoded data.
    */
   get buffer() {
+    this.finish()
     return this.buf.subarray(0, this.offset)
   }
 
@@ -128,4 +129,69 @@ class Encoder {
 }
 
 
-module.exports = { Encoder }
+class Decoder {
+  constructor(buffer) {
+    this.buf = buffer
+    this.offset = 0
+  }
+
+  /**
+   * Reads a LEB128-encoded unsigned integer from the current position in the buffer.
+   */
+  readUint32() {
+    let result = 0, shift = 0
+    while (this.offset < this.buf.byteLength) {
+      const nextByte = this.buf[this.offset]
+      if (shift === 28 && (nextByte & 0xf0) !== 0) { // more than 5 bytes, or value > 0xffffffff
+        throw new RangeError('number out of range')
+      }
+      result = (result | (nextByte & 0x7f) << shift) >>> 0 // right shift to interpret value as unsigned
+      shift += 7
+      this.offset++
+      if ((nextByte & 0x80) === 0) return result
+    }
+    throw new RangeError('buffer ended with incomplete number')
+  }
+
+  /**
+   * Reads a LEB128-encoded signed integer from the current position in the buffer.
+   */
+  readInt32() {
+    let result = 0, shift = 0
+    while (this.offset < this.buf.byteLength) {
+      const nextByte = this.buf[this.offset]
+      if ((shift === 28 && (nextByte & 0x80) !== 0) || // more than 5 bytes
+          (shift === 28 && (nextByte & 0x40) === 0 && (nextByte & 0x38) !== 0) || // positive int > 0x7fffffff
+          (shift === 28 && (nextByte & 0x40) !== 0 && (nextByte & 0x38) !== 0x38)) { // negative int < -0x80000000
+        throw new RangeError('number out of range')
+      }
+      result |= (nextByte & 0x7f) << shift
+      shift += 7
+      this.offset++
+
+      if ((nextByte & 0x80) === 0) {
+        if ((nextByte & 0x40) === 0 || shift > 28) {
+          return result // positive, or negative value that doesn't need sign-extending
+        } else {
+          return result | (-1 << shift) // sign-extend negative integer
+        }
+      }
+    }
+    throw new RangeError('buffer ended with incomplete number')
+  }
+
+  /**
+   * Reads a UTF-8 string from the current position in the buffer, prefixed with its
+   * length in bytes (where the length is encoded as an unsigned LEB128 integer).
+   */
+  readPrefixedString() {
+    const length = this.readUint32()
+    if (this.offset + length > this.buf.byteLength) {
+      throw new RangeError('buffer ended with incomplete string')
+    }
+    return utf8ToString(this.buf.subarray(this.offset, this.offset + length))
+  }
+}
+
+
+module.exports = { Encoder, Decoder }
