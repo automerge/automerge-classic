@@ -341,7 +341,8 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
         insertions = []
       }
       maxElem = Math.max(maxElem, parseElemId(diff.elemId).counter)
-      insertions.push({elemId: diff.elemId, value: diff.value, conflicts: diff.conflicts})
+      const value = getValue(diff, cache, updated)
+      insertions.push({elemId: diff.elemId, value, conflicts: diff.conflicts})
 
       if (startIndex === endIndex || diffs[startIndex + 1].action !== 'insert' ||
           diffs[startIndex + 1].index !== diff.index + 1) {
@@ -352,7 +353,7 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
     } else if (diff.action === 'set') {
       elems[diff.index] = {
         elemId: elems[diff.index].elemId,
-        value: diff.value,
+        value: getValue(diff, cache, updated),
         conflicts: diff.conflicts
       }
 

@@ -2572,7 +2572,8 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
         insertions = [];
       }
       maxElem = Math.max(maxElem, parseElemId(diff.elemId).counter);
-      insertions.push({ elemId: diff.elemId, value: diff.value, conflicts: diff.conflicts });
+      var value = getValue(diff, cache, updated);
+      insertions.push({ elemId: diff.elemId, value: value, conflicts: diff.conflicts });
 
       if (startIndex === endIndex || diffs[startIndex + 1].action !== 'insert' || diffs[startIndex + 1].index !== diff.index + 1) {
         elems.splice.apply(elems, [splicePos, deletions].concat(_toConsumableArray(insertions)));
@@ -2581,7 +2582,7 @@ function updateTextObject(diffs, startIndex, endIndex, cache, updated) {
     } else if (diff.action === 'set') {
       elems[diff.index] = {
         elemId: elems[diff.index].elemId,
-        value: diff.value,
+        value: getValue(diff, cache, updated),
         conflicts: diff.conflicts
       };
     } else if (diff.action === 'remove') {
@@ -4781,6 +4782,12 @@ var Text = function () {
     value: function getElemId(index) {
       return this.elems[index].elemId;
     }
+
+    /**
+     * Iterates over the text elements character by character, including any
+     * inline objects.
+     */
+
   }, {
     key: Symbol.iterator,
     value: function value() {
@@ -4805,8 +4812,78 @@ var Text = function () {
   }, {
     key: 'toString',
     value: function toString() {
-      return this.join('');
+      var chars = [];
+      var _iteratorNormalCompletion = true;
+      var _didIteratorError = false;
+      var _iteratorError = undefined;
+
+      try {
+        for (var _iterator = this.elems[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+          var elem = _step.value;
+
+          if (typeof elem.value === 'string') chars.push(elem.value);
+        }
+      } catch (err) {
+        _didIteratorError = true;
+        _iteratorError = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion && _iterator.return) {
+            _iterator.return();
+          }
+        } finally {
+          if (_didIteratorError) {
+            throw _iteratorError;
+          }
+        }
+      }
+
+      return chars.join('');
     }
+  }, {
+    key: 'toSpans',
+    value: function toSpans() {
+      var spans = [];
+      var chars = [];
+      var _iteratorNormalCompletion2 = true;
+      var _didIteratorError2 = false;
+      var _iteratorError2 = undefined;
+
+      try {
+        for (var _iterator2 = this.elems[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+          var elem = _step2.value;
+
+          if (typeof elem.value === 'string') {
+            chars.push(elem.value);
+          } else {
+            if (chars.length > 0) {
+              spans.push(chars.join(''));
+              chars = [];
+            }
+            spans.push(elem.value);
+          }
+        }
+      } catch (err) {
+        _didIteratorError2 = true;
+        _iteratorError2 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion2 && _iterator2.return) {
+            _iterator2.return();
+          }
+        } finally {
+          if (_didIteratorError2) {
+            throw _iteratorError2;
+          }
+        }
+      }
+
+      if (chars.length > 0) {
+        spans.push(chars.join(''));
+      }
+      return spans;
+    }
+
     /**
      * Returns the content of the Text object as a simple string, so that the
      * JSON serialization of an Automerge document represents text nicely.
@@ -4815,7 +4892,7 @@ var Text = function () {
   }, {
     key: 'toJSON',
     value: function toJSON() {
-      return this.join('');
+      return this.toString();
     }
 
     /**
@@ -14144,15 +14221,14 @@ for (var i = 0; i < 256; ++i) {
 function bytesToUuid(buf, offset) {
   var i = offset || 0;
   var bth = byteToHex;
-  // join used to fix memory issue caused by concatenation: https://bugs.chromium.org/p/v8/issues/detail?id=3175#c4
-  return ([bth[buf[i++]], bth[buf[i++]], 
-	bth[buf[i++]], bth[buf[i++]], '-',
-	bth[buf[i++]], bth[buf[i++]], '-',
-	bth[buf[i++]], bth[buf[i++]], '-',
-	bth[buf[i++]], bth[buf[i++]], '-',
-	bth[buf[i++]], bth[buf[i++]],
-	bth[buf[i++]], bth[buf[i++]],
-	bth[buf[i++]], bth[buf[i++]]]).join('');
+  return bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] + '-' +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]] +
+          bth[buf[i++]] + bth[buf[i++]];
 }
 
 module.exports = bytesToUuid;
@@ -14165,34 +14241,31 @@ module.exports = bytesToUuid;
   !*** ./node_modules/uuid/lib/rng-browser.js ***!
   \**********************************************/
 /*! no static exports found */
-/***/ (function(module, exports) {
+/***/ (function(module, exports, __webpack_require__) {
 
-// Unique ID creation requires a high quality random # generator.  In the
+/* WEBPACK VAR INJECTION */(function(global) {// Unique ID creation requires a high quality random # generator.  In the
 // browser this is a little complicated due to unknown quality of Math.random()
 // and inconsistent support for the `crypto` API.  We do the best we can via
 // feature-detection
+var rng;
 
-// getRandomValues needs to be invoked in a context where "this" is a Crypto
-// implementation. Also, find the complete implementation of crypto on IE11.
-var getRandomValues = (typeof(crypto) != 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto)) ||
-                      (typeof(msCrypto) != 'undefined' && typeof window.msCrypto.getRandomValues == 'function' && msCrypto.getRandomValues.bind(msCrypto));
-
-if (getRandomValues) {
+var crypto = global.crypto || global.msCrypto; // for IE 11
+if (crypto && crypto.getRandomValues) {
   // WHATWG crypto RNG - http://wiki.whatwg.org/wiki/Crypto
   var rnds8 = new Uint8Array(16); // eslint-disable-line no-undef
-
-  module.exports = function whatwgRNG() {
-    getRandomValues(rnds8);
+  rng = function whatwgRNG() {
+    crypto.getRandomValues(rnds8);
     return rnds8;
   };
-} else {
+}
+
+if (!rng) {
   // Math.random()-based (RNG)
   //
   // If all else fails, use Math.random().  It's fast, but is of unspecified
   // quality.
   var rnds = new Array(16);
-
-  module.exports = function mathRNG() {
+  rng = function() {
     for (var i = 0, r; i < 16; i++) {
       if ((i & 0x03) === 0) r = Math.random() * 0x100000000;
       rnds[i] = r >>> ((i & 0x03) << 3) & 0xff;
@@ -14202,6 +14275,9 @@ if (getRandomValues) {
   };
 }
 
+module.exports = rng;
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
 
 /***/ }),
 
@@ -14219,7 +14295,7 @@ function v4(options, buf, offset) {
   var i = buf && offset || 0;
 
   if (typeof(options) == 'string') {
-    buf = options === 'binary' ? new Array(16) : null;
+    buf = options == 'binary' ? new Array(16) : null;
     options = null;
   }
   options = options || {};

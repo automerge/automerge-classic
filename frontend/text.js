@@ -27,6 +27,10 @@ class Text {
     return this.elems[index].elemId
   }
 
+  /**
+   * Iterates over the text elements character by character, including any
+   * inline objects.
+   */
   [Symbol.iterator] () {
     let elems = this.elems, index = -1
     return {
@@ -45,14 +49,39 @@ class Text {
    * Returns the content of the Text object as a simple string.
    */
   toString() {
-    return this.join('')
+    let chars = []
+    for (let elem of this.elems) {
+      if (typeof elem.value === 'string') chars.push(elem.value)
+    }
+    return chars.join('')
   }
+
+  toSpans() {
+    let spans = []
+    let chars = []
+    for (let elem of this.elems) {
+      if (typeof elem.value === 'string') {
+        chars.push(elem.value)
+      } else {
+        if (chars.length > 0) {
+          spans.push(chars.join(''))
+          chars = []
+        }
+        spans.push(elem.value)
+      }
+    }
+    if (chars.length > 0) { 
+      spans.push(chars.join(''))
+    }
+    return spans
+  } 
+
   /**
    * Returns the content of the Text object as a simple string, so that the
    * JSON serialization of an Automerge document represents text nicely.
    */
   toJSON() {
-    return this.join('')
+    return this.toString()
   }
 
   /**
