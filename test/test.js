@@ -52,6 +52,11 @@ describe('Automerge', () => {
         let doc2 = Automerge.merge(Automerge.init(), doc1)
         assert.deepEqual(doc2, {cards: []})
       })
+
+      it('should not enable undo after Automerge.from', () => {
+        let doc = Automerge.from({cards: []})
+        assert.deepEqual(Automerge.canUndo(doc), false)
+      })
     })
 
     describe('changes', () => {

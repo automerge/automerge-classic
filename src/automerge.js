@@ -32,7 +32,8 @@ function init(options) {
  * Returns a new document object initialized with the given state.
  */
 function from(initialState, options) {
-  return change(init(options), 'Initialization', doc => Object.assign(doc, initialState))
+  const changeOpts = {message: 'Initialization', undoable: false}
+  return change(init(options), changeOpts, doc => Object.assign(doc, initialState))
 }
 
 function change(doc, options, callback) {

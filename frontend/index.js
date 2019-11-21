@@ -100,6 +100,9 @@ function makeChange(doc, requestType, context, options) {
   if (options && options.message !== undefined) {
     request.message = options.message
   }
+  if (options && options.undoable === false) {
+    request.undoable = false
+  }
   if (context) {
     request.ops = ensureSingleAssignment(context.ops)
   }

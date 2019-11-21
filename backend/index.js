@@ -186,7 +186,8 @@ function applyLocalChange(state, change) {
 
   let patch
   if (change.requestType === 'change') {
-    ;[state, patch] = apply(state, [change], true)
+    const undoable = (change.undoable === false) ? false : true
+    ;[state, patch] = apply(state, [change], undoable)
   } else if (change.requestType === 'undo') {
     ;[state, patch] = undo(state, change)
   } else if (change.requestType === 'redo') {
