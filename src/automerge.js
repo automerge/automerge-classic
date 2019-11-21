@@ -35,23 +35,23 @@ function from(initialState, options) {
   return change(init(options), 'Initialization', doc => Object.assign(doc, initialState))
 }
 
-function change(doc, message, callback) {
-  const [newDoc, change] = Frontend.change(doc, message, callback)
+function change(doc, options, callback) {
+  const [newDoc, change] = Frontend.change(doc, options, callback)
   return newDoc
 }
 
-function emptyChange(doc, message) {
-  const [newDoc, change] = Frontend.emptyChange(doc, message)
+function emptyChange(doc, options) {
+  const [newDoc, change] = Frontend.emptyChange(doc, options)
   return newDoc
 }
 
-function undo(doc, message) {
-  const [newDoc, change] = Frontend.undo(doc, message)
+function undo(doc, options) {
+  const [newDoc, change] = Frontend.undo(doc, options)
   return newDoc
 }
 
-function redo(doc, message) {
-  const [newDoc, change] = Frontend.redo(doc, message)
+function redo(doc, options) {
+  const [newDoc, change] = Frontend.redo(doc, options)
   return newDoc
 }
 

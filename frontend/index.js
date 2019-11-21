@@ -82,9 +82,11 @@ function ensureSingleAssignment(ops) {
  * updated document root object. `requestType` is a string indicating the type
  * of request, which may be "change", "undo", or "redo". For the "change" request
  * type, the details of the change are taken from the context object `context`.
- * `message` is an optional human-readable string describing the change.
+ * `options` contains properties that may affect how the change is processed; in
+ * particular, the `message` property of `options` is an optional human-readable
+ * string describing the change.
  */
-function makeChange(doc, requestType, context, message) {
+function makeChange(doc, requestType, context, options) {
   const actor = getActorId(doc)
   if (!actor) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
@@ -95,8 +97,8 @@ function makeChange(doc, requestType, context, message) {
   delete deps[actor]
 
   const request = {requestType, actor, seq: state.seq, deps}
-  if (message !== undefined) {
-    request.message = message
+  if (options && options.message !== undefined) {
+    request.message = options.message
   }
   if (context) {
     request.ops = ensureSingleAssignment(context.ops)
@@ -245,25 +247,32 @@ function from(initialState, options) {
 
 /**
  * Changes a document `doc` according to actions taken by the local user.
- * `message` is an optional descriptive string that is attached to the change.
+ * `options` is an object that can contain the following properties:
+ *  - `message`: an optional descriptive string that is attached to the change.
+ *  - `undoable`: false if the change should not affect the undo history.
+ * If `options` is a string, it is treated as `message`.
+ *
  * The actual change is made within the callback function `callback`, which is
  * given a mutable version of the document as argument. Returns a two-element
  * array `[doc, request]` where `doc` is the updated document, and `request`
  * is the change request to send to the backend. If nothing was actually
  * changed, returns the original `doc` and a `null` change request.
  */
-function change(doc, message, callback) {
+function change(doc, options, callback) {
   if (doc[OBJECT_ID] !== ROOT_ID) {
     throw new TypeError('The first argument to Automerge.change must be the document root')
   }
   if (doc[CHANGE]) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
-  if (typeof message === 'function' && callback === undefined) {
-    ;[message, callback] = [callback, message]
+  if (typeof options === 'function' && callback === undefined) {
+    ;[options, callback] = [callback, options]
   }
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
+  if (typeof options === 'string') {
+    options = {message: options}
+  }
+  if (options !== undefined && !isObject(options)) {
+    throw new TypeError('Unsupported type of options')
   }
 
   const actorId = getActorId(doc)
@@ -278,28 +287,31 @@ function change(doc, message, callback) {
     return [doc, null]
   } else {
     updateParentObjects(doc[CACHE], context.updated, context.inbound)
-    return makeChange(doc, 'change', context, message)
+    return makeChange(doc, 'change', context, options)
   }
 }
 
 /**
  * Triggers a new change request on the document `doc` without actually
- * modifying its data. `message` is an optional descriptive string attached to
- * the change. This function can be useful for acknowledging the receipt of
- * some message (as it's incorported into the `deps` field of the change).
- * Returns a two-element array `[doc, request]` where `doc` is the updated
- * document, and `request` is the change request to send to the backend.
+ * modifying its data. `options` is an object as described in the documentation
+ * for the `change` function. This function can be useful for acknowledging the
+ * receipt of some message (as it's incorported into the `deps` field of the
+ * change). Returns a two-element array `[doc, request]` where `doc` is the
+ * updated document, and `request` is the change request to send to the backend.
  */
-function emptyChange(doc, message) {
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
+function emptyChange(doc, options) {
+  if (typeof options === 'string') {
+    options = {message: options}
+  }
+  if (options !== undefined && !isObject(options)) {
+    throw new TypeError('Unsupported type of options')
   }
 
   const actorId = getActorId(doc)
   if (!actorId) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
   }
-  return makeChange(doc, 'change', new Context(doc, actorId), message)
+  return makeChange(doc, 'change', new Context(doc, actorId), options)
 }
 
 /**
@@ -363,14 +375,19 @@ function isUndoRedoInFlight(doc) {
 /**
  * Creates a request to perform an undo on the document `doc`, returning a
  * two-element array `[doc, request]` where `doc` is the updated document, and
- * `request` needs to be sent to the backend. `message` is an optional change
- * description to attach to the undo. Note that the undo does not take effect
- * immediately: only after the request is sent to the backend, and the backend
- * responds with a patch, does the user-visible document update actually happen.
+ * `request` needs to be sent to the backend. `options` is an object as
+ * described in the documentation for the `change` function; it may contain a
+ * `message` property with an optional change description to attach to the undo.
+ * Note that the undo does not take effect immediately: only after the request
+ * is sent to the backend, and the backend responds with a patch, does the
+ * user-visible document update actually happen.
  */
-function undo(doc, message) {
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
+function undo(doc, options) {
+  if (typeof options === 'string') {
+    options = {message: options}
+  }
+  if (options !== undefined && !isObject(options)) {
+    throw new TypeError('Unsupported type of options')
   }
   if (!doc[STATE].canUndo) {
     throw new Error('Cannot undo: there is nothing to be undone')
@@ -378,7 +395,7 @@ function undo(doc, message) {
   if (isUndoRedoInFlight(doc)) {
     throw new Error('Can only have one undo in flight at any one time')
   }
-  return makeChange(doc, 'undo', null, message)
+  return makeChange(doc, 'undo', null, options)
 }
 
 /**
@@ -392,15 +409,19 @@ function canRedo(doc) {
 /**
  * Creates a request to perform a redo of a prior undo on the document `doc`,
  * returning a two-element array `[doc, request]` where `doc` is the updated
- * document, and `request` needs to be sent to the backend. `message` is an
- * optional change description to attach to the redo. Note that the redo does
- * not take effect immediately: only after the request is sent to the backend,
- * and the backend responds with a patch, does the user-visible document
- * update actually happen.
+ * document, and `request` needs to be sent to the backend. `options` is an
+ * object as described in the documentation for the `change` function; it may
+ * contain a `message` property with an optional change description to attach
+ * to the redo. Note that the redo does not take effect immediately: only
+ * after the request is sent to the backend, and the backend responds with a
+ * patch, does the user-visible document update actually happen.
  */
-function redo(doc, message) {
-  if (message !== undefined && typeof message !== 'string') {
-    throw new TypeError('Change message must be a string')
+function redo(doc, options) {
+  if (typeof options === 'string') {
+    options = {message: options}
+  }
+  if (options !== undefined && !isObject(options)) {
+    throw new TypeError('Unsupported type of options')
   }
   if (!doc[STATE].canRedo) {
     throw new Error('Cannot redo: there is no prior undo')
@@ -408,7 +429,7 @@ function redo(doc, message) {
   if (isUndoRedoInFlight(doc)) {
     throw new Error('Can only have one redo in flight at any one time')
   }
-  return makeChange(doc, 'redo', null, message)
+  return makeChange(doc, 'redo', null, options)
 }
 
 /**
