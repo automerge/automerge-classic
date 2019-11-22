@@ -11,6 +11,14 @@
     "prepublishOnly": "npm run-script build"
   },
   "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/automerge/automerge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/automerge/automerge/issues"
+  },
+  "homepage": "https://github.com/automerge/automerge",
   "license": "MIT",
   "dependencies": {
     "immutable": "^3.8.2",
