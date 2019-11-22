@@ -358,6 +358,8 @@ options, with more under development:
 - [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
   combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
   [Dat project](https://datproject.org/).
+- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the `Automerge.Connection` protocol over
+  [PeerJS](https://github.com/peers/peerjs).
 
 The `getChanges()/applyChanges()` API works as follows:
 
