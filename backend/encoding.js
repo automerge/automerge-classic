@@ -72,18 +72,6 @@ class Encoder {
   }
 
   /**
-   * Appends the contents of byte buffer `data` to the buffer, prefixed with the
-   * number of bytes in the buffer (as a LEB128-encoded unsigned integer).
-   */
-  appendBytes(data) {
-    this.appendUint32(data.byteLength)
-    if (this.offset + data.byteLength >= this.buf.byteLength) this.grow()
-    this.buf.set(data, this.offset)
-    this.offset += data.byteLength
-    return this
-  }
-
-  /**
    * Appends a LEB128-encoded unsigned integer to the buffer.
    */
   appendUint32(value) {
@@ -124,12 +112,42 @@ class Encoder {
   }
 
   /**
+   * Appends the contents of byte buffer `data` to the buffer.
+   */
+  appendRawBytes(data) {
+    if (this.offset + data.byteLength >= this.buf.byteLength) this.grow()
+    this.buf.set(data, this.offset)
+    this.offset += data.byteLength
+    return this
+  }
+
+  /**
+   * Appends a UTF-8 string to the buffer, without any metadata. Returns the
+   * number of bytes appended.
+   */
+  appendRawString(value) {
+    if (typeof value !== 'string') throw new TypeError('value is not a string')
+    const data = stringToUtf8(value)
+    this.appendRawBytes(data)
+    return data.byteLength
+  }
+
+  /**
+   * Appends the contents of byte buffer `data` to the buffer, prefixed with the
+   * number of bytes in the buffer (as a LEB128-encoded unsigned integer).
+   */
+  appendPrefixedBytes(data) {
+    this.appendUint32(data.byteLength)
+    return this.appendRawBytes(data)
+  }
+
+  /**
    * Appends a UTF-8 string to the buffer, prefixed with its length in bytes
    * (where the length is encoded as an unsigned LEB128 integer).
    */
   appendPrefixedString(value) {
     if (typeof value !== 'string') throw new TypeError('value is not a string')
-    this.appendBytes(stringToUtf8(value))
+    this.appendPrefixedBytes(stringToUtf8(value))
     return this
   }
 
@@ -206,11 +224,11 @@ class Decoder {
   }
 
   /**
-   * Extracts a subarray from the current position in the buffer, prefixed with
-   * its length in bytes (encoded as an unsigned LEB128 integer).
+   * Extracts a subarray `length` bytes in size, starting from the current
+   * position in the buffer, and moves the position forward.
    */
-  readBytes() {
-    const length = this.readUint32(), start = this.offset
+  readRawBytes(length) {
+    const start = this.offset
     if (start + length > this.buf.byteLength) {
       throw new RangeError('subarray exceeds buffer size')
     }
@@ -219,11 +237,27 @@ class Decoder {
   }
 
   /**
+   * Extracts `length` bytes from the buffer, starting from the current position,
+   * and returns the UTF-8 string decoding of those bytes.
+   */
+  readRawString(length) {
+    return utf8ToString(this.readRawBytes(length))
+  }
+
+  /**
+   * Extracts a subarray from the current position in the buffer, prefixed with
+   * its length in bytes (encoded as an unsigned LEB128 integer).
+   */
+  readPrefixedBytes() {
+    return this.readRawBytes(this.readUint32())
+  }
+
+  /**
    * Reads a UTF-8 string from the current position in the buffer, prefixed with its
    * length in bytes (where the length is encoded as an unsigned LEB128 integer).
    */
   readPrefixedString() {
-    return utf8ToString(this.readBytes())
+    return utf8ToString(this.readPrefixedBytes())
   }
 }
 
@@ -421,6 +455,10 @@ class DeltaDecoder extends RLEDecoder {
 }
 
 
+const CHANGE_COLUMNS = ['action', 'obj_ctr', 'obj_actor', 'key_ctr', 'key_actor', 'key_str',
+  'insert', 'val_bytes', 'val_str', 'pred_num', 'pred_ctr', 'pred_actor']
+const ACTIONS = ['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable']
+
 /**
  * Parses a string of the form '12345@someActorId' into an object of the form
  * {counter: 12345, actorId: 'someActorId'}, and any other string into an object
@@ -478,10 +516,28 @@ function parseAllOpIds(change) {
   return {change, actorIds}
 }
 
+/**
+ * Encodes an array of operations in a set of columns. The operations need to
+ * be parsed with `parseAllOpIds()` beforehand. Returns a map from column name
+ * to Encoder object.
+ */
 function encodeOps(ops) {
+  const action    = new RLEEncoder('uint32')
   const obj_ctr   = new RLEEncoder('uint32')
   const obj_actor = new RLEEncoder('uint32')
+  const key_ctr   = new RLEEncoder('uint32')
+  const key_actor = new RLEEncoder('uint32')
+  const key_str   = new RLEEncoder('utf8')
+  const insert    = new RLEEncoder('uint32') // perhaps make a bitmap type?
+  const val_bytes = new RLEEncoder('uint32')
+  const val_str   = new Encoder() // TODO: need to encode ints, floating-point, boolean
+  const pred_num  = new RLEEncoder('uint32')
+  const pred_ctr  = new RLEEncoder('uint32')
+  const pred_actor = new RLEEncoder('uint32')
+
   for (let op of ops) {
+    action.appendValue(ACTIONS.indexOf(op.action))
+
     if (op.obj.value === ROOT_ID) {
       obj_ctr.appendValue(null)
       obj_actor.appendValue(null)
@@ -491,36 +547,100 @@ function encodeOps(ops) {
     } else {
       throw new RangeError(`Unexpected objectId reference: ${JSON.stringify(op.obj)}`)
     }
+
+    if (op.key.value === '_head' && op.insert) {
+      key_ctr.appendValue(0)
+      key_actor.appendValue(0)
+      key_str.appendValue(null)
+    } else if (op.key.value) {
+      key_ctr.appendValue(null)
+      key_actor.appendValue(null)
+      key_str.appendValue(op.key.value)
+    } else {
+      key_ctr.appendValue(op.key.counter)
+      key_actor.appendValue(op.key.actorNum)
+      key_str.appendValue(null)
+    }
+
+    insert.appendValue(op.insert ? 1 : 0)
+    if (typeof op.value === 'string') {
+      val_bytes.appendValue(val_str.appendRawString(op.value))
+    } else {
+      val_bytes.appendValue(0)
+    }
+
+    pred_num.appendValue(op.pred.length)
+    for (let i = 0; i < op.pred.length; i++) {
+      pred_ctr.appendValue(op.pred[i].counter)
+      pred_actor.appendValue(op.pred[i].actorNum)
+    }
   }
-  return { obj_ctr, obj_actor }
+  return {action, obj_ctr, obj_actor, key_ctr, key_actor, key_str, insert, val_bytes, val_str, pred_num, pred_ctr, pred_actor}
 }
 
+/**
+ * Decodes a set of columns (given as a map from column name to byte buffer)
+ * into an array of operations. `actorIds` is a list of actors that appear in
+ * the change; `actorIds[0]` is the actorId of the change's author.
+ */
 function decodeOps(columns, actorIds) {
+  const action    = new RLEDecoder('uint32', columns.action)
   const obj_ctr   = new RLEDecoder('uint32', columns.obj_ctr)
   const obj_actor = new RLEDecoder('uint32', columns.obj_actor)
-  let ops = []
-  while (!obj_ctr.done) {
-    let op = {}
+  const key_ctr   = new RLEDecoder('uint32', columns.key_ctr)
+  const key_actor = new RLEDecoder('uint32', columns.key_actor)
+  const key_str   = new RLEDecoder('utf8',   columns.key_str)
+  const insert    = new RLEDecoder('uint32', columns.insert)
+  const val_bytes = new RLEDecoder('uint32', columns.val_bytes)
+  const val_str   = new Decoder(columns.val_str)
+  const pred_num  = new RLEDecoder('uint32', columns.pred_num)
+  const pred_ctr  = new RLEDecoder('uint32', columns.pred_ctr)
+  const pred_actor = new RLEDecoder('uint32', columns.pred_actor)
+  const ops = []
+
+  while (!action.done) {
+    let op = {action: ACTIONS[action.readValue()]}
+
     const obj = {counter: obj_ctr.readValue(), actorNum: obj_actor.readValue()}
     if (obj.counter === null && obj.actorNum === null) {
       op.obj = ROOT_ID
-    } else if (obj.counter !== null && obj.counter >= 0 && obj.actorNum !== null && actorIds[obj.actorNum]) {
+    } else if (obj.counter && obj.actorNum !== null && actorIds[obj.actorNum]) {
       op.obj = `${obj.counter}@${actorIds[obj.actorNum]}`
     } else {
       throw new RangeError(`Unexpected objectId reference: ${obj.counter}@${obj.actorNum}`)
+    }
+
+    const key = {counter: key_ctr.readValue(), actorNum: key_actor.readValue(), value: key_str.readValue()}
+    if (key.value) {
+      op.key = key.value
+    } else if (key.counter === 0 && key.actorNum === 0) {
+      op.key = '_head'
+    } else if (key.counter && key.actorNum !== null && actorIds[key.actorNum]) {
+      op.key = `${key.counter}@${actorIds[key.actorNum]}`
+    } else {
+      throw new RangeError(`Unexpected key: ${JSON.stringify(key)}`)
+    }
+
+    if (insert.readValue() === 1) op.insert = true
+    const valBytes = val_bytes.readValue()
+    if (valBytes > 0) op.value = val_str.readRawString(valBytes)
+
+    const numPred = pred_num.readValue()
+    op.pred = []
+    for (let i = 0; i < numPred; i++) {
+      const pred = {counter: pred_ctr.readValue(), actorNum: pred_actor.readValue()}
+      op.pred.push(`${pred.counter}@${actorIds[pred.actorNum]}`)
     }
     ops.push(op)
   }
   return ops
 }
 
-const CHANGE_COLUMNS = ['obj_ctr', 'obj_actor']
-
 function encodeColumns(encoder, columns) {
   let columnNum = 0
   for (let columnName of CHANGE_COLUMNS) {
     encoder.appendUint32(columnNum)
-    encoder.appendBytes(columns[columnName].buffer)
+    encoder.appendPrefixedBytes(columns[columnName].buffer)
     columnNum += 1
   }
 }
@@ -528,7 +648,7 @@ function encodeColumns(encoder, columns) {
 function decodeColumns(decoder) {
   let columns = {}
   while (!decoder.done) {
-    const columnNum = decoder.readUint32(), columnBuf = decoder.readBytes()
+    const columnNum = decoder.readUint32(), columnBuf = decoder.readPrefixedBytes()
     if (CHANGE_COLUMNS[columnNum]) { // ignore unknown columns
       columns[CHANGE_COLUMNS[columnNum]] = columnBuf
     }

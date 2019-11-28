@@ -272,24 +272,28 @@ describe('Binary encoding', () => {
     it('should encode text edits', () => {
       const change1 = {actor: 'aaa', seq: 1, startOp: 1, deps: {}, ops: [
         {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
-        {action: 'set', obj: `1@aaa`, key: '_head', insert: true, value: 'h', pred: []},
-        {action: 'del', obj: `1@aaa`, key: `2@aaa`, pred: [`2@aaa`]},
-        {action: 'set', obj: `1@aaa`, key: '_head', insert: true, value: 'H', pred: []},
-        {action: 'set', obj: `1@aaa`, key: `4@aaa`, insert: true, value: 'i', pred: []}
+        {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'h', pred: []},
+        {action: 'del', obj: '1@aaa', key: '2@aaa', pred: ['2@aaa']},
+        {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'H', pred: []},
+        {action: 'set', obj: '1@aaa', key: '4@aaa', insert: true, value: 'i', pred: []}
       ]}
       checkEncoded(encodeChange(change1), [
         1, 3, 0x61, 0x61, 0x61, // version, actor 'aaa'
         1, 1, 0, 0, // seq, startOp, actor list, deps
-        0, 4, 0, 1, 4, 1, // obj_ctr column: one null, followed by four 1s
-        1, 4, 0, 1, 4, 0 // obj_actor column: one null, followed by four 0s
+        0, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
+        1, 4, 0, 1, 4, 1, // obj_ctr column: null, 1, 1, 1, 1
+        2, 4, 0, 1, 4, 0, // obj_actor column: null, 0, 0, 0, 0
+        3, 7, 0, 1, 0x7c, 0, 2, 0, 4, // key_ctr column: null, 0, 2, 0, 4
+        4, 4, 0, 1, 4, 0, // key_actor column: null, 0, 0, 0, 0
+        5, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // key_str column: 'text', null, null, null, null
+        6, 6, 0x7d, 0, 1, 0, 2, 1, // insert column: false, true, false, true, true
+        7, 6, 0x7d, 0, 1, 0, 2, 1, // val_bytes column: 0, 1, 0, 1, 1
+        8, 3, 0x68, 0x48, 0x69, // val_str column: 'h', 'H', 'i'
+        9, 6, 2, 0, 0x7f, 1, 2, 0, // pred_num column: 0, 0, 1, 0, 0
+        10, 2, 0x7f, 2, // pred_ctr column: 2
+        11, 2, 0x7f, 0 // pred_actor column: 0
       ])
-      assert.deepStrictEqual(decodeChange(encodeChange(change1)), {actor: 'aaa', seq: 1, startOp: 1, deps: {}, ops: [
-        {obj: ROOT_ID},
-        {obj: `1@aaa`},
-        {obj: `1@aaa`},
-        {obj: `1@aaa`},
-        {obj: `1@aaa`}
-      ]})
+      assert.deepStrictEqual(decodeChange(encodeChange(change1)), change1)
     })
   })
 })
