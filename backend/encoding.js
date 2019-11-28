@@ -204,15 +204,24 @@ class Decoder {
   }
 
   /**
+   * Extracts a subarray from the current position in the buffer, prefixed with
+   * its length in bytes (encoded as an unsigned LEB128 integer).
+   */
+  readBytes() {
+    const length = this.readUint32(), start = this.offset
+    if (start + length > this.buf.byteLength) {
+      throw new RangeError('subarray exceeds buffer size')
+    }
+    this.offset += length
+    return this.buf.subarray(start, this.offset)
+  }
+
+  /**
    * Reads a UTF-8 string from the current position in the buffer, prefixed with its
    * length in bytes (where the length is encoded as an unsigned LEB128 integer).
    */
   readPrefixedString() {
-    const length = this.readUint32()
-    if (this.offset + length > this.buf.byteLength) {
-      throw new RangeError('buffer ended with incomplete string')
-    }
-    return utf8ToString(this.buf.subarray(this.offset, this.offset + length))
+    return utf8ToString(this.readBytes())
   }
 }
 

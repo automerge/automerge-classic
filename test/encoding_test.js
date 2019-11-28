@@ -148,6 +148,17 @@ describe('Binary encoding', () => {
       assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('Oh là là').buffer).readPrefixedString(), 'Oh là là')
       assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('😄').buffer).readPrefixedString(), '😄')
     })
+
+    it('should encode multiple UTF-8 strings', () => {
+      const encoder = new Encoder()
+      encoder.appendPrefixedString('one')
+      encoder.appendPrefixedString('two')
+      encoder.appendPrefixedString('three')
+      const decoder = new Decoder(encoder.buffer)
+      assert.strictEqual(decoder.readPrefixedString(), 'one')
+      assert.strictEqual(decoder.readPrefixedString(), 'two')
+      assert.strictEqual(decoder.readPrefixedString(), 'three')
+    })
   })
 
   describe('RLEEncoder and RLEDecoder', () => {
