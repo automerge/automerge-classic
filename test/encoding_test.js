@@ -1,9 +1,10 @@
 const assert = require('assert')
-const { Encoder, Decoder } = require('../backend/encoding')
+const { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder } = require('../backend/encoding')
 
 function checkEncoded(encoder, bytes) {
-  const encoded = encoder.buffer, expected = new Uint8Array(bytes)
-  const message = `${encoded} equals ${expected}`
+  const encoded = (encoder instanceof Encoder) ? encoder.buffer : encoder
+  const expected = new Uint8Array(bytes)
+  const message = `${encoded} expected to equal ${expected}`
   assert(encoded.byteLength === expected.byteLength, message)
   for (let i = 0; i < encoded.byteLength; i++) {
     assert(encoded[i] === expected[i], message)
@@ -146,6 +147,96 @@ describe('Binary encoding', () => {
       assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('a').buffer).readPrefixedString(), 'a')
       assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('Oh là là').buffer).readPrefixedString(), 'Oh là là')
       assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('😄').buffer).readPrefixedString(), '😄')
+    })
+  })
+
+  describe('RLEEncoder and RLEDecoder', () => {
+    function encodeRLE(signed, values) {
+      const encoder = new RLEEncoder(signed)
+      for (let value of values) encoder.appendValue(value)
+      return encoder.buffer
+    }
+
+    function decodeRLE(signed, buffer) {
+      const decoder = new RLEDecoder(signed, buffer), values = []
+      while (!decoder.done) values.push(decoder.readValue())
+      return values
+    }
+
+    it('should encode sequences without nulls', () => {
+      checkEncoded(encodeRLE(false, []), [])
+      checkEncoded(encodeRLE(false, [1, 2, 3]), [0x7d, 1, 2, 3])
+      checkEncoded(encodeRLE(false, [0, 1, 2, 2, 3]), [0x7e, 0, 1, 2, 2, 0x7f, 3])
+      checkEncoded(encodeRLE(false, [1, 1, 1, 1, 1, 1]), [6, 1])
+      checkEncoded(encodeRLE(false, [1, 1, 1, 4, 4, 4]), [3, 1, 3, 4])
+      checkEncoded(encodeRLE(false, [0xff]), [0x7f, 0xff, 0x01])
+      checkEncoded(encodeRLE(true, [-0x40]), [0x7f, 0x40])
+    })
+
+    it('should encode sequences containing nulls', () => {
+      checkEncoded(encodeRLE(false, [null]), [0, 1])
+      checkEncoded(encodeRLE(false, [null, 1]), [0, 1, 0x7f, 1])
+      checkEncoded(encodeRLE(false, [1, null]), [0x7f, 1, 0, 1])
+      checkEncoded(encodeRLE(false, [1, 1, 1, null]), [3, 1, 0, 1])
+      checkEncoded(encodeRLE(false, [null, null, null, 3, 4, 5, null]), [0, 3, 0x7d, 3, 4, 5, 0, 1])
+      checkEncoded(encodeRLE(false, [null, null, null, 9, 9, 9]), [0, 3, 3, 9])
+      checkEncoded(encodeRLE(false, [1, 1, 1, 1, 1, null, null, null, 1]), [5, 1, 0, 3, 0x7f, 1])
+    })
+
+    it('should round-trip sequences without nulls', () => {
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [])), [])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 2, 3])), [1, 2, 3])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [0, 1, 2, 2, 3])), [0, 1, 2, 2, 3])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 1, 1, 1])), [1, 1, 1, 1, 1, 1])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 4, 4, 4])), [1, 1, 1, 4, 4, 4])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [0xff])), [0xff])
+      assert.deepStrictEqual(decodeRLE(true, encodeRLE(true, [-0x40])), [-0x40])
+    })
+
+    it('should round-trip sequences containing nulls', () => {
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null])), [null])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, 1])), [null, 1])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, null])), [1, null])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, null])), [1, 1, 1, null])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, null, null, 3, 4, 5, null])), [null, null, null, 3, 4, 5, null])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, null, null, 9, 9, 9])), [null, null, null, 9, 9, 9])
+      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 1, 1, null, null, null, 1])), [1, 1, 1, 1, 1, null, null, null, 1])
+    })
+  })
+
+  describe('DeltaEncoder and DeltaDecoder', () => {
+    function encodeDelta(values) {
+      const encoder = new DeltaEncoder()
+      for (let value of values) encoder.appendValue(value)
+      return encoder.buffer
+    }
+
+    function decodeDelta(buffer) {
+      const decoder = new DeltaDecoder(buffer), values = []
+      while (!decoder.done) values.push(decoder.readValue())
+      return values
+    }
+
+    it('should encode sequences', () => {
+      checkEncoded(encodeDelta([]), [])
+      checkEncoded(encodeDelta([null]), [0, 1])
+      checkEncoded(encodeDelta([18, 2, 9, 15, 16, 19, 25]), [0x79, 18, 0x70, 7, 6, 1, 3, 6])
+      checkEncoded(encodeDelta([1, 2, 3, 4, 5, 6, 7, 8]), [8, 1])
+      checkEncoded(encodeDelta([10, 11, 12, 13, 14, 15]), [0x7f, 10, 5, 1])
+      checkEncoded(encodeDelta([10, 11, 12, 13, 0, 1, 2, 3]), [0x7f, 10, 3, 1, 0x7f, 0x73, 3, 1])
+      checkEncoded(encodeDelta([0, 1, 2, 3, null, null, null, 4, 5, 6]), [0x7f, 0, 3, 1, 0, 3, 3, 1])
+      checkEncoded(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36]), [0x7f, 0x40, 7, 4])
+    })
+
+    it('should encode-decode round-trip sequences', () => {
+      assert.deepStrictEqual(decodeDelta(encodeDelta([])), [])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([null])), [null])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([18, 2, 9, 15, 16, 19, 25])), [18, 2, 9, 15, 16, 19, 25])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([1, 2, 3, 4, 5, 6, 7, 8])), [1, 2, 3, 4, 5, 6, 7, 8])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 14, 15])), [10, 11, 12, 13, 14, 15])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 0, 1, 2, 3])), [10, 11, 12, 13, 0, 1, 2, 3])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([0, 1, 2, 3, null, null, null, 4, 5, 6])), [0, 1, 2, 3, null, null, null, 4, 5, 6])
+      assert.deepStrictEqual(decodeDelta(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36])), [-64, -60, -56, -52, -48, -44, -40, -36])
     })
   })
 })
