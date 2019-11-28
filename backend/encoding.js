@@ -229,37 +229,37 @@ class Decoder {
 
 /**
  * An encoder that uses run-length encoding to compress sequences of repeated
- * values. Values must be either signed or unsigned 32-bit integers (the
- * constructor argument specifies which type is used), or a null value that is
- * distinct from all of the integers.
+ * values. The constructor argument specifies the type of values, which may be
+ * either 'int32', 'uint32', or 'utf8'. Besides valid values of the selected
+ * datatype, values may also be null.
  *
  * The encoded buffer starts with a LEB128-encoded signed integer, the
  * repetition count. The interpretation of the following values depends on this
  * repetition count:
- *   - If this number is a positive value n, the next LEB128-encoded integer in
- *     the buffer (signed or unsigned as specified) appears in the sequence
- *     repeated n times.
- *   - If the repetition count is a negative value -n, then the next n
- *     LEB128-encoded integers in the buffer are treated as a literal, i.e. they
- *     appear in the sequence without any further interpretation or repetition.
- *   - If the repetition count is zero, then the next LEB128-encoded integer in
- *     the buffer is an unsigned integer indicating the number of null values
+ *   - If this number is a positive value n, the next value in the buffer
+ *     (encoded as the specified datatype) is repeated n times in the sequence.
+ *   - If the repetition count is a negative value -n, then the next n values
+ *     (encoded as the specified datatype) in the buffer are treated as a
+ *     literal, i.e. they appear in the sequence without any further
+ *     interpretation or repetition.
+ *   - If the repetition count is zero, then the next value in the buffer is a
+ *     LEB128-encoded unsigned integer indicating the number of null values
  *     that appear at the current position in the sequence.
  *
  * After one of these three has completed, the process repeats, starting again
  * with a repetition count, until we reach the end of the buffer.
  */
 class RLEEncoder extends Encoder {
-  constructor(signed) {
+  constructor(type) {
     super()
-    this.signed = signed
+    this.type = type
     this.lastValue = undefined
     this.count = 0
     this.literal = []
   }
 
   /**
-   * Appends a new integer value to the sequence.
+   * Appends a new value to the sequence.
    */
   appendValue(value) {
     if (this.lastValue === undefined) {
@@ -277,11 +277,7 @@ class RLEEncoder extends Encoder {
 
     if ((value === null || value === undefined || this.count > 1) && this.literal.length > 0) {
       this.appendInt32(-this.literal.length)
-      if (this.signed) {
-        for (let v of this.literal) this.appendInt32(v)
-      } else {
-        for (let v of this.literal) this.appendUint32(v)
-      }
+      for (let v of this.literal) this.appendRawValue(v)
       this.literal = []
     }
 
@@ -290,10 +286,22 @@ class RLEEncoder extends Encoder {
       this.appendUint32(this.count)
     } else if (this.count > 1) {
       this.appendInt32(this.count)
-      this.signed ? this.appendInt32(this.lastValue) : this.appendUint32(this.lastValue)
+      this.appendRawValue(this.lastValue)
     }
     this.lastValue = value
     this.count = (value === undefined ? 0 : 1)
+  }
+
+  appendRawValue(value) {
+    if (this.type === 'int32') {
+      this.appendInt32(value)
+    } else if (this.type === 'uint32') {
+      this.appendUint32(value)
+    } else if (this.type === 'utf8') {
+      this.appendPrefixedString(value)
+    } else {
+      throw new RangeError(`Unknown RLEEncoder datatype: ${this.type}`)
+    }
   }
 
   finish() {
@@ -302,13 +310,13 @@ class RLEEncoder extends Encoder {
 }
 
 /**
- * Counterpart to RLEEncoder: reads values from an RLE-compressed sequence of
- * numbers, returning repeated values as required.
+ * Counterpart to RLEEncoder: reads values from an RLE-compressed sequence,
+ * returning nulls and repeated values as required.
  */
 class RLEDecoder extends Decoder {
-  constructor(signed, buffer) {
+  constructor(type, buffer) {
     super(buffer)
-    this.signed = signed
+    this.type = type
     this.lastValue = undefined
     this.count = 0
     this.literal = false
@@ -323,13 +331,13 @@ class RLEDecoder extends Decoder {
   }
 
   /**
-   * Returns the next integer (or null) value in the sequence.
+   * Returns the next value (or null) in the sequence.
    */
   readValue() {
     if (this.count === 0) {
       this.count = this.readInt32()
       if (this.count > 0) {
-        this.lastValue = this.signed ? this.readInt32() : this.readUint32()
+        this.lastValue = this.readRawValue()
         this.literal = false
       } else if (this.count < 0) {
         this.count = -this.count
@@ -343,9 +351,21 @@ class RLEDecoder extends Decoder {
 
     this.count -= 1
     if (this.literal) {
-      return this.signed ? this.readInt32() : this.readUint32()
+      return this.readRawValue()
     } else {
       return this.lastValue
+    }
+  }
+
+  readRawValue() {
+    if (this.type === 'int32') {
+      return this.readInt32()
+    } else if (this.type === 'uint32') {
+      return this.readUint32()
+    } else if (this.type === 'utf8') {
+      return this.readPrefixedString()
+    } else {
+      throw new RangeError(`Unknown RLEDecoder datatype: ${this.type}`)
     }
   }
 }
@@ -362,7 +382,7 @@ class RLEDecoder extends Decoder {
  */
 class DeltaEncoder extends RLEEncoder {
   constructor() {
-    super(true)
+    super('int32')
     this.absoluteValue = 0
   }
 
@@ -385,7 +405,7 @@ class DeltaEncoder extends RLEEncoder {
  */
 class DeltaDecoder extends RLEDecoder {
   constructor(buffer) {
-    super(true, buffer)
+    super('int32', buffer)
     this.absoluteValue = 0
   }
 
@@ -459,8 +479,8 @@ function parseAllOpIds(change) {
 }
 
 function encodeOps(ops) {
-  const obj_ctr   = new RLEEncoder(false)
-  const obj_actor = new RLEEncoder(false)
+  const obj_ctr   = new RLEEncoder('uint32')
+  const obj_actor = new RLEEncoder('uint32')
   for (let op of ops) {
     if (op.obj.value === ROOT_ID) {
       obj_ctr.appendValue(null)
@@ -476,8 +496,8 @@ function encodeOps(ops) {
 }
 
 function decodeOps(columns, actorIds) {
-  const obj_ctr   = new RLEDecoder(false, columns.obj_ctr)
-  const obj_actor = new RLEDecoder(false, columns.obj_actor)
+  const obj_ctr   = new RLEDecoder('uint32', columns.obj_ctr)
+  const obj_actor = new RLEDecoder('uint32', columns.obj_actor)
   let ops = []
   while (!obj_ctr.done) {
     let op = {}

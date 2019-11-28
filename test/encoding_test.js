@@ -163,56 +163,72 @@ describe('Binary encoding', () => {
   })
 
   describe('RLEEncoder and RLEDecoder', () => {
-    function encodeRLE(signed, values) {
-      const encoder = new RLEEncoder(signed)
+    function encodeRLE(type, values) {
+      const encoder = new RLEEncoder(type)
       for (let value of values) encoder.appendValue(value)
       return encoder.buffer
     }
 
-    function decodeRLE(signed, buffer) {
-      const decoder = new RLEDecoder(signed, buffer), values = []
+    function decodeRLE(type, buffer) {
+      const decoder = new RLEDecoder(type, buffer), values = []
       while (!decoder.done) values.push(decoder.readValue())
       return values
     }
 
     it('should encode sequences without nulls', () => {
-      checkEncoded(encodeRLE(false, []), [])
-      checkEncoded(encodeRLE(false, [1, 2, 3]), [0x7d, 1, 2, 3])
-      checkEncoded(encodeRLE(false, [0, 1, 2, 2, 3]), [0x7e, 0, 1, 2, 2, 0x7f, 3])
-      checkEncoded(encodeRLE(false, [1, 1, 1, 1, 1, 1]), [6, 1])
-      checkEncoded(encodeRLE(false, [1, 1, 1, 4, 4, 4]), [3, 1, 3, 4])
-      checkEncoded(encodeRLE(false, [0xff]), [0x7f, 0xff, 0x01])
-      checkEncoded(encodeRLE(true, [-0x40]), [0x7f, 0x40])
+      checkEncoded(encodeRLE('uint32', []), [])
+      checkEncoded(encodeRLE('uint32', [1, 2, 3]), [0x7d, 1, 2, 3])
+      checkEncoded(encodeRLE('uint32', [0, 1, 2, 2, 3]), [0x7e, 0, 1, 2, 2, 0x7f, 3])
+      checkEncoded(encodeRLE('uint32', [1, 1, 1, 1, 1, 1]), [6, 1])
+      checkEncoded(encodeRLE('uint32', [1, 1, 1, 4, 4, 4]), [3, 1, 3, 4])
+      checkEncoded(encodeRLE('uint32', [0xff]), [0x7f, 0xff, 0x01])
+      checkEncoded(encodeRLE('int32', [-0x40]), [0x7f, 0x40])
     })
 
     it('should encode sequences containing nulls', () => {
-      checkEncoded(encodeRLE(false, [null]), [0, 1])
-      checkEncoded(encodeRLE(false, [null, 1]), [0, 1, 0x7f, 1])
-      checkEncoded(encodeRLE(false, [1, null]), [0x7f, 1, 0, 1])
-      checkEncoded(encodeRLE(false, [1, 1, 1, null]), [3, 1, 0, 1])
-      checkEncoded(encodeRLE(false, [null, null, null, 3, 4, 5, null]), [0, 3, 0x7d, 3, 4, 5, 0, 1])
-      checkEncoded(encodeRLE(false, [null, null, null, 9, 9, 9]), [0, 3, 3, 9])
-      checkEncoded(encodeRLE(false, [1, 1, 1, 1, 1, null, null, null, 1]), [5, 1, 0, 3, 0x7f, 1])
+      checkEncoded(encodeRLE('uint32', [null]), [0, 1])
+      checkEncoded(encodeRLE('uint32', [null, 1]), [0, 1, 0x7f, 1])
+      checkEncoded(encodeRLE('uint32', [1, null]), [0x7f, 1, 0, 1])
+      checkEncoded(encodeRLE('uint32', [1, 1, 1, null]), [3, 1, 0, 1])
+      checkEncoded(encodeRLE('uint32', [null, null, null, 3, 4, 5, null]), [0, 3, 0x7d, 3, 4, 5, 0, 1])
+      checkEncoded(encodeRLE('uint32', [null, null, null, 9, 9, 9]), [0, 3, 3, 9])
+      checkEncoded(encodeRLE('uint32', [1, 1, 1, 1, 1, null, null, null, 1]), [5, 1, 0, 3, 0x7f, 1])
     })
 
     it('should round-trip sequences without nulls', () => {
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [])), [])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 2, 3])), [1, 2, 3])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [0, 1, 2, 2, 3])), [0, 1, 2, 2, 3])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 1, 1, 1])), [1, 1, 1, 1, 1, 1])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 4, 4, 4])), [1, 1, 1, 4, 4, 4])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [0xff])), [0xff])
-      assert.deepStrictEqual(decodeRLE(true, encodeRLE(true, [-0x40])), [-0x40])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [])), [])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, 2, 3])), [1, 2, 3])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [0, 1, 2, 2, 3])), [0, 1, 2, 2, 3])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, 1, 1, 1, 1, 1])), [1, 1, 1, 1, 1, 1])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, 1, 1, 4, 4, 4])), [1, 1, 1, 4, 4, 4])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [0xff])), [0xff])
+      assert.deepStrictEqual(decodeRLE('int32', encodeRLE('int32', [-0x40])), [-0x40])
     })
 
     it('should round-trip sequences containing nulls', () => {
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null])), [null])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, 1])), [null, 1])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, null])), [1, null])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, null])), [1, 1, 1, null])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, null, null, 3, 4, 5, null])), [null, null, null, 3, 4, 5, null])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [null, null, null, 9, 9, 9])), [null, null, null, 9, 9, 9])
-      assert.deepStrictEqual(decodeRLE(false, encodeRLE(false, [1, 1, 1, 1, 1, null, null, null, 1])), [1, 1, 1, 1, 1, null, null, null, 1])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [null])), [null])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [null, 1])), [null, 1])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, null])), [1, null])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, 1, 1, null])), [1, 1, 1, null])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [null, null, null, 3, 4, 5, null])), [null, null, null, 3, 4, 5, null])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [null, null, null, 9, 9, 9])), [null, null, null, 9, 9, 9])
+      assert.deepStrictEqual(decodeRLE('uint32', encodeRLE('uint32', [1, 1, 1, 1, 1, null, null, null, 1])), [1, 1, 1, 1, 1, null, null, null, 1])
+    })
+
+    it('should support encoding string values', () => {
+      checkEncoded(encodeRLE('utf8', ['a']), [0x7f, 1, 0x61])
+      checkEncoded(encodeRLE('utf8', ['a', 'b', 'c', 'd']), [0x7c, 1, 0x61, 1, 0x62, 1, 0x63, 1, 0x64])
+      checkEncoded(encodeRLE('utf8', ['a', 'a', 'a', 'a']), [4, 1, 0x61])
+      checkEncoded(encodeRLE('utf8', ['a', 'a', null, null, 'a', 'a']), [2, 1, 0x61, 0, 2, 2, 1, 0x61])
+      checkEncoded(encodeRLE('utf8', [null, null, null, null, 'abc']), [0, 4, 0x7f, 3, 0x61, 0x62, 0x63])
+    })
+
+    it('should round-trip sequences of string values', () => {
+      assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a'])), ['a'])
+      assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'b', 'c', 'd'])), ['a', 'b', 'c', 'd'])
+      assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'a', 'a', 'a'])), ['a', 'a', 'a', 'a'])
+      assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'a', null, null, 'a', 'a'])), ['a', 'a', null, null, 'a', 'a'])
+      assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', [null, null, null, null, 'abc'])), [null, null, null, null, 'abc'])
     })
   })
 
