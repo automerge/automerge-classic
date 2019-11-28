@@ -1,3 +1,5 @@
+const { ROOT_ID, copyObject, parseOpId } = require('../src/common')
+
 /**
  * UTF-8 decoding and encoding
  */
@@ -399,4 +401,158 @@ class DeltaDecoder extends RLEDecoder {
 }
 
 
-module.exports = { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder }
+/**
+ * Parses a string of the form '12345@someActorId' into an object of the form
+ * {counter: 12345, actorId: 'someActorId'}, and any other string into an object
+ * of the form {value: 'originalString'}.
+ */
+function maybeParseOpId(value) {
+  // FIXME when parsing the "key" of an operation, need to correctly handle
+  // map property names that happen to contain an @ sign
+  return (value.indexOf('@') >= 0) ? parseOpId(value) : {value}
+}
+
+/**
+ * Maps an opId of the form {counter: 12345, actorId: 'someActorId'} to the form
+ * {counter: 12345, actorNum: 123}, where the actorNum is zero for the actor
+ * `ownActor`, and the (1-based) index into the `actorIds` array otherwise.
+ */
+function actorIdToActorNum(opId, ownActor, actorIds) {
+  if (!opId.actorId) return opId
+  const counter = opId.counter
+  if (opId.actorId === ownActor) return {counter, actorNum: 0}
+  const actorNum = actorIds.indexOf(opId.actorId) + 1
+  if (actorNum === 0) throw new RangeError('missing actorId') // should not happen
+  return {counter, actorNum}
+}
+
+/**
+ * Returns an object `{change, actorIds}` where `change` is a copy of the argument
+ * in which all string opIds have been replaced with `{counter, actorNum}` objects,
+ * and where `actorIds` is a lexicographically sorted array of actor IDs occurring
+ * in any of the operations, excluding the actorId of the change itself. An
+ * `actorNum` value of zero indicates the actorId is the author of the change
+ * itself, and an `actorNum` greater than zero is an index into the array of
+ * actorIds (indexed starting from 1).
+ */
+function parseAllOpIds(change) {
+  const actors = {}
+  change = copyObject(change)
+  for (let actor of Object.keys(change.deps)) actors[actor] = true
+  change.ops = change.ops.map(op => {
+    op = copyObject(op)
+    op.obj = maybeParseOpId(op.obj)
+    op.key = maybeParseOpId(op.key)
+    if (op.obj.actorId) actors[op.obj.actorId] = true
+    if (op.key.actorId) actors[op.key.actorId] = true
+    op.pred = op.pred.map(parseOpId)
+    for (let pred of op.pred) actors[pred.actorId] = true
+    return op
+  })
+  const actorIds = Object.keys(actors).filter(actor => actor !== change.actor).sort()
+  for (let op of change.ops) {
+    op.obj = actorIdToActorNum(op.obj, change.actor, actorIds)
+    op.key = actorIdToActorNum(op.key, change.actor, actorIds)
+    op.pred = op.pred.map(pred => actorIdToActorNum(pred, change.actor, actorIds))
+  }
+  return {change, actorIds}
+}
+
+function encodeOps(ops) {
+  const obj_ctr   = new RLEEncoder(false)
+  const obj_actor = new RLEEncoder(false)
+  for (let op of ops) {
+    if (op.obj.value === ROOT_ID) {
+      obj_ctr.appendValue(null)
+      obj_actor.appendValue(null)
+    } else if (op.obj.actorNum >= 0 & op.obj.counter >= 0) {
+      obj_ctr.appendValue(op.obj.counter)
+      obj_actor.appendValue(op.obj.actorNum)
+    } else {
+      throw new RangeError(`Unexpected objectId reference: ${JSON.stringify(op.obj)}`)
+    }
+  }
+  return { obj_ctr, obj_actor }
+}
+
+function decodeOps(columns, actorIds) {
+  const obj_ctr   = new RLEDecoder(false, columns.obj_ctr)
+  const obj_actor = new RLEDecoder(false, columns.obj_actor)
+  let ops = []
+  while (!obj_ctr.done) {
+    let op = {}
+    const obj = {counter: obj_ctr.readValue(), actorNum: obj_actor.readValue()}
+    if (obj.counter === null && obj.actorNum === null) {
+      op.obj = ROOT_ID
+    } else if (obj.counter !== null && obj.counter >= 0 && obj.actorNum !== null && actorIds[obj.actorNum]) {
+      op.obj = `${obj.counter}@${actorIds[obj.actorNum]}`
+    } else {
+      throw new RangeError(`Unexpected objectId reference: ${obj.counter}@${obj.actorNum}`)
+    }
+    ops.push(op)
+  }
+  return ops
+}
+
+const CHANGE_COLUMNS = ['obj_ctr', 'obj_actor']
+
+function encodeColumns(encoder, columns) {
+  let columnNum = 0
+  for (let columnName of CHANGE_COLUMNS) {
+    encoder.appendUint32(columnNum)
+    encoder.appendBytes(columns[columnName].buffer)
+    columnNum += 1
+  }
+}
+
+function decodeColumns(decoder) {
+  let columns = {}
+  while (!decoder.done) {
+    const columnNum = decoder.readUint32(), columnBuf = decoder.readBytes()
+    if (CHANGE_COLUMNS[columnNum]) { // ignore unknown columns
+      columns[CHANGE_COLUMNS[columnNum]] = columnBuf
+    }
+  }
+  return columns
+}
+
+function encodeChange(changeObj) {
+  const { change, actorIds } = parseAllOpIds(changeObj)
+  const encoder = new Encoder()
+  encoder.appendUint32(1) // version
+  encoder.appendPrefixedString(change.actor)
+  encoder.appendUint32(change.seq)
+  encoder.appendUint32(change.startOp)
+  encoder.appendUint32(actorIds.length)
+  for (let actor of actorIds) encoder.appendPrefixedString(actor)
+  const depsKeys = Object.keys(change.deps).sort()
+  encoder.appendUint32(depsKeys.length)
+  for (let actor of depsKeys) {
+    encoder.appendUint32(actorIds.indexOf(actor) + 1)
+    encoder.appendUint32(change.deps[actor])
+  }
+  encodeColumns(encoder, encodeOps(change.ops))
+  return encoder.buffer
+}
+
+function decodeChange(buffer) {
+  const decoder = new Decoder(buffer)
+  const version = decoder.readUint32()
+  if (version !== 1) throw new RangeError(`Unsupported change version: ${version}`)
+  let change = {
+    actor:   decoder.readPrefixedString(),
+    seq:     decoder.readUint32(),
+    startOp: decoder.readUint32(),
+    deps: {}
+  }
+  const actorIds = [change.actor], numActorIds = decoder.readUint32()
+  for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readPrefixedString())
+  const numDeps = decoder.readUint32()
+  for (let i = 0; i < numDeps; i++) {
+    change.deps[actorIds[decoder.readUint32()]] = decoder.readUint32()
+  }
+  change.ops = decodeOps(decodeColumns(decoder), actorIds)
+  return change
+}
+
+module.exports = { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, encodeChange, decodeChange }

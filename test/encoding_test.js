@@ -1,5 +1,6 @@
 const assert = require('assert')
-const { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder } = require('../backend/encoding')
+const { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder, encodeChange, decodeChange } = require('../backend/encoding')
+const { ROOT_ID } = require('../src/common')
 
 function checkEncoded(encoder, bytes) {
   const encoded = (encoder instanceof Encoder) ? encoder.buffer : encoder
@@ -248,6 +249,31 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 0, 1, 2, 3])), [10, 11, 12, 13, 0, 1, 2, 3])
       assert.deepStrictEqual(decodeDelta(encodeDelta([0, 1, 2, 3, null, null, null, 4, 5, 6])), [0, 1, 2, 3, null, null, null, 4, 5, 6])
       assert.deepStrictEqual(decodeDelta(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36])), [-64, -60, -56, -52, -48, -44, -40, -36])
+    })
+  })
+
+  describe('change encoding', () => {
+    it('should encode text edits', () => {
+      const change1 = {actor: 'aaa', seq: 1, startOp: 1, deps: {}, ops: [
+        {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
+        {action: 'set', obj: `1@aaa`, key: '_head', insert: true, value: 'h', pred: []},
+        {action: 'del', obj: `1@aaa`, key: `2@aaa`, pred: [`2@aaa`]},
+        {action: 'set', obj: `1@aaa`, key: '_head', insert: true, value: 'H', pred: []},
+        {action: 'set', obj: `1@aaa`, key: `4@aaa`, insert: true, value: 'i', pred: []}
+      ]}
+      checkEncoded(encodeChange(change1), [
+        1, 3, 0x61, 0x61, 0x61, // version, actor 'aaa'
+        1, 1, 0, 0, // seq, startOp, actor list, deps
+        0, 4, 0, 1, 4, 1, // obj_ctr column: one null, followed by four 1s
+        1, 4, 0, 1, 4, 0 // obj_actor column: one null, followed by four 0s
+      ])
+      assert.deepStrictEqual(decodeChange(encodeChange(change1)), {actor: 'aaa', seq: 1, startOp: 1, deps: {}, ops: [
+        {obj: ROOT_ID},
+        {obj: `1@aaa`},
+        {obj: `1@aaa`},
+        {obj: `1@aaa`},
+        {obj: `1@aaa`}
+      ]})
     })
   })
 })
