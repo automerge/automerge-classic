@@ -18,7 +18,10 @@ if (typeof TextEncoder === 'function' && typeof TextDecoder === 'function') {
   const { StringDecoder } = require('string_decoder')
   const utf8decoder = new StringDecoder('utf8')
   stringToUtf8 = (string) => Buffer.from(string, 'utf8')
-  utf8ToString = (buffer) => utf8decoder.end(buffer)
+  // In Node >= 10 we can simply do "utf8decoder.end(buffer)". However, in Node 8 there
+  // is a bug that causes an Uint8Array to be incorrectly decoded when passed directly to
+  // StringDecoder.end(). Wrapping in an additional "Buffer.from()" works around this bug.
+  utf8ToString = (buffer) => utf8decoder.end(Buffer.from(buffer))
 
 } else {
   // Could use a polyfill? e.g. https://github.com/anonyco/FastestSmallestTextEncoderDecoder
