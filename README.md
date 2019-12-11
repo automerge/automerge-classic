@@ -66,6 +66,8 @@ and merging**:
 
 ## Setup
 
+[![Run on Repl.it](https://repl.it/badge/github/automerge/automerge)](https://repl.it/github/automerge/automerge)
+
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
 can import it with `require('automerge')` as in [the example below](#usage) (or
 `import * as Automerge from 'automerge'` if using ES2015 or TypeScript).

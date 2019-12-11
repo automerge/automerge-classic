@@ -1,0 +1,2 @@
+language = "nodejs"
+run = "yarn test && yarn build"
