@@ -25,6 +25,16 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.toString(), 'ac')
   })
 
+  it("should support implicit and explicit deletion", () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, "a", "b", "c"))
+    s1 = Automerge.change(s1, doc => doc.text.deleteAt(1))
+    s1 = Automerge.change(s1, doc => doc.text.deleteAt(1, 0))
+    assert.strictEqual(s1.text.length, 2)
+    assert.strictEqual(s1.text.get(0), "a")
+    assert.strictEqual(s1.text.get(1), "c")
+    assert.strictEqual(s1.text.toString(), "ac")
+  })
+
   it('should handle concurrent insertion', () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
     s2 = Automerge.change(s2, doc => doc.text.insertAt(0, 'x', 'y', 'z'))
