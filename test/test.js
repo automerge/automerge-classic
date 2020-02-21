@@ -204,7 +204,7 @@ describe('Automerge', () => {
       it('should support Date objects in maps', () => {
         const now = new Date()
         s1 = Automerge.change(s1, doc => doc.now = now)
-        let changes = Automerge.getChanges(Automerge.init(), s1)
+        let changes = Automerge.getAllChanges(s1)
         changes = JSON.parse(JSON.stringify(changes))
         s2 = Automerge.applyChanges(Automerge.init(), changes)
         assert.strictEqual(s2.now instanceof Date, true)
@@ -214,7 +214,7 @@ describe('Automerge', () => {
       it('should support Date objects in lists', () => {
         const now = new Date()
         s1 = Automerge.change(s1, doc => doc.list = [now])
-        let changes = Automerge.getChanges(Automerge.init(), s1)
+        let changes = Automerge.getAllChanges(s1)
         changes = JSON.parse(JSON.stringify(changes))
         s2 = Automerge.applyChanges(Automerge.init(), changes)
         assert.strictEqual(s2.list[0] instanceof Date, true)
@@ -1419,7 +1419,7 @@ describe('Automerge', () => {
 
   describe('changes API', () => {
     it('should return an empty list on an empty document', () => {
-      let changes = Automerge.getChanges(Automerge.init(), Automerge.init())
+      let changes = Automerge.getAllChanges(Automerge.init())
       assert.deepEqual(changes, [])
     })
 
@@ -1443,7 +1443,7 @@ describe('Automerge', () => {
     it('should allow a document copy to be reconstructed from scratch', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
       let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
-      let changes = Automerge.getChanges(Automerge.init(), s2)
+      let changes = Automerge.getAllChanges(s2)
       let s3 = Automerge.applyChanges(Automerge.init(), changes)
       assert.deepEqual(s3.birds, ['Chaffinch', 'Bullfinch'])
     })
@@ -1451,7 +1451,7 @@ describe('Automerge', () => {
     it('should return changes since the last given version', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
       let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
-      let changes1 = Automerge.getChanges(Automerge.init(), s1)
+      let changes1 = Automerge.getAllChanges(s1)
       let changes2 = Automerge.getChanges(s1, s2)
       assert.deepEqual(changes1.map(c => c.message), ['Add Chaffinch'])
       assert.deepEqual(changes2.map(c => c.message), ['Add Bullfinch'])
@@ -1460,7 +1460,7 @@ describe('Automerge', () => {
     it('should incrementally apply changes since the last given version', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
       let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
-      let changes1 = Automerge.getChanges(Automerge.init(), s1)
+      let changes1 = Automerge.getAllChanges(s1)
       let changes2 = Automerge.getChanges(s1, s2)
       let s3 = Automerge.applyChanges(Automerge.init(), changes1)
       let s4 = Automerge.applyChanges(s3, changes2)
@@ -1472,7 +1472,7 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Chaffinch'])
       let s2 = Automerge.merge(Automerge.init(), s1)
       s2 = Automerge.change(s2, doc => doc.birds.push('Bullfinch'))
-      let changes = Automerge.getChanges(Automerge.init(), s2)
+      let changes = Automerge.getAllChanges(s2)
       let s3 = Automerge.applyChanges(Automerge.init(), [changes[1]])
       assert.deepEqual(s3, {})
       assert.deepEqual(Automerge.getMissingDeps(s3), {[Automerge.getActorId(s1)]: 1})

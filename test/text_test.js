@@ -121,7 +121,7 @@ describe('Automerge.Text', () => {
 
     it('should encode the initial value as a change', () => {
       const s1 = Automerge.from({text: new Automerge.Text('init')})
-      const changes = Automerge.getChanges(Automerge.init(), s1)
+      const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
       const s2 = Automerge.applyChanges(Automerge.init(), changes)
       assert.strictEqual(s2.text instanceof Automerge.Text, true)

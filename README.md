@@ -378,8 +378,7 @@ newDoc = Automerge.applyChanges(currentDoc, changes)
 
 Note that `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old state and
 a new state. It then returns a list of all the changes that were made in `newDoc` since `oldDoc`. If
-you want a list of all the changes ever made in `newDoc`, you can call
-`Automerge.getChanges(Automerge.init(), newDoc)`.
+you want a list of all the changes ever made in `doc`, you can call `Automerge.getAllChanges(doc)`.
 
 The counterpart, `Automerge.applyChanges(oldDoc, changes)` applies the list of `changes` to the
 given document, and returns a new document with those changes applied. Automerge guarantees that
