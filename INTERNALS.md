@@ -79,6 +79,7 @@ document, including any content that is now deleted. However, for now we are
 choosing to preserve all history as it makes synchronisation easier (imagine
 a device that has been offline for a long time, and then needs to catch up on
 everything that has been changed by other users while it was offline).
+Moreover, being able to inspect edit history is itself a useful feature.
 
 
 Actor IDs, vector clocks, and causality
@@ -206,10 +207,10 @@ currently uses the following types of operation:
 
 * `{ action: 'ins', obj: listId, key: elemId, elem: uint }`
 
-  The user inserted a new item into a list. `obj` is the UUID of the list object
-  being modified. `key` is the ID of an existing element after which the new
-  element should be inserted, or the string `'_head'` if the new element should
-  be inserted at the beginning of the list. `elem` is an integer that is
+  The user inserted a new item into a list or text object. `obj` is the UUID of
+  the object being modified. `key` is the ID of an existing element after which
+  the new element should be inserted, or the string `'_head'` if the new element
+  should be inserted at the beginning of the list. `elem` is an integer that is
   strictly greater than the `elem` value of any other element in this list at
   the time of insertion.
 
@@ -237,12 +238,13 @@ currently uses the following types of operation:
 
 * `{ action: 'set', obj: objectId, key: key, value: value, datatype: datatype }`
 
-  The user assigned a value to a key in a map, or to an existing index in a
-  list. `obj` is the UUID of the map or list being modified. If the target
-  is a map, `key` is the name of the field being assigned. If the target is a
-  list, `key` is the ID of the list element to be updated. This ID must have
-  been created by a prior `ins` operation. `value` is always a primitive value
-  (string, number, boolean, or null); use `link` for assigning objects or arrays.
+  The user assigned a value to a key in a map, added a row to a table, or
+  assigned a value to an index in a list. `obj` is the UUID of the object being
+  modified. If the object is a map, `key` is the name of the field being
+  assigned. If the object is a list or text, `key` is the unique ID
+  of the list element to be updated, as created by a prior `ins` operation.
+  `value` is always a primitive value (string, number, boolean, or null); use a
+  `link` operation for assigning objects.
 
   The `datatype` property is usually absent, in which case the property value
   is just the primitive `value` as given. If the value of the `datatype` property
@@ -255,31 +257,35 @@ currently uses the following types of operation:
 
 * `{ action: 'link', obj: objectId, key: key, value: objectId }`
 
-  The user took a previously created map (created with `makeMap`) or list
-  object (created with `makeList`), and made it a nested object within another
-  map or list. Put another way, this operation creates a reference or pointer from
+  The user took a previously created object (created with `makeMap`, `makeList`,
+  `makeText`, or `makeTable`), and made it a nested object within another
+  object. Put another way, this operation creates a reference or pointer from
   one object to another. Multiple references to the same element are not allowed.
   Moreover, reference cycles are not allowed; the code currently doesn't check
   for them, so if you create a cycle, you'll get infinite loops.
 
-  `obj` is the UUID of the map or list being modified (i.e. the outer map or
-  list in the nesting). `key` is the name of the field (in the case of `obj`
-  being a map) or the ID of the list element (if `obj` is a list) being
-  updated. `value` is the UUID of the object being referenced (i.e. the nested
-  map or list).
+  `obj` is the UUID of the object being modified (i.e. the parent object in the
+  nesting). If the object is a map, `key` is the name of the property in the
+  parent object being updated. If the object is a table, `key` is the primary
+  key of the row (= the object ID of the row). If the object is a list or text,
+  `key` is the ID of the list element, as created by a prior `ins` operation.
+  `value` is the UUID of the object being referenced (i.e. the child object).
 
 * `{ action: 'del', obj: objectId, key: key }`
 
-  The user deleted a key from a map, or an element from a list. `obj` is the
-  UUID of the map or list being modified. `key` is the key being removed from
-  the map, or the ID of the list element being removed, as appropriate.
+  The user deleted a key from a map, a row from a table, or an element from a
+  list or text object. `obj` is the UUID of the object being modified. `key`
+  is the key being removed from the map, the primary key of the row being
+  removed from the table, or the ID of the list/text element being removed,
+  as appropriate.
 
-* `{ action: 'inc', obj: objectId, value: number }`
+* `{ action: 'inc', obj: objectId, key: key, value: number }`
 
-  The user incremented or decremented the value of an `Automerge.Countere`.
-  `obj` is the UUID of the counter being modified. `value` is the amount by
-  which the counter is incremented, with a negative value representing
-  a decrement.
+  The user incremented or decremented the value of an `Automerge.Counter`.
+  `obj` is the UUID of the parent object being modified, and `key` is the name
+  of the property or the list element ID where the counter is located within
+  that object. `value` is the amount by which the counter is incremented, with
+  a negative value representing a decrement.
 
 For example, the following code:
 
@@ -430,7 +436,7 @@ A diff is a JSON object with the following properties:
   integer index of the list element. The entire path may be `null` if the object
   is not reachable from the document root.
 * `action`: If the object is a `map` or `table`, the action is either
-  `'create'`, `'set'`, or `'remove'`. If the object is a `list` or `text, the
+  `'create'`, `'set'`, or `'remove'`. If the object is a `list` or `text`, the
   action is one of `'create'`, `'insert'`, `'set'`, `'remove'`, or `'maxElem'`.
   The action types are explained below.
 * `key`: Used when the object is a `map` or `table`, and when the action is
@@ -449,6 +455,11 @@ A diff is a JSON object with the following properties:
   a primitive value (number, string, boolean, or null, in which case the `value`
   property is used), or another object (in which case the `link` property
   contains the object ID of the object assigned in this action).
+
+  The `value` property is also used when the action is `maxElem`. In this case,
+  the `value` property contains the highest `elem` integer that has appeared in
+  any `ins` operation (see documentation of the `ins` operation). This action
+  ensures that the same element ID is not reused in certain edge cases.
 * `datatype`: Used when the action is `set` or `insert`, and the `value`
   property is set. The value of the `datatype` property is either `'timestamp'`,
   `'counter'`, or the property is absent. The meaning is as documented for the
@@ -463,63 +474,71 @@ A diff is a JSON object with the following properties:
   datatype interpretation, that was assigned).
 
 
-Applying operations to the local state
---------------------------------------
+Applying operations to the backend
+----------------------------------
 
-The local state is comprised of a few different pieces:
+The local state in the backend is comprised of a few different pieces:
 
-* `queue`: A list of pending changes.
+* `queue`: A list of pending changes that have not yet been applied because some
+  of their dependencies are missing.
 * `history`: A list of all applied changes.
 
 The two pieces of state above represent the single source-of-truth for every
 change that the system has observed. When saving and loading an Automerge CRDT,
-only the `history` is used. The pieces described in the next section below
-contain cached information that would otherwise have to be computed by iterating
-over the entire history.
+only the `history` is used. The pieces described below contain cached information
+that would otherwise have to be computed by iterating over the entire history.
 
-* `states`: A map keyed by actor IDs. The values are lists, where each element
-  is a change plus all of the changes dependencies, including transitive
-  dependencies. (Since each change only stores direct dependencies, this
-  essentially caches the transitive dependencies for each change.)
-* `byObject`: A map of object IDs to objects. An "object" is a map, a list, or a
-  text sequence.
-* `clock`: A map keyed by actor IDs, with sequence numbers as the values. This
-  represents the current vector clock of the local state.
-* `deps`: A map
-
-Finally, the pieces of state below store the information necessary to support
-undo and redo operations:
-
-* `undoPos`: An integer, representing the current place in the undo stack.
-* `undoStack`: A list of changes that, if applied to the state, would perform an
-  "undo".
-* `redoStack`: A list of changes that, if applied to the state, would perform a
-  "redo".
-
-When a change is generated (whether locally or remotely), it is immediately
-added to the `queue` list of changes. Automerge then iterates through every
-change in `queue`, performing the following steps for each pending change:
-* The local state is checked to see if the change is causally ready (described
-  below). If a change is not causally ready, then it is skipped and Automerge
-  moves on to the next pending change. If the change is causally ready, then
-  Automerge continues with the next step.
-* The change is applied. This step updates several different parts of the state
-  and is described in depth below.
-
-### Determining if a change is causally ready
-
-For each change that it receives, Automerge checks to make sure that every
-sequence number in the change's dependencies is less than or equal to the
-sequence number stored in the local vector clock (`clock` described above). If
-every sequence number satisfies this condition, then the change is considered
-_causally ready_.
-
-### TODO
-
-This section is still a work in progress. More to come!
-
-
-Querying the local state
-------------------------
-
-TODO
+* `states`: A map keyed by actor IDs. The values are lists of the form
+  `[{change: change1, allDeps: allDeps1}, {change: ..., allDeps: ...}, ...]`,
+  where the n-th object in the list contains the change with sequence number n+1
+  by that actor, and `allDeps` is the full vector clock of dependencies (and
+  transitive dependencies) of that change.
+* `byObject`: A map keyed by object ID, where each value is a map containing the
+  following keys:
+  * `_init`: The operation that created this object (an object whose `action`
+    property is one of `makeMap`, `makeList`, `makeTable`, or `makeText`).
+  * `_keys`: A map where the keys are property names (in the case of a map
+    object), row primary keys (in the case of a table object), or element IDs
+    (in the case of a list or text object). The value for each key is a list of
+    operations that assign a value to this key. In the common case, there is
+    either no operation (indicating the absence of a value, e.g. a tombstone in
+    a list), or one operation (containing the current value of this property).
+    Multiple operations appear in this list if there were conflicting,
+    concurrent assignments to the same element.
+  * `_inbound`: The set of `link` operations whose value is this object ID; in
+    other words, the set of operations that establish a link between this
+    object and its parents. Normally an object may appear only once in the
+    tree, in which case it has exactly one parent, and this set contains
+    exactly one operation. The set is empty if the object is the root object,
+    or if it is removed from the tree.
+  * `_insertion`: Used in list and text objects only. A map whose keys are the
+    list element IDs, and the value for each key is the `ins` operation that
+    inserted the element with that ID.
+  * `_following`: Used in list and text objects only. A map whose keys are list
+    element IDs, or the string `'_head'`, and the value for each key is a list
+    of `ins` operations that reference that key in their `key` property. There
+    may be multiple such operations if there have been multiple insertions at
+    the same place in the list.
+  * `_elemIds`: Used in list and text objects only. An instance of the
+    `SkipList` class, containing the sequence of element IDs of visible elements
+    in the list (i.e. element IDs that have at least one associated value).
+    This skip list is used to efficiently translate between element IDs and
+    list indexes.
+* `clock`: A map where keys are actor IDs, and the value is the highest change
+  sequence number that we have applied from that actor. This represents the
+  current vector clock of the local state, containing all actor IDs ever seen.
+* `deps`: A map of the same form as `clock`, but excluding transitive
+  dependencies — that is, containing only actorID/seqNo pairs that cannot be
+  reached through the indirect dependencies of another of the dependencies.
+* `undoPos`: An integer, representing the current place in the undo stack. At
+  any point in time, the first `undoPos` elements of `undoStack` (i.e. indexes
+  0 to undoPos–1) are undoable, and any indexes >= undoPos in `undoStack` have
+  already been undone.
+* `undoStack`: A list of list of operations. One element in the outer list is
+  pushed when a local change is performed through `applyLocalChange()`, and it
+  is set to the list of operations that need to be performed in order to undo
+  that change. Those operations are chosen such that they restore the prior
+  value(s) of any properties that are updated in the course of the local change.
+* `redoStack`: A list of list of operations, similar to `undoStack`. Here, an
+  element is pushed to the outer list when an undo is performed, and it
+  contains the operations that we need to perform in order to undo the undo.
