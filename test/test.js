@@ -6,58 +6,57 @@ const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
 
 describe('Automerge', () => {
 
-    describe('initialization ', () => {
-      it('should initially be an empty map', () => {
-        const doc = Automerge.init()
-        assert.deepEqual(doc, {})
-      })
-
-      it('should allow instantiating from an existing object', () => {
-        const initialState = { birds: { wrens: 3, magpies: 4 } }
-        const doc = Automerge.from(initialState)
-        assert.deepEqual(doc, initialState)
-      })
-
-      it('should allow merging of an object initialized with `from`', () => {
-        let doc1 = Automerge.from({ cards: [] })
-        let doc2 = Automerge.merge(Automerge.init(), doc1)
-        assert.deepEqual(doc2, { cards: [] })
-      })
-
-      it('should allow passing an actorId when instantiating from an existing object', () => {
-        const actorId = '123'
-        let doc = Automerge.from({ foo: 1 }, actorId)
-        assert.strictEqual(Automerge.getActorId(doc), '123')
-      })
-
-      it('accepts an empty object as initial state', () => {
-        const doc = Automerge.from({})
-        assert.deepEqual(doc, {})
-      })
-
-      it('accepts an array as initial state, but converts it to an object', () => {
-        const doc = Automerge.from(['a', 'b', 'c'])
-        assert.deepEqual(doc, { '0': 'a', '1': 'b', '2': 'c' })
-      })
-
-      it('accepts strings as initial values, but treats them as an array of characters', () => {
-        const doc = Automerge.from('abc')
-        assert.deepEqual(doc, { '0': 'a', '1': 'b', '2': 'c' })
-      })
-
-      it('ignores numbers provided as initial values', () => {
-        const doc = Automerge.from(123)
-        assert.deepEqual(doc, {})
-      })
-
-      it('ignores booleans provided as initial values', () => {
-        const doc1 = Automerge.from(false)
-        assert.deepEqual(doc1, {})
-        const doc2 = Automerge.from(true)
-        assert.deepEqual(doc2, {})
-      })
+  describe('initialization ', () => {
+    it('should initially be an empty map', () => {
+      const doc = Automerge.init()
+      assert.deepEqual(doc, {})
     })
 
+    it('should allow instantiating from an existing object', () => {
+      const initialState = { birds: { wrens: 3, magpies: 4 } }
+      const doc = Automerge.from(initialState)
+      assert.deepEqual(doc, initialState)
+    })
+
+    it('should allow merging of an object initialized with `from`', () => {
+      let doc1 = Automerge.from({ cards: [] })
+      let doc2 = Automerge.merge(Automerge.init(), doc1)
+      assert.deepEqual(doc2, { cards: [] })
+    })
+
+    it('should allow passing an actorId when instantiating from an existing object', () => {
+      const actorId = '123'
+      let doc = Automerge.from({ foo: 1 }, actorId)
+      assert.strictEqual(Automerge.getActorId(doc), '123')
+    })
+
+    it('accepts an empty object as initial state', () => {
+      const doc = Automerge.from({})
+      assert.deepEqual(doc, {})
+    })
+
+    it('accepts an array as initial state, but converts it to an object', () => {
+      const doc = Automerge.from(['a', 'b', 'c'])
+      assert.deepEqual(doc, { '0': 'a', '1': 'b', '2': 'c' })
+    })
+
+    it('accepts strings as initial values, but treats them as an array of characters', () => {
+      const doc = Automerge.from('abc')
+      assert.deepEqual(doc, { '0': 'a', '1': 'b', '2': 'c' })
+    })
+
+    it('ignores numbers provided as initial values', () => {
+      const doc = Automerge.from(123)
+      assert.deepEqual(doc, {})
+    })
+
+    it('ignores booleans provided as initial values', () => {
+      const doc1 = Automerge.from(false)
+      assert.deepEqual(doc1, {})
+      const doc2 = Automerge.from(true)
+      assert.deepEqual(doc2, {})
+    })
+  })
 
   describe('sequential use', () => {
     let s1, s2
