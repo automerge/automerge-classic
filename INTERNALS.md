@@ -1,9 +1,9 @@
 Automerge internal data structures
 ==================================
 
-This document is a quick summary of how Automerge stores data internally. You
-shouldn't need to read it in order to use Automerge in your application, but you
-might find it useful if you want to hack on the Automerge code itself.
+This document explains how Automerge stores data internally. You shouldn't need
+to read it in order to use Automerge in your application, but you might find it
+useful if you want to hack on the Automerge code itself.
 
 
 Document, changes, and operations
