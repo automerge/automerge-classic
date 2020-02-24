@@ -56,6 +56,11 @@ describe('Automerge', () => {
       const doc2 = Automerge.from(true)
       assert.deepEqual(doc2, {})
     })
+
+    it('should not enable undo after Automerge.from', () => {
+      let doc = Automerge.from({cards: []})
+      assert.deepEqual(Automerge.canUndo(doc), false)
+    })
   })
 
   describe('sequential use', () => {
@@ -198,12 +203,6 @@ describe('Automerge', () => {
             })
           })
         }, /Calls to Automerge.change cannot be nested/)
-      })
-
-      it('should not allow objects as change message', () => {
-        assert.throws(() => {
-          Automerge.change(s1, {key: 'value'}, doc => doc.foo = 'bar')
-        }, /Change message must be a string/)
       })
 
       it('should not interfere with each other when forking', () => {
