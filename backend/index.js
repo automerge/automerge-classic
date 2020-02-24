@@ -192,7 +192,7 @@ function applyLocalChange(state, request) {
     throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
 
-  let patch, isUndoable = (request.requestType === 'change')
+  let patch, isUndoable = (request.requestType === 'change' && request.undoable !== false)
   ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
 
   state = state.update('versions', versions => {

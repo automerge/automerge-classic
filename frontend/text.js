@@ -99,11 +99,11 @@ class Text {
    * Deletes `numDelete` list items starting at position `index`.
    * if `numDelete` is not given, one item is deleted.
    */
-  deleteAt(index, numDelete) {
+  deleteAt(index, numDelete = 1) {
     if (this.context) {
-      this.context.splice(this.path, index, numDelete || 1, [])
+      this.context.splice(this.path, index, numDelete, [])
     } else if (!this[OBJECT_ID]) {
-      this.elems.splice(index, numDelete || 1)
+      this.elems.splice(index, numDelete)
     } else {
       throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
     }

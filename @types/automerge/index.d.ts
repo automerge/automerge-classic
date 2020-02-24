@@ -36,6 +36,7 @@ declare module 'automerge' {
   function equals<T>(val1: T, val2: T): boolean
 
   function getActorId<T>(doc: Doc<T>): string
+  function getAllChanges<T>(doc: Doc<T>): Change[]
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
@@ -281,13 +282,14 @@ declare module 'automerge' {
   // It's like TypeScript's `readonly`, but goes all the way down a tree.
 
   // prettier-ignore
-  type Freeze<T> = 
+  type Freeze<T> =
     T extends Function ? T
     : T extends Text ? ReadonlyText
     : T extends Table<infer T, infer KeyOrder> ? FreezeTable<T, KeyOrder>
     : T extends List<infer T> ? FreezeList<T>
     : T extends Array<infer T> ? FreezeArray<T>
     : T extends Map<infer K, infer V> ? FreezeMap<K, V>
+    : T extends string & infer O ? string & O
     : FreezeObject<T>
 
   interface FreezeTable<T, KeyOrder> extends ReadonlyTable<Freeze<T>, Array<keyof Freeze<T>>> {}

@@ -20,6 +20,13 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2020-02-24
+
+- **Added** [#232]: New API `Automerge.getAllChanges()` returns all changes ([@ept])
+- **Fixed** [#230]: `Text.deleteAt` allows zero characters to be deleted ([@skokenes])
+- **Fixed** [#219]: `canUndo` is false immediately after `Automerge.from` ([@ept])
+- **Fixed** [#215]: Adjust TypeScript definition of `Freeze<T>` ([@jeffpeterson])
+
 ## [0.12.1] — 2019-08-22
 
 - **Fixed** [#184]: Corrected TypeScript type definition for `Automerge.DocSet` ([@HerbCaudill])
@@ -223,7 +230,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/automerge/automerge/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/automerge/automerge/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/automerge/automerge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/automerge/automerge/compare/v0.10.1...v0.11.0
@@ -251,6 +259,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#232]: https://github.com/automerge/automerge/pull/232
+[#230]: https://github.com/automerge/automerge/issues/230
+[#219]: https://github.com/automerge/automerge/issues/219
 [#210]: https://github.com/automerge/automerge/pull/210
 [#202]: https://github.com/automerge/automerge/issues/202
 [#199]: https://github.com/automerge/automerge/pull/199
@@ -331,4 +342,5 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@pvh]: https://github.com/pvh
 [@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
+[@skokenes]: https://github.com/skokenes
 [@wincent]: https://github.com/wincent

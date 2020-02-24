@@ -254,7 +254,7 @@ describe('TypeScript support', () => {
     it('should include operations in changes', () => {
       let s1 = Automerge.init<NumberBox>()
       s1 = Automerge.change(s1, doc => (doc.number = 3))
-      const changes = Automerge.getChanges(Automerge.init(), s1)
+      const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
       assert.strictEqual(changes[0].ops.length, 1)
       assert.strictEqual(changes[0].ops[0].action, 'set')
@@ -267,7 +267,7 @@ describe('TypeScript support', () => {
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = []))
       let s2 = Automerge.change(s1, doc => doc.birds.push('goldfinch'))
-      const changes = Automerge.getChanges(Automerge.init<BirdList>(), s2)
+      const changes = Automerge.getAllChanges(s2)
       let s3 = Automerge.applyChanges(Automerge.init<BirdList>(), changes)
       assert.deepStrictEqual(s3.birds, ['goldfinch'])
     })

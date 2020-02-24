@@ -32,26 +32,27 @@ function init(options) {
  * Returns a new document object initialized with the given state.
  */
 function from(initialState, options) {
-  return change(init(options), 'Initialization', doc => Object.assign(doc, initialState))
+  const changeOpts = {message: 'Initialization', undoable: false}
+  return change(init(options), changeOpts, doc => Object.assign(doc, initialState))
 }
 
-function change(doc, message, callback) {
-  const [newDoc, change] = Frontend.change(doc, message, callback)
+function change(doc, options, callback) {
+  const [newDoc, change] = Frontend.change(doc, options, callback)
   return newDoc
 }
 
-function emptyChange(doc, message) {
-  const [newDoc, change] = Frontend.emptyChange(doc, message)
+function emptyChange(doc, options) {
+  const [newDoc, change] = Frontend.emptyChange(doc, options)
   return newDoc
 }
 
-function undo(doc, message) {
-  const [newDoc, change] = Frontend.undo(doc, message)
+function undo(doc, options) {
+  const [newDoc, change] = Frontend.undo(doc, options)
   return newDoc
 }
 
-function redo(doc, message) {
-  const [newDoc, change] = Frontend.redo(doc, message)
+function redo(doc, options) {
+  const [newDoc, change] = Frontend.redo(doc, options)
   return newDoc
 }
 
@@ -88,6 +89,10 @@ function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
   return Backend.getChanges(oldState, newState)
+}
+
+function getAllChanges(doc) {
+  return getChanges(init(), doc)
 }
 
 function applyChanges(doc, changes) {
@@ -130,7 +135,7 @@ function getHistory(doc) {
 
 module.exports = {
   init, from, change, emptyChange, undo, redo,
-  load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
+  load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
   equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),

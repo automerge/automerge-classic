@@ -82,6 +82,7 @@ Otherwise, clone this repository, and then you can use the following commands:
 
 For examples of real-life applications built upon Automerge, check out:
 
+- [PushPin](https://github.com/inkandswitch/pushpin), a mature React-based personal archiving application
 - [Farm](https://github.com/inkandswitch/farm), a programmable, collaborative computing environment
 - [Capstone](https://github.com/inkandswitch/capstone), a tablet-based note-taking and
   idea-development tool ([blog post](https://www.inkandswitch.com/capstone-manuscript.html))
@@ -357,6 +358,8 @@ options, with more under development:
 - [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
   combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
   [Dat project](https://datproject.org/).
+- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the `Automerge.Connection` protocol over
+  [PeerJS](https://github.com/peers/peerjs).
 
 The `getChanges()/applyChanges()` API works as follows:
 
@@ -375,8 +378,7 @@ newDoc = Automerge.applyChanges(currentDoc, changes)
 
 Note that `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old state and
 a new state. It then returns a list of all the changes that were made in `newDoc` since `oldDoc`. If
-you want a list of all the changes ever made in `newDoc`, you can call
-`Automerge.getChanges(Automerge.init(), newDoc)`.
+you want a list of all the changes ever made in `doc`, you can call `Automerge.getAllChanges(doc)`.
 
 The counterpart, `Automerge.applyChanges(oldDoc, changes)` applies the list of `changes` to the
 given document, and returns a new document with those changes applied. Automerge guarantees that
