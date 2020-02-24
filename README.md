@@ -669,8 +669,8 @@ The project currently has a number of limitations that you should be aware of:
 
 ## Meta
 
-Copyright 2017–2019, Ink & Switch LLC, and University of Cambridge. Released under the terms of the
+Copyright 2017–2020, the Automerge contributors. Released under the terms of the
 MIT license (see `LICENSE`).
 
-Created by [Martin Kleppmann](http://martin.kleppmann.com/) and
+Created by [Martin Kleppmann](https://martin.kleppmann.com/) and
 [many great contributors](https://github.com/automerge/automerge/graphs/contributors).
