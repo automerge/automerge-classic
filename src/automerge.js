@@ -91,6 +91,10 @@ function getChanges(oldDoc, newDoc) {
   return Backend.getChanges(oldState, newState)
 }
 
+function getAllChanges(doc) {
+  return getChanges(init(), doc)
+}
+
 function applyChanges(doc, changes) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = Backend.applyChanges(oldState, changes)
@@ -131,7 +135,7 @@ function getHistory(doc) {
 
 module.exports = {
   init, from, change, emptyChange, undo, redo,
-  load, save, merge, diff, getChanges, applyChanges, getMissingDeps,
+  load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
   equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),

@@ -36,6 +36,7 @@ declare module 'automerge' {
   function equals<T>(val1: T, val2: T): boolean
 
   function getActorId<T>(doc: Doc<T>): string
+  function getAllChanges<T>(doc: Doc<T>): Change[]
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
