@@ -6,10 +6,10 @@ shouldn't need to read it in order to use Automerge in your application, but you
 might find it useful if you want to hack on the Automerge code itself.
 
 
-State, operations, and deltas
------------------------------
+Document, changes, and operations
+---------------------------------
 
-You get a Automerge instance by calling `Automerge.init()` (creates a new, empty
+You get an Automerge instance by calling `Automerge.init()` (creates a new, empty
 document) or `Automerge.load()` (loads an existing document, typically from
 a file on disk). By default, this document exists only in memory on a single
 device, and you don't need any network communication for read or write access.
@@ -17,46 +17,74 @@ There may be a separate networking layer that asynchronously propagates changes
 from one device to another, but that networking layer is outside of the scope of
 Automerge itself.
 
-The Automerge document looks like a JavaScript object (by default the empty
-object `{}`), but it's actually a wrapper (technically, a
-[Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy))
-around a *state* object. The *state* is an
-[Immutable.js](http://facebook.github.io/immutable-js/) data structure
-containing the set of changes that were made to the state over time. Think of
-the state as being like a database of edits; then then proxy is like a database
-query through which you can examine the current state of the document.
-
+The Automerge instance represents the current state of your application (or some part of it).
 The state is immutable and is never updated in place. Instead, whenever you want
 to do something that changes the state, you call a function that takes the old
 state as first argument, and returns a new state reflecting the change. There
 are two ways how the state can change:
 
-1. *Local operations*, which are generally triggered by the user changing some
+1. **Local changes**, which are generally triggered by the user changing some
    piece of application data in the user interface. Such editing by the user is
    expressed by calling `Automerge.change()`, which groups together a block
-   of operations that should be applied as an atomic unit. Within that block, a
-   mutable API is used for expressing the changes, but internally these API
-   calls are translated into operations on the immutable state. The
-   `change()` function returns a new copy of the state with those operations
-   included.
-2. *Remote operations*: a user on another device has edited their copy of
+   of operations that should be applied as an atomic unit. Within the change
+   callback you have access to a mutable version of the Automerge document,
+   implemented as a
+   [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy)).
+   The proxy records any mutations you make as *operations* (e.g. changing the
+   value of a particular property of a particular object). The `change()`
+   function returns a new copy of the state with those operations applied.
+2. **Remote changes**: a user on another device has edited their copy of
    a document, that change was sent to you via the network, and now you want
    to apply it to your own copy of the document. Remote operations are applied
-   using `Automerge.applyDeltas()`, which again returns a new copy of the
+   using `Automerge.applyChanges()`, which again returns a new copy of the
    state. For testing purposes there is also `Automerge.merge()`, which is
    is a short-cut for the case where the "remote" document is actually just
    another instance of Automerge in the same process.
 
-To facilitate network communication, the functions `Automerge.getVClock()` and
-`.getDeltasAfter()` allow Automerge instances on different devices to figure out
-their differences (which operations are missing on which device). These
-functions only query the state, but do not change it.
+Some terminology:
+
+* An **operation** is a fine-grained description of a single modification, e.g.
+  setting the value of a particular property of a particular object, or
+  inserting one element into a list. Users normally never see operations — they
+  are a low-level implementation detail.
+* A **change** is a collection of operations grouped into a unit that is
+  applied atomically (a bit like a database transaction). Each call to
+  `Automerge.change()` produces exactly one change, and inside the change there
+  may be any number of operations. A change is also the smallest unit that gets
+  transmitted over the network to other devices.
+* A **document** is the state of a single Automerge instance. The state of a
+  document is determined by the set of all changes that have been applied to
+  it. Automerge ensures that whenever any two documents have seen the same
+  set of changes, even if the changes were applied in a different order, then
+  those documents are in the same state. This means an Automerge document is a
+  [CRDT](https://crdt.tech/).
+
+`Automerge.getChanges()` returns all the changes that have occurred between one
+document state and another, so that they can be encoded and sent over the
+network to other devices. On the recipient's end, `Automerge.applyChanges()`
+updates the corresponding document to incorporate those changes.
+
+You can save a document to disk using `Automerge.save()`. This function really
+just takes all the changes that have ever happened in the document, and encodes
+them as a string. Conversely, `Automerge.load()` decodes that string and applies
+all of the changes to a new, blank document. This works because we can always
+reconstruct the document state from the set of changes. For this reason, a
+document preserves its entire editing history, even across saves and reloads
+(a bit like a Git repository).
+
+One day, we may need to allow this history to be pruned in order to save disk
+space. There are also privacy implications in storing the whole history: any
+new collaborator who gets access to a document can see all past states of the
+document, including any content that is now deleted. However, for now we are
+choosing to preserve all history as it makes synchronisation easier (imagine
+a device that has been offline for a long time, and then needs to catch up on
+everything that has been changed by other users while it was offline).
 
 
 Actor IDs, vector clocks, and causality
 ---------------------------------------
 
-Each Automerge instance has an *actor ID* — a UUID that is generated randomly
+Each Automerge instance has an **actor ID** — a UUID that is generated randomly
 whenever you do `Automerge.init()` or `Automerge.load()` (unless you explicitly
 pass an actor ID into those functions). Whenever you make a local edit on that
 Automerge instance, the operations are tagged with that actor ID as the origin.
@@ -82,40 +110,73 @@ originating on that instance in strictly incrementing order; and then we only
 need to store the highest sequence number we've seen for each actor ID. This
 mapping from actor ID to highest sequence number is called a *vector clock*.
 
-With our documents, one change sometimes depends on another. For example, if
+The vector clock is useful when two peers are communicating, and need to
+figure out which changes they need to send to each other in order to get in
+sync. If the peers send each other their vector clocks, each peer can see the
+highest sequence number for each actor that the other peer has seen; if it has
+any changes with higher sequence numbers, it sends those. See `src/connection.js`
+for an implementation of such a protocol.
+
+### Dependencies
+
+In our documents, one change sometimes depends on another. For example, if
 an item is first added and then removed, it doesn't make sense to try to apply
 the removal if you haven't already seen the addition (since you'd be trying to
-remove something that doesn't yet exist). To keep track of these dependencies,
-every change includes the vector clock of the originating Automerge instance
-at the time when the local edit was made. Every other Automerge instance that
-wants to apply this change needs to check that the prior changes have
-already been applied; it can do this by checking that for all known actor IDs,
-the greatest sequence number it has already applied is no less than the sequence
-number in the change's vector clock. If the change depends on some other
-change that has not yet been seen, the change is buffered until the
-prerequisite change arrives. This ordering and buffering process is known as
-*causally ordered delivery* (because it ensures that everybody first sees the
-cause, then the effect, not the other way round).
+remove something that doesn't yet exist). This requires *causal ordering* of
+changes, which we implement by each change declaring its *dependencies*.
+
+Every change by actor *X* with sequence number *n* (with *n* > 1) implicitly
+depends on *X*'s change with sequence number *n* – 1. Moreover, assume that
+in between *X* generating change number *n* – 1 and change number *n*, *X*
+received a change from actor *Y* with sequence number *m*. In that case, *X*'s
+change *n* also declares an explicit dependency on *Y*'s change *m*.
+
+When any Automerge instance wants to apply a change that depends on another
+change, it ensures that the dependency is applied first. If it has not yet
+received the dependency, the dependent change is buffered until the prerequisite
+change arrives. This ordering and buffering process happens automatically, which
+means that you can pass changes to `Automerge.applyChanges()` in any order, and
+Automerge will take care of applying them in causal order.
 
 
 Change structure and operation types
 ------------------------------------
 
-Every change is a JSON document with four properties:
+**NB. This section describes the format used by the currently released version
+of Automerge (on the `master` branch). A new format is in development on the
+`performance` branch).**
+
+Every change is a JSON object with five properties:
 
 * `actor`: The actor ID on which the change originated (a UUID).
-* `clock`: The vector clock of the originating Automerge instance at the time
-  the change was generated, represented as a map from actor IDs to sequence
-  numbers: `{[actorId1]: seq1, [actorId2]: seq2, ...}`. The entry for the actor
-  ID on which the change originated, i.e. `change.clock[change.actor]`,
-  is the sequence number of this particular change.
+* `seq`: The sequence number of the change, starting with 1 for a given actor
+  ID and proceeding as an incrementing sequence.
+* `deps`: The change's dependencies, represented as an object where keys are
+  actor IDs and values are the highest sequence number seen from that actor:
+  `{[actorId1]: seq1, [actorId2]: seq2, ...}`. The implicit dependency on
+  sequence number `seq – 1` by the same `actor` need not be declared. Any
+  dependency that is also a transitive dependency of another change need not
+  be declared either.
 * `message`: An optional human-readable "commit message" that describes the
   change in a meaningful way. It is not interpreted by Automerge, only
   stored for introspection, debugging, undo, and similar purposes.
 * `ops`: An array of operations that are grouped into this change.
 
-Each operation in the `ops` array is a JSON object. Automerge currently uses the
-following types of operation:
+Each operation acts on an object, which is identified by a UUID. There are four
+types of object: `map` (represented in the document as a JavaScript object),
+`list` (represented as a JavaScript array), `text` (represented as an instance
+of `Automerge.Text`), and `table` (represented as an instance of
+`Automerge.Table`). When processing operations, we mostly consider just `map`
+and `list` as object types, because `table` behaves almost like `map`, and
+`text` behaves almost like `list`. The root of an Automerge document has
+a special UUID that consists only of zeroes, and its type is always `map`.
+
+Note that `Automerge.Counter` and `Date` objects are not types of object for
+Automerge purposes, but rather datatypes of values (see documentation of the
+`set` operation).
+
+Each operation in the `ops` array of a change is a JSON object. Automerge
+currently uses the following types of operation:
 
 * `{ action: 'makeMap', obj: objectId }`
 
@@ -174,7 +235,7 @@ following types of operation:
   construction is known as a
   [Lamport timestamp](https://en.wikipedia.org/wiki/Lamport_timestamps).
 
-* `{ action: 'set', obj: objectId, key: key, value: value }`
+* `{ action: 'set', obj: objectId, key: key, value: value, datatype: datatype }`
 
   The user assigned a value to a key in a map, or to an existing index in a
   list. `obj` is the UUID of the map or list being modified. If the target
@@ -183,15 +244,23 @@ following types of operation:
   been created by a prior `ins` operation. `value` is always a primitive value
   (string, number, boolean, or null); use `link` for assigning objects or arrays.
 
+  The `datatype` property is usually absent, in which case the property value
+  is just the primitive `value` as given. If the value of the `datatype` property
+  is `'counter'`, the value must be an integer, and it is turned into an
+  `Automerge.Counter` object in the document. If the `datatype` property is
+  `'timestamp'`, the value is interpreted as the number of milliseconds since
+  the 1970 Unix epoch, and turned into a JavaScript
+  [Date](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date)
+  object in the document.
+
 * `{ action: 'link', obj: objectId, key: key, value: objectId }`
 
   The user took a previously created map (created with `makeMap`) or list
   object (created with `makeList`), and made it a nested object within another
   map or list. Put another way, this operation creates a reference or pointer from
-  one object to another. It is acceptable for the same object to be referenced
-  from several different places in a document. In principle, you could also
-  create reference cycles, but the code currently doesn't handle them, so you'll
-  get infinite loops.
+  one object to another. Multiple references to the same element are not allowed.
+  Moreover, reference cycles are not allowed; the code currently doesn't check
+  for them, so if you create a cycle, you'll get infinite loops.
 
   `obj` is the UUID of the map or list being modified (i.e. the outer map or
   list in the nesting). `key` is the name of the field (in the case of `obj`
@@ -204,13 +273,13 @@ following types of operation:
   The user deleted a key from a map, or an element from a list. `obj` is the
   UUID of the map or list being modified. `key` is the key being removed from
   the map, or the ID of the list element being removed, as appropriate.
-  Assigning the value `undefined` is interpreted as a deletion.
 
 * `{ action: 'inc', obj: objectId, value: number }`
 
-  The user incremented or decremented a counter. `obj` is the UUID of the
-  counter being modified. `value` is the amount by which the counter is
-  incremented, with a negative value representing a decrement.
+  The user incremented or decremented the value of an `Automerge.Countere`.
+  `obj` is the UUID of the counter being modified. `value` is the amount by
+  which the counter is incremented, with a negative value representing
+  a decrement.
 
 For example, the following code:
 
@@ -222,23 +291,24 @@ generates the following JSON object describing the change:
 
 ```js
 { actor: 'be3a9238-66c1-4215-9694-8688f1162cea',        // actorId where this change originated
-  clock: { 'be3a9238-66c1-4215-9694-8688f1162cea': 1 }, // sequence number 1
-  message: 'Create document',                           // human-readable message
+  seq: 1,                                               // sequence number 1
+  deps: {},                                             // no dependencies on other changes
+  message: 'Create document',                           // human-readable description
   ops:
    [ { action: 'makeList',                              // Make a list object to hold the cards
        obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46' },   // New UUID for the list
      { action: 'ins',                                   // Insert a new element into the list we created
-       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',
+       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',     // UUID of the list object
        key: '_head',                                    // Insert at the beginning of the list
        elem: 1 },
      { action: 'makeMap',                               // Make a map object to reprsent a card
-       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3' },
+       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3' },   // New UUID for the card
      { action: 'set',                                   // Set the title of the card
-       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3',
+       obj: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3',     // UUID of the card object
        key: 'title',
        value: 'hello world' },
      { action: 'link',                                  // Make the card the first element of the list
-       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',
+       obj: '3a64c13f-c270-4af4-a733-abaadc5e7c46',     // UUID of the list object
        key: 'be3a9238-66c1-4215-9694-8688f1162cea:1',   // Assign to the list element with elem:1
        value: '4f1cd0ee-3855-4b56-9b8d-85f88cd614e3' }, // UUID of the card object
      { action: 'link',                                  // Place the list of cards in the root object
