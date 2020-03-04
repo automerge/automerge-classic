@@ -456,7 +456,7 @@ class DeltaDecoder extends RLEDecoder {
 
 
 const CHANGE_COLUMNS = ['action', 'obj_ctr', 'obj_actor', 'key_ctr', 'key_actor', 'key_str',
-  'insert', 'val_bytes', 'val_str', 'pred_num', 'pred_ctr', 'pred_actor']
+  'insert', 'val_bytes', 'val_str', 'pred_num', 'pred_ctr', 'pred_actor'] // TODO add `child` column
 const ACTIONS = ['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable']
 
 /**

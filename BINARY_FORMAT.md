@@ -21,7 +21,7 @@ the currently released version of Automerge.
 The biggest difference in the new version is that each operation has a unique
 operation ID, which consists of an integer counter and an actor ID. The
 operations within a change are given operation IDs with consecutive counter
-values, and the actorId of the author fo the change. This ID is used whenever we
+values, and the actorId of the author of the change. This ID is used whenever we
 need to refer to the operation or the things it has done: for example, while the
 old version generated a UUID to refer to an object, the new version refers to an
 object by the ID of the operation that created it. Likewise, we refer to a list
@@ -51,7 +51,7 @@ A change is a JSON object with the following properties:
 An operation is a JSON object with the following properties:
 
 * `action`: One of `'set'`, `'del'`, `'inc'`, `'link'`, `'makeMap'`,
-  `'makeList'`, `'makeText'`, or `'makeTable'`. These broadly have the same
+  `'makeList'`, `'makeText'`, or `'makeTable'`. These have broadly the same
   meaning as before:
   * `set` assigns a primitive value (string, number, boolean, or null) to a
     property of an object or a list element
@@ -92,6 +92,11 @@ An operation is a JSON object with the following properties:
   for rows of an Automerge.Table object). In the case of a `link` operation,
   this property contains the ID of the child object being referenced. Not
   present on other operations.
+* `pred`: An array of IDs of operations that are overwritten by this operation,
+  in the form `counter@actorId`. Any existing operations that are not
+  overwritten must be concurrent, and result in a conflict. The `pred` property
+  appears on all types of operation, but it is always empty on an operation with
+  `insert: true`, since such an operation does not overwrite anything.
 
 Note several differences to the old format:
 
@@ -107,6 +112,11 @@ Note several differences to the old format:
    object).
 3. The `obj` field of a `make*` operation is now the ID of the parent object,
    not the ID of the object being created.
+4. Assignments to the same property or list element: in the old format, we had
+   to use the dependency graph and vector clocks to figure out whether one
+   assignment overwrites another, or whether they are concurrent. In the new
+   format there is a new `pred` property of operations that explicitly captures
+   the relationship between operations on the same property.
 
 Open questions:
 
@@ -116,3 +126,59 @@ Open questions:
   cannot know its objectId until after a round-trip through the backend. This is
   particularly relevant to Automerge.Table, which currently uses the objectId of
   a row as its primary key.
+
+
+Binary representation of changes
+--------------------------------
+
+TODO (see `backend/encoding.js`)
+
+
+Frontend-backend protocol
+-------------------------
+
+The protocol for communication between frontend and backend has also changed.
+The changes are partly a consequence of the new change format, but also an
+independent refactoring aimed at making the frontend as simple and lightweight
+as possible, and moving most of the complexity into the backend.
+
+The responsibilities between frontend and backend are assigned as follows:
+
+* The frontend knows the current session's actorId; the backend does not. This
+  opens the possibility of in the future maybe having multiple frontends backed
+  by a single backend.
+* The frontend assigns sequence numbers to locally generated changes.
+* The backend assigns operation IDs.
+  * Therefore, when the frontend creates a new object, it doesn't know that
+    object's ID (= the ID of the `make*` operation that created it) until after
+    a round-trip through the backend. The frontend-backend protocol therefore
+    needs to use a temporary object ID for objects whose creation is in flight.
+    We use UUIDs as these temporary IDs.
+  * The reason for having the backend assign operation IDs is that the exact
+    number of operations in a change is not known until the backend has filtered
+    out duplicate operations, which requires information not known to the
+    frontend. And the exact number of operations is important because operation
+    IDs are assigned sequentially within a change, to maximise compression.
+* The frontend references list elements by their index; the mapping between
+  indexes and list element IDs is only known to the backend.
+  * Hence, both directions of the frontend-backend protocol use list indexes,
+    not list element IDs.
+  * The reason for this is to keep the management of the list element ID data
+    structure off the UI thread.
+
+### Change requests
+
+As in the old format, a change request is sent from the frontend to the backend
+as the result of local user input.
+
+TODO details
+
+### Patch format
+
+As in the old format, a patch is sent from the backend to the frontend,
+describing how the document should change. The new patch format is very
+different from the old one; the new format allows the frontend to be
+lighter-weight (in particular, it removes the need for the frontend to
+maintain an index from child object to parent object).
+
+TODO details
