@@ -270,7 +270,7 @@ describe('Binary encoding', () => {
 
   describe('change encoding', () => {
     it('should encode text edits', () => {
-      const change1 = {actor: 'aaa', seq: 1, startOp: 1, deps: {}, ops: [
+      const change1 = {actor: 'aaa', seq: 1, startOp: 1, time: 9, deps: {}, ops: [
         {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
         {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'h', pred: []},
         {action: 'del', obj: '1@aaa', key: '2@aaa', pred: ['2@aaa']},
@@ -279,7 +279,7 @@ describe('Binary encoding', () => {
       ]}
       checkEncoded(encodeChange(change1), [
         1, 3, 0x61, 0x61, 0x61, // version, actor 'aaa'
-        1, 1, 0, 0, // seq, startOp, actor list, deps
+        1, 1, 9, 0, 0, // seq, startOp, time, actor list, deps
         0, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
         1, 4, 0, 1, 4, 1, // obj_ctr column: null, 1, 1, 1, 1
         2, 4, 0, 1, 4, 0, // obj_actor column: null, 0, 0, 0, 0

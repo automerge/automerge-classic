@@ -46,8 +46,10 @@ A change is a JSON object with the following properties:
 * `startOp`: An integer, containing the counter value of the ID of the first
   operation in this change. Subsequent operations are assigned IDs in an
   incrementing sequence.
+* `time`: The timestamp at which this change was generated, as an integer
+  indicating the number of milliseconds since the 1970 Unix epoch. Dates
+  before the epoch are represented as a negative number.
 * `ops`: An array of operations, as documented below.
-* TODO should add a timestamp.
 
 An operation is a JSON object with the following properties:
 

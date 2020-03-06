@@ -13,7 +13,7 @@ const { SkipList } = require('./skip_list')
  */
 function processChangeRequest(state, opSet, request, startOp) {
   const { actor, seq, deps } = request
-  const change = { actor, seq, startOp, deps, ops: [] }
+  const change = { actor, seq, startOp, deps, time: new Date().getTime(), ops: [] }
   if (request.message) change.message = request.message
 
   let objectIds = state.get('objectIds'), objectTypes = {}, elemIds = {}, assignments = {}
@@ -288,7 +288,10 @@ function undo(state, request, startOp) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
   const { actor, seq, deps, message } = request
-  const change = Map({ actor, seq, startOp, deps: fromJS(deps), message, ops: undoOps })
+  const change = Map({
+    actor, seq, startOp, deps: fromJS(deps), message,
+    time: new Date().getTime(), ops: undoOps
+  })
 
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
@@ -337,7 +340,10 @@ function redo(state, request, startOp) {
     throw new RangeError('Cannot redo: the last change was not an undo')
   }
   const { actor, seq, deps, message } = request
-  const change = Map({ actor, seq, startOp, deps: fromJS(deps), message, ops: redoOps })
+  const change = Map({
+    actor, seq, startOp, deps: fromJS(deps), message,
+    time: new Date().getTime(), ops: redoOps
+  })
 
   let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)

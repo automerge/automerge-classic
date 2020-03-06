@@ -663,6 +663,7 @@ function encodeChange(changeObj) {
   encoder.appendPrefixedString(change.actor)
   encoder.appendUint32(change.seq)
   encoder.appendUint32(change.startOp)
+  encoder.appendInt32(change.time)
   encoder.appendUint32(actorIds.length)
   for (let actor of actorIds) encoder.appendPrefixedString(actor)
   const depsKeys = Object.keys(change.deps).sort()
@@ -683,6 +684,7 @@ function decodeChange(buffer) {
     actor:   decoder.readPrefixedString(),
     seq:     decoder.readUint32(),
     startOp: decoder.readUint32(),
+    time:    decoder.readInt32(),
     deps: {}
   }
   const actorIds = [change.actor], numActorIds = decoder.readUint32()
