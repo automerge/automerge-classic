@@ -47,6 +47,7 @@ A change is a JSON object with the following properties:
   operation in this change. Subsequent operations are assigned IDs in an
   incrementing sequence.
 * `ops`: An array of operations, as documented below.
+* TODO should add a timestamp.
 
 An operation is a JSON object with the following properties:
 
@@ -325,15 +326,18 @@ possible:
 * The object is empty. This means that there is no longer any value
   associated with this property, i.e. the property has been deleted. (Note
   that a `null` value is still a value, and not the same as the absence of
-  a value.
+  a value.)
 * The object has one key. This is the common case: the property has one
   value (which might be a primitive value or a nested object).
 * The object has multiple keys. This happens if there is a conflict, i.e.
   multiple concurrent assignments to the same property or list element.
+  The keys in the object indicate the IDs of the concurrent assignment
+  operations.
 
 It is possible for an update to occur somewhere inside a nested object in
 the document tree while there is a conflict somewhere along the path from
 the root object to the object being updated. In this case, the patch will
 continue to report the conflict on the appropriate property. The property
-will change from having multiple values (or no value) only when the user
-explicitly resolves the conflict by assigning to the conflicting property.
+will change from having multiple values to having one value (or no value)
+only when the user explicitly resolves the conflict by assigning to the
+conflicting property.
