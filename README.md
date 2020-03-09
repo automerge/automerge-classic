@@ -659,9 +659,15 @@ possible to have row objects that don't have values for all columns (e.g. in the
 
 The project currently has a number of limitations that you should be aware of:
 
-- No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause the
-  application state on other devices to become corrupted or go out of sync.
-- No security: there is currently no encryption, authentication, or access control.
+- [No integrity checking](https://github.com/automerge/automerge/issues/200): if a buggy (or
+  malicious) device makes corrupted edits, it can cause the application state on other devices to
+  become corrupted or go out of sync.  Note that this is a very specific integrity concern: the
+  desire to eliminate the potential for any bugs that could be introduced by the use of sequence
+  numbers.  Automerge is developed using good software development practices, and is already a
+  trustworthy data structure implementation.
+- `Automerge.Connection` provides no security: there is currently no encryption, authentication, or
+  access control.  However, for the whole of the rest of Automerge, being a data structure
+  implementation, those security concerns are out of scope.
 - Storage overhead: Automerge needs to store additional metadata besides the actual objects you
   create; for some datatypes, such as text, the overhead is substantial. We are working on improving
   this.
