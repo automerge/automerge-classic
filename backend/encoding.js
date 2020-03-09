@@ -1,5 +1,19 @@
 const { ROOT_ID, copyObject, parseOpId } = require('../src/common')
 
+// Maybe we should be using the platform's built-in hash implementation?
+// Node has the crypto module: https://nodejs.org/api/crypto.html and browsers have
+// https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
+// However, the WebCrypto API is asynchronous (returns promises), which would
+// force all our APIs to become asynchronous as well, which would be annoying.
+//
+// I think on balance, it's safe enough to use a random library off npm:
+// - We only need one hash function (not a full suite of crypto algorithms);
+// - SHA256 is quite simple and has fairly few opportunities for subtle bugs
+//   (compared to asymmetric cryptography anyway);
+// - It does not need a secure source of random bits;
+// - I have reviewed the source code and it seems pretty reasonable.
+const { Hash } = require('fast-sha256')
+
 /**
  * UTF-8 decoding and encoding
  */
@@ -42,6 +56,16 @@ function encodeLEB128(value, numBytes, buf, index) {
   }
 }
 
+/**
+ * Returns true if the two byte arrays contain the same data, false if not.
+ */
+function compareBytes(array1, array2) {
+  if (array1.byteLength !== array2.byteLength) return false
+  for (let i = 0; i < array1.byteLength; i++) {
+    if (array1[i] !== array2[i]) return false
+  }
+  return true
+}
 
 /**
  * Wrapper around an Uint8Array that allows values to be appended to the buffer,
@@ -72,6 +96,15 @@ class Encoder {
   }
 
   /**
+   * Appends one byte (0 to 255) to the buffer.
+   */
+  appendByte(value) {
+    if (this.offset >= this.buf.byteLength) this.grow()
+    this.buf[this.offset] = value
+    this.offset += 1
+  }
+
+  /**
    * Appends a LEB128-encoded unsigned integer to the buffer.
    */
   appendUint32(value) {
@@ -79,7 +112,7 @@ class Encoder {
     if (value < 0 || value > 0xffffffff) throw new RangeError('number out of range')
 
     const numBytes = Math.max(1, Math.ceil((32 - Math.clz32(value)) / 7))
-    if (this.offset + numBytes >= this.buf.byteLength) this.grow()
+    if (this.offset + numBytes > this.buf.byteLength) this.grow()
     encodeLEB128(value, numBytes, this.buf, this.offset)
     this.offset += numBytes
     return this
@@ -94,13 +127,13 @@ class Encoder {
 
     if (value >= 0) {
       const numBytes = Math.ceil((33 - Math.clz32(value)) / 7)
-      if (this.offset + numBytes >= this.buf.byteLength) this.grow()
+      if (this.offset + numBytes > this.buf.byteLength) this.grow()
       encodeLEB128(value, numBytes, this.buf, this.offset)
       this.offset += numBytes
 
     } else {
       const numBytes = Math.ceil((33 - Math.clz32(-value - 1)) / 7)
-      if (this.offset + numBytes >= this.buf.byteLength) this.grow()
+      if (this.offset + numBytes > this.buf.byteLength) this.grow()
 
       for (let i = 0; i < numBytes; i++) {
         this.buf[this.offset + i] = (value & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
@@ -115,7 +148,7 @@ class Encoder {
    * Appends the contents of byte buffer `data` to the buffer.
    */
   appendRawBytes(data) {
-    if (this.offset + data.byteLength >= this.buf.byteLength) this.grow()
+    if (this.offset + data.byteLength > this.buf.byteLength) this.grow()
     this.buf.set(data, this.offset)
     this.offset += data.byteLength
     return this
@@ -176,6 +209,14 @@ class Decoder {
    */
   get done() {
     return this.offset === this.buf.byteLength
+  }
+
+  /**
+   * Reads one byte (0 to 255) from the buffer.
+   */
+  readByte() {
+    this.offset += 1
+    return this.buf[this.offset - 1]
   }
 
   /**
@@ -454,7 +495,8 @@ class DeltaDecoder extends RLEDecoder {
   }
 }
 
-
+// These bytes don't mean anything, they were generated randomly
+const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
 const CHANGE_COLUMNS = ['action', 'obj_ctr', 'obj_actor', 'key_ctr', 'key_actor', 'key_str',
   'insert', 'val_bytes', 'val_str', 'pred_num', 'pred_ctr', 'pred_actor'] // TODO add `child` column
 const ACTIONS = ['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable']
@@ -656,14 +698,12 @@ function decodeColumns(decoder) {
   return columns
 }
 
-function encodeChange(changeObj) {
-  const { change, actorIds } = parseAllOpIds(changeObj)
-  const encoder = new Encoder()
-  encoder.appendUint32(1) // version
+function encodeChangeHeader(encoder, change, actorIds) {
   encoder.appendPrefixedString(change.actor)
   encoder.appendUint32(change.seq)
   encoder.appendUint32(change.startOp)
   encoder.appendInt32(change.time)
+  encoder.appendPrefixedString(change.message || '')
   encoder.appendUint32(actorIds.length)
   for (let actor of actorIds) encoder.appendPrefixedString(actor)
   const depsKeys = Object.keys(change.deps).sort()
@@ -672,19 +712,15 @@ function encodeChange(changeObj) {
     encoder.appendUint32(actorIds.indexOf(actor) + 1)
     encoder.appendUint32(change.deps[actor])
   }
-  encodeColumns(encoder, encodeOps(change.ops))
-  return encoder.buffer
 }
 
-function decodeChange(buffer) {
-  const decoder = new Decoder(buffer)
-  const version = decoder.readUint32()
-  if (version !== 1) throw new RangeError(`Unsupported change version: ${version}`)
+function decodeChangeHeader(decoder) {
   let change = {
     actor:   decoder.readPrefixedString(),
     seq:     decoder.readUint32(),
     startOp: decoder.readUint32(),
     time:    decoder.readInt32(),
+    message: decoder.readPrefixedString(),
     deps: {}
   }
   const actorIds = [change.actor], numActorIds = decoder.readUint32()
@@ -695,6 +731,85 @@ function decodeChange(buffer) {
   }
   change.ops = decodeOps(decodeColumns(decoder), actorIds)
   return change
+}
+
+/**
+ * Calls the `callback` with an encoder that should be used to encode the
+ * contents of the container.
+ */
+function encodeContainerHeader(chunkType, callback) {
+  const HASH_SIZE = 32 // size of SHA-256 hash
+  const HEADER_SPACE = MAGIC_BYTES.byteLength + HASH_SIZE + 1 + 5 // 1 byte type + 5 bytes length
+  const body = new Encoder()
+  // Make space for the header at the beginning of the body buffer. We will
+  // copy the header in here later. This is cheaper than copying the body since
+  // the body is likely to be much larger than the header.
+  body.appendRawBytes(new Uint8Array(HEADER_SPACE))
+  callback(body)
+  const bodyBuf = body.buffer
+
+  const header = new Encoder()
+  if (chunkType === 'document') {
+    header.appendByte(0)
+  } else if (chunkType === 'change') {
+    header.appendByte(1)
+  } else {
+    throw new RangeError(`Unsupported chunk type: ${chunkType}`)
+  }
+  header.appendUint32(bodyBuf.byteLength - HEADER_SPACE)
+
+  // Compute the hash over chunkType, length, and body
+  const headerBuf = header.buffer
+  const hash = new Hash()
+  hash.update(headerBuf)
+  hash.update(bodyBuf.subarray(HEADER_SPACE))
+
+  // Copy header into the body buffer so that they are contiguous
+  bodyBuf.set(MAGIC_BYTES,   HEADER_SPACE - headerBuf.byteLength - HASH_SIZE - MAGIC_BYTES.byteLength)
+  bodyBuf.set(hash.digest(), HEADER_SPACE - headerBuf.byteLength - HASH_SIZE)
+  bodyBuf.set(headerBuf,     HEADER_SPACE - headerBuf.byteLength)
+  //console.log('hash: ', [...hash.digest()].map(x => `0x${x.toString(16)}`).join(', '))
+  return bodyBuf.subarray(   HEADER_SPACE - headerBuf.byteLength - HASH_SIZE - MAGIC_BYTES.byteLength)
+}
+
+function decodeContainerHeader(decoder) {
+  if (!compareBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
+    throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
+  }
+  const expectedHash = decoder.readRawBytes(32)
+  const hashStartOffset = decoder.offset
+  const chunkType = decoder.readByte()
+  const chunkLength = decoder.readUint32()
+  const chunkData = new Decoder(decoder.readRawBytes(chunkLength))
+  const hash = new Hash()
+  hash.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
+  if (!compareBytes(hash.digest(), expectedHash)) {
+    throw new RangeError('Hash does not match data')
+  }
+  if (chunkType === 0) {
+    // decode document
+  } else if (chunkType === 1) {
+    return decodeChangeHeader(chunkData)
+  } else {
+    console.log(`Warning: ignoring chunk with unknown type ${chunkType}`)
+  }
+}
+
+function encodeChange(changeObj) {
+  const { change, actorIds } = parseAllOpIds(changeObj)
+  return encodeContainerHeader('change', encoder => {
+    encodeChangeHeader(encoder, change, actorIds)
+    encodeColumns(encoder, encodeOps(change.ops))
+  })
+}
+
+function decodeChange(buffer) {
+  const decoder = new Decoder(buffer), changes = []
+  do {
+    const change = decodeContainerHeader(decoder)
+    if (change) changes.push(change)
+  } while (!decoder.done)
+  return changes
 }
 
 module.exports = { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, encodeChange, decodeChange }

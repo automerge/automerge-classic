@@ -270,7 +270,7 @@ describe('Binary encoding', () => {
 
   describe('change encoding', () => {
     it('should encode text edits', () => {
-      const change1 = {actor: 'aaa', seq: 1, startOp: 1, time: 9, deps: {}, ops: [
+      const change1 = {actor: 'aaa', seq: 1, startOp: 1, time: 9, message: '', deps: {}, ops: [
         {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
         {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'h', pred: []},
         {action: 'del', obj: '1@aaa', key: '2@aaa', pred: ['2@aaa']},
@@ -278,8 +278,11 @@ describe('Binary encoding', () => {
         {action: 'set', obj: '1@aaa', key: '4@aaa', insert: true, value: 'i', pred: []}
       ]}
       checkEncoded(encodeChange(change1), [
-        1, 3, 0x61, 0x61, 0x61, // version, actor 'aaa'
-        1, 1, 9, 0, 0, // seq, startOp, time, actor list, deps
+        0x85, 0x6f, 0x4a, 0x83, // magic bytes
+        0x54, 0x31, 0x82, 0x56, 0x8e, 0xb7, 0x74, 0x74, 0xa3, 0xa2, 0x68, 0xec, 0x0d, 0xd1, 0x52, 0x12, // sha-256
+        0x09, 0xdc, 0xdd, 0xf2, 0x95, 0x1d, 0xba, 0xe6, 0x68, 0xc6, 0x9b, 0xa8, 0x79, 0x31, 0xa4, 0x44, // hash
+        1, 92, 3, 0x61, 0x61, 0x61, // chunkType: change, length, actor 'aaa'
+        1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
         0, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
         1, 4, 0, 1, 4, 1, // obj_ctr column: null, 1, 1, 1, 1
         2, 4, 0, 1, 4, 0, // obj_actor column: null, 0, 0, 0, 0
@@ -293,7 +296,7 @@ describe('Binary encoding', () => {
         10, 2, 0x7f, 2, // pred_ctr column: 2
         11, 2, 0x7f, 0 // pred_actor column: 0
       ])
-      assert.deepStrictEqual(decodeChange(encodeChange(change1)), change1)
+      assert.deepStrictEqual(decodeChange(encodeChange(change1)), [change1])
     })
   })
 })
