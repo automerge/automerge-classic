@@ -17,9 +17,40 @@ const { Hash } = require('fast-sha256')
 
 // These bytes don't mean anything, they were generated randomly
 const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
-const CHANGE_COLUMNS = ['action', 'obj_ctr', 'obj_actor', 'key_ctr', 'key_actor', 'key_str',
-  'insert', 'val_bytes', 'val_str', 'pred_num', 'pred_ctr', 'pred_actor'] // TODO add `child` column
+
+const COLUMN_TYPE = {
+  GROUP_CARD: 0, ACTOR_ID: 1, INT_RLE: 2, INT_DELTA: 3, BOOLEAN: 4,
+  STRING_RLE: 5, VALUE_LEN: 6, VALUE_RAW: 7
+}
+
+const VALUE_TYPE = {
+  NULL: 0, FALSE: 1, TRUE: 2, LEB128_UINT: 3, LEB128_INT: 4, IEEE754: 5,
+  UTF8: 6, BYTES: 7, COUNTER: 8, TIMESTAMP: 9, MIN_UNKNOWN: 10, MAX_UNKNOWN: 15
+}
+
 const ACTIONS = ['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable']
+
+const CHANGE_COLUMNS = {
+  objActor:  0 << 3 | COLUMN_TYPE.ACTOR_ID,
+  objCtr:    0 << 3 | COLUMN_TYPE.INT_RLE,
+  keyActor:  1 << 3 | COLUMN_TYPE.ACTOR_ID,
+  keyCtr:    1 << 3 | COLUMN_TYPE.INT_DELTA,
+  keyStr:    1 << 3 | COLUMN_TYPE.STRING_RLE,
+  idActor:   2 << 3 | COLUMN_TYPE.ACTOR_ID,
+  idCtr:     2 << 3 | COLUMN_TYPE.INT_RLE,
+  insert:    3 << 3 | COLUMN_TYPE.BOOLEAN,
+  action:    4 << 3 | COLUMN_TYPE.INT_RLE,
+  valLen:    5 << 3 | COLUMN_TYPE.VALUE_LEN,
+  valRaw:    5 << 3 | COLUMN_TYPE.VALUE_RAW,
+  chldActor: 6 << 3 | COLUMN_TYPE.ACTOR_ID,
+  chldCtr:   6 << 3 | COLUMN_TYPE.INT_RLE,
+  predNum:   7 << 3 | COLUMN_TYPE.GROUP_CARD,
+  predActor: 7 << 3 | COLUMN_TYPE.ACTOR_ID,
+  predCtr:   7 << 3 | COLUMN_TYPE.INT_RLE,
+  succNum:   8 << 3 | COLUMN_TYPE.GROUP_CARD,
+  succActor: 8 << 3 | COLUMN_TYPE.ACTOR_ID,
+  succCtr:   8 << 3 | COLUMN_TYPE.INT_RLE
+}
 
 /**
  * Returns true if the two byte arrays contain the same data, false if not.
@@ -38,6 +69,7 @@ function compareBytes(array1, array2) {
  * of the form {value: 'originalString'}.
  */
 function maybeParseOpId(value) {
+  if (value === undefined) return {}
   // FIXME when parsing the "key" of an operation, need to correctly handle
   // map property names that happen to contain an @ sign
   return (value.indexOf('@') >= 0) ? parseOpId(value) : {value}
@@ -74,9 +106,11 @@ function parseAllOpIds(change) {
     op = copyObject(op)
     op.obj = maybeParseOpId(op.obj)
     op.key = maybeParseOpId(op.key)
+    op.child = maybeParseOpId(op.child)
+    op.pred = op.pred.map(parseOpId)
     if (op.obj.actorId) actors[op.obj.actorId] = true
     if (op.key.actorId) actors[op.key.actorId] = true
-    op.pred = op.pred.map(parseOpId)
+    if (op.child.actorId) actors[op.child.actorId] = true
     for (let pred of op.pred) actors[pred.actorId] = true
     return op
   })
@@ -90,143 +124,299 @@ function parseAllOpIds(change) {
 }
 
 /**
+ * Encodes the `obj` property of operation `op` into the two columns
+ * `objActor` and `objCtr`.
+ */
+function encodeObjectId(op, columns) {
+  if (op.obj.value === ROOT_ID) {
+    columns.objActor.appendValue(null)
+    columns.objCtr.appendValue(null)
+  } else if (op.obj.actorNum >= 0 & op.obj.counter > 0) {
+    columns.objActor.appendValue(op.obj.actorNum)
+    columns.objCtr.appendValue(op.obj.counter)
+  } else {
+    throw new RangeError(`Unexpected objectId reference: ${JSON.stringify(op.obj)}`)
+  }
+}
+
+/**
+ * Encodes the `key` property of operation `op` into the three columns
+ * `keyActor`, `keyCtr`, and `keyStr`.
+ */
+function encodeOperationKey(op, columns) {
+  if (op.key.value === '_head' && op.insert) {
+    columns.keyActor.appendValue(0)
+    columns.keyCtr.appendValue(0)
+    columns.keyStr.appendValue(null)
+  } else if (op.key.value) {
+    columns.keyActor.appendValue(null)
+    columns.keyCtr.appendValue(null)
+    columns.keyStr.appendValue(op.key.value)
+  } else if (op.key.actorNum >= 0 && op.key.counter > 0) {
+    columns.keyActor.appendValue(op.key.actorNum)
+    columns.keyCtr.appendValue(op.key.counter)
+    columns.keyStr.appendValue(null)
+  } else {
+    throw new RangeError(`Unexpected operation key: ${JSON.stringify(op.key)}`)
+  }
+}
+
+/**
+ * Encodes the `action` property of operation `op` into the `action` column.
+ */
+function encodeOperationAction(op, columns) {
+  const actionCode = ACTIONS.indexOf(op.action)
+  if (actionCode >= 0) {
+    columns.action.appendValue(actionCode)
+  } else if (typeof op.action === 'number') {
+    columns.action.appendValue(op.action)
+  } else {
+    throw new RangeError(`Unexpected operation action: ${op.action}`)
+  }
+}
+
+/**
+ * Encodes the integer `value` into the two columns `valLen` and `valRaw`,
+ * with the datatype tag set to `typeTag`. If `typeTag` is zero, it is set
+ * automatically to signed or unsigned depending on the sign of the value.
+ * Values with non-zero type tags are always encoded as signed integers.
+ */
+function encodeInteger(value, typeTag, columns) {
+  let numBytes
+  if (value < 0 || typeTag > 0) {
+    numBytes = columns.valRaw.appendInt32(value)
+    if (!typeTag) typeTag = VALUE_TYPE.LEB128_INT
+  } else {
+    numBytes = columns.valRaw.appendUint32(value)
+    typeTag = VALUE_TYPE.LEB128_UINT
+  }
+  columns.valLen.appendValue(numBytes << 4 | typeTag)
+}
+
+/**
+ * Encodes the `value` property of operation `op` into the two columns
+ * `valLen` and `valRaw`.
+ */
+function encodeValue(op, columns) {
+  if ((op.action !== 'set' && op.action !== 'inc') || op.value === null) {
+    columns.valLen.appendValue(VALUE_TYPE.NULL)
+  } else if (op.value === false) {
+    columns.valLen.appendValue(VALUE_TYPE.FALSE)
+  } else if (op.value === true) {
+    columns.valLen.appendValue(VALUE_TYPE.TRUE)
+  } else if (typeof op.value === 'string') {
+    const numBytes = columns.valRaw.appendRawString(op.value)
+    columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.UTF8)
+  } else if (ArrayBuffer.isView(op.value)) {
+    const numBytes = columns.valRaw.appendRawBytes(new Uint8Array(op.value.buffer))
+    columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.BYTES)
+  } else if (op.datatype === 'counter' && typeof op.value === 'number') {
+    encodeInteger(op.value, VALUE_TYPE.COUNTER, columns)
+  } else if (op.datatype === 'timestamp' && typeof op.value === 'number') {
+    encodeInteger(op.value, VALUE_TYPE.TIMESTAMP, columns)
+  } else if (typeof op.datatype === 'number' && op.datatype >= VALUE_TYPE.MIN_UNKNOWN &&
+             op.datatype <= VALUE_TYPE.MAX_UNKNOWN && op.value instanceof Uint8Array) {
+    const numBytes = columns.valRaw.appendRawBytes(op.value)
+    columns.valLen.appendValue(numBytes << 4 | op.datatype)
+  } else if (op.datatype) {
+      throw new RangeError(`Unknown datatype ${op.datatype} for value ${op.value}`)
+  } else if (typeof op.value === 'number') {
+    if (Number.isInteger(op.value) && op.value <= 0xffffffff && op.value >= -0x80000000) {
+      encodeInteger(op.value, 0, columns)
+    } else {
+      // Encode number in 32-bit float if this can be done without loss of precision
+      const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
+      view32.setFloat32(0, op.value, true) // true means little-endian
+      if (view32.getFloat32(0, true) === op.value) {
+        columns.valRaw.appendRawBytes(new Uint8Array(buf32))
+        columns.valLen.appendValue(4 << 4 | VALUE_TYPE.IEEE754)
+      } else {
+        const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
+        view64.setFloat64(0, op.value, true) // true means little-endian
+        columns.valRaw.appendRawBytes(new Uint8Array(buf64))
+        columns.valLen.appendValue(8 << 4 | VALUE_TYPE.IEEE754)
+      }
+    }
+  } else {
+    throw new RangeError(`Unsupported value in operation: ${op.value}`)
+  }
+}
+
+/**
+ * Reads one value from the column `columns[colIndex]` and interprets it based
+ * on the column type. `actorIds` is a list of actors that appear in the change;
+ * `actorIds[0]` is the actorId of the change's author. Mutates the `value`
+ * object with the value, and returns the number of columns processed (this is 2
+ * in the case of a pair of VALUE_LEN and VALUE_RAW columns, which are processed
+ * in one go).
+ */
+function decodeValue(columns, colIndex, actorIds, value) {
+  const { columnId, columnName, decoder } = columns[colIndex]
+  if (columnId % 8 === COLUMN_TYPE.VALUE_LEN && colIndex + 1 < columns.length &&
+      columns[colIndex + 1].columnId === columnId + 1) {
+    const sizeTag = decoder.readValue(), rawDecoder = columns[colIndex + 1].decoder
+    if (sizeTag === VALUE_TYPE.NULL) {
+      value[columnName] = null
+    } else if (sizeTag === VALUE_TYPE.FALSE) {
+      value[columnName] = false
+    } else if (sizeTag === VALUE_TYPE.TRUE) {
+      value[columnName] = true
+    } else if (sizeTag % 16 === VALUE_TYPE.UTF8) {
+      value[columnName] = rawDecoder.readRawString(sizeTag >> 4)
+    } else {
+      const bytes = rawDecoder.readRawBytes(sizeTag >> 4), valDecoder = new Decoder(bytes)
+      if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
+        value[columnName] = valDecoder.readUint32()
+      } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
+        value[columnName] = valDecoder.readInt32()
+      } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
+        const view = new DataView(bytes.buffer)
+        if (bytes.byteLength === 4) {
+          value[columnName] = view.getFloat32(0, true) // true means little-endian
+        } else if (bytes.byteLength === 8) {
+          value[columnName] = view.getFloat64(0, true)
+        } else {
+          throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
+        }
+      } else if (sizeTag % 16 === VALUE_TYPE.COUNTER) {
+        value[columnName] = valDecoder.readInt32()
+        value[columnName + '_datatype'] = 'counter'
+      } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
+        value[columnName] = valDecoder.readInt32()
+        value[columnName + '_datatype'] = 'timestamp'
+      } else {
+        value[columnName] = bytes
+        value[columnName + '_datatype'] = sizeTag % 16
+      }
+    }
+    return 2
+  } else if (columnId % 8 === COLUMN_TYPE.ACTOR_ID) {
+    value[columnName] = actorIds[decoder.readValue()]
+  } else {
+    value[columnName] = decoder.readValue()
+  }
+  return 1
+}
+
+/**
  * Encodes an array of operations in a set of columns. The operations need to
  * be parsed with `parseAllOpIds()` beforehand. Returns a map from column name
  * to Encoder object.
  */
 function encodeOps(ops) {
-  const action    = new RLEEncoder('uint32')
-  const obj_ctr   = new RLEEncoder('uint32')
-  const obj_actor = new RLEEncoder('uint32')
-  const key_ctr   = new RLEEncoder('uint32')
-  const key_actor = new RLEEncoder('uint32')
-  const key_str   = new RLEEncoder('utf8')
-  const insert    = new RLEEncoder('uint32') // perhaps make a bitmap type?
-  const val_bytes = new RLEEncoder('uint32')
-  const val_str   = new Encoder() // TODO: need to encode ints, floating-point, boolean
-  const pred_num  = new RLEEncoder('uint32')
-  const pred_ctr  = new RLEEncoder('uint32')
-  const pred_actor = new RLEEncoder('uint32')
+  const columns = {
+    objActor  : new RLEEncoder('uint32'),
+    objCtr    : new RLEEncoder('uint32'),
+    keyActor  : new RLEEncoder('uint32'),
+    keyCtr    : new DeltaEncoder(),
+    keyStr    : new RLEEncoder('utf8'),
+    insert    : new BooleanEncoder(),
+    action    : new RLEEncoder('uint32'),
+    valLen    : new RLEEncoder('uint32'),
+    valRaw    : new Encoder(),
+    chldActor : new RLEEncoder('uint32'),
+    chldCtr   : new RLEEncoder('uint32'),
+    predNum   : new RLEEncoder('uint32'),
+    predCtr   : new RLEEncoder('uint32'),
+    predActor : new RLEEncoder('uint32')
+  }
 
   for (let op of ops) {
-    action.appendValue(ACTIONS.indexOf(op.action))
+    encodeObjectId(op, columns)
+    encodeOperationKey(op, columns)
+    columns.insert.appendValue(!!op.insert)
+    encodeOperationAction(op, columns)
+    encodeValue(op, columns)
 
-    if (op.obj.value === ROOT_ID) {
-      obj_ctr.appendValue(null)
-      obj_actor.appendValue(null)
-    } else if (op.obj.actorNum >= 0 & op.obj.counter >= 0) {
-      obj_ctr.appendValue(op.obj.counter)
-      obj_actor.appendValue(op.obj.actorNum)
+    if (op.child.counter) {
+      columns.chldActor.appendValue(op.child.actorNum)
+      columns.chldCtr.appendValue(op.child.counter)
     } else {
-      throw new RangeError(`Unexpected objectId reference: ${JSON.stringify(op.obj)}`)
+      columns.chldActor.appendValue(null)
+      columns.chldCtr.appendValue(null)
     }
 
-    if (op.key.value === '_head' && op.insert) {
-      key_ctr.appendValue(0)
-      key_actor.appendValue(0)
-      key_str.appendValue(null)
-    } else if (op.key.value) {
-      key_ctr.appendValue(null)
-      key_actor.appendValue(null)
-      key_str.appendValue(op.key.value)
-    } else {
-      key_ctr.appendValue(op.key.counter)
-      key_actor.appendValue(op.key.actorNum)
-      key_str.appendValue(null)
-    }
-
-    insert.appendValue(op.insert ? 1 : 0)
-    if (typeof op.value === 'string') {
-      val_bytes.appendValue(val_str.appendRawString(op.value))
-    } else {
-      val_bytes.appendValue(0)
-    }
-
-    pred_num.appendValue(op.pred.length)
+    columns.predNum.appendValue(op.pred.length)
     for (let i = 0; i < op.pred.length; i++) {
-      pred_ctr.appendValue(op.pred[i].counter)
-      pred_actor.appendValue(op.pred[i].actorNum)
-    }
-  }
-  return {action, obj_ctr, obj_actor, key_ctr, key_actor, key_str, insert, val_bytes, val_str, pred_num, pred_ctr, pred_actor}
-}
-
-/**
- * Decodes a set of columns (given as a map from column name to byte buffer)
- * into an array of operations. `actorIds` is a list of actors that appear in
- * the change; `actorIds[0]` is the actorId of the change's author.
- */
-function decodeOps(columns, actorIds) {
-  const action    = new RLEDecoder('uint32', columns.action)
-  const obj_ctr   = new RLEDecoder('uint32', columns.obj_ctr)
-  const obj_actor = new RLEDecoder('uint32', columns.obj_actor)
-  const key_ctr   = new RLEDecoder('uint32', columns.key_ctr)
-  const key_actor = new RLEDecoder('uint32', columns.key_actor)
-  const key_str   = new RLEDecoder('utf8',   columns.key_str)
-  const insert    = new RLEDecoder('uint32', columns.insert)
-  const val_bytes = new RLEDecoder('uint32', columns.val_bytes)
-  const val_str   = new Decoder(columns.val_str)
-  const pred_num  = new RLEDecoder('uint32', columns.pred_num)
-  const pred_ctr  = new RLEDecoder('uint32', columns.pred_ctr)
-  const pred_actor = new RLEDecoder('uint32', columns.pred_actor)
-  const ops = []
-
-  while (!action.done) {
-    let op = {action: ACTIONS[action.readValue()]}
-
-    const obj = {counter: obj_ctr.readValue(), actorNum: obj_actor.readValue()}
-    if (obj.counter === null && obj.actorNum === null) {
-      op.obj = ROOT_ID
-    } else if (obj.counter && obj.actorNum !== null && actorIds[obj.actorNum]) {
-      op.obj = `${obj.counter}@${actorIds[obj.actorNum]}`
-    } else {
-      throw new RangeError(`Unexpected objectId reference: ${obj.counter}@${obj.actorNum}`)
-    }
-
-    const key = {counter: key_ctr.readValue(), actorNum: key_actor.readValue(), value: key_str.readValue()}
-    if (key.value) {
-      op.key = key.value
-    } else if (key.counter === 0 && key.actorNum === 0) {
-      op.key = '_head'
-    } else if (key.counter && key.actorNum !== null && actorIds[key.actorNum]) {
-      op.key = `${key.counter}@${actorIds[key.actorNum]}`
-    } else {
-      throw new RangeError(`Unexpected key: ${JSON.stringify(key)}`)
-    }
-
-    if (insert.readValue() === 1) op.insert = true
-    const valBytes = val_bytes.readValue()
-    if (valBytes > 0) op.value = val_str.readRawString(valBytes)
-
-    const numPred = pred_num.readValue()
-    op.pred = []
-    for (let i = 0; i < numPred; i++) {
-      const pred = {counter: pred_ctr.readValue(), actorNum: pred_actor.readValue()}
-      op.pred.push(`${pred.counter}@${actorIds[pred.actorNum]}`)
-    }
-    ops.push(op)
-  }
-  return ops
-}
-
-function encodeColumns(encoder, columns) {
-  let columnNum = 0
-  for (let columnName of CHANGE_COLUMNS) {
-    encoder.appendUint32(columnNum)
-    encoder.appendPrefixedBytes(columns[columnName].buffer)
-    columnNum += 1
-  }
-}
-
-function decodeColumns(decoder) {
-  let columns = {}
-  while (!decoder.done) {
-    const columnNum = decoder.readUint32(), columnBuf = decoder.readPrefixedBytes()
-    if (CHANGE_COLUMNS[columnNum]) { // ignore unknown columns
-      columns[CHANGE_COLUMNS[columnNum]] = columnBuf
+      columns.predActor.appendValue(op.pred[i].actorNum)
+      columns.predCtr.appendValue(op.pred[i].counter)
     }
   }
   return columns
+}
+
+/**
+ * Takes a change as decoded by `decodeColumns`, and changes it into the form
+ * expected by the rest of the backend.
+ */
+function decodeOps(ops) {
+  const newOps = []
+  for (let op of ops) {
+    const newOp = {
+      obj: op.objCtr === null ? ROOT_ID : `${op.objCtr}@${op.objActor}`,
+      key: op.keyCtr === 0 ? '_head' : (op.keyStr || `${op.keyCtr}@${op.keyActor}`),
+      action: ACTIONS[op.action] || op.action,
+      pred: op.predNum.map(pred => `${pred.predCtr}@${pred.predActor}`)
+    }
+    if (op.insert) newOp.insert = true
+    if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
+      newOp.value = op.valLen
+    }
+    if (op.chldCtr !== null) newOp.child = `${op.chldCtr}@${op.chldActor}`
+    newOps.push(newOp)
+  }
+  return newOps
+}
+
+function decodeColumns(decoder, actorIds) {
+  let columns = []
+  while (!decoder.done) {
+    const columnId = decoder.readUint32()
+    const columnBuf = decoder.readPrefixedBytes()
+    let [columnName, _] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === columnId)
+    if (!columnName) columnName = columnId.toString()
+
+    if (columnId % 8 === COLUMN_TYPE.INT_DELTA) {
+      columns.push({columnId, columnName, decoder: new DeltaDecoder(columnBuf)})
+    } else if (columnId % 8 === COLUMN_TYPE.BOOLEAN) {
+      columns.push({columnId, columnName, decoder: new BooleanDecoder(columnBuf)})
+    } else if (columnId % 8 === COLUMN_TYPE.STRING_RLE) {
+      columns.push({columnId, columnName, decoder: new RLEDecoder('utf8', columnBuf)})
+    } else if (columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
+      columns.push({columnId, columnName, decoder: new Decoder(columnBuf)})
+    } else {
+      columns.push({columnId, columnName, decoder: new RLEDecoder('uint32', columnBuf)})
+    }
+  }
+
+  let parsedOps = []
+  while (!columns[0].decoder.done) {
+    let op = {}, col = 0
+    while (col < columns.length) {
+      const columnId = columns[col].columnId
+      let groupId = columnId >> 3, groupCols = 1
+      while (col + groupCols < columns.length && columns[col + groupCols].columnId >> 3 === groupId) {
+        groupCols++
+      }
+
+      if (columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
+        const values = [], count = columns[col].decoder.readValue()
+        for (let i = 0; i < count; i++) {
+          let value = {}
+          for (let colOffset = 1; colOffset < groupCols; colOffset++) {
+            decodeValue(columns, col + colOffset, actorIds, value)
+          }
+          values.push(value)
+        }
+        op[columns[col].columnName] = values
+        col += groupCols
+      } else {
+        col += decodeValue(columns, col, actorIds, op)
+      }
+    }
+    parsedOps.push(op)
+  }
+  return parsedOps
 }
 
 function encodeChangeHeader(encoder, change, actorIds) {
@@ -260,7 +450,7 @@ function decodeChangeHeader(decoder) {
   for (let i = 0; i < numDeps; i++) {
     change.deps[actorIds[decoder.readUint32()]] = decoder.readUint32()
   }
-  change.ops = decodeOps(decodeColumns(decoder), actorIds)
+  change.ops = decodeOps(decodeColumns(decoder, actorIds))
   return change
 }
 
@@ -328,9 +518,17 @@ function decodeContainerHeader(decoder) {
 
 function encodeChange(changeObj) {
   const { change, actorIds } = parseAllOpIds(changeObj)
+  const columns = encodeOps(change.ops)
+  const columnIds = Object.entries(CHANGE_COLUMNS).sort((a, b) => a[1] - b[1])
+
   return encodeContainerHeader('change', encoder => {
     encodeChangeHeader(encoder, change, actorIds)
-    encodeColumns(encoder, encodeOps(change.ops))
+    for (let [columnName, columnId] of columnIds) {
+      if (columns[columnName]) {
+        encoder.appendUint32(columnId)
+        encoder.appendPrefixedBytes(columns[columnName].buffer)
+      }
+    }
   })
 }
 

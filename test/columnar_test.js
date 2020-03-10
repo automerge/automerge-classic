@@ -14,22 +14,24 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0x54, 0x31, 0x82, 0x56, 0x8e, 0xb7, 0x74, 0x74, 0xa3, 0xa2, 0x68, 0xec, 0x0d, 0xd1, 0x52, 0x12, // sha-256
-      0x09, 0xdc, 0xdd, 0xf2, 0x95, 0x1d, 0xba, 0xe6, 0x68, 0xc6, 0x9b, 0xa8, 0x79, 0x31, 0xa4, 0x44, // hash
-      1, 92, 3, 0x61, 0x61, 0x61, // chunkType: change, length, actor 'aaa'
+      0x34, 0x6d, 0xc2, 0x85, 0xcb, 0x7a, 0xd1, 0xad, 0x67, 0xfd, 0xe7, 0x19, 0xe3, 0x96, 0xa1, 0x89, // sha-256
+      0xfa, 0x16, 0x75, 0x17, 0x84, 0x46, 0x1c, 0x4b, 0x74, 0xf1, 0x23, 0x70, 0x05, 0x07, 0xcd, 0x22, // hash
+      1, 98, 3, 0x61, 0x61, 0x61, // chunkType: change, length, actor 'aaa'
       1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
-      0, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
-      1, 4, 0, 1, 4, 1, // obj_ctr column: null, 1, 1, 1, 1
-      2, 4, 0, 1, 4, 0, // obj_actor column: null, 0, 0, 0, 0
-      3, 7, 0, 1, 0x7c, 0, 2, 0, 4, // key_ctr column: null, 0, 2, 0, 4
-      4, 4, 0, 1, 4, 0, // key_actor column: null, 0, 0, 0, 0
-      5, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // key_str column: 'text', null, null, null, null
-      6, 6, 0x7d, 0, 1, 0, 2, 1, // insert column: false, true, false, true, true
-      7, 6, 0x7d, 0, 1, 0, 2, 1, // val_bytes column: 0, 1, 0, 1, 1
-      8, 3, 0x68, 0x48, 0x69, // val_str column: 'h', 'H', 'i'
-      9, 6, 2, 0, 0x7f, 1, 2, 0, // pred_num column: 0, 0, 1, 0, 0
-      10, 2, 0x7f, 2, // pred_ctr column: 2
-      11, 2, 0x7f, 0 // pred_actor column: 0
+      1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
+      2, 4, 0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
+      9, 4, 0, 1, 4, 0, // keyActor column: null, 0, 0, 0, 0
+      11, 7, 0, 1, 0x7c, 0, 2, 0x7e, 4, // keyCtr column: null, 0, 2, 0, 4
+      13, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // keyStr column: 'text', null, null, null, null
+      28, 4, 1, 1, 1, 2, // insert column: false, true, false, true, true
+      34, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
+      46, 6, 0x7d, 0, 0x16, 0, 2, 0x16, // valLen column: 0, 0x16, 0, 0x16, 0x16
+      47, 3, 0x68, 0x48, 0x69, // valRaw column: 'h', 'H', 'i'
+      49, 2, 0, 5, // chldActor column: null, null, null, null, null
+      50, 2, 0, 5, // clldCtr column: null, null, null, null, null
+      56, 6, 2, 0, 0x7f, 1, 2, 0, // predNum column: 0, 0, 1, 0, 0
+      57, 2, 0x7f, 0, // predActor column: 0
+      58, 2, 0x7f, 2 // predCtr column: 2
     ])
     assert.deepStrictEqual(decodeChange(encodeChange(change1)), [change1])
   })
