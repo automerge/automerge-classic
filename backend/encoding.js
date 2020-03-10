@@ -78,7 +78,8 @@ class Encoder {
   }
 
   /**
-   * Appends a LEB128-encoded unsigned integer to the buffer.
+   * Appends a LEB128-encoded unsigned integer to the buffer. Returns the number
+   * of bytes appended.
    */
   appendUint32(value) {
     if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
@@ -88,11 +89,12 @@ class Encoder {
     if (this.offset + numBytes > this.buf.byteLength) this.grow()
     encodeLEB128(value, numBytes, this.buf, this.offset)
     this.offset += numBytes
-    return this
+    return numBytes
   }
 
   /**
-   * Appends a LEB128-encoded signed integer to the buffer.
+   * Appends a LEB128-encoded signed integer to the buffer. Returns the number
+   * of bytes appended.
    */
   appendInt32(value) {
     if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
@@ -103,6 +105,7 @@ class Encoder {
       if (this.offset + numBytes > this.buf.byteLength) this.grow()
       encodeLEB128(value, numBytes, this.buf, this.offset)
       this.offset += numBytes
+      return numBytes
 
     } else {
       const numBytes = Math.ceil((33 - Math.clz32(-value - 1)) / 7)
@@ -113,18 +116,19 @@ class Encoder {
         value >>= 7 // NB. using sign-propagating right shift
       }
       this.offset += numBytes
+      return numBytes
     }
-    return this
   }
 
   /**
-   * Appends the contents of byte buffer `data` to the buffer.
+   * Appends the contents of byte buffer `data` to the buffer. Returns the
+   * number of bytes appended.
    */
   appendRawBytes(data) {
     if (this.offset + data.byteLength > this.buf.byteLength) this.grow()
     this.buf.set(data, this.offset)
     this.offset += data.byteLength
-    return this
+    return data.byteLength
   }
 
   /**
@@ -133,9 +137,7 @@ class Encoder {
    */
   appendRawString(value) {
     if (typeof value !== 'string') throw new TypeError('value is not a string')
-    const data = stringToUtf8(value)
-    this.appendRawBytes(data)
-    return data.byteLength
+    return this.appendRawBytes(stringToUtf8(value))
   }
 
   /**
@@ -144,7 +146,8 @@ class Encoder {
    */
   appendPrefixedBytes(data) {
     this.appendUint32(data.byteLength)
-    return this.appendRawBytes(data)
+    this.appendRawBytes(data)
+    return this
   }
 
   /**
