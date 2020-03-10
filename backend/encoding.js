@@ -204,8 +204,8 @@ class Decoder {
   }
 
   /**
-   * Returns true if there is still data to be read at the current decoding
-   * position, and false if we are at the end of the buffer.
+   * Returns false if there is still data to be read at the current decoding
+   * position, and true if we are at the end of the buffer.
    */
   get done() {
     return this.offset === this.buf.byteLength
@@ -379,6 +379,10 @@ class RLEEncoder extends Encoder {
     }
   }
 
+  /**
+   * Flushes any unwritten data to the buffer. Call this before reading from
+   * the buffer constructed by this Encoder.
+   */
   finish() {
     this.appendValue(undefined)
   }
@@ -398,8 +402,8 @@ class RLEDecoder extends Decoder {
   }
 
   /**
-   * Returns true if there is still data to be read at the current decoding
-   * position, and false if we are at the end of the buffer.
+   * Returns false if there is still data to be read at the current decoding
+   * position, and true if we are at the end of the buffer.
    */
   get done() {
     return (this.count === 0) && (this.offset === this.buf.byteLength)
