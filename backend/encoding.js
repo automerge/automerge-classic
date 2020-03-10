@@ -499,6 +499,81 @@ class DeltaDecoder extends RLEDecoder {
   }
 }
 
+/**
+ * Encodes a sequence of boolean values by mapping it to a sequence of integers:
+ * the number of false values, followed by the number of true values, followed
+ * by the number of false values, and so on. Each number is encoded as a LEB128
+ * unsigned integer. This encoding is a bit like RLEEncoder, except that we
+ * only encode the repetition count but not the actual value, since the values
+ * just alternate between false and true (starting with false).
+ */
+class BooleanEncoder extends Encoder {
+  constructor() {
+    super()
+    this.lastValue = false
+    this.count = 0
+  }
+
+  /**
+   * Appends a new value to the sequence.
+   */
+  appendValue(value) {
+    if (value !== false && value !== true) {
+      throw new RangeError(`Unsupported value for BooleanEncoder: ${value}`)
+    }
+    if (this.lastValue === value) {
+      this.count += 1
+    } else {
+      this.appendUint32(this.count)
+      this.lastValue = value
+      this.count = 1
+    }
+  }
+
+  /**
+   * Flushes any unwritten data to the buffer. Call this before reading from
+   * the buffer constructed by this Encoder.
+   */
+  finish() {
+    if (this.count > 0) {
+      this.appendUint32(this.count)
+      this.count = 0
+    }
+  }
+}
+
+/**
+ * Counterpart to BooleanEncoder: reads boolean values from a runlength-encoded
+ * sequence.
+ */
+class BooleanDecoder extends Decoder {
+  constructor(buffer) {
+    super(buffer)
+    this.lastValue = true // is negated the first time we read a count
+    this.count = 0
+  }
+
+  /**
+   * Returns false if there is still data to be read at the current decoding
+   * position, and true if we are at the end of the buffer.
+   */
+  get done() {
+    return (this.count === 0) && (this.offset === this.buf.byteLength)
+  }
+
+  /**
+   * Returns the next value (or null) in the sequence.
+   */
+  readValue() {
+    while (this.count === 0) {
+      this.count = this.readUint32()
+      this.lastValue = !this.lastValue
+    }
+    this.count -= 1
+    return this.lastValue
+  }
+}
+
 // These bytes don't mean anything, they were generated randomly
 const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
 const CHANGE_COLUMNS = ['action', 'obj_ctr', 'obj_actor', 'key_ctr', 'key_actor', 'key_str',
@@ -816,4 +891,4 @@ function decodeChange(buffer) {
   return changes
 }
 
-module.exports = { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, encodeChange, decodeChange }
+module.exports = { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder, encodeChange, decodeChange }

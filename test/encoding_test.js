@@ -1,5 +1,5 @@
 const assert = require('assert')
-const { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder, encodeChange, decodeChange } = require('../backend/encoding')
+const { Encoder, RLEEncoder, DeltaEncoder, Decoder, RLEDecoder, DeltaDecoder, BooleanEncoder, BooleanDecoder, encodeChange, decodeChange } = require('../backend/encoding')
 const { ROOT_ID } = require('../src/common')
 
 function checkEncoded(encoder, bytes) {
@@ -265,6 +265,45 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 0, 1, 2, 3])), [10, 11, 12, 13, 0, 1, 2, 3])
       assert.deepStrictEqual(decodeDelta(encodeDelta([0, 1, 2, 3, null, null, null, 4, 5, 6])), [0, 1, 2, 3, null, null, null, 4, 5, 6])
       assert.deepStrictEqual(decodeDelta(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36])), [-64, -60, -56, -52, -48, -44, -40, -36])
+    })
+  })
+
+  describe('BooleanEncoder and BooleanDecoder', () => {
+    function encodeBools(values) {
+      const encoder = new BooleanEncoder()
+      for (let value of values) encoder.appendValue(value)
+      return encoder.buffer
+    }
+
+    function decodeBools(buffer) {
+      const decoder = new BooleanDecoder(buffer), values = []
+      while (!decoder.done) values.push(decoder.readValue())
+      return values
+    }
+
+    it('should encode sequences of booleans', () => {
+      checkEncoded(encodeBools([]), [])
+      checkEncoded(encodeBools([false]), [1])
+      checkEncoded(encodeBools([true]), [0, 1])
+      checkEncoded(encodeBools([false, false, false, true, true]), [3, 2])
+      checkEncoded(encodeBools([true, true, true, false, false]), [0, 3, 2])
+      checkEncoded(encodeBools([true, false, true, false, true, true, false]), [0, 1, 1, 1, 1, 2, 1])
+    })
+
+    it('should encode-decode round-trip booleans', () => {
+      assert.deepStrictEqual(decodeBools(encodeBools([])), [])
+      assert.deepStrictEqual(decodeBools(encodeBools([false])), [false])
+      assert.deepStrictEqual(decodeBools(encodeBools([true])), [true])
+      assert.deepStrictEqual(decodeBools(encodeBools([false, false, false, true, true])), [false, false, false, true, true])
+      assert.deepStrictEqual(decodeBools(encodeBools([true, true, true, false, false])), [true, true, true, false, false])
+      assert.deepStrictEqual(decodeBools(encodeBools([true, false, true, false, true, true, false])), [true, false, true, false, true, true, false])
+    })
+
+    it('should not allow non-boolean values', () => {
+      assert.throws(() => { encodeBools([42]) }, /Unsupported value/)
+      assert.throws(() => { encodeBools([null]) }, /Unsupported value/)
+      assert.throws(() => { encodeBools(['false']) }, /Unsupported value/)
+      assert.throws(() => { encodeBools([undefined]) }, /Unsupported value/)
     })
   })
 
