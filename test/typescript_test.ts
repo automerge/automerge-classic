@@ -441,7 +441,7 @@ describe('TypeScript support', () => {
     }
 
     interface BookDb {
-      books: Automerge.Table<Book, ['authors', 'title', 'isbn']>
+      books: Automerge.Table<Book>
     }
 
     // Example data
@@ -487,7 +487,7 @@ describe('TypeScript support', () => {
         publisher?: string
       }
       interface BookDeluxeDb {
-        books: Automerge.Table<BookDeluxe, ['authors', 'title', 'isbn', 'publisher']>
+        books: Automerge.Table<BookDeluxe>
       }
 
       const s3 = Automerge.change(
