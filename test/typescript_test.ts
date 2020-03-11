@@ -497,16 +497,6 @@ describe('TypeScript support', () => {
       // Now we're off to the races
       const p3 = s3.books.byId(id).publisher
       assert.deepEqual(p3, "O'Reilly")
-
-      // and we can even do this:
-      Automerge.change(s3, doc => {
-        doc.books.add([
-          ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-          'Introduction to Reliable and Secure Distributed Programming',
-          '3-642-15259-7',
-          'Springer',
-        ])
-      })
     })
 
     it('supports `remove`', () => {
@@ -515,18 +505,6 @@ describe('TypeScript support', () => {
     })
 
     describe('supports `add`', () => {
-      it('accepts value passed as correctly-ordered array', () => {
-        let bookId: string
-        const s2 = Automerge.change(s1, doc => {
-          bookId = doc.books.add([
-            ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-            'Introduction to Reliable and Secure Distributed Programming',
-            '3-642-15259-7',
-          ])
-        })
-        assert.deepEqual(s2.books.byId(bookId), RSDP)
-      })
-
       it('accepts value passed as object', () => {
         let bookId: string
         const s2 = Automerge.change(s1, doc => (bookId = doc.books.add(RSDP)))
