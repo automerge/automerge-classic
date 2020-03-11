@@ -61,8 +61,10 @@ class Encoder {
   /**
    * Reallocates the encoder's buffer to be bigger.
    */
-  grow() {
-    const newBuf = new Uint8Array(this.buf.byteLength * 4)
+  grow(minSize = 0) {
+    let newSize = this.buf.byteLength * 4
+    while (newSize < minSize) newSize *= 2
+    const newBuf = new Uint8Array(newSize)
     newBuf.set(this.buf, 0)
     this.buf = newBuf
     return this
@@ -125,7 +127,9 @@ class Encoder {
    * number of bytes appended.
    */
   appendRawBytes(data) {
-    if (this.offset + data.byteLength > this.buf.byteLength) this.grow()
+    if (this.offset + data.byteLength > this.buf.byteLength) {
+      this.grow(this.offset + data.byteLength)
+    }
     this.buf.set(data, this.offset)
     this.offset += data.byteLength
     return data.byteLength
