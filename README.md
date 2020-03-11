@@ -657,15 +657,18 @@ possible to have row objects that don't have values for all columns (e.g. in the
 
 ## Caveats
 
-The project currently has a number of limitations that you should be aware of:
+Automerge has a comprehensive test suite and is developed using good software engineering
+practices. However, it currently has a few limitations that you should be aware of:
 
-- No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause the
-  application state on other devices to become corrupted or go out of sync.
-- No security: there is currently no encryption, authentication, or access control.
+- Automerge is a data structure library, not a full network protocol. `Automerge.Connection`
+  provides a basic building block for a network protocol, but other protocol concerns (such as
+  encryption, authentication, and access control) need to be handled by separate layers
+  outside of Automerge.
 - Storage overhead: Automerge needs to store additional metadata besides the actual objects you
   create; for some datatypes, such as text, the overhead is substantial. We are working on improving
   this.
-- ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
+
+See also the [list of open issues](https://github.com/automerge/automerge/issues).
 
 ## Meta
 
