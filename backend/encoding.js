@@ -30,17 +30,6 @@ if (typeof TextEncoder === 'function' && typeof TextDecoder === 'function') {
 
 
 /**
- * Encodes a nonnegative integer in a variable number of bytes using the LEB128
- * encoding scheme. https://en.wikipedia.org/wiki/LEB128
- */
-function encodeLEB128(value, numBytes, buf, index) {
-  for (let i = 0; i < numBytes; i++) {
-    buf[index + i] = (value & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
-    value >>>= 7 // NB. using zero-filling right shift
-  }
-}
-
-/**
  * Wrapper around an Uint8Array that allows values to be appended to the buffer,
  * and that automatically grows the buffer when space runs out.
  */
@@ -80,8 +69,9 @@ class Encoder {
   }
 
   /**
-   * Appends a LEB128-encoded unsigned integer to the buffer. Returns the number
-   * of bytes appended.
+   * Encodes a 32-bit nonnegative integer in a variable number of bytes using
+   * the LEB128 encoding scheme (https://en.wikipedia.org/wiki/LEB128) and
+   * appends it to the buffer. Returns the number of bytes written.
    */
   appendUint32(value) {
     if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
@@ -89,37 +79,129 @@ class Encoder {
 
     const numBytes = Math.max(1, Math.ceil((32 - Math.clz32(value)) / 7))
     if (this.offset + numBytes > this.buf.byteLength) this.grow()
-    encodeLEB128(value, numBytes, this.buf, this.offset)
+
+    for (let i = 0; i < numBytes; i++) {
+      this.buf[this.offset + i] = (value & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
+      value >>>= 7 // zero-filling right shift
+    }
     this.offset += numBytes
     return numBytes
   }
 
   /**
-   * Appends a LEB128-encoded signed integer to the buffer. Returns the number
-   * of bytes appended.
+   * Encodes a 32-bit signed integer in a variable number of bytes using the
+   * LEB128 encoding scheme (https://en.wikipedia.org/wiki/LEB128) and appends
+   * it to the buffer. Returns the number of bytes written.
    */
   appendInt32(value) {
     if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
     if (value < -0x80000000 || value > 0x7fffffff) throw new RangeError('number out of range')
 
-    if (value >= 0) {
-      const numBytes = Math.ceil((33 - Math.clz32(value)) / 7)
-      if (this.offset + numBytes > this.buf.byteLength) this.grow()
-      encodeLEB128(value, numBytes, this.buf, this.offset)
-      this.offset += numBytes
-      return numBytes
+    const numBytes = Math.ceil((33 - Math.clz32(value >= 0 ? value : -value - 1)) / 7)
+    if (this.offset + numBytes > this.buf.byteLength) this.grow()
 
-    } else {
-      const numBytes = Math.ceil((33 - Math.clz32(-value - 1)) / 7)
-      if (this.offset + numBytes > this.buf.byteLength) this.grow()
-
-      for (let i = 0; i < numBytes; i++) {
-        this.buf[this.offset + i] = (value & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
-        value >>= 7 // NB. using sign-propagating right shift
-      }
-      this.offset += numBytes
-      return numBytes
+    for (let i = 0; i < numBytes; i++) {
+      this.buf[this.offset + i] = (value & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
+      value >>= 7 // sign-propagating right shift
     }
+    this.offset += numBytes
+    return numBytes
+  }
+
+  /**
+   * Encodes a nonnegative integer in a variable number of bytes using the LEB128
+   * encoding scheme, up to the maximum size of integers supported by JavaScript
+   * (53 bits).
+   */
+  appendUint53(value) {
+    if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
+    if (value < 0 || value > Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('number out of range')
+    }
+    const high32 = Math.floor(value / 0x100000000)
+    const low32 = (value & 0xffffffff) >>> 0 // right shift to interpret as unsigned
+    return this.appendUint64(high32, low32)
+  }
+
+  /**
+   * Encodes a signed integer in a variable number of bytes using the LEB128
+   * encoding scheme, up to the maximum size of integers supported by JavaScript
+   * (53 bits).
+   */
+  appendInt53(value) {
+    if (!Number.isInteger(value)) throw new RangeError('value is not an integer')
+    if (value < Number.MIN_SAFE_INTEGER || value > Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('number out of range')
+    }
+    const high32 = Math.floor(value / 0x100000000)
+    const low32 = (value & 0xffffffff) >>> 0 // right shift to interpret as unsigned
+    return this.appendInt64(high32, low32)
+  }
+
+  /**
+   * Encodes a 64-bit nonnegative integer in a variable number of bytes using
+   * the LEB128 encoding scheme, and appends it to the buffer. The number is
+   * given as two 32-bit halves since JavaScript cannot accurately represent
+   * integers with more than 53 bits in a single variable.
+   */
+  appendUint64(high32, low32) {
+    if (!Number.isInteger(high32) || !Number.isInteger(low32)) {
+      throw new RangeError('value is not an integer')
+    }
+    if (high32 < 0 || high32 > 0xffffffff || low32 < 0 || low32 > 0xffffffff) {
+      throw new RangeError('number out of range')
+    }
+    if (high32 === 0) return this.appendUint32(low32)
+
+    const numBytes = Math.ceil((64 - Math.clz32(high32)) / 7)
+    if (this.offset + numBytes > this.buf.byteLength) this.grow()
+    for (let i = 0; i < 4; i++) {
+      this.buf[this.offset + i] = (low32 & 0x7f) | 0x80
+      low32 >>>= 7 // zero-filling right shift
+    }
+    this.buf[this.offset + 4] = (low32 & 0x0f) | ((high32 & 0x07) << 4) | (numBytes === 5 ? 0x00 : 0x80)
+    high32 >>>= 3
+    for (let i = 5; i < numBytes; i++) {
+      this.buf[this.offset + i] = (high32 & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
+      high32 >>>= 7
+    }
+    this.offset += numBytes
+    return numBytes
+  }
+
+  /**
+   * Encodes a 64-bit signed integer in a variable number of bytes using the
+   * LEB128 encoding scheme, and appends it to the buffer. The number is given
+   * as two 32-bit halves since JavaScript cannot accurately represent integers
+   * with more than 53 bits in a single variable. The sign of the 64-bit
+   * number is determined by the sign of the `high32` half; the sign of the
+   * `low32` half is ignored.
+   */
+  appendInt64(high32, low32) {
+    if (!Number.isInteger(high32) || !Number.isInteger(low32)) {
+      throw new RangeError('value is not an integer')
+    }
+    if (high32 < -0x80000000 || high32 > 0x7fffffff || low32 < -0x80000000 || low32 > 0xffffffff) {
+      throw new RangeError('number out of range')
+    }
+    low32 >>>= 0 // interpret as unsigned
+    if (high32 === 0 && low32 <= 0x7fffffff) return this.appendInt32(low32)
+    if (high32 === -1 && low32 >= 0x80000000) return this.appendInt32(low32 - 0x100000000)
+
+    const numBytes = Math.ceil((65 - Math.clz32(high32 >= 0 ? high32 : -high32 - 1)) / 7)
+    if (this.offset + numBytes > this.buf.byteLength) this.grow()
+    for (let i = 0; i < 4; i++) {
+      this.buf[this.offset + i] = (low32 & 0x7f) | 0x80
+      low32 >>>= 7 // zero-filling right shift
+    }
+    this.buf[this.offset + 4] = (low32 & 0x0f) | ((high32 & 0x07) << 4) | (numBytes === 5 ? 0x00 : 0x80)
+    high32 >>= 3 // sign-propagating right shift
+    for (let i = 5; i < numBytes; i++) {
+      this.buf[this.offset + i] = (high32 & 0x7f) | (i === numBytes - 1 ? 0x00 : 0x80)
+      high32 >>= 7
+    }
+    this.offset += numBytes
+    return numBytes
   }
 
   /**
@@ -201,6 +283,7 @@ class Decoder {
 
   /**
    * Reads a LEB128-encoded unsigned integer from the current position in the buffer.
+   * Throws an exception if the value doesn't fit in a 32-bit unsigned int.
    */
   readUint32() {
     let result = 0, shift = 0
@@ -219,6 +302,7 @@ class Decoder {
 
   /**
    * Reads a LEB128-encoded signed integer from the current position in the buffer.
+   * Throws an exception if the value doesn't fit in a 32-bit signed int.
    */
   readInt32() {
     let result = 0, shift = 0
@@ -239,6 +323,112 @@ class Decoder {
         } else {
           return result | (-1 << shift) // sign-extend negative integer
         }
+      }
+    }
+    throw new RangeError('buffer ended with incomplete number')
+  }
+
+  /**
+   * Reads a LEB128-encoded unsigned integer from the current position in the
+   * buffer. Allows any integer that can be safely represented by JavaScript
+   * (up to 2^53 - 1), and throws an exception outside of that range.
+   */
+  readUint53() {
+    const { low32, high32 } = this.readUint64()
+    if (high32 < 0 || high32 > 0x1fffff) {
+      throw new RangeError('number out of range')
+    }
+    return high32 * 0x100000000 + low32
+  }
+
+  /**
+   * Reads a LEB128-encoded signed integer from the current position in the
+   * buffer. Allows any integer that can be safely represented by JavaScript
+   * (between -(2^53 - 1) and 2^53 - 1), throws an exception outside of that range.
+   */
+  readInt53() {
+    const { low32, high32 } = this.readInt64()
+    if (high32 < -0x200000 || (high32 === -0x200000 && low32 === 0) || high32 > 0x1fffff) {
+      throw new RangeError('number out of range')
+    }
+    return high32 * 0x100000000 + low32
+  }
+
+  /**
+   * Reads a LEB128-encoded unsigned integer from the current position in the
+   * buffer. Throws an exception if the value doesn't fit in a 64-bit unsigned
+   * int. Returns the number in two 32-bit halves, as an object of the form
+   * `{high32, low32}`.
+   */
+  readUint64() {
+    let low32 = 0, high32 = 0, shift = 0
+    while (this.offset < this.buf.byteLength && shift <= 28) {
+      const nextByte = this.buf[this.offset]
+      low32 = (low32 | (nextByte & 0x7f) << shift) >>> 0 // right shift to interpret value as unsigned
+      if (shift === 28) {
+        high32 = (nextByte & 0x70) >>> 4
+      }
+      shift += 7
+      this.offset++
+      if ((nextByte & 0x80) === 0) return { high32, low32 }
+    }
+
+    shift = 3
+    while (this.offset < this.buf.byteLength) {
+      const nextByte = this.buf[this.offset]
+      if (shift === 31 && (nextByte & 0xfe) !== 0) { // more than 10 bytes, or value > 2^64 - 1
+        throw new RangeError('number out of range')
+      }
+      high32 = (high32 | (nextByte & 0x7f) << shift) >>> 0
+      shift += 7
+      this.offset++
+      if ((nextByte & 0x80) === 0) return { high32, low32 }
+    }
+    throw new RangeError('buffer ended with incomplete number')
+  }
+
+  /**
+   * Reads a LEB128-encoded signed integer from the current position in the
+   * buffer. Throws an exception if the value doesn't fit in a 64-bit signed
+   * int. Returns the number in two 32-bit halves, as an object of the form
+   * `{high32, low32}`. The `low32` half is always non-negative, and the
+   * sign of the `high32` half indicates the sign of the 64-bit number.
+   */
+  readInt64() {
+    let low32 = 0, high32 = 0, shift = 0
+    while (this.offset < this.buf.byteLength && shift <= 28) {
+      const nextByte = this.buf[this.offset]
+      low32 = (low32 | (nextByte & 0x7f) << shift) >>> 0 // right shift to interpret value as unsigned
+      if (shift === 28) {
+        high32 = (nextByte & 0x70) >>> 4
+      }
+      shift += 7
+      this.offset++
+      if ((nextByte & 0x80) === 0) {
+        if ((nextByte & 0x40) !== 0) { // sign-extend negative integer
+          if (shift < 32) low32 = (low32 | (-1 << shift)) >>> 0
+          high32 |= -1 << Math.max(shift - 32, 0)
+        }
+        return { high32, low32 }
+      }
+    }
+
+    shift = 3
+    while (this.offset < this.buf.byteLength) {
+      const nextByte = this.buf[this.offset]
+      // On the 10th byte there are only two valid values: all 7 value bits zero
+      // (if the value is positive) or all 7 bits one (if the value is negative)
+      if (shift === 31 && nextByte !== 0 && nextByte !== 0x7f) {
+        throw new RangeError('number out of range')
+      }
+      high32 |= (nextByte & 0x7f) << shift
+      shift += 7
+      this.offset++
+      if ((nextByte & 0x80) === 0) {
+        if ((nextByte & 0x40) !== 0 && shift < 32) { // sign-extend negative integer
+          high32 |= -1 << shift
+        }
+        return { high32, low32 }
       }
     }
     throw new RangeError('buffer ended with incomplete number')

@@ -4,171 +4,479 @@ const { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, Bo
 
 describe('Binary encoding', () => {
   describe('Encoder and Decoder', () => {
-    it('should LEB128-encode unsigned integers', () => {
-      function encode(value) {
+    describe('32-bit LEB128 encoding', () => {
+      it('should encode unsigned integers', () => {
+        function encode(value) {
+          const encoder = new Encoder()
+          encoder.appendUint32(value)
+          return encoder
+        }
+        checkEncoded(encode(0), [0])
+        checkEncoded(encode(1), [1])
+        checkEncoded(encode(0x42), [0x42])
+        checkEncoded(encode(0x7f), [0x7f])
+        checkEncoded(encode(0x80), [0x80, 0x01])
+        checkEncoded(encode(0xff), [0xff, 0x01])
+        checkEncoded(encode(0x1234), [0xb4, 0x24])
+        checkEncoded(encode(0x3fff), [0xff, 0x7f])
+        checkEncoded(encode(0x4000), [0x80, 0x80, 0x01])
+        checkEncoded(encode(0x5678), [0xf8, 0xac, 0x01])
+        checkEncoded(encode(0xfffff), [0xff, 0xff, 0x3f])
+        checkEncoded(encode(0x1fffff), [0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x200000), [0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0xfffffff), [0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x10000000), [0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
+        checkEncoded(encode(0x87654321), [0xa1, 0x86, 0x95, 0xbb, 0x08])
+        checkEncoded(encode(0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x0f])
+      })
+
+      it('should round-trip unsigned integers', () => {
+        const examples = [
+          0, 1, 0x42, 0x7f, 0x80, 0xff, 0x1234, 0x3fff, 0x4000, 0x5678, 0xfffff, 0x1fffff,
+          0x200000, 0xfffffff, 0x10000000, 0x7fffffff, 0x87654321, 0xffffffff
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendUint32(value)
+          const decoder = new Decoder(encoder.buffer)
+          assert.strictEqual(decoder.readUint32(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should encode signed integers', () => {
+        function encode(value) {
+          const encoder = new Encoder()
+          encoder.appendInt32(value)
+          return encoder
+        }
+        checkEncoded(encode(0), [0])
+        checkEncoded(encode(1), [1])
+        checkEncoded(encode(-1), [0x7f])
+        checkEncoded(encode(0x3f), [0x3f])
+        checkEncoded(encode(0x40), [0xc0, 0x00])
+        checkEncoded(encode(-0x3f), [0x41])
+        checkEncoded(encode(-0x40), [0x40])
+        checkEncoded(encode(-0x41), [0xbf, 0x7f])
+        checkEncoded(encode(0x1fff), [0xff, 0x3f])
+        checkEncoded(encode(0x2000), [0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x2000), [0x80, 0x40])
+        checkEncoded(encode(-0x2001), [0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0xfffff), [0xff, 0xff, 0x3f])
+        checkEncoded(encode(0x100000), [0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x100000), [0x80, 0x80, 0x40])
+        checkEncoded(encode(-0x100001), [0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x7ffffff), [0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(0x8000000), [0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x8000000), [0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(-0x8000001), [0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x76543210), [0x90, 0xe4, 0xd0, 0xb2, 0x07])
+        checkEncoded(encode(-0x76543210), [0xf0, 0x9b, 0xaf, 0xcd, 0x78])
+        checkEncoded(encode(0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
+        checkEncoded(encode(-0x80000000), [0x80, 0x80, 0x80, 0x80, 0x78])
+      })
+
+      it('should round-trip signed integers', () => {
+        const examples = [
+          0, 1, -1, 0x3f, 0x40, -0x3f, -0x40, -0x41, 0x1fff, 0x2000, -0x2000,
+          -0x2001, 0xfffff, 0x100000, -0x100000, -0x100001, 0x7ffffff, 0x8000000,
+          -0x8000000, -0x8000001, 0x76543210, -0x76543210, 0x7fffffff, -0x80000000
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendInt32(value)
+          const decoder = new Decoder(encoder.buffer)
+          assert.strictEqual(decoder.readInt32(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should not encode values that are out of range', () => {
+        assert.throws(() => { new Encoder().appendUint32(0x100000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint32(Number.MAX_SAFE_INTEGER) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint32(-1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint32(-0x80000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint32(Number.NEGATIVE_INFINITY) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendUint32(Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendUint32(Math.PI) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt32(0x80000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt32(Number.MAX_SAFE_INTEGER) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt32(-0x80000001) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt32(Number.NEGATIVE_INFINITY) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt32(Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt32(Math.PI) }, /not an integer/)
+      })
+
+      it('should not decode values that are out of range', () => {
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readUint32() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readInt32() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x10])).readUint32() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x08])).readInt32() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0x77])).readInt32() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readUint32() }, /incomplete number/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readInt32() }, /incomplete number/)
+      })
+    })
+
+    describe('53-bit LEB128 encoding', () => {
+      it('should encode unsigned integers', () => {
+        function encode(value) {
+          const encoder = new Encoder()
+          encoder.appendUint53(value)
+          return encoder
+        }
+        checkEncoded(encode(0), [0])
+        checkEncoded(encode(0x7f), [0x7f])
+        checkEncoded(encode(0x80), [0x80, 0x01])
+        checkEncoded(encode(0x3fff), [0xff, 0x7f])
+        checkEncoded(encode(0x4000), [0x80, 0x80, 0x01])
+        checkEncoded(encode(0x1fffff), [0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x200000), [0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0xfffffff), [0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x10000000), [0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x0f])
+        checkEncoded(encode(0x100000000), [0x80, 0x80, 0x80, 0x80, 0x10])
+        checkEncoded(encode(0x7ffffffff), [0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x800000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x3ffffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x40000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x2000000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x123456789abcde), [0xde, 0xf9, 0xea, 0xc4, 0xe7, 0x8a, 0x8d, 0x09])
+        checkEncoded(encode(Number.MAX_SAFE_INTEGER), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f])
+      })
+
+      it('should round-trip unsigned integers', () => {
+        const examples = [
+          0, 0x7f, 0x80, 0x3fff, 0x4000, 0x1fffff, 0x200000, 0xfffffff, 0x10000000,
+          0xffffffff, 0x100000000, 0x7ffffffff, 0x800000000, 0x3ffffffffff,
+          0x40000000000, 0x2000000000000, 0x123456789abcde, Number.MAX_SAFE_INTEGER
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendUint53(value)
+          const decoder = new Decoder(encoder.buffer)
+          assert.strictEqual(decoder.readUint53(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should encode signed integers', () => {
+        function encode(value) {
+          const encoder = new Encoder()
+          encoder.appendInt53(value)
+          return encoder
+        }
+        checkEncoded(encode(0), [0])
+        checkEncoded(encode(1), [1])
+        checkEncoded(encode(-1), [0x7f])
+        checkEncoded(encode(0x3f), [0x3f])
+        checkEncoded(encode(-0x40), [0x40])
+        checkEncoded(encode(0x40), [0xc0, 0x00])
+        checkEncoded(encode(-0x41), [0xbf, 0x7f])
+        checkEncoded(encode(0x1fff), [0xff, 0x3f])
+        checkEncoded(encode(-0x2000), [0x80, 0x40])
+        checkEncoded(encode(0x2000), [0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x2001), [0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0xfffff), [0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x100000), [0x80, 0x80, 0x40])
+        checkEncoded(encode(0x100000), [0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x100001), [0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x7ffffff), [0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x8000000), [0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x8000000), [0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x8000001), [0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
+        checkEncoded(encode(0x80000000), [0x80, 0x80, 0x80, 0x80, 0x08])
+        checkEncoded(encode(-0x80000000), [0x80, 0x80, 0x80, 0x80, 0x78])
+        checkEncoded(encode(-0x80000001), [0xff, 0xff, 0xff, 0xff, 0x77])
+        checkEncoded(encode(0x3ffffffff), [0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x400000000), [0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x400000000), [0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x400000001), [0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x1ffffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x20000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x20000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x20000000001), [0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0xffffffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x1000000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x1000000000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x1000000000001), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x123456789abcde), [0xde, 0xf9, 0xea, 0xc4, 0xe7, 0x8a, 0x8d, 0x09])
+        checkEncoded(encode(Number.MAX_SAFE_INTEGER), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f])
+        checkEncoded(encode(Number.MIN_SAFE_INTEGER), [0x81, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x70])
+      })
+
+      it('should round-trip signed integers', () => {
+        const examples = [
+          0, 1, -1, 0x3f, -0x40, 0x40, -0x41, 0x1fff, -0x2000, 0x2000, -0x2001, 0xfffff,
+          -0x100000, 0x100000, -0x100001, 0x7ffffff, -0x8000000, 0x8000000, -0x8000001,
+          0x7fffffff, 0x80000000, -0x80000000, -0x80000001, 0x3ffffffff, -0x400000000,
+          0x400000000, -0x400000001, 0x1ffffffffff, -0x20000000000, 0x20000000000,
+          -0x20000000001, 0xffffffffffff, -0x1000000000000, 0x1000000000000,
+          -0x1000000000001, Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER,
+          0x123, -0x123, 0x1234, -0x1234, 0x12345, -0x12345, 0x123456, -0x123456,
+          0x1234567, -0x1234567, 0x12345678, -0x12345678, 0x123456789, -0x123456789,
+          0x123456789a, -0x123456789a, 0x123456789ab, -0x123456789ab, 0x123456789abc,
+          -0x123456789abc, 0x123456789abcd, -0x123456789abcd, 0x123456789abcde,
+          -0x123456789abcde
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendInt53(value)
+          const decoder = new Decoder(encoder.buffer)
+          assert.strictEqual(decoder.readInt53(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should not encode values that are out of range', () => {
+        assert.throws(() => { new Encoder().appendUint53(Number.MAX_SAFE_INTEGER + 1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint53(-1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint53(-0x80000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint53(Number.MIN_SAFE_INTEGER) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint53(Number.NEGATIVE_INFINITY) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendUint53(Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendUint53(Math.PI) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt53(Number.MAX_SAFE_INTEGER + 1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt53(Number.MIN_SAFE_INTEGER - 1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt53(Number.NEGATIVE_INFINITY) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt53(Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt53(Math.PI) }, /not an integer/)
+      })
+
+      it('should not decode values that are out of range', () => {
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x10])).readUint53() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x10])).readInt53() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x70])).readInt53() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x6f])).readInt53() }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readUint53() }, /incomplete number/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readInt53() }, /incomplete number/)
+      })
+    })
+
+    describe('64-bit LEB128 encoding', () => {
+      it('should encode unsigned integers', () => {
+        function encode(high32, low32) {
+          const encoder = new Encoder()
+          encoder.appendUint64(high32, low32)
+          return encoder
+        }
+        checkEncoded(encode(0, 0), [0])
+        checkEncoded(encode(0, 0x7f), [0x7f])
+        checkEncoded(encode(0, 0x80), [0x80, 0x01])
+        checkEncoded(encode(0, 0x3fff), [0xff, 0x7f])
+        checkEncoded(encode(0, 0x4000), [0x80, 0x80, 0x01])
+        checkEncoded(encode(0, 0x1fffff), [0xff, 0xff, 0x7f])
+        checkEncoded(encode(0, 0x200000), [0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0, 0xfffffff), [0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0, 0x10000000), [0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x0f])
+        checkEncoded(encode(0x1, 0x00000000), [0x80, 0x80, 0x80, 0x80, 0x10])
+        checkEncoded(encode(0x7, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x8, 0x00000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x3ff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x400, 0x00000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0x1ffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x20000, 0x00000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0xffffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f])
+        checkEncoded(encode(0x1000000, 0x00000000), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01])
+        checkEncoded(encode(0xffffffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
+      })
+
+      it('should round-trip unsigned integers', () => {
+        const examples = [
+          {high32: 0, low32: 0}, {high32: 0, low32: 0x7f}, {high32: 0, low32: 0x80},
+          {high32: 0, low32: 0x3fff}, {high32: 0, low32: 0x4000}, {high32: 0, low32: 0x1fffff},
+          {high32: 0, low32: 0x200000}, {high32: 0, low32: 0xfffffff},
+          {high32: 0, low32: 0x10000000}, {high32: 0, low32: 0xffffffff},
+          {high32: 0x1, low32: 0x00000000}, {high32: 0x7, low32: 0xffffffff},
+          {high32: 0x8, low32: 0x00000000}, {high32: 0x3ff, low32: 0xffffffff},
+          {high32: 0x400, low32: 0x00000000}, {high32: 0x1ffff, low32: 0xffffffff},
+          {high32: 0x20000, low32: 0x00000000}, {high32: 0xffffff, low32: 0xffffffff},
+          {high32: 0x1000000, low32: 0x00000000}, {high32: 0xffffffff, low32: 0xffffffff},
+          {high32: 0, low32: 0x123}, {high32: 0, low32: 0x1234}, {high32: 0, low32: 0x12345},
+          {high32: 0, low32: 0x123456}, {high32: 0, low32: 0x1234567},
+          {high32: 0, low32: 0x12345678}, {high32: 0x9, low32: 0x12345678},
+          {high32: 0x98, low32: 0x12345678}, {high32: 0x987, low32: 0x12345678},
+          {high32: 0x9876, low32: 0x12345678}, {high32: 0x98765, low32: 0x12345678},
+          {high32: 0x987654, low32: 0x12345678}, {high32: 0x9876543, low32: 0x12345678},
+          {high32: 0x98765432, low32: 0x12345678}
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendUint64(value.high32, value.low32)
+          const decoder = new Decoder(encoder.buffer)
+          assert.deepStrictEqual(decoder.readUint64(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should encode signed integers', () => {
+        function encode(high32, low32) {
+          const encoder = new Encoder()
+          encoder.appendInt64(high32, low32)
+          return encoder
+        }
+        checkEncoded(encode(0, 0), [0])
+        checkEncoded(encode(0, 1), [1])
+        checkEncoded(encode(-1, -1), [0x7f])
+        checkEncoded(encode(0, 0x3f), [0x3f])
+        checkEncoded(encode(-1, -0x40), [0x40])
+        checkEncoded(encode(0, 0x40), [0xc0, 0x00])
+        checkEncoded(encode(-1, -0x41), [0xbf, 0x7f])
+        checkEncoded(encode(0, 0x1fff), [0xff, 0x3f])
+        checkEncoded(encode(-1, -0x2000), [0x80, 0x40])
+        checkEncoded(encode(0, 0x2000), [0x80, 0xc0, 0x00])
+        checkEncoded(encode(-1, -0x2001), [0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0, 0xfffff), [0xff, 0xff, 0x3f])
+        checkEncoded(encode(-1, -0x100000), [0x80, 0x80, 0x40])
+        checkEncoded(encode(0, 0x100000), [0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-1, -0x100001), [0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0, 0x7ffffff), [0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-1, -0x8000000), [0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0, 0x8000000), [0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-1, -0x8000001), [0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0, 0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
+        checkEncoded(encode(0, 0x80000000), [0x80, 0x80, 0x80, 0x80, 0x08])
+        checkEncoded(encode(0, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x0f])
+        checkEncoded(encode(-1, -0x80000000), [0x80, 0x80, 0x80, 0x80, 0x78])
+        checkEncoded(encode(-1, 0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x77])
+        checkEncoded(encode(-1, 1), [0x81, 0x80, 0x80, 0x80, 0x70])
+        checkEncoded(encode(-1, 0), [0x80, 0x80, 0x80, 0x80, 0x70])
+        checkEncoded(encode(-2, -1), [0xff, 0xff, 0xff, 0xff, 0x6f])
+        checkEncoded(encode(3, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-4, 0), [0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(4, 0), [0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-5, -1), [0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x1ff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x200, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x200, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x201, -1), [0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0xffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x10000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x10000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x10001, -1), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x7fffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x800000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x800000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x800001, -1), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x3fffffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f])
+        checkEncoded(encode(-0x40000000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40])
+        checkEncoded(encode(0x40000000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xc0, 0x00])
+        checkEncoded(encode(-0x40000001, -1), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xbf, 0x7f])
+        checkEncoded(encode(0x7fffffff, 0xffffffff), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00])
+        checkEncoded(encode(-0x80000000, 0), [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x7f])
+      })
+
+      it('should round-trip signed integers', () => {
+        const examples = [
+          {high32: 0, low32: 0}, {high32: 0, low32: 1}, {high32: -1, low32: -1 >>> 0},
+          {high32: 0, low32: 0x3f}, {high32: -1, low32: -0x40 >>> 0}, {high32: 0, low32: 0x40},
+          {high32: -1, low32: -0x41 >>> 0}, {high32: 0, low32: 0x1fff}, {high32: -1, low32: -0x2000 >>> 0},
+          {high32: 0, low32: 0x2000}, {high32: -1, low32: -0x2001 >>> 0},
+          {high32: 0, low32: 0xfffff}, {high32: -1, low32: -0x100000 >>> 0},
+          {high32: 0, low32: 0x100000}, {high32: -1, low32: -0x100001 >>> 0},
+          {high32: 0, low32: 0x7ffffff}, {high32: -1, low32: -0x8000000 >>> 0},
+          {high32: 0, low32: 0x8000000}, {high32: -1, low32: -0x8000001 >>> 0},
+          {high32: 0, low32: 0x7fffffff}, {high32: 0, low32: 0x80000000},
+          {high32: 0, low32: 0xffffffff}, {high32: -1, low32: -0x80000000 >>> 0},
+          {high32: -1, low32: 0x7fffffff}, {high32: -1, low32: 1}, {high32: -1, low32: 0},
+          {high32: -2, low32: -1 >>> 0}, {high32: 3, low32: 0xffffffff}, {high32: -4, low32: 0},
+          {high32: 4, low32: 0}, {high32: -5, low32: -1 >>> 0}, {high32: 0x1ff, low32: 0xffffffff},
+          {high32: -0x200, low32: 0}, {high32: 0x200, low32: 0}, {high32: -0x201, low32: -1 >>> 0},
+          {high32: 0xffff, low32: 0xffffffff}, {high32: -0x10000, low32: 0},
+          {high32: 0x10000, low32: 0}, {high32: -0x10001, low32: -1 >>> 0},
+          {high32: 0x7fffff, low32: 0xffffffff}, {high32: -0x800000, low32: 0},
+          {high32: 0x800000, low32: 0}, {high32: -0x800001, low32: -1 >>> 0},
+          {high32: 0x3fffffff, low32: 0xffffffff}, {high32: -0x40000000, low32: 0},
+          {high32: 0x40000000, low32: 0}, {high32: -0x40000001, low32: -1 >>> 0},
+          {high32: 0x7fffffff, low32: 0xffffffff}, {high32: -0x80000000, low32: 0},
+          {high32: 0, low32: 0x123}, {high32: -1, low32: -0x123 >>> 0},
+          {high32: 0, low32: 0x1234}, {high32: -1, low32: -0x1234 >>> 0},
+          {high32: 0, low32: 0x12345}, {high32: -1, low32: -0x12345 >>> 0},
+          {high32: 0, low32: 0x123456}, {high32: -1, low32: -0x123456 >>> 0},
+          {high32: 0, low32: 0x1234567}, {high32: -1, low32: -0x1234567 >>> 0},
+          {high32: 0, low32: 0x12345678}, {high32: -1, low32: -0x12345678 >>> 0},
+          {high32: 0x9, low32: 0x12345678}, {high32: -0x9, low32: -0x12345678 >>> 0},
+          {high32: 0x98, low32: 0x12345678}, {high32: -0x98, low32: -0x12345678 >>> 0},
+          {high32: 0x987, low32: 0x12345678}, {high32: -0x987, low32: -0x12345678 >>> 0},
+          {high32: 0x9876, low32: 0x12345678}, {high32: -0x9876, low32: -0x12345678 >>> 0},
+          {high32: 0x98765, low32: 0x12345678}, {high32: -0x98765, low32: -0x12345678 >>> 0},
+          {high32: 0x987654, low32: 0x12345678}, {high32: -0x987654, low32: -0x12345678 >>> 0},
+          {high32: 0x9876543, low32: 0x12345678}, {high32: -0x9876543, low32: -0x12345678 >>> 0},
+          {high32: 0x78765432, low32: 0x12345678}, {high32: -0x78765432, low32: -0x12345678 >>> 0}
+        ]
+        for (let value of examples) {
+          const encoder = new Encoder()
+          encoder.appendInt64(value.high32, value.low32)
+          const decoder = new Decoder(encoder.buffer)
+          assert.deepStrictEqual(decoder.readInt64(), value)
+          assert.strictEqual(decoder.done, true)
+        }
+      })
+
+      it('should not encode values that are out of range', () => {
+        assert.throws(() => { new Encoder().appendUint64(0, 0x100000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint64(0x100000000, 0) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint64(0, -1) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint64(-1, 0) }, /out of range/)
+        assert.throws(() => { new Encoder().appendUint64(123, Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendUint64(123, Math.PI) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt64(0, 0x100000000) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt64(0x80000000, 0) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt64(0, -0x80000001) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt64(-0x80000001, 0) }, /out of range/)
+        assert.throws(() => { new Encoder().appendInt64(123, Number.NaN) }, /not an integer/)
+        assert.throws(() => { new Encoder().appendInt64(123, Math.PI) }, /not an integer/)
+      })
+
+      it('should not decode values that are out of range', () => {
+        assert.throws(() => {
+          new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readUint64()
+        }, /out of range/)
+        assert.throws(() => {
+          new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readInt64()
+        }, /out of range/)
+        assert.throws(() => {
+          new Decoder(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x02])).readUint64()
+        }, /out of range/)
+        assert.throws(() => {
+          new Decoder(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])).readInt64()
+        }, /out of range/)
+        assert.throws(() => {
+          new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x7e])).readInt64()
+        }, /out of range/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readUint64() }, /incomplete number/)
+        assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readInt64() }, /incomplete number/)
+      })
+    })
+
+    describe('UTF-8 encoding', () => {
+      it('should encode strings', () => {
+        checkEncoded(new Encoder().appendPrefixedString(''), [0])
+        checkEncoded(new Encoder().appendPrefixedString('a'), [1, 0x61])
+        checkEncoded(new Encoder().appendPrefixedString('Oh là là'), [10, 79, 104, 32, 108, 195, 160, 32, 108, 195, 160])
+        checkEncoded(new Encoder().appendPrefixedString('😄'), [4, 0xf0, 0x9f, 0x98, 0x84])
+      })
+
+      it('should round-trip strings', () => {
+        assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('').buffer).readPrefixedString(), '')
+        assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('a').buffer).readPrefixedString(), 'a')
+        assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('Oh là là').buffer).readPrefixedString(), 'Oh là là')
+        assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('😄').buffer).readPrefixedString(), '😄')
+      })
+
+      it('should encode multiple strings', () => {
         const encoder = new Encoder()
-        encoder.appendUint32(value)
-        return encoder
-      }
-      checkEncoded(encode(0), [0])
-      checkEncoded(encode(1), [1])
-      checkEncoded(encode(0x42), [0x42])
-      checkEncoded(encode(0x7f), [0x7f])
-      checkEncoded(encode(0x80), [0x80, 0x01])
-      checkEncoded(encode(0xff), [0xff, 0x01])
-      checkEncoded(encode(0x1234), [0xb4, 0x24])
-      checkEncoded(encode(0x3fff), [0xff, 0x7f])
-      checkEncoded(encode(0x4000), [0x80, 0x80, 0x01])
-      checkEncoded(encode(0x5678), [0xf8, 0xac, 0x01])
-      checkEncoded(encode(0xfffff), [0xff, 0xff, 0x3f])
-      checkEncoded(encode(0x1fffff), [0xff, 0xff, 0x7f])
-      checkEncoded(encode(0x200000), [0x80, 0x80, 0x80, 0x01])
-      checkEncoded(encode(0xfffffff), [0xff, 0xff, 0xff, 0x7f])
-      checkEncoded(encode(0x10000000), [0x80, 0x80, 0x80, 0x80, 0x01])
-      checkEncoded(encode(0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
-      checkEncoded(encode(0x87654321), [0xa1, 0x86, 0x95, 0xbb, 0x08])
-      checkEncoded(encode(0xffffffff), [0xff, 0xff, 0xff, 0xff, 0x0f])
-    })
-
-    it('should encode-decode round-trip unsigned integers', () => {
-      function codec(value) {
-        const encoder = new Encoder()
-        encoder.appendUint32(value)
-        return new Decoder(encoder.buffer).readUint32()
-      }
-      assert.strictEqual(codec(0), 0)
-      assert.strictEqual(codec(1), 1)
-      assert.strictEqual(codec(0x42), 0x42)
-      assert.strictEqual(codec(0x7f), 0x7f)
-      assert.strictEqual(codec(0x80), 0x80)
-      assert.strictEqual(codec(0xff), 0xff)
-      assert.strictEqual(codec(0x1234), 0x1234)
-      assert.strictEqual(codec(0x3fff), 0x3fff)
-      assert.strictEqual(codec(0x4000), 0x4000)
-      assert.strictEqual(codec(0x5678), 0x5678)
-      assert.strictEqual(codec(0xfffff), 0xfffff)
-      assert.strictEqual(codec(0x1fffff), 0x1fffff)
-      assert.strictEqual(codec(0x200000), 0x200000)
-      assert.strictEqual(codec(0xfffffff), 0xfffffff)
-      assert.strictEqual(codec(0x10000000), 0x10000000)
-      assert.strictEqual(codec(0x7fffffff), 0x7fffffff)
-      assert.strictEqual(codec(0x87654321), 0x87654321)
-      assert.strictEqual(codec(0xffffffff), 0xffffffff)
-    })
-
-    it('should LEB128-encode signed integers', () => {
-      function encode(value) {
-        const encoder = new Encoder()
-        encoder.appendInt32(value)
-        return encoder
-      }
-      checkEncoded(encode(0), [0])
-      checkEncoded(encode(1), [1])
-      checkEncoded(encode(-1), [0x7f])
-      checkEncoded(encode(0x3f), [0x3f])
-      checkEncoded(encode(0x40), [0xc0, 0x00])
-      checkEncoded(encode(-0x3f), [0x41])
-      checkEncoded(encode(-0x40), [0x40])
-      checkEncoded(encode(-0x41), [0xbf, 0x7f])
-      checkEncoded(encode(0x1fff), [0xff, 0x3f])
-      checkEncoded(encode(0x2000), [0x80, 0xc0, 0x00])
-      checkEncoded(encode(-0x2000), [0x80, 0x40])
-      checkEncoded(encode(-0x2001), [0xff, 0xbf, 0x7f])
-      checkEncoded(encode(0xfffff), [0xff, 0xff, 0x3f])
-      checkEncoded(encode(0x100000), [0x80, 0x80, 0xc0, 0x00])
-      checkEncoded(encode(-0x100000), [0x80, 0x80, 0x40])
-      checkEncoded(encode(-0x100001), [0xff, 0xff, 0xbf, 0x7f])
-      checkEncoded(encode(0x7ffffff), [0xff, 0xff, 0xff, 0x3f])
-      checkEncoded(encode(0x8000000), [0x80, 0x80, 0x80, 0xc0, 0x00])
-      checkEncoded(encode(-0x8000000), [0x80, 0x80, 0x80, 0x40])
-      checkEncoded(encode(-0x8000001), [0xff, 0xff, 0xff, 0xbf, 0x7f])
-      checkEncoded(encode(0x76543210), [0x90, 0xe4, 0xd0, 0xb2, 0x07])
-      checkEncoded(encode(-0x76543210), [0xf0, 0x9b, 0xaf, 0xcd, 0x78])
-      checkEncoded(encode(0x7fffffff), [0xff, 0xff, 0xff, 0xff, 0x07])
-      checkEncoded(encode(-0x80000000), [0x80, 0x80, 0x80, 0x80, 0x78])
-    })
-
-    it('should encode-decode round-trip signed integers', () => {
-      function codec(value) {
-        const encoder = new Encoder()
-        encoder.appendInt32(value)
-        return new Decoder(encoder.buffer).readInt32()
-      }
-      assert.strictEqual(codec(0), 0)
-      assert.strictEqual(codec(1), 1)
-      assert.strictEqual(codec(-1), -1)
-      assert.strictEqual(codec(0x3f), 0x3f)
-      assert.strictEqual(codec(0x40), 0x40)
-      assert.strictEqual(codec(-0x3f), -0x3f)
-      assert.strictEqual(codec(-0x40), -0x40)
-      assert.strictEqual(codec(-0x41), -0x41)
-      assert.strictEqual(codec(0x1fff), 0x1fff)
-      assert.strictEqual(codec(0x2000), 0x2000)
-      assert.strictEqual(codec(-0x2000), -0x2000)
-      assert.strictEqual(codec(-0x2001), -0x2001)
-      assert.strictEqual(codec(0xfffff), 0xfffff)
-      assert.strictEqual(codec(0x100000), 0x100000)
-      assert.strictEqual(codec(-0x100000), -0x100000)
-      assert.strictEqual(codec(-0x100001), -0x100001)
-      assert.strictEqual(codec(0x7ffffff), 0x7ffffff)
-      assert.strictEqual(codec(0x8000000), 0x8000000)
-      assert.strictEqual(codec(-0x8000000), -0x8000000)
-      assert.strictEqual(codec(-0x8000001), -0x8000001)
-      assert.strictEqual(codec(0x76543210), 0x76543210)
-      assert.strictEqual(codec(-0x76543210), -0x76543210)
-      assert.strictEqual(codec(0x7fffffff), 0x7fffffff)
-      assert.strictEqual(codec(-0x80000000), -0x80000000)
-    })
-
-    it('should not encode number values that are out of range', () => {
-      assert.throws(() => { new Encoder().appendUint32(0x100000000) }, /out of range/)
-      assert.throws(() => { new Encoder().appendUint32(Number.MAX_SAFE_INTEGER) }, /out of range/)
-      assert.throws(() => { new Encoder().appendUint32(-1) }, /out of range/)
-      assert.throws(() => { new Encoder().appendUint32(-0x80000000) }, /out of range/)
-      assert.throws(() => { new Encoder().appendUint32(Number.NEGATIVE_INFINITY) }, /not an integer/)
-      assert.throws(() => { new Encoder().appendUint32(Number.NaN) }, /not an integer/)
-      assert.throws(() => { new Encoder().appendUint32(Math.PI) }, /not an integer/)
-      assert.throws(() => { new Encoder().appendInt32(0x80000000) }, /out of range/)
-      assert.throws(() => { new Encoder().appendInt32(Number.MAX_SAFE_INTEGER) }, /out of range/)
-      assert.throws(() => { new Encoder().appendInt32(-0x80000001) }, /out of range/)
-      assert.throws(() => { new Encoder().appendInt32(Number.NEGATIVE_INFINITY) }, /not an integer/)
-      assert.throws(() => { new Encoder().appendInt32(Number.NaN) }, /not an integer/)
-      assert.throws(() => { new Encoder().appendInt32(Math.PI) }, /not an integer/)
-    })
-
-    it('should not decode number values that are out of range', () => {
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readUint32() }, /out of range/)
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x00])).readInt32() }, /out of range/)
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x10])).readUint32() }, /out of range/)
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x08])).readInt32() }, /out of range/)
-      assert.throws(() => { new Decoder(new Uint8Array([0xff, 0xff, 0xff, 0xff, 0x77])).readInt32() }, /out of range/)
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readUint32() }, /incomplete number/)
-      assert.throws(() => { new Decoder(new Uint8Array([0x80, 0x80])).readInt32() }, /incomplete number/)
-    })
-
-    it('should encode strings as UTF-8', () => {
-      checkEncoded(new Encoder().appendPrefixedString(''), [0])
-      checkEncoded(new Encoder().appendPrefixedString('a'), [1, 0x61])
-      checkEncoded(new Encoder().appendPrefixedString('Oh là là'), [10, 79, 104, 32, 108, 195, 160, 32, 108, 195, 160])
-      checkEncoded(new Encoder().appendPrefixedString('😄'), [4, 0xf0, 0x9f, 0x98, 0x84])
-    })
-
-    it('should encode-decode round-trip UTF-8 strings', () => {
-      assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('').buffer).readPrefixedString(), '')
-      assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('a').buffer).readPrefixedString(), 'a')
-      assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('Oh là là').buffer).readPrefixedString(), 'Oh là là')
-      assert.strictEqual(new Decoder(new Encoder().appendPrefixedString('😄').buffer).readPrefixedString(), '😄')
-    })
-
-    it('should encode multiple UTF-8 strings', () => {
-      const encoder = new Encoder()
-      encoder.appendPrefixedString('one')
-      encoder.appendPrefixedString('two')
-      encoder.appendPrefixedString('three')
-      const decoder = new Decoder(encoder.buffer)
-      assert.strictEqual(decoder.readPrefixedString(), 'one')
-      assert.strictEqual(decoder.readPrefixedString(), 'two')
-      assert.strictEqual(decoder.readPrefixedString(), 'three')
+        encoder.appendPrefixedString('one')
+        encoder.appendPrefixedString('two')
+        encoder.appendPrefixedString('three')
+        const decoder = new Decoder(encoder.buffer)
+        assert.strictEqual(decoder.readPrefixedString(), 'one')
+        assert.strictEqual(decoder.readPrefixedString(), 'two')
+        assert.strictEqual(decoder.readPrefixedString(), 'three')
+      })
     })
   })
 
