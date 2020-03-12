@@ -11,7 +11,8 @@ const { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, Bo
 // - We only need one hash function (not a full suite of crypto algorithms);
 // - SHA256 is quite simple and has fairly few opportunities for subtle bugs
 //   (compared to asymmetric cryptography anyway);
-// - It does not need a secure source of random bits;
+// - It does not need a secure source of random bits and does not need to be
+//   constant-time;
 // - I have reviewed the source code and it seems pretty reasonable.
 const { Hash } = require('fast-sha256')
 
