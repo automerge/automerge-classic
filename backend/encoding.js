@@ -231,7 +231,7 @@ class Encoder {
    * number of bytes in the buffer (as a LEB128-encoded unsigned integer).
    */
   appendPrefixedBytes(data) {
-    this.appendUint32(data.byteLength)
+    this.appendUint53(data.byteLength)
     this.appendRawBytes(data)
     return this
   }
@@ -460,7 +460,7 @@ class Decoder {
    * its length in bytes (encoded as an unsigned LEB128 integer).
    */
   readPrefixedBytes() {
-    return this.readRawBytes(this.readUint32())
+    return this.readRawBytes(this.readUint53())
   }
 
   /**
@@ -475,7 +475,7 @@ class Decoder {
 /**
  * An encoder that uses run-length encoding to compress sequences of repeated
  * values. The constructor argument specifies the type of values, which may be
- * either 'int32', 'uint32', or 'utf8'. Besides valid values of the selected
+ * either 'int', 'uint', or 'utf8'. Besides valid values of the selected
  * datatype, values may also be null.
  *
  * The encoded buffer starts with a LEB128-encoded signed integer, the
@@ -521,16 +521,16 @@ class RLEEncoder extends Encoder {
     }
 
     if ((value === null || value === undefined || this.count > 1) && this.literal.length > 0) {
-      this.appendInt32(-this.literal.length)
+      this.appendInt53(-this.literal.length)
       for (let v of this.literal) this.appendRawValue(v)
       this.literal = []
     }
 
     if (this.lastValue === null && this.count > 0) {
       this.appendInt32(0)
-      this.appendUint32(this.count)
+      this.appendUint53(this.count)
     } else if (this.count > 1) {
-      this.appendInt32(this.count)
+      this.appendInt53(this.count)
       this.appendRawValue(this.lastValue)
     }
     this.lastValue = value
@@ -538,10 +538,10 @@ class RLEEncoder extends Encoder {
   }
 
   appendRawValue(value) {
-    if (this.type === 'int32') {
-      this.appendInt32(value)
-    } else if (this.type === 'uint32') {
-      this.appendUint32(value)
+    if (this.type === 'int') {
+      this.appendInt53(value)
+    } else if (this.type === 'uint') {
+      this.appendUint53(value)
     } else if (this.type === 'utf8') {
       this.appendPrefixedString(value)
     } else {
@@ -584,7 +584,7 @@ class RLEDecoder extends Decoder {
    */
   readValue() {
     if (this.count === 0) {
-      this.count = this.readInt32()
+      this.count = this.readInt53()
       if (this.count > 0) {
         this.lastValue = this.readRawValue()
         this.literal = false
@@ -592,7 +592,7 @@ class RLEDecoder extends Decoder {
         this.count = -this.count
         this.literal = true
       } else { // this.count == 0
-        this.count = this.readUint32()
+        this.count = this.readUint53()
         this.lastValue = null
         this.literal = false
       }
@@ -607,10 +607,10 @@ class RLEDecoder extends Decoder {
   }
 
   readRawValue() {
-    if (this.type === 'int32') {
-      return this.readInt32()
-    } else if (this.type === 'uint32') {
-      return this.readUint32()
+    if (this.type === 'int') {
+      return this.readInt53()
+    } else if (this.type === 'uint') {
+      return this.readUint53()
     } else if (this.type === 'utf8') {
       return this.readPrefixedString()
     } else {
@@ -631,7 +631,7 @@ class RLEDecoder extends Decoder {
  */
 class DeltaEncoder extends RLEEncoder {
   constructor() {
-    super('int32')
+    super('int')
     this.absoluteValue = 0
   }
 
@@ -654,7 +654,7 @@ class DeltaEncoder extends RLEEncoder {
  */
 class DeltaDecoder extends RLEDecoder {
   constructor(buffer) {
-    super('int32', buffer)
+    super('int', buffer)
     this.absoluteValue = 0
   }
 
@@ -694,7 +694,7 @@ class BooleanEncoder extends Encoder {
     if (this.lastValue === value) {
       this.count += 1
     } else {
-      this.appendUint32(this.count)
+      this.appendUint53(this.count)
       this.lastValue = value
       this.count = 1
     }
@@ -706,7 +706,7 @@ class BooleanEncoder extends Encoder {
    */
   finish() {
     if (this.count > 0) {
-      this.appendUint32(this.count)
+      this.appendUint53(this.count)
       this.count = 0
     }
   }
@@ -736,7 +736,7 @@ class BooleanDecoder extends Decoder {
    */
   readValue() {
     while (this.count === 0) {
-      this.count = this.readUint32()
+      this.count = this.readUint53()
       this.lastValue = !this.lastValue
     }
     this.count -= 1

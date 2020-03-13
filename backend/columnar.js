@@ -185,10 +185,10 @@ function encodeOperationAction(op, columns) {
 function encodeInteger(value, typeTag, columns) {
   let numBytes
   if (value < 0 || typeTag > 0) {
-    numBytes = columns.valRaw.appendInt32(value)
+    numBytes = columns.valRaw.appendInt53(value)
     if (!typeTag) typeTag = VALUE_TYPE.LEB128_INT
   } else {
-    numBytes = columns.valRaw.appendUint32(value)
+    numBytes = columns.valRaw.appendUint53(value)
     typeTag = VALUE_TYPE.LEB128_UINT
   }
   columns.valLen.appendValue(numBytes << 4 | typeTag)
@@ -222,7 +222,7 @@ function encodeValue(op, columns) {
   } else if (op.datatype) {
       throw new RangeError(`Unknown datatype ${op.datatype} for value ${op.value}`)
   } else if (typeof op.value === 'number') {
-    if (Number.isInteger(op.value) && op.value <= 0xffffffff && op.value >= -0x80000000) {
+    if (Number.isInteger(op.value) && op.value <= Number.MAX_SAFE_INTEGER && op.value >= Number.MIN_SAFE_INTEGER) {
       encodeInteger(op.value, 0, columns)
     } else {
       // Encode number in 32-bit float if this can be done without loss of precision
@@ -267,9 +267,9 @@ function decodeValue(columns, colIndex, actorIds, value) {
     } else {
       const bytes = rawDecoder.readRawBytes(sizeTag >> 4), valDecoder = new Decoder(bytes)
       if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
-        value[columnName] = valDecoder.readUint32()
+        value[columnName] = valDecoder.readUint53()
       } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
-        value[columnName] = valDecoder.readInt32()
+        value[columnName] = valDecoder.readInt53()
       } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
         const view = new DataView(bytes.buffer)
         if (bytes.byteLength === 4) {
@@ -280,10 +280,10 @@ function decodeValue(columns, colIndex, actorIds, value) {
           throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
         }
       } else if (sizeTag % 16 === VALUE_TYPE.COUNTER) {
-        value[columnName] = valDecoder.readInt32()
+        value[columnName] = valDecoder.readInt53()
         value[columnName + '_datatype'] = 'counter'
       } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
-        value[columnName] = valDecoder.readInt32()
+        value[columnName] = valDecoder.readInt53()
         value[columnName + '_datatype'] = 'timestamp'
       } else {
         value[columnName] = bytes
@@ -306,20 +306,20 @@ function decodeValue(columns, colIndex, actorIds, value) {
  */
 function encodeOps(ops) {
   const columns = {
-    objActor  : new RLEEncoder('uint32'),
-    objCtr    : new RLEEncoder('uint32'),
-    keyActor  : new RLEEncoder('uint32'),
+    objActor  : new RLEEncoder('uint'),
+    objCtr    : new RLEEncoder('uint'),
+    keyActor  : new RLEEncoder('uint'),
     keyCtr    : new DeltaEncoder(),
     keyStr    : new RLEEncoder('utf8'),
     insert    : new BooleanEncoder(),
-    action    : new RLEEncoder('uint32'),
-    valLen    : new RLEEncoder('uint32'),
+    action    : new RLEEncoder('uint'),
+    valLen    : new RLEEncoder('uint'),
     valRaw    : new Encoder(),
-    chldActor : new RLEEncoder('uint32'),
-    chldCtr   : new RLEEncoder('uint32'),
-    predNum   : new RLEEncoder('uint32'),
-    predCtr   : new RLEEncoder('uint32'),
-    predActor : new RLEEncoder('uint32')
+    chldActor : new RLEEncoder('uint'),
+    chldCtr   : new RLEEncoder('uint'),
+    predNum   : new RLEEncoder('uint'),
+    predCtr   : new RLEEncoder('uint'),
+    predActor : new RLEEncoder('uint')
   }
 
   for (let op of ops) {
@@ -386,7 +386,7 @@ function decodeColumns(decoder, actorIds) {
     } else if (columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
       columns.push({columnId, columnName, decoder: new Decoder(columnBuf)})
     } else {
-      columns.push({columnId, columnName, decoder: new RLEDecoder('uint32', columnBuf)})
+      columns.push({columnId, columnName, decoder: new RLEDecoder('uint', columnBuf)})
     }
   }
 
@@ -422,34 +422,34 @@ function decodeColumns(decoder, actorIds) {
 
 function encodeChangeHeader(encoder, change, actorIds) {
   encoder.appendPrefixedString(change.actor)
-  encoder.appendUint32(change.seq)
-  encoder.appendUint32(change.startOp)
-  encoder.appendInt32(change.time)
+  encoder.appendUint53(change.seq)
+  encoder.appendUint53(change.startOp)
+  encoder.appendInt53(change.time)
   encoder.appendPrefixedString(change.message || '')
-  encoder.appendUint32(actorIds.length)
+  encoder.appendUint53(actorIds.length)
   for (let actor of actorIds) encoder.appendPrefixedString(actor)
   const depsKeys = Object.keys(change.deps).sort()
-  encoder.appendUint32(depsKeys.length)
+  encoder.appendUint53(depsKeys.length)
   for (let actor of depsKeys) {
-    encoder.appendUint32(actorIds.indexOf(actor) + 1)
-    encoder.appendUint32(change.deps[actor])
+    encoder.appendUint53(actorIds.indexOf(actor) + 1)
+    encoder.appendUint53(change.deps[actor])
   }
 }
 
 function decodeChangeHeader(decoder) {
   let change = {
     actor:   decoder.readPrefixedString(),
-    seq:     decoder.readUint32(),
-    startOp: decoder.readUint32(),
-    time:    decoder.readInt32(),
+    seq:     decoder.readUint53(),
+    startOp: decoder.readUint53(),
+    time:    decoder.readInt53(),
     message: decoder.readPrefixedString(),
     deps: {}
   }
-  const actorIds = [change.actor], numActorIds = decoder.readUint32()
+  const actorIds = [change.actor], numActorIds = decoder.readUint53()
   for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readPrefixedString())
-  const numDeps = decoder.readUint32()
+  const numDeps = decoder.readUint53()
   for (let i = 0; i < numDeps; i++) {
-    change.deps[actorIds[decoder.readUint32()]] = decoder.readUint32()
+    change.deps[actorIds[decoder.readUint53()]] = decoder.readUint53()
   }
   change.ops = decodeOps(decodeColumns(decoder, actorIds))
   return change
@@ -478,7 +478,7 @@ function encodeContainerHeader(chunkType, callback) {
   } else {
     throw new RangeError(`Unsupported chunk type: ${chunkType}`)
   }
-  header.appendUint32(bodyBuf.byteLength - HEADER_SPACE)
+  header.appendUint53(bodyBuf.byteLength - HEADER_SPACE)
 
   // Compute the hash over chunkType, length, and body
   const headerBuf = header.buffer
@@ -501,7 +501,7 @@ function decodeContainerHeader(decoder) {
   const expectedHash = decoder.readRawBytes(32)
   const hashStartOffset = decoder.offset
   const chunkType = decoder.readByte()
-  const chunkLength = decoder.readUint32()
+  const chunkLength = decoder.readUint53()
   const chunkData = new Decoder(decoder.readRawBytes(chunkLength))
   const hash = new Hash()
   hash.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
@@ -526,7 +526,7 @@ function encodeChange(changeObj) {
     encodeChangeHeader(encoder, change, actorIds)
     for (let [columnName, columnId] of columnIds) {
       if (columns[columnName]) {
-        encoder.appendUint32(columnId)
+        encoder.appendUint53(columnId)
         encoder.appendPrefixedBytes(columns[columnName].buffer)
       }
     }
