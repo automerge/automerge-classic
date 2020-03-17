@@ -246,9 +246,10 @@ describe('TypeScript support', () => {
       let s2 = Automerge.change(s1, 'add chaffinch', doc => doc.birds.push('chaffinch'))
       const changes = Automerge.getChanges(s1, s2)
       assert.strictEqual(changes.length, 1)
-      assert.strictEqual(changes[0].message, 'add chaffinch')
-      assert.strictEqual(changes[0].actor, Automerge.getActorId(s2))
-      assert.strictEqual(changes[0].seq, 2)
+      const change = Automerge.decodeChange(changes[0])[0]
+      assert.strictEqual(change.message, 'add chaffinch')
+      assert.strictEqual(change.actor, Automerge.getActorId(s2))
+      assert.strictEqual(change.seq, 2)
     })
 
     it('should include operations in changes', () => {
@@ -256,11 +257,12 @@ describe('TypeScript support', () => {
       s1 = Automerge.change(s1, doc => (doc.number = 3))
       const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
-      assert.strictEqual(changes[0].ops.length, 1)
-      assert.strictEqual(changes[0].ops[0].action, 'set')
-      assert.strictEqual(changes[0].ops[0].obj, ROOT_ID)
-      assert.strictEqual(changes[0].ops[0].key, 'number')
-      assert.strictEqual(changes[0].ops[0].value, 3)
+      const change = Automerge.decodeChange(changes[0])[0]
+      assert.strictEqual(change.ops.length, 1)
+      assert.strictEqual(change.ops[0].action, 'set')
+      assert.strictEqual(change.ops[0].obj, ROOT_ID)
+      assert.strictEqual(change.ops[0].key, 'number')
+      assert.strictEqual(change.ops[0].value, 3)
     })
 
     it('should allow changes to be re-applied', () => {
@@ -653,7 +655,7 @@ describe('TypeScript support', () => {
     let beforeDoc: BirdList
     let afterDoc: BirdList
     let docSet: Automerge.DocSet<BirdList>
-    let changes: Automerge.Change[]
+    let changes: Uint8Array[]
     let callback: Automerge.DocSetHandler<BirdList>
     const ID = '1'
 
@@ -700,7 +702,7 @@ describe('TypeScript support', () => {
     let beforeDoc: BirdList
     let afterDoc: BirdList
     let watchDoc: Automerge.WatchableDoc<BirdList>
-    let changes: Automerge.Change[]
+    let changes: Uint8Array[]
     let callback: Automerge.WatchableDocHandler<BirdList>
 
     beforeEach(() => {

@@ -485,22 +485,30 @@ function init() {
 }
 
 /**
- * Adds `change` to `opSet`. If `isLocal` is true, the operations are extended with
- * `pred` properties. If `isUndoable` is true, an undo history entry is created.
- * `patch` is mutated to describe the change (in the format used by patches).
+ * Adds `change` to `opSet` without any modification or undo history creation
+ * (e.g. because it's a remote change, or we have loaded it from disk). `change`
+ * is given as an Immutable.js Map object. `patch` is mutated to describe the
+ * change (in the format used by patches).
  */
-function addChange(opSet, change, isLocal, isUndoable, patch) {
-  if (isLocal) {
-    if (isUndoable) {
-      opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
-      opSet = applyChange(opSet, change, true, patch)
-      opSet = pushUndoHistory(opSet)
-    } else {
-      opSet = applyChange(opSet, change, true, patch)
-    }
+function addChange(opSet, change, patch) {
+  opSet = opSet.update('queue', queue => queue.push(change))
+  return applyQueuedOps(opSet, patch)
+}
+
+/**
+ * Applies a change made by the local user and adds it to `opSet`. The `change`
+ * is given as an Immutable.js Map object. The operations in this change will be
+ * extended with `pred` properties before they are added to the `opSet`. If
+ * `isUndoable` is true, an undo history entry is created. `patch` is mutated
+ * to describe the change (in the format used by patches).
+ */
+function addLocalChange(opSet, change, isUndoable, patch) {
+  if (isUndoable) {
+    opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
+    opSet = applyChange(opSet, change, true, patch)
+    opSet = pushUndoHistory(opSet)
   } else {
-    opSet = opSet.update('queue', queue => queue.push(change))
-    opSet = applyQueuedOps(opSet, patch)
+    opSet = applyChange(opSet, change, true, patch)
   }
   return opSet
 }
@@ -665,6 +673,6 @@ function constructObject(opSet, objectId) {
 }
 
 module.exports = {
-  init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
+  init, addChange, addLocalChange, getMissingChanges, getChangesForActor, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
 }

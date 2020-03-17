@@ -2,6 +2,7 @@ const { Map, List, fromJS } = require('immutable')
 const { copyObject, lessOrEqual } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
+const { encodeChange, decodeChange } = require('./columnar')
 
 /**
  * Processes a change request `request` that is incoming from the frontend. Translates index-based
@@ -87,6 +88,22 @@ function processChangeRequest(state, opSet, request, startOp) {
 }
 
 /**
+ * Decodes a list of changes from the binary format into the Immutable.js
+ * objects expected by OpSet. `binaryChanges` is an array of `Uint8Array`
+ * objects.
+ */
+function decodeChanges(binaryChanges) {
+  let decoded = []
+  for (let binaryChange of binaryChanges) {
+    if (!(binaryChange instanceof Uint8Array)) {
+      throw new RangeError(`Unexpected type of change: ${binaryChange}`)
+    }
+    for (let change of decodeChange(binaryChange)) decoded.push(change)
+  }
+  return fromJS(decoded)
+}
+
+/**
  * Returns an empty node state.
  */
 function init() {
@@ -119,13 +136,18 @@ function makePatch(state, diffs, request, isIncremental) {
 }
 
 /**
- * The implementation behind `applyChanges()` and `applyLocalChange()`.
+ * The implementation behind `applyChanges()`, `applyLocalChange()`, and
+ * `loadChanges()`.
  */
 function apply(state, changes, request, isUndoable, isIncremental) {
   let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
-    opSet = OpSet.addChange(opSet, change, !!request, isUndoable, diffs)
+    if (request) {
+      opSet = OpSet.addLocalChange(opSet, change, isUndoable, diffs)
+    } else {
+      opSet = OpSet.addChange(opSet, change, diffs)
+    }
   }
 
   OpSet.finalizePatch(opSet, diffs)
@@ -154,7 +176,7 @@ function applyChanges(state, changes) {
   // been local changes. Since we are applying a remote change here, we have to set that flag to
   // false on all existing version objects.
   state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
-  return apply(state, fromJS(changes), null, false, true)
+  return apply(state, decodeChanges(changes), null, false, true)
 }
 
 /**
@@ -210,7 +232,7 @@ function applyLocalChange(state, request) {
         if (v.get('localOnly')) {
           return v.set('opSet', state.get('opSet'))
         } else {
-          return v.set('opSet', OpSet.addChange(v.get('opSet'), change, true, false, null))
+          return v.set('opSet', OpSet.addLocalChange(v.get('opSet'), change, false, null))
         }
       })
   })
@@ -225,7 +247,7 @@ function applyLocalChange(state, request) {
  * been loaded, you can use `getPatch()` to construct the latest document state.
  */
 function loadChanges(state, changes) {
-  const [newState, _] = apply(state, fromJS(changes), null, false, false)
+  const [newState, _] = apply(state, decodeChanges(changes), null, false, false)
   return newState
 }
 
@@ -245,16 +267,16 @@ function getChanges(oldState, newState) {
     throw new RangeError('Cannot diff two states that have diverged')
   }
 
-  return OpSet.getMissingChanges(newState.get('opSet'), oldClock).toJS()
+  return OpSet.getMissingChanges(newState.get('opSet'), oldClock).toJS().map(encodeChange)
 }
 
 function getChangesForActor(state, actorId) {
   // I might want to validate the actorId here
-  return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS()
+  return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS().map(encodeChange)
 }
 
 function getMissingChanges(state, clock) {
-  return OpSet.getMissingChanges(state.get('opSet'), clock).toJS()
+  return OpSet.getMissingChanges(state.get('opSet'), clock).toJS().map(encodeChange)
 }
 
 function getMissingDeps(state) {
@@ -270,8 +292,7 @@ function getMissingDeps(state) {
  * reused for different changes in `local` and `remote` respectively.
  */
 function merge(local, remote) {
-  const changes = OpSet.getMissingChanges(remote.get('opSet'), local.getIn(['opSet', 'clock']))
-  return applyChanges(local, changes)
+  return applyChanges(local, getMissingChanges(remote, local.getIn(['opSet', 'clock'])))
 }
 
 /**

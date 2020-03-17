@@ -96,7 +96,7 @@ describe('Automerge.Table', () => {
       assert.throws(() => s1.books.remove('id'),  /can only be modified in a change function/)
     })
 
-    it('should save and reload', () => {
+    it.skip('should save and reload', () => {
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2.books.columns, ['authors', 'title', 'isbn'])
       assert.deepStrictEqual(s2.books.byId(rowId), DDIA)
@@ -152,7 +152,7 @@ describe('Automerge.Table', () => {
     })
   })
 
-  it('should allow concurrent row insertion', () => {
+  it.skip('should allow concurrent row insertion', () => {
     const a0 = Automerge.change(Automerge.init(), doc => {
       doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
     })

@@ -2,6 +2,7 @@ const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const Backend = require('../backend')
+const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 
 /**
@@ -56,13 +57,12 @@ function redo(doc, options) {
   return newDoc
 }
 
-function load(string, options) {
-  return docFromChanges(options, transit.fromJSON(string))
+function load(changes, options) {
+  return docFromChanges(options, changes) // TODO change this to use encoded document format
 }
 
 function save(doc) {
-  const state = Frontend.getBackendState(doc)
-  return transit.toJSON(state.getIn(['opSet', 'history']))
+  return getAllChanges(doc) // TODO change this to use encoded document format
 }
 
 function merge(localDoc, remoteDoc) {
@@ -118,25 +118,28 @@ function equals(val1, val2) {
 }
 
 function getHistory(doc) {
-  const state = Frontend.getBackendState(doc)
   const actor = Frontend.getActorId(doc)
-  const history = state.getIn(['opSet', 'history'])
+  const history = getAllChanges(doc)
   return history.map((change, index) => {
     return {
       get change () {
-        return change.toJS()
+        const decoded = decodeChange(change)
+        if (decoded.length !== 1) {
+          throw new RangeError(`Unexpected number of decoded changes: ${decoded.length}`)
+        }
+        return decoded[0]
       },
       get snapshot () {
         return docFromChanges(actor, history.slice(0, index + 1))
       }
     }
-  }).toArray()
+  })
 }
 
 module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
-  equals, getHistory, uuid,
+  encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),

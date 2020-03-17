@@ -108,7 +108,7 @@ function parseAllOpIds(change) {
     op.obj = maybeParseOpId(op.obj)
     op.key = maybeParseOpId(op.key)
     op.child = maybeParseOpId(op.child)
-    op.pred = op.pred.map(parseOpId)
+    if (op.pred) op.pred = op.pred.map(parseOpId)
     if (op.obj.actorId) actors[op.obj.actorId] = true
     if (op.key.actorId) actors[op.key.actorId] = true
     if (op.child.actorId) actors[op.child.actorId] = true
@@ -362,6 +362,7 @@ function decodeOps(ops) {
     if (op.insert) newOp.insert = true
     if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
       newOp.value = op.valLen
+      if (op.valLen_datatype) newOp.datatype = op.valLen_datatype
     }
     if (op.chldCtr !== null) newOp.child = `${op.chldCtr}@${op.chldActor}`
     newOps.push(newOp)

@@ -31,13 +31,15 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
-  function applyChanges<T>(doc: Doc<T>, changes: Change[]): Doc<T>
+  function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): Doc<T>
   function diff<D extends Doc<any>>(olddoc: D, newdoc: D): ObjectDiff
   function equals<T>(val1: T, val2: T): boolean
+  function encodeChange(change: Change): Uint8Array
+  function decodeChange(binaryChange: Uint8Array): Change[]
 
   function getActorId<T>(doc: Doc<T>): string
-  function getAllChanges<T>(doc: Doc<T>): Change[]
-  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
+  function getAllChanges<T>(doc: Doc<T>): Uint8Array[]
+  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Clock
@@ -108,13 +110,13 @@ declare module 'automerge' {
     maybeSendChanges(docId: string): void
     open(): void
     receiveMsg(msg: Message): Doc<T>
-    sendMsg(docId: string, clock: Clock, changes: Change[]): void
+    sendMsg(docId: string, clock: Clock, changes: Uint8Array[]): void
   }
 
   type DocSetHandler<T> = (docId: string, doc: Doc<T>) => void
   class DocSet<T> {
     constructor()
-    applyChanges(docId: string, changes: Change[]): T
+    applyChanges(docId: string, changes: Uint8Array[]): T
     getDoc(docId: string): Doc<T>
     removeDoc(docId: string): void
     setDoc(docId: string, doc: Doc<T>): void
@@ -126,7 +128,7 @@ declare module 'automerge' {
   type WatchableDocHandler<T> = (doc: Doc<T>) => void
   class WatchableDoc<D, T = Proxy<D>> {
     constructor(doc: D)
-    applyChanges(changes: Change[]): D
+    applyChanges(changes: Uint8Array[]): D
     get(): D
     set(doc: D): void
     registerHandler(handler: WatchableDocHandler<T>): void
@@ -155,11 +157,11 @@ declare module 'automerge' {
   }
 
   namespace Backend {
-    function applyChanges(state: BackendState, changes: Change[]): [BackendState, Patch]
+    function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
-    function getChanges(oldState: BackendState, newState: BackendState): Change[]
-    function getChangesForActor(state: BackendState, actorId: string): Change[]
-    function getMissingChanges(state: BackendState, clock: Clock): Change[]
+    function getChanges(oldState: BackendState, newState: BackendState): Uint8Array[]
+    function getChangesForActor(state: BackendState, actorId: string): Uint8Array[]
+    function getMissingChanges(state: BackendState, clock: Clock): Uint8Array[]
     function getMissingDeps(state: BackendState): Clock
     function getPatch(state: BackendState): Patch
     function init(): BackendState
