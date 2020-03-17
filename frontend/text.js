@@ -46,35 +46,46 @@ class Text {
   }
 
   /**
-   * Returns the content of the Text object as a simple string.
+   * Returns the content of the Text object as a simple string, ignoring any
+   * non-character elements.
    */
   toString() {
-    let chars = []
-    for (let elem of this.elems) {
-      if (typeof elem.value === 'string') chars.push(elem.value)
+    // Concatting to a string is faster than creating an array and then
+    // .join()ing for small (<100KB) arrays.
+    // https://jsperf.com/join-vs-loop-w-type-test
+    let str = ''
+    for (const elem of this.elems) {
+      if (typeof elem.value === 'string') str += elem.value
     }
-    return chars.join('')
+    return str
   }
 
+  /**
+   * Returns the content of the Text object as a sequence of strings,
+   * interleaved with non-character elements.
+   *
+   * For example, the value ['a', 'b', {x: 3}, 'c', 'd'] has spans:
+   * => ['ab', {x: 3}, 'cd']
+   */
   toSpans() {
     let spans = []
-    let chars = []
-    for (let elem of this.elems) {
+    let chars = ''
+    for (const elem of this.elems) {
       if (typeof elem.value === 'string') {
-        chars.push(elem.value)
+        chars += elem.value
       } else {
         if (chars.length > 0) {
-          spans.push(chars.join(''))
-          chars = []
+          spans.push(chars)
+          chars = ''
         }
         spans.push(elem.value)
       }
     }
-    if (chars.length > 0) { 
-      spans.push(chars.join(''))
+    if (chars.length > 0) {
+      spans.push(chars)
     }
     return spans
-  } 
+  }
 
   /**
    * Returns the content of the Text object as a simple string, so that the
