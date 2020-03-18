@@ -18,21 +18,16 @@ function compareRows(properties, row1, row2) {
 
 
 /**
- * A relational-style collection of records. A table has an ordered list of
- * columns, and an unordered set of rows. Each row is an object that maps
- * column names to values. The set of rows is represented by a map from
- * object ID to row object.
+ * A relational-style unordered collection of records (rows). Each row is an
+ * object that maps column names to values. The set of rows is represented by
+ * a map from object ID to row object.
  */
 class Table {
   /**
    * This constructor is used by application code when creating a new Table
    * object within a change callback.
    */
-  constructor(columns) {
-    if (!Array.isArray(columns)) {
-      throw new TypeError('When creating a table you must supply a list of columns')
-    }
-    this.columns = columns
+  constructor() {
     this.entries = Object.freeze({})
     Object.freeze(this)
   }
@@ -156,7 +151,6 @@ class Table {
       throw new Error('A table can only be modified in a change function')
     }
     this.entries[id] = value
-    if (id === 'columns') this.columns = value
   }
 
   /**
@@ -195,14 +189,13 @@ class Table {
   }
 
   /**
-   * Returns an object containing both the table entries (indexed by objectID)
-   * and the columns (under the key `columns`). This provides a nice format
-   * when serializing an Automerge document to JSON.
+   * Returns an object containing the table entries, indexed by objectID,
+   * for serializing an Automerge document to JSON.
    */
   toJSON() {
     const rows = {}
     for (let id of this.ids) rows[id] = this.byId(id)
-    return {columns: this.columns, rows}
+    return rows
   }
 }
 
@@ -211,15 +204,6 @@ class Table {
  * callback.
  */
 class WriteableTable extends Table {
-  /**
-   * Returns a proxied version of the columns list. This list can be modified
-   * within a change callback.
-   */
-  get columns() {
-    const columnsId = this.entries.columns[OBJECT_ID]
-    return this.context.instantiateObject(columnsId)
-  }
-
   /**
    * Returns a proxied version of the row with ID `id`. This row object can be
    * modified within a change callback.
@@ -236,7 +220,7 @@ class WriteableTable extends Table {
    */
   add(row) {
     if (typeof row !== 'object' || Array.isArray(row)) {
-      throw new RangeError('Table row must be an object')
+      throw new TypeError('Table row must be an object')
     }
     return this.context.addTableRow(this[OBJECT_ID], row)
   }

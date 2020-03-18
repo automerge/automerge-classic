@@ -461,7 +461,7 @@ describe('TypeScript support', () => {
 
     beforeEach(() => {
       s1 = Automerge.change(Automerge.init<BookDb>(), doc => {
-        doc.books = new Automerge.Table(['authors', 'title', 'isbn'])
+        doc.books = new Automerge.Table()
         id = doc.books.add(DDIA)
       })
     })
@@ -470,18 +470,13 @@ describe('TypeScript support', () => {
     it('supports `count`', () => assert.strictEqual(s1.books.count, 1))
     it('supports `ids`', () => assert.deepEqual(s1.books.ids, [id]))
     it('supports iteration', () => assert.deepEqual([...s1.books], [DDIA]))
-    it('supports `columns`', () => assert.deepEqual(s1.books.columns, ['authors', 'title', 'isbn']))
 
-    it('allows modifying the columns array', () => {
-      const s2 = Automerge.change(s1, doc => doc.books.columns.push('publisher'))
-      assert.deepEqual(s2.books.columns, ['authors', 'title', 'isbn', 'publisher'])
-      assert.deepEqual(s2.books.byId(id), DDIA)
-
+    it('allows adding row properties', () => {
       // Note that if we add columns and want to actually use them, we need to recast the table to a
       // new type e.g. without the `ts-ignore` flag, this would throw a type error:
 
       // @ts-ignore - Property 'publisher' does not exist on type book
-      const p2 = s2.books.byId(id).publisher 
+      const p2 = s1.books.byId(id).publisher 
 
       // So we need to create new types
       interface BookDeluxe extends Book {
@@ -492,9 +487,9 @@ describe('TypeScript support', () => {
         books: Automerge.Table<BookDeluxe>
       }
 
-      const s2a = s2 as Doc<BookDeluxeDb> // Cast existing table to new type
+      const s2 = s1 as Doc<BookDeluxeDb> // Cast existing table to new type
       const s3 = Automerge.change(
-        s2a,
+        s2,
         doc => (doc.books.byId(id).publisher = "O'Reilly")
       )
 

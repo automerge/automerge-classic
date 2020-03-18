@@ -606,15 +606,8 @@ You can create new tables and insert rows like this:
 ```js
 let database = Automerge.change(Automerge.init(), doc => {
   // When creating a table, provide a list of column names
-  doc.authors = new Automerge.Table(['surname', 'forename'])
-  doc.publications = new Automerge.Table([
-    'type',
-    'authors',
-    'title',
-    'publisher',
-    'edition',
-    'year',
-  ])
+  doc.authors = new Automerge.Table()
+  doc.publications = new Automerge.Table()
 
   // Automerge.Table.add() inserts a new row into the database
   // and returns the primary key (unique ID) of the new row
@@ -653,10 +646,10 @@ database.publications.filter(pub => pub.title.startsWith('Designing'))
 database.publications.map(pub => pub.publisher)
 ```
 
-Note that currently the `Automerge.Table` type does not enforce a schema; the list of columns is
-given because it is useful metadata, but it doesn't actually change how rows are stored. It's
-possible to have row objects that don't have values for all columns (e.g. in the example above, the
-"edition" property is not set).
+Note that currently the `Automerge.Table` type does not enforce a schema. By convention, the row
+objects that you add to a table should have the same properties (like columns in a table), but
+Automerge does not enforce this. This is because different users may be running different versions
+of your app, which might be using different properties.
 
 ## Caveats
 
