@@ -8,6 +8,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Removed** [#236]: Undocumented `Automerge.Table` API that allowed rows to be added by
+  providing an array of values. Now rows must be given as an object ([@HerbCaudill])
+- **Removed** support for Node 8, which is no longer being maintained
+
 ## [0.13.0] — 2020-02-24
 
 - **Added** [#232]: New API `Automerge.getAllChanges()` returns all changes ([@ept])
@@ -247,6 +251,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#236]: https://github.com/automerge/automerge/pull/236
 [#232]: https://github.com/automerge/automerge/pull/232
 [#230]: https://github.com/automerge/automerge/issues/230
 [#219]: https://github.com/automerge/automerge/issues/219
