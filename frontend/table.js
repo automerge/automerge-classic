@@ -235,6 +235,9 @@ class WriteableTable extends Table {
    * column name to value. Returns the objectId of the new row.
    */
   add(row) {
+    if (typeof row !== 'object' || Array.isArray(row)) {
+      throw new RangeError('Table row must be an object')
+    }
     return this.context.addTableRow(this[OBJECT_ID], row)
   }
 
