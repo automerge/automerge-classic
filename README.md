@@ -3,7 +3,7 @@
 💬 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
 
 [![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
-[![Browser Test Status](https://saucelabs.com/buildstatus/automerge)](https://saucelabs.com/open_sauce/user/automerge)
+[![Browser Test Status](https://app.saucelabs.com/buildstatus/automerge)](https://app.saucelabs.com/open_sauce/user/automerge/builds)
 
 Automerge is a library of data structures for building collaborative applications in JavaScript.
 
