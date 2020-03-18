@@ -27,6 +27,10 @@ class Text {
     return this.elems[index].elemId
   }
 
+  getIndexForId (id) {
+    return this.elems.findIndex(e => e.elemId === id)
+  }
+
   [Symbol.iterator] () {
     let elems = this.elems, index = -1
     return {

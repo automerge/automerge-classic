@@ -170,4 +170,46 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.toString(), 'Init')
     })
   })
+
+  describe('element ids', () => {
+    it('should return ids for every element in the text', () => {
+      const s1 = Automerge.from({text: new Automerge.Text('init')})
+      for (let i = 0; i < 4; i++) {
+        assert.strictEqual(typeof s1.text.getElemId(i), 'string')
+      }
+    })
+
+    it('should throw for out-of-range index', () => {
+      const s1 = Automerge.from({text: new Automerge.Text('init')})
+      assert.throws(() => s1.text.getElemId(-1), /Cannot read property/)
+      assert.throws(() => s1.text.getElemId(4), /Cannot read property/)
+    })
+
+    it('should round-trip id to index', () => {
+      const s1 = Automerge.from({text: new Automerge.Text('init')})
+      for (let i = 0; i < 4; i++) {
+        assert.strictEqual(s1.text.getIndexForId(s1.text.getElemId(i)), i)
+      }
+    })
+
+    it('should update observed index when text is changed', () => {
+      const s1 = Automerge.from({text: new Automerge.Text('init')})
+      const t_id = s1.text.getElemId(3)
+
+      // when inserting
+      const s2 = Automerge.change(s1, d => d.text.insertAt(2, 'a'))
+      assert.strictEqual(s2.text.getIndexForId(t_id), 4)
+
+      // and when deleting
+      const s3 = Automerge.change(s1, d => d.text.deleteAt(1, 1))
+      assert.strictEqual(s3.text.getIndexForId(t_id), 2)
+    })
+
+    it('should return -1 for deleted characters', () => {
+      const s1 = Automerge.from({text: new Automerge.Text('init')})
+      const t_id = s1.text.getElemId(0)
+      const s2 = Automerge.change(s1, d => d.text.deleteAt(0, 1))
+      assert.strictEqual(s2.text.getIndexForId(t_id), -1)
+    })
+  })
 })
