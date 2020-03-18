@@ -133,28 +133,6 @@ describe('Automerge.Table', () => {
       assert.deepEqual(s2.books.columns, ['authors', 'title', 'isbn', 'publisher'])
       assert.deepEqual(s2.books.byId(rowId), DDIA)
     })
-
-    it('should translate an array row into a map', () => {
-      let rsdp, lovelace
-      const s2 = Automerge.change(s1, doc => {
-        rsdp = doc.books.add([
-          ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-          'Introduction to Reliable and Secure Distributed Programming',
-          '3-642-15259-7'
-        ])
-        lovelace = doc.books.add([
-          ['Padua, Sydney'],
-          'The Thrilling Adventures of Lovelace and Babbage',
-          '9780141981536'
-        ])
-      })
-      assert.deepEqual(s2.books.byId(rsdp), RSDP)
-      assert.deepEqual(s2.books.byId(lovelace), {
-        authors: ['Padua, Sydney'],
-        title: 'The Thrilling Adventures of Lovelace and Babbage',
-        isbn: '9780141981536'
-      })
-    })
   })
 
   it('should allow concurrent row insertion', () => {

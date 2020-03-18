@@ -441,7 +441,7 @@ describe('TypeScript support', () => {
     }
 
     interface BookDb {
-      books: Automerge.Table<Book, ['authors', 'title', 'isbn']>
+      books: Automerge.Table<Book>
     }
 
     // Example data
@@ -479,34 +479,28 @@ describe('TypeScript support', () => {
 
       // Note that if we add columns and want to actually use them, we need to recast the table to a
       // new type e.g. without the `ts-ignore` flag, this would throw a type error:
-      // @ts-ignore
-      const p2 = s2.books.byId(id).publisher // Property 'publisher' does not exist on type book
 
-      // So we need to create new types:
+      // @ts-ignore - Property 'publisher' does not exist on type book
+      const p2 = s2.books.byId(id).publisher 
+
+      // So we need to create new types
       interface BookDeluxe extends Book {
+        // ... existing properties, plus:
         publisher?: string
       }
       interface BookDeluxeDb {
-        books: Automerge.Table<BookDeluxe, ['authors', 'title', 'isbn', 'publisher']>
+        books: Automerge.Table<BookDeluxe>
       }
 
+      const s2a = s2 as Doc<BookDeluxeDb> // Cast existing table to new type
       const s3 = Automerge.change(
-        s2 as BookDeluxeDb, // Cast existing table to new type
+        s2a,
         doc => (doc.books.byId(id).publisher = "O'Reilly")
       )
+
       // Now we're off to the races
       const p3 = s3.books.byId(id).publisher
       assert.deepEqual(p3, "O'Reilly")
-
-      // and we can even do this:
-      Automerge.change(s3, doc => {
-        doc.books.add([
-          ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-          'Introduction to Reliable and Secure Distributed Programming',
-          '3-642-15259-7',
-          'Springer',
-        ])
-      })
     })
 
     it('supports `remove`', () => {
@@ -515,18 +509,6 @@ describe('TypeScript support', () => {
     })
 
     describe('supports `add`', () => {
-      it('accepts value passed as correctly-ordered array', () => {
-        let bookId: string
-        const s2 = Automerge.change(s1, doc => {
-          bookId = doc.books.add([
-            ['Cachin, Christian', 'Guerraoui, Rachid', 'Rodrigues, Luís'],
-            'Introduction to Reliable and Secure Distributed Programming',
-            '3-642-15259-7',
-          ])
-        })
-        assert.deepEqual(s2.books.byId(bookId), RSDP)
-      })
-
       it('accepts value passed as object', () => {
         let bookId: string
         const s2 = Automerge.change(s1, doc => (bookId = doc.books.add(RSDP)))

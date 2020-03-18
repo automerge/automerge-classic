@@ -231,18 +231,12 @@ class WriteableTable extends Table {
   }
 
   /**
-   * Adds a new row to the table. The row can be given either as a map from
-   * column name to value, or as a list of values. If given as a list of
-   * values, it is translated into a map using the table's column list.
-   * Returns the objectId of the new row.
+   * Adds a new row to the table. The row is given as a map from
+   * column name to value. Returns the objectId of the new row.
    */
   add(row) {
-    if (Array.isArray(row)) {
-      const columns = this.columns, rowObj = {}
-      for (let i = 0; i < columns.length; i++) {
-        rowObj[columns[i]] = row[i]
-      }
-      row = rowObj
+    if (typeof row !== 'object' || Array.isArray(row)) {
+      throw new RangeError('Table row must be an object')
     }
     return this.context.addTableRow(this[OBJECT_ID], row)
   }
