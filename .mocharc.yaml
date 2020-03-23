@@ -9,5 +9,5 @@ watch-files:
   - 'test/*.js'
   - 'test/*.ts'
 spec:
-  - 'test/*.js'
-  - 'test/*.ts'
+  - 'test/*test*.js'
+  - 'test/*test*.ts'
