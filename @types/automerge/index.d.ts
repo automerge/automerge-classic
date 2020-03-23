@@ -55,14 +55,18 @@ declare module 'automerge' {
 
   // custom CRDT types
 
+  class TableRow {
+    readonly id: UUID
+  }
+
   class Table<T> {
     constructor()
     add(item: T): UUID
-    byId(id: UUID): T
+    byId(id: UUID): T & TableRow
     count: number
     ids: UUID[]
     remove(id: UUID): void
-    rows(): T[]
+    rows(): (T & TableRow)[]
     set(id: UUID, value: T): void
   }
 

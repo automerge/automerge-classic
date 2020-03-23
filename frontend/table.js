@@ -46,7 +46,7 @@ class Table {
   get ids() {
     return Object.keys(this.entries).filter(key => {
       const entry = this.entries[key]
-      return isObject(entry) && entry[OBJECT_ID] === key
+      return isObject(entry) && entry.id === key
     })
   }
 
@@ -107,7 +107,7 @@ class Table {
     } else if (Array.isArray(arg)) {
       return this.rows.sort((row1, row2) => compareRows(arg, row1, row2))
     } else if (arg === undefined) {
-      return this.rows.sort((row1, row2) => compareRows([OBJECT_ID], row1, row2))
+      return this.rows.sort((row1, row2) => compareRows(['id'], row1, row2))
     } else {
       throw new TypeError(`Unsupported sorting argument: ${arg}`)
     }
@@ -149,6 +149,9 @@ class Table {
   set(id, value) {
     if (Object.isFrozen(this.entries)) {
       throw new Error('A table can only be modified in a change function')
+    }
+    if (isObject(value) && !Array.isArray(value)) {
+      Object.defineProperty(value, 'id', {value: id, enumerable: true})
     }
     this.entries[id] = value
   }
@@ -209,8 +212,8 @@ class WriteableTable extends Table {
    * modified within a change callback.
    */
   byId(id) {
-    if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
-      return this.context.instantiateObject(id)
+    if (isObject(this.entries[id]) && this.entries[id].id === id) {
+      return this.context.instantiateObject(id, ['id'])
     }
   }
 
@@ -219,9 +222,6 @@ class WriteableTable extends Table {
    * column name to value. Returns the objectId of the new row.
    */
   add(row) {
-    if (typeof row !== 'object' || Array.isArray(row)) {
-      throw new TypeError('Table row must be an object')
-    }
     return this.context.addTableRow(this[OBJECT_ID], row)
   }
 
@@ -230,7 +230,7 @@ class WriteableTable extends Table {
    * does not exist in the table.
    */
   remove(id) {
-    if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
+    if (isObject(this.entries[id]) && this.entries[id].id === id) {
       this.context.deleteTableRow(this[OBJECT_ID], id)
     } else {
       throw new RangeError(`There is no row with ID ${id} in this table`)

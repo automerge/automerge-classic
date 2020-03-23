@@ -457,19 +457,21 @@ describe('TypeScript support', () => {
     }
 
     let s1: Doc<BookDb>
-    let id: string
+    let id: Automerge.UUID
+    let ddiaWithId: Book & Automerge.TableRow
 
     beforeEach(() => {
       s1 = Automerge.change(Automerge.init<BookDb>(), doc => {
         doc.books = new Automerge.Table()
         id = doc.books.add(DDIA)
       })
+      ddiaWithId = Object.assign({id}, DDIA)
     })
 
-    it('supports `byId`', () => assert.deepEqual(s1.books.byId(id), DDIA))
+    it('supports `byId`', () => assert.deepEqual(s1.books.byId(id), ddiaWithId))
     it('supports `count`', () => assert.strictEqual(s1.books.count, 1))
     it('supports `ids`', () => assert.deepEqual(s1.books.ids, [id]))
-    it('supports iteration', () => assert.deepEqual([...s1.books], [DDIA]))
+    it('supports iteration', () => assert.deepEqual([...s1.books], [ddiaWithId]))
 
     it('allows adding row properties', () => {
       // Note that if we add columns and want to actually use them, we need to recast the table to a
@@ -507,15 +509,16 @@ describe('TypeScript support', () => {
       it('accepts value passed as object', () => {
         let bookId: string
         const s2 = Automerge.change(s1, doc => (bookId = doc.books.add(RSDP)))
-        assert.deepEqual(s2.books.byId(bookId), RSDP)
+        assert.deepEqual(s2.books.byId(bookId), Object.assign({id: bookId}, RSDP))
+        assert.strictEqual(s2.books.byId(bookId).id, bookId)
       })
     })
 
     describe('standard array operations on rows', () => {
       it('supports `filter`', () =>
-        assert.deepEqual(s1.books.filter(book => book.authors.length === 1), [DDIA]))
+        assert.deepEqual(s1.books.filter(book => book.authors.length === 1), [ddiaWithId]))
       it('supports `find`', () =>
-        assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), DDIA))
+        assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), ddiaWithId))
       it('supports `map`', () =>
         assert.deepEqual(s1.books.map<string>(book => book.title), [DDIA.title]))
     })

@@ -277,11 +277,14 @@ class Context {
    * Returns the objectId of the new row.
    */
   addTableRow(objectId, row) {
-    if (!isObject(row)) {
+    if (!isObject(row) || Array.isArray(row)) {
       throw new TypeError('A table row must be an object')
     }
     if (row[OBJECT_ID]) {
       throw new TypeError('Cannot reuse an existing object as table row')
+    }
+    if (row.id) {
+      throw new TypeError('A table row must not have an "id" property; it is generated automatically')
     }
 
     const rowId = this.createNestedObjects(row)
