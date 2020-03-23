@@ -11,6 +11,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Removed** [#236]: Undocumented `Automerge.Table` API that allowed rows to be added by
   providing an array of values. Now rows must be given as an object ([@HerbCaudill])
 - **Removed** support for Node 8, which is no longer being maintained
+- **Added** [#194], [#238]: `Automerge.Text` objects may now contain objects as well as strings;
+  new method `Text.toSpans()` that concatenates characters while leaving objects unchanged
+  ([@pvh], [@ept], [@nornagon])
 
 ## [0.13.0] — 2020-02-24
 
@@ -251,6 +254,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#238]: https://github.com/automerge/automerge/pull/238
 [#236]: https://github.com/automerge/automerge/pull/236
 [#232]: https://github.com/automerge/automerge/pull/232
 [#230]: https://github.com/automerge/automerge/issues/230
@@ -258,6 +262,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [#210]: https://github.com/automerge/automerge/pull/210
 [#202]: https://github.com/automerge/automerge/issues/202
 [#199]: https://github.com/automerge/automerge/pull/199
+[#194]: https://github.com/automerge/automerge/issues/194
 [#184]: https://github.com/automerge/automerge/pull/184
 [#183]: https://github.com/automerge/automerge/pull/183
 [#181]: https://github.com/automerge/automerge/pull/181
@@ -332,6 +337,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@minhhien1996]: https://github.com/minhhien1996
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
+[@nornagon]: https://github.com/nornagon
 [@pvh]: https://github.com/pvh
 [@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
