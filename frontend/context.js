@@ -99,7 +99,6 @@ class Context {
       }
       this.apply({action: 'create', type: 'table', obj: objectId})
       this.addOp({action: 'makeTable', obj: objectId})
-      this.setMapKey(objectId, 'table', 'columns', value.columns)
 
     } else if (Array.isArray(value)) {
       // Create a new list object
