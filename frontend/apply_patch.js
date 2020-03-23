@@ -167,10 +167,10 @@ function updateTableObject(diff, cache, updated, inbound) {
     const previous = object.byId(diff.key)
     if (isObject(previous)) refsBefore[previous[OBJECT_ID]] = true
     if (diff.link) {
-      object.set(diff.key, updated[diff.value] || cache[diff.value])
+      object._set(diff.key, updated[diff.value] || cache[diff.value])
       refsAfter[diff.value] = true
     } else {
-      object.set(diff.key, diff.value)
+      object._set(diff.key, diff.value)
     }
   } else if (diff.action === 'remove') {
     const previous = object.byId(diff.key)
@@ -197,7 +197,7 @@ function parentTableObject(objectId, cache, updated) {
   for (let key of Object.keys(table.entries)) {
     let value = table.byId(key)
     if (isObject(value) && updated[value[OBJECT_ID]]) {
-      table.set(key, updated[value[OBJECT_ID]])
+      table._set(key, updated[value[OBJECT_ID]])
     }
   }
 }
