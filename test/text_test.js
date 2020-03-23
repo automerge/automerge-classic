@@ -396,7 +396,7 @@ describe('Automerge.Text', () => {
           doc.text = new Automerge.Text('hello world')
           doc.text.insertAt(5, { attributes: { bold: true } })
         })
-        assert.deepEqual(s1.text.toSpans(), 
+        assert.deepEqual(s1.text.toSpans(),
           ['hello', { attributes: { bold: true } }, ' world'])
       })
       it('should allow consecutive control characters', () => {
@@ -405,9 +405,9 @@ describe('Automerge.Text', () => {
           doc.text.insertAt(5, { attributes: { bold: true } })
           doc.text.insertAt(6, { attributes: { italic: true } })
         })
-        assert.deepEqual(s1.text.toSpans(), 
-          ['hello', 
-           { attributes: { bold: true } }, 
+        assert.deepEqual(s1.text.toSpans(),
+          ['hello',
+           { attributes: { bold: true } },
            { attributes: { italic: true } },
            ' world'
           ])
@@ -418,8 +418,8 @@ describe('Automerge.Text', () => {
           doc.text.insertAt(5, { attributes: { bold: true } })
           doc.text.insertAt(12, { attributes: { italic: true } })
         })
-        assert.deepEqual(s1.text.toSpans(), 
-          ['hello', 
+        assert.deepEqual(s1.text.toSpans(),
+          ['hello',
            { attributes: { bold: true } },
            ' world',
            { attributes: { italic: true } }
@@ -518,7 +518,7 @@ describe('Automerge.Text', () => {
           doc.text.insertAt(11+1, { attributes: { bold: true } })
         })
 
-        
+
         let merged = Automerge.merge(s3, s4)
 
         let deltaDoc = automergeTextToDeltaDoc(merged.text)
@@ -583,10 +583,10 @@ describe('Automerge.Text', () => {
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(delta, doc)
         })
-        
+
         assert.strictEqual(s2.text.join(''), 'Hello reader')
       })
-      
+
       it('should apply an insert with control characters', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text('Hello world')
@@ -602,7 +602,7 @@ describe('Automerge.Text', () => {
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(delta, doc)
         })
-        
+
         assert.strictEqual(s2.text.toString(), 'Hello reader!')
         assert.deepEqual(s2.text.toSpans(), [
           "Hello ",
@@ -643,7 +643,7 @@ describe('Automerge.Text', () => {
           "!"
         ])
       })
-      
+
       it('should support embeds', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text('')
@@ -662,7 +662,7 @@ describe('Automerge.Text', () => {
         let s2 = Automerge.change(s1, doc => {
           applyDeltaDocToAutomergeText(deltaDoc, doc)
         })
-        
+
         assert.deepEqual(s2.text.toSpans(), [
           { attributes: { link: 'https://quilljs.com' } },
           { image: 'https://quilljs.com/assets/images/icon.png'},
