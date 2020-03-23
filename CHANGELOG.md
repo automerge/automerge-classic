@@ -10,6 +10,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 - **Removed** [#236]: Undocumented `Automerge.Table` API that allowed rows to be added by
   providing an array of values. Now rows must be given as an object ([@HerbCaudill])
+- **Removed** [#241]: Constructor of `Automerge.Table` no longer takes an array of columns, and
+  the `columns` property of `Automerge.Table` is also removed ([@ept])
+- **Changed** [#242]: Rows of `Automerge.Table` now automatically get an `id` property containing
+  the primary key of that row ([@ept])
 - **Removed** support for Node 8, which is no longer being maintained
 - **Added** [#194], [#238]: `Automerge.Text` objects may now contain objects as well as strings;
   new method `Text.toSpans()` that concatenates characters while leaving objects unchanged
@@ -254,6 +258,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#242]: https://github.com/automerge/automerge/pull/242
+[#241]: https://github.com/automerge/automerge/pull/241
 [#238]: https://github.com/automerge/automerge/pull/238
 [#236]: https://github.com/automerge/automerge/pull/236
 [#232]: https://github.com/automerge/automerge/pull/232
