@@ -23,6 +23,10 @@ class Text {
     return this.elems[index].value
   }
 
+  /**
+   * Iterates over the text elements character by character, including any
+   * inline objects.
+   */
   [Symbol.iterator] () {
     let elems = this.elems, index = -1
     return {
@@ -38,17 +42,53 @@ class Text {
   }
 
   /**
-   * Returns the content of the Text object as a simple string.
+   * Returns the content of the Text object as a simple string, ignoring any
+   * non-character elements.
    */
   toString() {
-    return this.join('')
+    // Concatting to a string is faster than creating an array and then
+    // .join()ing for small (<100KB) arrays.
+    // https://jsperf.com/join-vs-loop-w-type-test
+    let str = ''
+    for (const elem of this.elems) {
+      if (typeof elem.value === 'string') str += elem.value
+    }
+    return str
   }
+
+  /**
+   * Returns the content of the Text object as a sequence of strings,
+   * interleaved with non-character elements.
+   *
+   * For example, the value ['a', 'b', {x: 3}, 'c', 'd'] has spans:
+   * => ['ab', {x: 3}, 'cd']
+   */
+  toSpans() {
+    let spans = []
+    let chars = ''
+    for (const elem of this.elems) {
+      if (typeof elem.value === 'string') {
+        chars += elem.value
+      } else {
+        if (chars.length > 0) {
+          spans.push(chars)
+          chars = ''
+        }
+        spans.push(elem.value)
+      }
+    }
+    if (chars.length > 0) {
+      spans.push(chars)
+    }
+    return spans
+  }
+
   /**
    * Returns the content of the Text object as a simple string, so that the
    * JSON serialization of an Automerge document represents text nicely.
    */
   toJSON() {
-    return this.join('')
+    return this.toString()
   }
 
   /**

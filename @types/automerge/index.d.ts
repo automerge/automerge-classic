@@ -57,17 +57,18 @@ declare module 'automerge' {
 
   // custom CRDT types
 
-  class Table<T, KeyOrder extends Array<keyof T>> extends Array<T> {
-    constructor(columns: KeyArray<T, KeyOrder>)
-    add(item: T | TupleFromInterface<T, KeyOrder>): UUID
-    byId(id: UUID): T
-    columns: string[]
+  class TableRow {
+    readonly id: UUID
+  }
+
+  class Table<T> {
+    constructor()
+    add(item: T): UUID
+    byId(id: UUID): T & TableRow
     count: number
     ids: UUID[]
     remove(id: UUID): void
-    rows(): T[]
-    set(id: UUID, value: T): void
-    set(id: 'columns', value: string[]): void
+    rows(): (T & TableRow)[]
   }
 
   class List<T> extends Array<T> {
@@ -78,6 +79,7 @@ declare module 'automerge' {
   class Text extends List<string> {
     constructor(text?: string | string[])
     get(index: number): string
+    toSpans<T>(): (string | T)[]
   }
 
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
@@ -97,7 +99,7 @@ declare module 'automerge' {
 
   // Readonly variants
 
-  type ReadonlyTable<T, KeyOrder extends Array<keyof T>> = ReadonlyArray<T> & Table<T, KeyOrder>
+  type ReadonlyTable<T> = ReadonlyArray<T> & Table<T>
   type ReadonlyList<T> = ReadonlyArray<T> & List<T>
   type ReadonlyText = ReadonlyList<string> & Text
 
@@ -287,46 +289,18 @@ declare module 'automerge' {
   type Freeze<T> =
     T extends Function ? T
     : T extends Text ? ReadonlyText
-    : T extends Table<infer T, infer KeyOrder> ? FreezeTable<T, KeyOrder>
+    : T extends Table<infer T> ? FreezeTable<T>
     : T extends List<infer T> ? FreezeList<T>
     : T extends Array<infer T> ? FreezeArray<T>
     : T extends Map<infer K, infer V> ? FreezeMap<K, V>
     : T extends string & infer O ? string & O
     : FreezeObject<T>
 
-  interface FreezeTable<T, KeyOrder> extends ReadonlyTable<Freeze<T>, Array<keyof Freeze<T>>> {}
+  interface FreezeTable<T> extends ReadonlyTable<Freeze<T>> {}
   interface FreezeList<T> extends ReadonlyList<Freeze<T>> {}
   interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
   interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
   type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
-
-  // Type utility function: KeyArray
-  // Enforces that the array provided for key order only contains keys of T
-  type KeyArray<T, KeyOrder extends Array<keyof T>> = keyof T extends KeyOrder[number]
-    ? KeyOrder
-    : Exclude<keyof T, KeyOrder[number]>[]
-
-  // Type utility function: TupleFromInterface
-  // Generates a tuple containing the types of each property of T, in the order provided by KeyOrder. For example:
-  // ```
-  // interface Book {
-  //   authors: string[]
-  //   title: string
-  //   date: Date
-  // }
-  // type BookTuple = TupleFromInterface<Book, ['authors', 'title', 'date']> // [ string[], string, Date ]
-  //
-  // function add(b: Book | BookTuple): void
-  // ```
-  // Now the argument for `Table.add` can either be a `Book` object, or an array of values for each
-  // of the properties of `Book`, in the order given.
-  // ```
-  // add({authors, title, date}) // valid
-  // add([authors, title, date]) // also valid
-  // ```
-  type TupleFromInterface<T, KeyOrder extends Array<keyof T>> = {
-    [I in keyof KeyOrder]: Lookup<T, KeyOrder[I]>
-  }
 
   type Lookup<T, K> = K extends keyof T ? T[K] : never
 }

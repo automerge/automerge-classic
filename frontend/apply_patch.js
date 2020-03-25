@@ -180,7 +180,7 @@ function updateTableObject(patch, obj, updated) {
       object.remove(key)
     } else if (opIds.length === 1) {
       const subpatch = patch.props[key][opIds[0]]
-      object.set(key, getValue(subpatch, object.byId(key), updated), opIds[0])
+      object._set(key, getValue(subpatch, object.byId(key), updated), opIds[0])
     } else {
       throw new RangeError('Conflicts are not supported on properties of a table')
     }

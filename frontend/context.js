@@ -209,9 +209,7 @@ class Context {
       const operation = {action: 'makeTable', obj, key, child}
       if (insert) operation.insert = true
       this.addOp(operation)
-
-      const columns = this.setValue(child, 'columns', value.columns, false)
-      return {objectId: child, type: 'table', props: {columns: {[this.actorId]: columns}}}
+      return {objectId: child, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
@@ -398,11 +396,14 @@ class Context {
    * Returns the objectId of the new row.
    */
   addTableRow(path, row) {
-    if (!isObject(row)) {
+    if (!isObject(row) || Array.isArray(row)) {
       throw new TypeError('A table row must be an object')
     }
     if (row[OBJECT_ID]) {
       throw new TypeError('Cannot reuse an existing object as table row')
+    }
+    if (row.id) {
+      throw new TypeError('A table row must not have an "id" property; it is generated automatically')
     }
 
     const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false)

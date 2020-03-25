@@ -1,0 +1,13 @@
+use_strict: true
+require:
+  - ts-node/register
+  - tsconfig-paths/register
+watch-files:
+  - 'src/*.js'
+  - 'frontend/*.js'
+  - 'backend/*.js'
+  - 'test/*.js'
+  - 'test/*.ts'
+spec:
+  - 'test/*test*.js'
+  - 'test/*test*.ts'

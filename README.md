@@ -3,7 +3,7 @@
 💬 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
 
 [![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
-[![Browser Test Status](https://saucelabs.com/buildstatus/automerge)](https://saucelabs.com/open_sauce/user/automerge)
+[![Browser Test Status](https://app.saucelabs.com/buildstatus/automerge)](https://app.saucelabs.com/open_sauce/user/automerge/builds)
 
 Automerge is a library of data structures for building collaborative applications in JavaScript.
 
@@ -353,6 +353,9 @@ options, with more under development:
   an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
   contains an example that runs the Connection protocol over a simple TCP connection.
+- [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
+  ([usage example](https://github.com/automerge/automerge/issues/117)) runs the `Automerge.Connection`
+  protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
 - [MPL](https://github.com/automerge/mpl) runs the `Automerge.Connection` protocol over
   [WebRTC](https://webrtc.org/).
 - [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
@@ -602,16 +605,8 @@ You can create new tables and insert rows like this:
 
 ```js
 let database = Automerge.change(Automerge.init(), doc => {
-  // When creating a table, provide a list of column names
-  doc.authors = new Automerge.Table(['surname', 'forename'])
-  doc.publications = new Automerge.Table([
-    'type',
-    'authors',
-    'title',
-    'publisher',
-    'edition',
-    'year',
-  ])
+  doc.authors = new Automerge.Table()
+  doc.publications = new Automerge.Table()
 
   // Automerge.Table.add() inserts a new row into the database
   // and returns the primary key (unique ID) of the new row
@@ -623,7 +618,7 @@ let database = Automerge.change(Automerge.init(), doc => {
     authors: [martinID],
     title: 'Designing Data-Intensive Applications',
     publisher: "O'Reilly Media",
-    year: 2017,
+    year: 2017
   })
 })
 ```
@@ -650,27 +645,30 @@ database.publications.filter(pub => pub.title.startsWith('Designing'))
 database.publications.map(pub => pub.publisher)
 ```
 
-Note that currently the `Automerge.Table` type does not enforce a schema; the list of columns is
-given because it is useful metadata, but it doesn't actually change how rows are stored. It's
-possible to have row objects that don't have values for all columns (e.g. in the example above, the
-"edition" property is not set).
+Note that currently the `Automerge.Table` type does not enforce a schema. By convention, the row
+objects that you add to a table should have the same properties (like columns in a table), but
+Automerge does not enforce this. This is because different users may be running different versions
+of your app, which might be using different properties.
 
 ## Caveats
 
-The project currently has a number of limitations that you should be aware of:
+Automerge has a comprehensive test suite and is developed using good software engineering
+practices. However, it currently has a few limitations that you should be aware of:
 
-- No integrity checking: if a buggy (or malicious) device makes corrupted edits, it can cause the
-  application state on other devices to become corrupted or go out of sync.
-- No security: there is currently no encryption, authentication, or access control.
+- Automerge is a data structure library, not a full network protocol. `Automerge.Connection`
+  provides a basic building block for a network protocol, but other protocol concerns (such as
+  encryption, authentication, and access control) need to be handled by separate layers
+  outside of Automerge.
 - Storage overhead: Automerge needs to store additional metadata besides the actual objects you
   create; for some datatypes, such as text, the overhead is substantial. We are working on improving
   this.
-- ...and more, see the [open issues](https://github.com/automerge/automerge/issues).
+
+See also the [list of open issues](https://github.com/automerge/automerge/issues).
 
 ## Meta
 
-Copyright 2017–2019, Ink & Switch LLC, and University of Cambridge. Released under the terms of the
+Copyright 2017–2020, the Automerge contributors. Released under the terms of the
 MIT license (see `LICENSE`).
 
-Created by [Martin Kleppmann](http://martin.kleppmann.com/) and
+Created by [Martin Kleppmann](https://martin.kleppmann.com/) and
 [many great contributors](https://github.com/automerge/automerge/graphs/contributors).

@@ -18,21 +18,16 @@ function compareRows(properties, row1, row2) {
 
 
 /**
- * A relational-style collection of records. A table has an ordered list of
- * columns, and an unordered set of rows. Each row is an object that maps
- * column names to values. The set of rows is represented by a map from
- * object ID to row object.
+ * A relational-style unordered collection of records (rows). Each row is an
+ * object that maps column names to values. The set of rows is represented by
+ * a map from object ID to row object.
  */
 class Table {
   /**
    * This constructor is used by application code when creating a new Table
    * object within a change callback.
    */
-  constructor(columns) {
-    if (!Array.isArray(columns)) {
-      throw new TypeError('When creating a table you must supply a list of columns')
-    }
-    this.columns = columns
+  constructor() {
     this.entries = Object.freeze({})
     Object.freeze(this)
   }
@@ -51,7 +46,7 @@ class Table {
   get ids() {
     return Object.keys(this.entries).filter(key => {
       const entry = this.entries[key]
-      return isObject(entry) && entry[OBJECT_ID] === key
+      return isObject(entry) && entry.id === key
     })
   }
 
@@ -112,7 +107,7 @@ class Table {
     } else if (Array.isArray(arg)) {
       return this.rows.sort((row1, row2) => compareRows(arg, row1, row2))
     } else if (arg === undefined) {
-      return this.rows.sort((row1, row2) => compareRows([OBJECT_ID], row1, row2))
+      return this.rows.sort((row1, row2) => compareRows(['id'], row1, row2))
     } else {
       throw new TypeError(`Unsupported sorting argument: ${arg}`)
     }
@@ -149,14 +144,17 @@ class Table {
   }
 
   /**
-   * Sets the entry with key `id` to `value`.
+   * Sets the entry with key `id` to `value`. This method is for internal use
+   * only; it is not part of the public API of Automerge.Table.
    */
-  set(id, value) {
+  _set(id, value) {
     if (Object.isFrozen(this.entries)) {
       throw new Error('A table can only be modified in a change function')
     }
+    if (isObject(value) && !Array.isArray(value)) {
+      Object.defineProperty(value, 'id', {value: id, enumerable: true})
+    }
     this.entries[id] = value
-    if (id === 'columns') this.columns = value
   }
 
   /**
@@ -196,14 +194,13 @@ class Table {
   }
 
   /**
-   * Returns an object containing both the table entries (indexed by objectID)
-   * and the columns (under the key `columns`). This provides a nice format
-   * when serializing an Automerge document to JSON.
+   * Returns an object containing the table entries, indexed by objectID,
+   * for serializing an Automerge document to JSON.
    */
   toJSON() {
     const rows = {}
     for (let id of this.ids) rows[id] = this.byId(id)
-    return {columns: this.columns, rows}
+    return rows
   }
 }
 
@@ -213,40 +210,21 @@ class Table {
  */
 class WriteableTable extends Table {
   /**
-   * Returns a proxied version of the columns list. This list can be modified
-   * within a change callback.
-   */
-  get columns() {
-    const columnsId = this.entries.columns[OBJECT_ID]
-    const path = this.path.concat([{key: 'columns', objectId: columnsId}])
-    return this.context.instantiateObject(path, columnsId)
-  }
-
-  /**
    * Returns a proxied version of the row with ID `id`. This row object can be
    * modified within a change callback.
    */
   byId(id) {
-    if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
+    if (isObject(this.entries[id]) && this.entries[id].id === id) {
       const path = this.path.concat([{key: id, objectId: id}])
-      return this.context.instantiateObject(path, id)
+      return this.context.instantiateObject(path, id, ['id'])
     }
   }
 
   /**
-   * Adds a new row to the table. The row can be given either as a map from
-   * column name to value, or as a list of values. If given as a list of
-   * values, it is translated into a map using the table's column list.
-   * Returns the objectId of the new row.
+   * Adds a new row to the table. The row is given as a map from
+   * column name to value. Returns the objectId of the new row.
    */
   add(row) {
-    if (Array.isArray(row)) {
-      const columns = this.columns, rowObj = {}
-      for (let i = 0; i < columns.length; i++) {
-        rowObj[columns[i]] = row[i]
-      }
-      row = rowObj
-    }
     return this.context.addTableRow(this.path, row)
   }
 
@@ -255,7 +233,7 @@ class WriteableTable extends Table {
    * does not exist in the table.
    */
   remove(id) {
-    if (isObject(this.entries[id]) && this.entries[id][OBJECT_ID] === id) {
+    if (isObject(this.entries[id]) && this.entries[id].id === id) {
       this.context.deleteTableRow(this.path, id)
     } else {
       throw new RangeError(`There is no row with ID ${id} in this table`)

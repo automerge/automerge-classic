@@ -106,13 +106,19 @@ const MapHandler = {
   },
 
   set (target, key, value) {
-    const { context, objectId, path } = target
+    const { context, objectId, path, readonly } = target
+    if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
+      throw new RangeError(`Object property "${key}" cannot be modified`)
+    }
     context.setMapKey(path, key, value)
     return true
   },
 
   deleteProperty (target, key) {
-    const { context, objectId, path } = target
+    const { context, objectId, path, readonly } = target
+    if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
+      throw new RangeError(`Object property "${key}" cannot be modified`)
+    }
     context.deleteMapKey(path, key)
     return true
   },
@@ -191,8 +197,8 @@ const ListHandler = {
   }
 }
 
-function mapProxy(context, objectId, path) {
-  return new Proxy({context, objectId, path}, MapHandler)
+function mapProxy(context, objectId, path, readonly) {
+  return new Proxy({context, objectId, path, readonly}, MapHandler)
 }
 
 function listProxy(context, objectId, path) {
@@ -203,15 +209,16 @@ function listProxy(context, objectId, path) {
  * Instantiates a proxy object for the given `objectId`.
  * This function is added as a method to the context object by rootObjectProxy().
  * When it is called, `this` is the context object.
+ * `readonly` is a list of map property names that cannot be modified.
  */
-function instantiateProxy(path, objectId) {
+function instantiateProxy(path, objectId, readonly) {
   const object = this.getObject(objectId)
   if (Array.isArray(object)) {
     return listProxy(this, objectId, path)
   } else if (object instanceof Text || object instanceof Table) {
     return object.getWriteable(this, path)
   } else {
-    return mapProxy(this, objectId, path)
+    return mapProxy(this, objectId, path, readonly)
   }
 }
 

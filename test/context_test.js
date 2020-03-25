@@ -150,22 +150,11 @@ describe('Proxying context', () => {
       context.setMapKey([], 'books', new Table(['author', 'title']))
       assert(applyPatch.calledOnce)
       const objectId = applyPatch.firstCall.args[0].props.books[context.actorId].objectId
-      const columnsId = applyPatch.firstCall.args[0].props.books[context.actorId].props.columns[context.actorId].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
-        books: {[context.actorId]: {objectId, type: 'table', props: {
-          columns: {[context.actorId]: {objectId: columnsId, type: 'list', props: {
-            0: {[context.actorId]: {value: 'author'}},
-            1: {[context.actorId]: {value: 'title'}}
-          }, edits: [
-            {action: 'insert', index: 0}, {action: 'insert', index: 1}
-          ]}}
-        }}}
+        books: {[context.actorId]: {objectId, type: 'table', props: {}}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'makeTable', key: 'books', child: objectId},
-        {obj: objectId, action: 'makeList', key: 'columns', child: columnsId},
-        {obj: columnsId, action: 'set', key: 0, insert: true, value: 'author'},
-        {obj: columnsId, action: 'set', key: 1, insert: true, value: 'title'}
+        {obj: ROOT_ID, action: 'makeTable', key: 'books', child: objectId}
       ])
     })
 
