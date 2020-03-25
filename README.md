@@ -605,7 +605,6 @@ You can create new tables and insert rows like this:
 
 ```js
 let database = Automerge.change(Automerge.init(), doc => {
-  // When creating a table, provide a list of column names
   doc.authors = new Automerge.Table()
   doc.publications = new Automerge.Table()
 
@@ -619,7 +618,7 @@ let database = Automerge.change(Automerge.init(), doc => {
     authors: [martinID],
     title: 'Designing Data-Intensive Applications',
     publisher: "O'Reilly Media",
-    year: 2017,
+    year: 2017
   })
 })
 ```

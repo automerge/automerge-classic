@@ -52,18 +52,19 @@ describe('Automerge.Table', () => {
   })
 
   describe('with one row', () => {
-    let s1, rowId
+    let s1, rowId, rowWithId
 
     beforeEach(() => {
       s1 = Automerge.change(Automerge.init({freeze: true}), doc => {
         doc.books = new Automerge.Table()
         rowId = doc.books.add(DDIA)
       })
+      rowWithId = Object.assign({id: rowId}, DDIA)
     })
 
     it('should look up a row by ID', () => {
       const row = s1.books.byId(rowId)
-      assert.deepEqual(row, DDIA)
+      assert.deepEqual(row, rowWithId)
       assert.strictEqual(Frontend.getObjectId(row), rowId)
     })
 
@@ -76,26 +77,26 @@ describe('Automerge.Table', () => {
     })
 
     it('should allow iterating over rows', () => {
-      assert.deepEqual([...s1.books], [DDIA])
+      assert.deepEqual([...s1.books], [rowWithId])
     })
 
     it('should support standard array methods', () => {
-      assert.deepEqual(s1.books.filter(book => book.isbn === '1449373321'), [DDIA])
+      assert.deepEqual(s1.books.filter(book => book.isbn === '1449373321'), [rowWithId])
       assert.deepEqual(s1.books.filter(book => book.isbn === '9781449373320'), [])
-      assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), DDIA)
+      assert.deepEqual(s1.books.find(book => book.isbn === '1449373321'), rowWithId)
       assert.strictEqual(s1.books.find(book => book.isbn === '9781449373320'), undefined)
       assert.deepEqual(s1.books.map(book => book.title), ['Designing Data-Intensive Applications'])
     })
 
     it('should be immutable', () => {
       assert.strictEqual(s1.books.add, undefined)
-      assert.throws(() => s1.books.set('id', {}), /can only be modified in a change function/)
-      assert.throws(() => s1.books.remove('id'),  /can only be modified in a change function/)
+      assert.throws(() => s1.books.set('publisher', {}), /can only be modified in a change function/)
+      assert.throws(() => s1.books.remove('publisher'),  /can only be modified in a change function/)
     })
 
     it('should save and reload', () => {
       const s2 = Automerge.load(Automerge.save(s1))
-      assert.deepEqual(s2.books.byId(rowId), DDIA)
+      assert.deepEqual(s2.books.byId(rowId), rowWithId)
     })
 
     it('should allow a row to be updated', () => {
@@ -103,6 +104,7 @@ describe('Automerge.Table', () => {
         doc.books.byId(rowId).isbn = '9781449373320'
       })
       assert.deepEqual(s2.books.byId(rowId), {
+        id: rowId,
         authors: ['Kleppmann, Martin'],
         title: 'Designing Data-Intensive Applications',
         isbn: '9781449373320'
@@ -116,6 +118,22 @@ describe('Automerge.Table', () => {
       assert.strictEqual(s2.books.count, 0)
       assert.deepEqual([...s2.books], [])
     })
+
+    it('should not allow a row ID to be specified', () => {
+      assert.throws(() => {
+        Automerge.change(s1, doc => {
+          doc.books.add(Object.assign({id: 'beafbfde-8e44-4a5f-b679-786e2ebba03f'}, RSDP))
+        })
+      }, /A table row must not have an "id" property/)
+    })
+
+    it('should not allow a row ID to be modified', () => {
+      assert.throws(() => {
+        Automerge.change(s1, doc => {
+          doc.books.byId(rowId).id = 'beafbfde-8e44-4a5f-b679-786e2ebba03f'
+        })
+      }, /Object property "id" cannot be modified/)
+    })
   })
 
   it('should allow concurrent row insertion', () => {
@@ -128,23 +146,26 @@ describe('Automerge.Table', () => {
     const a1 = Automerge.change(a0, doc => { ddia = doc.books.add(DDIA) })
     const b1 = Automerge.change(b0, doc => { rsdp = doc.books.add(RSDP) })
     const a2 = Automerge.merge(a1, b1)
-    assert.deepEqual(a2.books.byId(ddia), DDIA)
-    assert.deepEqual(a2.books.byId(rsdp), RSDP)
+    assert.deepEqual(a2.books.byId(ddia), Object.assign({id: ddia}, DDIA))
+    assert.deepEqual(a2.books.byId(rsdp), Object.assign({id: rsdp}, RSDP))
     assert.strictEqual(a2.books.count, 2)
     assertEqualsOneOf(a2.books.ids, [ddia, rsdp], [rsdp, ddia])
   })
 
   it('should allow rows to be sorted in various ways', () => {
+    let ddia, rsdp
     const s = Automerge.change(Automerge.init(), doc => {
       doc.books = new Automerge.Table()
-      doc.books.add(DDIA)
-      doc.books.add(RSDP)
+      ddia = doc.books.add(DDIA)
+      rsdp = doc.books.add(RSDP)
     })
-    assert.deepEqual(s.books.sort('title'), [DDIA, RSDP])
-    assert.deepEqual(s.books.sort(['authors', 'title']), [RSDP, DDIA])
+    const ddiaWithId = Object.assign({id: ddia}, DDIA)
+    const rsdpWithId = Object.assign({id: rsdp}, RSDP)
+    assert.deepEqual(s.books.sort('title'), [ddiaWithId, rsdpWithId])
+    assert.deepEqual(s.books.sort(['authors', 'title']), [rsdpWithId, ddiaWithId])
     assert.deepEqual(s.books.sort((row1, row2) => {
       return (row1.isbn === '1449373321') ? -1 : +1
-    }), [DDIA, RSDP])
+    }), [ddiaWithId, rsdpWithId])
   })
 
   it('should allow serialization to JSON', () => {
@@ -153,6 +174,7 @@ describe('Automerge.Table', () => {
       doc.books = new Automerge.Table()
       ddia = doc.books.add(DDIA)
     })
-    assert.deepEqual(JSON.parse(JSON.stringify(s)), {books: {[ddia]: DDIA}})
+    const ddiaWithId = Object.assign({id: ddia}, DDIA)
+    assert.deepEqual(JSON.parse(JSON.stringify(s)), {books: {[ddia]: ddiaWithId}})
   })
 })
