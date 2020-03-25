@@ -215,8 +215,9 @@ class WriteableTable extends Table {
    */
   byId(id) {
     if (isObject(this.entries[id]) && this.entries[id].id === id) {
-      const path = this.path.concat([{key: id, objectId: id}])
-      return this.context.instantiateObject(path, id, ['id'])
+      const objectId = this.entries[id][OBJECT_ID]
+      const path = this.path.concat([{key: id, objectId}])
+      return this.context.instantiateObject(path, objectId, ['id'])
     }
   }
 

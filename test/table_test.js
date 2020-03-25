@@ -63,7 +63,6 @@ describe('Automerge.Table', () => {
     it('should look up a row by ID', () => {
       const row = s1.books.byId(rowId)
       assert.deepStrictEqual(row, rowWithId)
-      assert.strictEqual(Frontend.getObjectId(row), rowId)
     })
 
     it('should return the row count', () => {
@@ -91,7 +90,7 @@ describe('Automerge.Table', () => {
       assert.throws(() => s1.books.remove(rowId), /can only be modified in a change function/)
     })
 
-    it.skip('should save and reload', () => {
+    it('should save and reload', () => {
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2.books.byId(rowId), rowWithId)
     })
@@ -133,7 +132,7 @@ describe('Automerge.Table', () => {
     })
   })
 
-  it.skip('should allow concurrent row insertion', () => {
+  it('should allow concurrent row insertion', () => {
     const a0 = Automerge.change(Automerge.init(), doc => {
       doc.books = new Automerge.Table()
     })

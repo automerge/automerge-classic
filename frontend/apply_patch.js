@@ -173,7 +173,7 @@ function updateTableObject(patch, obj, updated) {
 
   const object = updated[objectId]
 
-  for (let key of Object.keys(patch.props)) {
+  for (let key of Object.keys(patch.props || {})) {
     const values = {}, opIds = Object.keys(patch.props[key])
 
     if (opIds.length === 0) {
