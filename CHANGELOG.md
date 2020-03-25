@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.0] — 2020-03-25
+
 - **Removed** [#236]: Undocumented `Automerge.Table` API that allowed rows to be added by
   providing an array of values. Now rows must be given as an object ([@HerbCaudill])
 - **Removed** [#241]: Constructor of `Automerge.Table` no longer takes an array of columns, and
@@ -231,7 +233,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/automerge/automerge/compare/v0.13.1...v0.14.0
 [0.13.0]: https://github.com/automerge/automerge/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/automerge/automerge/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/automerge/automerge/compare/v0.11.0...v0.12.0
