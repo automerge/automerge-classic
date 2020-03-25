@@ -90,8 +90,7 @@ describe('Automerge.Table', () => {
 
     it('should be immutable', () => {
       assert.strictEqual(s1.books.add, undefined)
-      assert.throws(() => s1.books.set('publisher', {}), /can only be modified in a change function/)
-      assert.throws(() => s1.books.remove('publisher'),  /can only be modified in a change function/)
+      assert.throws(() => s1.books.remove(rowId), /can only be modified in a change function/)
     })
 
     it('should save and reload', () => {

@@ -14,6 +14,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   the `columns` property of `Automerge.Table` is also removed ([@ept])
 - **Changed** [#242]: Rows of `Automerge.Table` now automatically get an `id` property containing
   the primary key of that row ([@ept])
+- **Removed** [#243]: `Automerge.Table` objects no longer have a `set()` method. Use `add()` or
+  `remove()` instead ([@ept])
 - **Removed** support for Node 8, which is no longer being maintained
 - **Added** [#194], [#238]: `Automerge.Text` objects may now contain objects as well as strings;
   new method `Text.toSpans()` that concatenates characters while leaving objects unchanged
@@ -258,6 +260,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#243]: https://github.com/automerge/automerge/pull/243
 [#242]: https://github.com/automerge/automerge/pull/242
 [#241]: https://github.com/automerge/automerge/pull/241
 [#238]: https://github.com/automerge/automerge/pull/238

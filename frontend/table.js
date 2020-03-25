@@ -144,9 +144,10 @@ class Table {
   }
 
   /**
-   * Sets the entry with key `id` to `value`.
+   * Sets the entry with key `id` to `value`. This method is for internal use
+   * only; it is not part of the public API of Automerge.Table.
    */
-  set(id, value) {
+  _set(id, value) {
     if (Object.isFrozen(this.entries)) {
       throw new Error('A table can only be modified in a change function')
     }
