@@ -339,17 +339,6 @@ describe('TypeScript support', () => {
   })
 
   describe('history inspection', () => {
-    it('should diff two document states', () => {
-      const s1 = Automerge.change(Automerge.init<NumberBox>(), doc => (doc.number = 1))
-      const s2 = Automerge.change(s1, doc => (doc.number = 2))
-      const diff = Automerge.diff(s1, s2)
-      assert.strictEqual(diff.objectId, ROOT_ID)
-      assert.strictEqual(diff.type, 'map')
-      assert.deepStrictEqual(Object.keys(diff.props), ['number'])
-      const value = diff.props.number[`2@${Automerge.getActorId(s1)}`]
-      assert.strictEqual((value as Automerge.ValueDiff).value, 2)
-    })
-
     it('should inspect document history', () => {
       const s0 = Automerge.init<NumberBox>()
       const s1 = Automerge.change(s0, 'one', doc => (doc.number = 1))

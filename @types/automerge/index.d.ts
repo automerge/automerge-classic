@@ -32,7 +32,6 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
   function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): Doc<T>
-  function diff<D extends Doc<any>>(olddoc: D, newdoc: D): ObjectDiff
   function equals<T>(val1: T, val2: T): boolean
   function encodeChange(change: Change): Uint8Array
   function decodeChange(binaryChange: Uint8Array): Change[]

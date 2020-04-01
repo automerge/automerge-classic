@@ -77,14 +77,6 @@ function merge(localDoc, remoteDoc) {
   return Frontend.applyPatch(localDoc, patch)
 }
 
-function diff(oldDoc, newDoc) {
-  const oldState = Frontend.getBackendState(oldDoc)
-  const newState = Frontend.getBackendState(newDoc)
-  const changes = Backend.getChanges(oldState, newState)
-  const [state, patch] = Backend.applyChanges(oldState, changes)
-  return patch.diffs
-}
-
 function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
@@ -138,7 +130,7 @@ function getHistory(doc) {
 
 module.exports = {
   init, from, change, emptyChange, undo, redo,
-  load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
+  load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),

@@ -464,49 +464,8 @@ Automerge.getHistory(doc2)
 ```
 
 Within the change object, the property `message` is set to the free-form "commit message" that was
-passed in as second argument to `Automerge.change()` (if any). The rest of the change object is
-specific to Automerge implementation details, and normally shouldn't need to be interpreted.
-
-If you want to find out what actually changed in a particular edit, rather than inspecting the
-change object, it is better to use `Automerge.diff(oldDoc, newDoc)`. This function returns a list of
-edits that were made in document `newDoc` since its prior version `oldDoc`. You can pass in
-snapshots returned by `Automerge.getHistory()` in order to determine differences between historic
-versions.
-
-The data returned by `Automerge.diff()` has the following form:
-
-```js
-let history = Automerge.getHistory(doc2)
-Automerge.diff(history[2].snapshot, doc2) // get all changes since history[2]
-// [ { action: 'set', type: 'map', obj: '...', key: 'x', value: 1 },
-//   { action: 'set', type: 'map', obj: '...', key: 'x', value: 2 } ]
-```
-
-In the objects returned by `Automerge.diff()`, `obj` indicates the object ID of the object being
-edited (the same as returned by `Automerge.getObjectId()`), and `type` indicates whether that object
-is a `map`, `list`, or `text`.
-
-The available values for `action` depend on the type of object. For `type: 'map'`, the possible
-actions are:
-
-- `action: 'set'`: Then the property `key` is the name of the property being updated. If the value
-  assigned to the property is a primitive (string, number, boolean, null), then `value` contains
-  that value. If the assigned value is an object (map, list, or text), then `value` contains the ID
-  of that object, and additionally the property `link: true` is set. Moreover, if this assignment
-  caused conflicts, then the conflicting values are additionally contained in a `conflicts`
-  property.
-- `action: 'remove'`: Then the property `key` is the name of the property being removed.
-
-For `type: 'list'` and `type: 'text'`, the possible actions are:
-
-- `action: 'insert'`: Then the property `index` contains the list index at which a new element is
-  being inserted, and `value` contains the value inserted there. If the inserted value is an object,
-  the `value` property contains its ID, and the property `link: true` is set.
-- `action: 'set'`: Then the property `index` contains the list index to which a new value is being
-  assigned, and `value` contains that value. If the assigned value is an object, the `value`
-  property contains its ID, and the property `link: true` is set.
-- `action: 'remove'`: Then the property `index` contains the list index that is being removed from
-  the list.
+passed in as second argument to `Automerge.change()` (if any). The rest of the change object
+describes the changes in Automerge's internal change format.
 
 ## Custom CRDT types
 
