@@ -267,7 +267,7 @@ describe('Automerge.Backend', () => {
           bird: {[`1@${actor}`]: {value: 'magpie'}}
         }}
       })
-      const change01 = decodeOneChange(Backend.getChanges(s0, s1))
+      const change01 = decodeOneChange(Backend.getChanges(s1, {}))
       assert.deepStrictEqual(change01, {actor, seq: 1, startOp: 1, time: change01.time, message: '', deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]})
@@ -301,11 +301,11 @@ describe('Automerge.Backend', () => {
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
+      const change01 = decodeOneChange(Backend.getChanges(s1, {}))
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(remote1)])
+      const change12 = decodeOneChange(Backend.getChanges(s2, {[actor1]: 1}))
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
-      const change01 = decodeOneChange(Backend.getChanges(s0, s1))
-      const change12 = decodeOneChange(Backend.getChanges(s1, s2))
-      const change23 = decodeOneChange(Backend.getChanges(s2, s3))
+      const change23 = decodeOneChange(Backend.getChanges(s3, {[actor1]: 1, [actor2]: 1}))
       assert.deepStrictEqual(change01, {actor: actor1, seq: 1, startOp: 1, time: change01.time, message: '', deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]})
@@ -333,10 +333,10 @@ describe('Automerge.Backend', () => {
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
       const [s2, patch2] = Backend.applyLocalChange(s1, local1)
+      const change12 = decodeOneChange(Backend.getChanges(s2, {actor2: 1}))
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(remote2)])
       const [s4, patch4] = Backend.applyLocalChange(s3, local2)
-      const change12 = decodeOneChange(Backend.getChanges(s1, s2))
-      const change34 = decodeOneChange(Backend.getChanges(s3, s4))
+      const change34 = decodeOneChange(Backend.getChanges(s4, {actor1: 1, actor2: 2}))
       assert.deepStrictEqual(change12, {actor: 'actor1', seq: 1, startOp: 2, time: change12.time, message: '', deps: {actor2: 1}, ops: [
         {obj: '1@actor2', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
       ]})
@@ -369,7 +369,7 @@ describe('Automerge.Backend', () => {
           }}
         }}
       })
-      const change12 = decodeOneChange(Backend.getChanges(s1, s2))
+      const change12 = decodeOneChange(Backend.getChanges(s2, {[actor]: 1}))
       assert.deepStrictEqual(change12, {actor, seq: 2, startOp: 2, time: change12.time, message: '', deps: {}, ops: [
         {obj: `1@${actor}`, action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
         {obj: `1@${actor}`, action: 'del', key: `2@${actor}`, pred: [`2@${actor}`]}

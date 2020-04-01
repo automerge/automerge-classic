@@ -61,7 +61,7 @@ class Connection {
     const clock = state.getIn(['opSet', 'clock'])
 
     if (this._theirClock.has(docId)) {
-      const changes = Backend.getMissingChanges(state, this._theirClock.get(docId))
+      const changes = Backend.getChanges(state, this._theirClock.get(docId))
       if (changes.length > 0) {
         this._theirClock = clockUnion(this._theirClock, docId, clock)
         this.sendMsg(docId, clock, changes)

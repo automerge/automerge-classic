@@ -69,22 +69,18 @@ function merge(localDoc, remoteDoc) {
   if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
     throw new RangeError('Cannot merge an actor with itself')
   }
-  const localState  = Frontend.getBackendState(localDoc)
-  const remoteState = Frontend.getBackendState(remoteDoc)
-  const [state, patch] = Backend.merge(localState, remoteState)
-  if (patch.diffs.length === 0) return localDoc
-  patch.state = state
-  return Frontend.applyPatch(localDoc, patch)
+  return applyChanges(localDoc, getChanges(localDoc, remoteDoc))
 }
 
 function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  return Backend.getChanges(oldState, newState)
+  const clock = oldState.getIn(['opSet', 'clock']).toJS()
+  return Backend.getChanges(newState, clock)
 }
 
 function getAllChanges(doc) {
-  return getChanges(init(), doc)
+  return Backend.getChanges(Frontend.getBackendState(doc), {})
 }
 
 function applyChanges(doc, changes) {

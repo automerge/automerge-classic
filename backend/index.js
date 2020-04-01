@@ -257,39 +257,17 @@ function getPatch(state) {
   return makePatch(state, diffs, null, false)
 }
 
-function getChanges(oldState, newState) {
-  const oldClock = oldState.getIn(['opSet', 'clock'])
-  const newClock = newState.getIn(['opSet', 'clock'])
-  if (!lessOrEqual(oldClock, newClock)) {
-    throw new RangeError('Cannot diff two states that have diverged')
-  }
-
-  return OpSet.getMissingChanges(newState.get('opSet'), oldClock).toJS().map(encodeChange)
-}
-
 function getChangesForActor(state, actorId) {
   // I might want to validate the actorId here
   return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS().map(encodeChange)
 }
 
-function getMissingChanges(state, clock) {
-  return OpSet.getMissingChanges(state.get('opSet'), clock).toJS().map(encodeChange)
+function getChanges(state, clock) {
+  return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock)).toJS().map(encodeChange)
 }
 
 function getMissingDeps(state) {
   return OpSet.getMissingDeps(state.get('opSet'))
-}
-
-/**
- * Takes any changes that appear in `remote` but not in `local`, and applies
- * them to `local`, returning a two-element list `[state, patch]` where `state`
- * is the updated version of `local`, and `patch` describes the modifications
- * that need to be made to the document objects to reflect these changes.
- * Note that this function does not detect if the same sequence number has been
- * reused for different changes in `local` and `remote` respectively.
- */
-function merge(local, remote) {
-  return applyChanges(local, getMissingChanges(remote, local.getIn(['opSet', 'clock'])))
 }
 
 /**
@@ -371,5 +349,5 @@ function redo(state, request, startOp) {
 
 module.exports = {
   init, applyChanges, applyLocalChange, loadChanges, getPatch,
-  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge
+  getChangesForActor, getChanges, getMissingDeps
 }

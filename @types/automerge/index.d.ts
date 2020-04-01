@@ -160,13 +160,11 @@ declare module 'automerge' {
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
-    function getChanges(oldState: BackendState, newState: BackendState): Uint8Array[]
+    function getChanges(state: BackendState, clock: Clock): Uint8Array[]
     function getChangesForActor(state: BackendState, actorId: string): Uint8Array[]
-    function getMissingChanges(state: BackendState, clock: Clock): Uint8Array[]
     function getMissingDeps(state: BackendState): Clock
     function getPatch(state: BackendState): Patch
     function init(): BackendState
-    function merge(local: BackendState, remote: BackendState): BackendState
   }
 
   // Internals
