@@ -330,6 +330,10 @@ describe('Automerge.Backend', () => {
       const local2 = {requestType: 'change', actor: 'actor1', seq: 2, version: 1, ops: [
         {obj: '1@actor2', action: 'set', key: 1, insert: true, value: 'wagtail'}
       ]}
+      const local3 = {requestType: 'change', actor: 'actor1', seq: 3, version: 4, ops: [
+        {obj: '1@actor2', action: 'set', key: 0, value: 'Magpie'},
+        {obj: '1@actor2', action: 'set', key: 1, value: 'Goldfinch'}
+      ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
       const [s2, patch2] = Backend.applyLocalChange(s1, local1)
@@ -337,15 +341,18 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(remote2)])
       const [s4, patch4] = Backend.applyLocalChange(s3, local2)
       const change34 = decodeOneChange(Backend.getChanges(s4, {actor1: 1, actor2: 2}))
+      const [s5, patch5] = Backend.applyLocalChange(s4, local3)
+      const change45 = decodeOneChange(Backend.getChanges(s5, {actor1: 2, actor2: 2}))
       assert.deepStrictEqual(change12, {actor: 'actor1', seq: 1, startOp: 2, time: change12.time, message: '', deps: {actor2: 1}, ops: [
         {obj: '1@actor2', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
       ]})
       assert.deepStrictEqual(change34, {actor: 'actor1', seq: 2, startOp: 3, time: change34.time, message: '', deps: {}, ops: [
         {obj: '1@actor2', action: 'set', key: '2@actor1', insert: true, value: 'wagtail', pred: []}
       ]})
-      const elemIds = s3.getIn(['opSet', 'byObject', '1@actor2', '_elemIds'])
-      assert.strictEqual(elemIds.keyOf(0), '2@actor2')
-      assert.strictEqual(elemIds.keyOf(1), '2@actor1')
+      assert.deepStrictEqual(change45, {actor: 'actor1', seq: 3, startOp: 4, time: change45.time, message: '', deps: {actor2: 2}, ops: [
+        {obj: '1@actor2', action: 'set', key: '2@actor2', value: 'Magpie',    pred: ['2@actor2']},
+        {obj: '1@actor2', action: 'set', key: '2@actor1', value: 'Goldfinch', pred: ['2@actor1']}
+      ]})
     })
 
     it('should handle list element insertion and deletion in the same change', () => {

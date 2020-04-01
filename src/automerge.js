@@ -75,8 +75,7 @@ function merge(localDoc, remoteDoc) {
 function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  const clock = oldState.getIn(['opSet', 'clock']).toJS()
-  return Backend.getChanges(newState, clock)
+  return Backend.getChanges(newState, Backend.getClock(oldState))
 }
 
 function getAllChanges(doc) {
