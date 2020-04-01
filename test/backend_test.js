@@ -1,6 +1,6 @@
 const assert = require('assert')
 const Automerge = require('../src/automerge')
-const Backend = require('../backend')
+const Backend = Automerge.Backend
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const { decodeOneChange } = require('./helpers')
 const uuid = require('../src/uuid')

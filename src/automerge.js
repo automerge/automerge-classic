@@ -1,17 +1,17 @@
 const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
-const Backend = require('../backend')
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
+let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
 /**
  * Constructs a new frontend document that reflects the given list of changes.
  */
 function docFromChanges(options, changes) {
   const doc = init(options)
-  const state = Backend.loadChanges(Backend.init(), changes)
-  const patch = Backend.getPatch(state)
+  const state = backend.loadChanges(backend.init(), changes)
+  const patch = backend.getPatch(state)
   patch.state = state
   return Frontend.applyPatch(doc, patch)
 }
@@ -26,7 +26,7 @@ function init(options) {
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported options for init(): ${options}`)
   }
-  return Frontend.init(Object.assign({backend: Backend}, options))
+  return Frontend.init(Object.assign({backend}, options))
 }
 
 /**
@@ -75,22 +75,22 @@ function merge(localDoc, remoteDoc) {
 function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  return Backend.getChanges(newState, Backend.getClock(oldState))
+  return backend.getChanges(newState, backend.getClock(oldState))
 }
 
 function getAllChanges(doc) {
-  return Backend.getChanges(Frontend.getBackendState(doc), {})
+  return backend.getChanges(Frontend.getBackendState(doc), {})
 }
 
 function applyChanges(doc, changes) {
   const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = Backend.applyChanges(oldState, changes)
+  const [newState, patch] = backend.applyChanges(oldState, changes)
   patch.state = newState
   return Frontend.applyPatch(doc, patch)
 }
 
 function getMissingDeps(doc) {
-  return Backend.getMissingDeps(Frontend.getBackendState(doc))
+  return backend.getMissingDeps(Frontend.getBackendState(doc))
 }
 
 function equals(val1, val2) {
@@ -123,11 +123,20 @@ function getHistory(doc) {
   })
 }
 
+/**
+ * Replaces the default backend implementation with a different one.
+ * This allows you to switch to using the Rust/WebAssembly implementation.
+ */
+function setDefaultBackend(newBackend) {
+  backend = newBackend
+}
+
 module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, Backend
+  Frontend, setDefaultBackend,
+  get Backend() { return backend }
 }
 
 for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',
