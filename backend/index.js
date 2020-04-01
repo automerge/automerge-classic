@@ -1,5 +1,5 @@
 const { Map, List, fromJS } = require('immutable')
-const { copyObject, lessOrEqual } = require('../src/common')
+const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { encodeChange, decodeChange } = require('./columnar')

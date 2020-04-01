@@ -127,10 +127,7 @@ module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, Backend,
-  DocSet: require('./doc_set'),
-  WatchableDoc: require('./watchable_doc'),
-  Connection: require('./connection')
+  Frontend, Backend
 }
 
 for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',

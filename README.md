@@ -349,20 +349,20 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js), is
-  an implementation of a protocol that syncs up two nodes by determining missing changes and sending
-  them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
-  contains an example that runs the Connection protocol over a simple TCP connection.
+- [automerge-connection](https://github.com/automerge/automerge-connection) is an implementation
+  of a protocol that syncs up two nodes by determining missing changes and sending them to each
+  other. The [automerge-net](https://github.com/automerge/automerge-net) repository
+  contains an example that runs the automerge-connection protocol over a simple TCP connection.
 - [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
-  ([usage example](https://github.com/automerge/automerge/issues/117)) runs the `Automerge.Connection`
+  ([usage example](https://github.com/automerge/automerge/issues/117)) runs the automerge-connection
   protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
-- [MPL](https://github.com/automerge/mpl) runs the `Automerge.Connection` protocol over
+- [MPL](https://github.com/automerge/mpl) runs the automerge-connection protocol over
   [WebRTC](https://webrtc.org/).
 - [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
   combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
   [Dat project](https://datproject.org/).
-- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the `Automerge.Connection` protocol over
-  [PeerJS](https://github.com/peers/peerjs).
+- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the
+  automerge-connection protocol over [PeerJS](https://github.com/peers/peerjs).
 
 The `getChanges()/applyChanges()` API works as follows:
 
@@ -609,20 +609,13 @@ objects that you add to a table should have the same properties (like columns in
 Automerge does not enforce this. This is because different users may be running different versions
 of your app, which might be using different properties.
 
-## Caveats
+## Scope of Automerge
 
-Automerge has a comprehensive test suite and is developed using good software engineering
-practices. However, it currently has a few limitations that you should be aware of:
-
-- Automerge is a data structure library, not a full network protocol. `Automerge.Connection`
-  provides a basic building block for a network protocol, but other protocol concerns (such as
-  encryption, authentication, and access control) need to be handled by separate layers
-  outside of Automerge.
-- Storage overhead: Automerge needs to store additional metadata besides the actual objects you
-  create; for some datatypes, such as text, the overhead is substantial. We are working on improving
-  this.
-
-See also the [list of open issues](https://github.com/automerge/automerge/issues).
+Automerge is a data structure library, not a full network protocol.
+[automerge-connection](https://github.com/automerge/automerge-connection)
+provides a basic building block for a network protocol, but other protocol concerns (such as
+encryption, authentication, and access control) need to be handled by separate layers
+outside of Automerge.
 
 ## Meta
 
