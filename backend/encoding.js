@@ -501,12 +501,16 @@ class RLEEncoder extends Encoder {
     this.lastValue = undefined
     this.count = 0
     this.literal = []
+    this.onlyNulls = true
   }
 
   /**
    * Appends a new value to the sequence.
    */
   appendValue(value) {
+    if (value !== null && value !== undefined) {
+      this.onlyNulls = false
+    }
     if (this.lastValue === undefined) {
       this.lastValue = value
     }
@@ -537,6 +541,9 @@ class RLEEncoder extends Encoder {
     this.count = (value === undefined ? 0 : 1)
   }
 
+  /**
+   * Private method, do not call from outside the class.
+   */
   appendRawValue(value) {
     if (this.type === 'int') {
       this.appendInt53(value)
@@ -583,6 +590,8 @@ class RLEDecoder extends Decoder {
    * Returns the next value (or null) in the sequence.
    */
   readValue() {
+    if (this.done) return null
+
     if (this.count === 0) {
       this.count = this.readInt53()
       if (this.count > 0) {
@@ -606,6 +615,9 @@ class RLEDecoder extends Decoder {
     }
   }
 
+  /**
+   * Private method, do not call from outside the class.
+   */
   readRawValue() {
     if (this.type === 'int') {
       return this.readInt53()

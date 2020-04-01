@@ -132,7 +132,7 @@ function encodeObjectId(op, columns) {
   if (op.obj.value === ROOT_ID) {
     columns.objActor.appendValue(null)
     columns.objCtr.appendValue(null)
-  } else if (op.obj.actorNum >= 0 & op.obj.counter > 0) {
+  } else if (op.obj.actorNum >= 0 && op.obj.counter > 0) {
     columns.objActor.appendValue(op.obj.actorNum)
     columns.objCtr.appendValue(op.obj.counter)
   } else {
@@ -370,29 +370,45 @@ function decodeOps(ops) {
   return newOps
 }
 
+function decoderByColumnId(columnId, buffer) {
+  if ((columnId & 7) === COLUMN_TYPE.INT_DELTA) {
+    return new DeltaDecoder(buffer)
+  } else if ((columnId & 7) === COLUMN_TYPE.BOOLEAN) {
+    return new BooleanDecoder(buffer)
+  } else if ((columnId & 7) === COLUMN_TYPE.STRING_RLE) {
+    return new RLEDecoder('utf8', buffer)
+  } else if ((columnId & 7) === COLUMN_TYPE.VALUE_RAW) {
+    return new Decoder(buffer)
+  } else {
+    return new RLEDecoder('uint', buffer)
+  }
+}
+
 function decodeColumns(decoder, actorIds) {
-  let columns = []
+  // By default, every column decodes an empty byte array
+  const emptyBuf = Uint8Array.of(), decoders = {}
+  for (let [columnName, columnId] of Object.entries(CHANGE_COLUMNS)) {
+    decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
+  }
+
+  let lastColumnId = -1
   while (!decoder.done) {
     const columnId = decoder.readUint32()
     const columnBuf = decoder.readPrefixedBytes()
+    if (columnId <= lastColumnId) throw new RangeError('Columns must be in ascending order')
+    lastColumnId = columnId
+    decoders[columnId] = decoderByColumnId(columnId, columnBuf)
+  }
+
+  let columns = []
+  for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort()) {
     let [columnName, _] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
-
-    if (columnId % 8 === COLUMN_TYPE.INT_DELTA) {
-      columns.push({columnId, columnName, decoder: new DeltaDecoder(columnBuf)})
-    } else if (columnId % 8 === COLUMN_TYPE.BOOLEAN) {
-      columns.push({columnId, columnName, decoder: new BooleanDecoder(columnBuf)})
-    } else if (columnId % 8 === COLUMN_TYPE.STRING_RLE) {
-      columns.push({columnId, columnName, decoder: new RLEDecoder('utf8', columnBuf)})
-    } else if (columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
-      columns.push({columnId, columnName, decoder: new Decoder(columnBuf)})
-    } else {
-      columns.push({columnId, columnName, decoder: new RLEDecoder('uint', columnBuf)})
-    }
+    columns.push({columnId, columnName, decoder: decoders[columnId]})
   }
 
   let parsedOps = []
-  while (!columns[0].decoder.done) {
+  while (columns.some(col => !col.decoder.done)) {
     let op = {}, col = 0
     while (col < columns.length) {
       const columnId = columns[col].columnId
@@ -526,9 +542,12 @@ function encodeChange(changeObj) {
   return encodeContainerHeader('change', encoder => {
     encodeChangeHeader(encoder, change, actorIds)
     for (let [columnName, columnId] of columnIds) {
-      if (columns[columnName]) {
-        encoder.appendUint53(columnId)
-        encoder.appendPrefixedBytes(columns[columnName].buffer)
+      if (columns[columnName] && !columns[columnName].onlyNulls) {
+        const buffer = columns[columnName].buffer
+        if (buffer.byteLength > 0) {
+          encoder.appendUint53(columnId)
+          encoder.appendPrefixedBytes(buffer)
+        }
       }
     }
   })
