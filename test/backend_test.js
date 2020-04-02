@@ -1,7 +1,7 @@
 const assert = require('assert')
 const Automerge = require('../src/automerge')
 const Backend = Automerge.Backend
-const { encodeChange, decodeChange } = require('../backend/columnar')
+const { encodeChange, decodeChanges } = require('../backend/columnar')
 const { decodeOneChange } = require('./helpers')
 const uuid = require('../src/uuid')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
@@ -565,8 +565,8 @@ describe('Automerge.Backend', () => {
       const state = Automerge.Frontend.getBackendState(mergeDoc)
       const actorChanges = Backend.getChangesForActor(state, 'actor2')
 
-      assert.equal(actorChanges.length, 2)
-      assert.equal(decodeChange(actorChanges[0])[0].actor, 'actor2')
+      assert.strictEqual(actorChanges.length, 2)
+      assert.strictEqual(decodeChanges([actorChanges[0]])[0].actor, 'actor2')
     })
   })
 })

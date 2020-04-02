@@ -1,6 +1,6 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { encodeChange, decodeChange } = require('../backend/columnar')
+const { encodeChange, decodeChanges } = require('../backend/columnar')
 const { ROOT_ID } = require('../src/common')
 
 describe('change encoding', () => {
@@ -31,6 +31,6 @@ describe('change encoding', () => {
       57, 2, 0x7f, 0, // predActor column: 0
       58, 2, 0x7f, 2 // predCtr column: 2
     ])
-    assert.deepStrictEqual(decodeChange(encodeChange(change1)), [change1])
+    assert.deepStrictEqual(decodeChanges([encodeChange(change1)]), [change1])
   })
 })

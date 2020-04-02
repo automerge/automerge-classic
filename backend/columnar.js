@@ -562,4 +562,19 @@ function decodeChange(buffer) {
   return changes
 }
 
-module.exports = { encodeChange, decodeChange }
+/**
+ * Decodes a list of changes from the binary format into JS objects.
+ * `binaryChanges` is an array of `Uint8Array` objects.
+ */
+function decodeChanges(binaryChanges) {
+  let decoded = []
+  for (let binaryChange of binaryChanges) {
+    if (!(binaryChange instanceof Uint8Array)) {
+      throw new RangeError(`Unexpected type of change: ${binaryChange}`)
+    }
+    for (let change of decodeChange(binaryChange)) decoded.push(change)
+  }
+  return decoded
+}
+
+module.exports = { encodeChange, decodeChanges }

@@ -2,7 +2,7 @@ const { Map, List, fromJS } = require('immutable')
 const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
-const { encodeChange, decodeChange } = require('./columnar')
+const { encodeChange, decodeChanges } = require('./columnar')
 
 function backendState(backend) {
   if (backend.frozen) {
@@ -96,22 +96,6 @@ function processChangeRequest(state, opSet, request, startOp) {
 }
 
 /**
- * Decodes a list of changes from the binary format into the Immutable.js
- * objects expected by OpSet. `binaryChanges` is an array of `Uint8Array`
- * objects.
- */
-function decodeChanges(binaryChanges) {
-  let decoded = []
-  for (let binaryChange of binaryChanges) {
-    if (!(binaryChange instanceof Uint8Array)) {
-      throw new RangeError(`Unexpected type of change: ${binaryChange}`)
-    }
-    for (let change of decodeChange(binaryChange)) decoded.push(change)
-  }
-  return fromJS(decoded)
-}
-
-/**
  * Returns an empty node state.
  */
 function init() {
@@ -181,7 +165,7 @@ function applyChanges(backend, changes) {
   // been local changes. Since we are applying a remote change here, we have to set that flag to
   // false on all existing version objects.
   state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
-  ;[state, patch] = apply(state, decodeChanges(changes), null, false, true)
+  ;[state, patch] = apply(state, fromJS(decodeChanges(changes)), null, false, true)
   backend.frozen = true
   return [{state}, patch]
 }
@@ -257,7 +241,7 @@ function applyLocalChange(backend, request) {
  */
 function loadChanges(backend, changes) {
   const state = backendState(backend)
-  const [newState, _] = apply(state, decodeChanges(changes), null, false, false)
+  const [newState, _] = apply(state, fromJS(decodeChanges(changes)), null, false, false)
   backend.frozen = true
   return {state: newState}
 }
