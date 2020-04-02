@@ -220,6 +220,17 @@ describe('Automerge', () => {
         }, /Attempting to use an outdated Automerge document/)
       })
 
+      it('should allow a document to be cloned', () => {
+        s1 = Automerge.change(s1, doc => doc.zero = 0)
+        s2 = Automerge.clone(s1)
+        s1 = Automerge.change(s1, doc => doc.one = 1)
+        s2 = Automerge.change(s2, doc => doc.two = 2)
+        assert.deepStrictEqual(s1, {zero: 0, one: 1})
+        assert.deepStrictEqual(s2, {zero: 0, two: 2})
+        Automerge.free(s1)
+        Automerge.free(s2)
+      })
+
       it('should work with Object.assign merges', () => {
         s1 = Automerge.change(s1, doc1 => {
           doc1.stuff = {foo: 'bar', baz: 'blur'}

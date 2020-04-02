@@ -57,6 +57,17 @@ function redo(doc, options) {
   return newDoc
 }
 
+function clone(doc) {
+  const state = backend.clone(Frontend.getBackendState(doc))
+  const patch = backend.getPatch(state)
+  patch.state = state
+  return Frontend.applyPatch(doc, patch)
+}
+
+function free(doc) {
+  backend.free(Frontend.getBackendState(doc))
+}
+
 function load(changes, options) {
   return docFromChanges(options, changes) // TODO change this to use encoded document format
 }
@@ -135,7 +146,7 @@ function decodeChange(change) {
 }
 
 module.exports = {
-  init, from, change, emptyChange, undo, redo,
+  init, from, change, emptyChange, undo, redo, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend,

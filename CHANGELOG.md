@@ -22,7 +22,10 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   allowed. In other words, the document is now required to be a tree, not a DAG.
 - **Changed**: We no longer assume that the backend state is immutable, giving us greater freedom
   to implement the backend in a way that maximises performance. (Frontend state and Automerge
-  documents remain immutable as before.)
+  documents remain immutable as before.) This restricts certain usage patterns: for example, if
+  you update a document, you cannot then take a reference to the document state before that
+  update and update or query it. If you want to be able to continue referencing an old document
+  state, you can copy it using `Automerge.clone()`.
 - **Removed**: `Automerge.diff` and `Backend.merge`, because they depended on the assumption of
   an immutable backend. We hope to bring back a better implementation of `Automerge.diff` in the
   future.

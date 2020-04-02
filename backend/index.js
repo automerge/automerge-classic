@@ -104,6 +104,15 @@ function init() {
   return {state}
 }
 
+function clone(backend) {
+  return {state: backendState(backend)}
+}
+
+function free(backend) {
+  backend.state = null
+  backend.frozen = true
+}
+
 /**
  * Constructs a patch object from the current node state `state` and the
  * object modifications `diffs`.
@@ -357,6 +366,6 @@ function getRedoStack(backend) {
 }
 
 module.exports = {
-  init, applyChanges, applyLocalChange, loadChanges, getPatch,
+  init, clone, free, applyChanges, applyLocalChange, loadChanges, getPatch,
   getChangesForActor, getChanges, getMissingDeps, getUndoStack, getRedoStack
 }
