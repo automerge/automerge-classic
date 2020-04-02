@@ -29,7 +29,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Changed**: `Backend.getChanges()` arguments are now the latest backend state and a vector
   clock. This was previously the function signature of `Backend.getMissingChanges()`, which has
   been removed.
-- **Added**: `Backend.getClock()` returns the vector clock of the latest backend state.
+- **Added**: `Frontend.getClock()` returns the vector clock of the latest document state.
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been
   moved to a separate [automerge-connection](https://github.com/automerge/automerge-connection)
   repository.

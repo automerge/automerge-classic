@@ -383,6 +383,15 @@ function setActorId(doc, actorId) {
 }
 
 /**
+ * Returns the vector clock (object where keys are actorIds, and values are the
+ * highest sequence number we've processed from that actor) corresponding to
+ * the current document state.
+ */
+function getClock(doc) {
+  return doc[STATE].clock
+}
+
+/**
  * Fetches the conflicts on the property `key` of `object`, which may be any
  * object in a document. If `object` is a list, then `key` must be a list
  * index; if `object` is a map, then `key` must be a property name.
@@ -405,7 +414,7 @@ function getBackendState(doc) {
 module.exports = {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
-  getObjectId, getObjectById, getActorId, setActorId, getConflicts,
+  getObjectId, getObjectById, getActorId, setActorId, getClock, getConflicts,
   getBackendState,
   Text, Table, Counter
 }

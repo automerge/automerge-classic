@@ -73,9 +73,8 @@ function merge(localDoc, remoteDoc) {
 }
 
 function getChanges(oldDoc, newDoc) {
-  const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  return backend.getChanges(newState, backend.getClock(oldState))
+  return backend.getChanges(newState, Frontend.getClock(oldDoc))
 }
 
 function getAllChanges(doc) {

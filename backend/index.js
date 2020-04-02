@@ -341,10 +341,6 @@ function redo(state, request, startOp) {
   return [state.set('opSet', opSet), change]
 }
 
-function getClock(state) {
-  return state.getIn(['opSet', 'clock']).toJS()
-}
-
 function getUndoStack(state) {
   return state.getIn(['opSet', 'undoStack']).toJS()
 }
@@ -356,5 +352,5 @@ function getRedoStack(state) {
 module.exports = {
   init, applyChanges, applyLocalChange, loadChanges, getPatch,
   getChangesForActor, getChanges, getMissingDeps,
-  getClock, getUndoStack, getRedoStack
+  getUndoStack, getRedoStack
 }
