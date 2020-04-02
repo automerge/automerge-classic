@@ -35,7 +35,7 @@ module.exports = function(config) {
 
   config.set({
     frameworks: ['browserify', 'mocha', 'karma-typescript'],
-    files: ['test/*.js', 'test/*.ts'],
+    files: ['test/*test*.js', 'test/*test*.ts'],
     preprocessors: {
       'test/*.js': ['browserify'],
       'test/*.ts': ['karma-typescript']
