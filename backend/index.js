@@ -109,27 +109,21 @@ function init() {
 }
 
 /**
- * Constructs a patch object from the current node state `state` and the list
- * of object modifications `diffs`.
+ * Constructs a patch object from the current node state `state` and the
+ * object modifications `diffs`.
  */
 function makePatch(state, diffs, request, isIncremental) {
   const version = state.get('versions').last().get('version')
+  const clock   = state.getIn(['opSet', 'clock']).toJS()
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
+  const patch = {version, clock, canUndo, canRedo, diffs}
 
-  if (isIncremental) {
-    const patch = {version, canUndo, canRedo}
-    if (patch && request) {
-      patch.actor = request.actor
-      patch.seq   = request.seq
-    }
-    patch.diffs = diffs
-    return patch
-
-  } else {
-    const clock = state.getIn(['opSet', 'clock']).toJS()
-    return {version, clock, canUndo, canRedo, diffs}
+  if (isIncremental && request) {
+    patch.actor = request.actor
+    patch.seq   = request.seq
   }
+  return patch
 }
 
 /**

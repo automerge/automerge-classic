@@ -214,7 +214,7 @@ describe('Automerge.Frontend', () => {
     it('should use version and sequence number from the backend', () => {
       const local = uuid(), remote1 = uuid(), remote2 = uuid()
       const patch1 = {
-        version: 3,
+        version: 3, canUndo: false, canRedo: false,
         clock: {[local]: 4, [remote1]: 11, [remote2]: 41},
         diffs: {objectId: ROOT_ID, type: 'map', props: {blackbirds: {[local]: {value: 24}}}}
       }
@@ -236,17 +236,21 @@ describe('Automerge.Frontend', () => {
         {requestType: 'change', actor, seq: 2, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
       ])
 
-      doc2 = Frontend.applyPatch(doc2, {actor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        blackbirds: {[actor]: {value: 24}}
-      }}})
+      doc2 = Frontend.applyPatch(doc2, {
+        actor, seq: 1, version: 1, clock: {[actor]: 1}, canUndo: true, canRedo: false, diffs: {
+          objectId: ROOT_ID, type: 'map', props: {blackbirds: {[actor]: {value: 24}}}
+        }
+      })
       assert.deepStrictEqual(doc2, {blackbirds: 24, partridges: 1})
       assert.deepStrictEqual(getRequests(doc2), [
         {requestType: 'change', actor, seq: 2, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
       ])
 
-      doc2 = Frontend.applyPatch(doc2, {actor, seq: 2, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        partridges: {[actor]: {value: 1}}
-      }}})
+      doc2 = Frontend.applyPatch(doc2, {
+        actor, seq: 2, version: 2, clock: {[actor]: 2}, canUndo: true, canRedo: false, diffs: {
+          objectId: ROOT_ID, type: 'map', props: {partridges: {[actor]: {value: 1}}}
+        }
+      })
       assert.deepStrictEqual(doc2, {blackbirds: 24, partridges: 1})
       assert.deepStrictEqual(getRequests(doc2), [])
     })
@@ -258,17 +262,21 @@ describe('Automerge.Frontend', () => {
         {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
       ])
 
-      doc = Frontend.applyPatch(doc, {actor: other, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        pheasants: {[other]: {value: 2}}
-      }}})
+      doc = Frontend.applyPatch(doc, {
+        version: 1, clock: {[other]: 1}, canUndo: false, canRedo: false, diffs: {
+          objectId: ROOT_ID, type: 'map', props: {pheasants: {[other]: {value: 2}}}
+        }
+      })
       assert.deepStrictEqual(doc, {blackbirds: 24})
       assert.deepStrictEqual(getRequests(doc), [
         {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
       ])
 
-      doc = Frontend.applyPatch(doc, {actor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        blackbirds: {[actor]: {value: 24}}
-      }}})
+      doc = Frontend.applyPatch(doc, {
+        actor, seq: 1, version: 2, clock: {[actor]: 1, [other]: 1}, canUndo: true, canRedo: false, diffs: {
+          objectId: ROOT_ID, type: 'map', props: {blackbirds: {[actor]: {value: 24}}}
+        }
+      })
       assert.deepStrictEqual(doc, {blackbirds: 24, pheasants: 2})
       assert.deepStrictEqual(getRequests(doc), [])
     })
@@ -278,18 +286,23 @@ describe('Automerge.Frontend', () => {
       const [doc2, req2] = Frontend.change(doc1, doc => doc.partridges = 1)
       const actor = Frontend.getActorId(doc2)
       const diffs = {objectId: ROOT_ID, type: 'map', props: {partridges: {[actor]: {value: 1}}}}
-      assert.throws(() => { Frontend.applyPatch(doc2, {actor, seq: 2, diffs}) }, /Mismatched sequence number/)
+      assert.throws(() => {
+        Frontend.applyPatch(doc2, {actor, seq: 2, clock: {[actor]: 2}, diffs})
+      }, /Mismatched sequence number/)
     })
 
     it('should handle concurrent insertions into lists', () => {
       let [doc1, req1] = Frontend.change(Frontend.init(), doc => doc.birds = ['goldfinch'])
       const birds = Frontend.getObjectId(doc1.birds), actor = Frontend.getActorId(doc1)
-      doc1 = Frontend.applyPatch(doc1, {actor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list',
-          edits: [{action: 'insert', index: 0}],
-          props: {0: {[actor]: {value: 'goldfinch'}}}
+      doc1 = Frontend.applyPatch(doc1, {
+        actor, seq: 1, version: 1, clock: {[actor]: 1}, canUndo: true, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          birds: {[actor]: {objectId: birds, type: 'list',
+            edits: [{action: 'insert', index: 0}],
+            props: {0: {[actor]: {value: 'goldfinch'}}}
+          }}
         }}
-      }}})
+      })
       assert.deepStrictEqual(doc1, {birds: ['goldfinch']})
       assert.deepStrictEqual(getRequests(doc1), [])
 
@@ -300,22 +313,28 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['chaffinch', 'goldfinch', 'greenfinch']})
 
       const remoteActor = uuid()
-      const doc3 = Frontend.applyPatch(doc2, {actor: remoteActor, seq: 1, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list',
-          edits: [{action: 'insert', index: 1}],
-          props: {1: {[remoteActor]: {value: 'bullfinch'}}}
+      const doc3 = Frontend.applyPatch(doc2, {
+        version: 2, clock: {[actor]: 1, [remoteActor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          birds: {[actor]: {objectId: birds, type: 'list',
+            edits: [{action: 'insert', index: 1}],
+            props: {1: {[remoteActor]: {value: 'bullfinch'}}}
+          }}
         }}
-      }}})
+      })
       // The addition of 'bullfinch' does not take effect yet: it is queued up until the pending
       // request has made its round-trip through the backend.
       assert.deepStrictEqual(doc3, {birds: ['chaffinch', 'goldfinch', 'greenfinch']})
 
-      const doc4 = Frontend.applyPatch(doc3, {actor, seq: 2, diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[actor]: {objectId: birds, type: 'list',
-          edits: [{action: 'insert', index: 0}, {action: 'insert', index: 2}],
-          props: {0: {[actor]: {value: 'chaffinch'}}, 2: {[actor]: {value: 'greenfinch'}}}
+      const doc4 = Frontend.applyPatch(doc3, {
+        actor, seq: 2, version: 3, clock: {[actor]: 2, [remoteActor]: 1}, canUndo: true, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          birds: {[actor]: {objectId: birds, type: 'list',
+            edits: [{action: 'insert', index: 0}, {action: 'insert', index: 2}],
+            props: {0: {[actor]: {value: 'chaffinch'}}, 2: {[actor]: {value: 'greenfinch'}}}
+          }}
         }}
-      }}})
+      })
       assert.deepStrictEqual(doc4, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
       assert.deepStrictEqual(getRequests(doc4), [])
     })
@@ -337,17 +356,21 @@ describe('Automerge.Frontend', () => {
   describe('applying patches', () => {
     it('should set root object properties', () => {
       const actor = uuid()
-      const patch = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        bird: {[actor]: {value: 'magpie'}}
-      }}}
+      const patch = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {bird: {[actor]: {value: 'magpie'}}}}
+      }
       const doc = Frontend.applyPatch(Frontend.init(), patch)
       assert.deepStrictEqual(doc, {bird: 'magpie'})
     })
 
     it('should reveal conflicts on root object properties', () => {
-      const patch = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        favoriteBird: {actor1: {value: 'robin'}, actor2: {value: 'wagtail'}}
-      }}}
+      const patch = {
+        version: 1, clock: {actor1: 1, actor2: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          favoriteBird: {actor1: {value: 'robin'}, actor2: {value: 'wagtail'}}
+        }}
+      }
       const doc = Frontend.applyPatch(Frontend.init(), patch)
       assert.deepStrictEqual(doc, {favoriteBird: 'wagtail'})
       assert.deepStrictEqual(Frontend.getConflicts(doc, 'favoriteBird'), {actor1: 'robin', actor2: 'wagtail'})
@@ -355,21 +378,30 @@ describe('Automerge.Frontend', () => {
 
     it('should create nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const patch = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'map', props: {wrens: {[actor]: {value: 3}}}
-      }}}}}
+      const patch = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {wrens: {[actor]: {value: 3}}}
+        }}}}
+      }
       const doc = Frontend.applyPatch(Frontend.init(), patch)
       assert.deepStrictEqual(doc, {birds: {wrens: 3}})
     })
 
     it('should apply updates inside nested maps', () => {
       const birds = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'map', props: {wrens: {[actor]: {value: 3}}}
-      }}}}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'map', props: {sparrows: {[actor]: {value: 15}}}
-      }}}}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {wrens: {[actor]: {value: 3}}}
+        }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'map', props: {sparrows: {[actor]: {value: 15}}}
+        }}}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {birds: {wrens: 3}})
@@ -378,14 +410,20 @@ describe('Automerge.Frontend', () => {
 
     it('should apply updates inside map key conflicts', () => {
       const birds1 = uuid(), birds2 = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {favoriteBirds: {
-        actor1: {objectId: birds1, type: 'map', props: {blackbirds: {actor1: {value: 1}}}},
-        actor2: {objectId: birds2, type: 'map', props: {wrens:      {actor2: {value: 3}}}}
-      }}}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {favoriteBirds: {
-        actor1: {objectId: birds1, type: 'map', props: {blackbirds: {actor1: {value: 2}}}},
-        actor2: {objectId: birds2, type: 'map'}
-      }}}}
+      const patch1 = {
+        version: 1, clock: {[birds1]: 1, [birds2]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {favoriteBirds: {
+          actor1: {objectId: birds1, type: 'map', props: {blackbirds: {actor1: {value: 1}}}},
+          actor2: {objectId: birds2, type: 'map', props: {wrens:      {actor2: {value: 3}}}}
+        }}}
+      }
+      const patch2 = {
+        version: 2, clock: {[birds1]: 2, [birds2]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {favoriteBirds: {
+          actor1: {objectId: birds1, type: 'map', props: {blackbirds: {actor1: {value: 2}}}},
+          actor2: {objectId: birds2, type: 'map'}
+        }}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {favoriteBirds: {wrens: 3}})
@@ -396,13 +434,19 @@ describe('Automerge.Frontend', () => {
 
     it('should structure-share unmodified objects', () => {
       const birds = uuid(), mammals = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds:   {[actor]: {objectId: birds,     type: 'map', props: {wrens:   {[actor]: {value: 3}}}}},
-        mammals: {[actor]: {objectId: mammals,   type: 'map', props: {badgers: {[actor]: {value: 1}}}}}
-      }}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        birds:   {[actor]: {objectId: birds,     type: 'map', props: {sparrows: {[actor]: {value: 15}}}}}
-      }}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          birds:   {[actor]: {objectId: birds,     type: 'map', props: {wrens:   {[actor]: {value: 3}}}}},
+          mammals: {[actor]: {objectId: mammals,   type: 'map', props: {badgers: {[actor]: {value: 1}}}}}
+        }}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          birds:   {[actor]: {objectId: birds,     type: 'map', props: {sparrows: {[actor]: {value: 15}}}}}
+        }}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {birds: {wrens: 3}, mammals: {badgers: 1}})
@@ -412,12 +456,18 @@ describe('Automerge.Frontend', () => {
 
     it('should delete keys in maps', () => {
       const actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        magpies: {[actor]: {value: 2}}, sparrows: {[actor]: {value: 15}}
-      }}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        magpies: {}
-      }}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          magpies: {[actor]: {value: 2}}, sparrows: {[actor]: {value: 15}}
+        }}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          magpies: {}
+        }}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {magpies: 2, sparrows: 15})
@@ -426,26 +476,35 @@ describe('Automerge.Frontend', () => {
 
     it('should create lists', () => {
       const birds = uuid(), actor = uuid()
-      const patch = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list',
-        edits: [{action: 'insert', index: 0}],
-        props: {0: {[actor]: {value: 'chaffinch'}}}
-      }}}}}
+      const patch = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list',
+          edits: [{action: 'insert', index: 0}],
+          props: {0: {[actor]: {value: 'chaffinch'}}}
+        }}}}
+      }
       const doc = Frontend.applyPatch(Frontend.init(), patch)
       assert.deepStrictEqual(doc, {birds: ['chaffinch']})
     })
 
     it('should apply updates inside lists', () => {
       const birds = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list',
-        edits: [{action: 'insert', index: 0}],
-        props: {0: {[actor]: {value: 'chaffinch'}}}
-      }}}}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', edits: [],
-        props: {0: {[actor]: {value: 'greenfinch'}}}
-      }}}}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list',
+          edits: [{action: 'insert', index: 0}],
+          props: {0: {[actor]: {value: 'chaffinch'}}}
+        }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', edits: [],
+          props: {0: {[actor]: {value: 'greenfinch'}}}
+        }}}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {birds: ['chaffinch']})
@@ -454,21 +513,27 @@ describe('Automerge.Frontend', () => {
 
     it('should apply updates inside list element conflicts', () => {
       const birds = uuid(), item1 = uuid(), item2 = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list',
-        edits: [{action: 'insert', index: 0}],
-        props: {0: {
-          actor1: {objectId: item1, type: 'map', props: {species: {actor1: {value: 'woodpecker'}}, numSeen: {actor1: {value: 1}}}},
-          actor2: {objectId: item2, type: 'map', props: {species: {actor2: {value: 'lapwing'   }}, numSeen: {actor2: {value: 2}}}}
-        }}
-      }}}}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', edits: [],
-        props: {0: {
-          actor1: {objectId: item1, type: 'map', props: {numSeen: {actor1: {value: 2}}}},
-          actor2: {objectId: item2, type: 'map'}
-        }}
-      }}}}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list',
+          edits: [{action: 'insert', index: 0}],
+          props: {0: {
+            actor1: {objectId: item1, type: 'map', props: {species: {actor1: {value: 'woodpecker'}}, numSeen: {actor1: {value: 1}}}},
+            actor2: {objectId: item2, type: 'map', props: {species: {actor2: {value: 'lapwing'   }}, numSeen: {actor2: {value: 2}}}}
+          }}
+        }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', edits: [],
+          props: {0: {
+            actor1: {objectId: item1, type: 'map', props: {numSeen: {actor1: {value: 2}}}},
+            actor2: {objectId: item2, type: 'map'}
+          }}
+        }}}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {birds: [{species: 'lapwing', numSeen: 2}]})
@@ -486,18 +551,24 @@ describe('Automerge.Frontend', () => {
 
     it('should delete list elements', () => {
       const birds = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list',
-        edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
-        props: {
-          0: {[actor]: {value: 'chaffinch'}},
-          1: {[actor]: {value: 'goldfinch'}}
-        }
-      }}}}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
-        objectId: birds, type: 'list', props: {},
-        edits: [{action: 'remove', index: 0}]
-      }}}}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list',
+          edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+          props: {
+            0: {[actor]: {value: 'chaffinch'}},
+            1: {[actor]: {value: 'goldfinch'}}
+          }
+        }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+          objectId: birds, type: 'list', props: {},
+          edits: [{action: 'remove', index: 0}]
+        }}}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {birds: ['chaffinch', 'goldfinch']})
@@ -506,28 +577,34 @@ describe('Automerge.Frontend', () => {
 
     it('should apply updates at different levels of the object tree', () => {
       const counts = uuid(), details = uuid(), detail1 = uuid(), actor = uuid()
-      const patch1 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        counts: {[actor]: {objectId: counts, type: 'map', props: {
-          magpies: {[actor]: {value: 2}}
-        }}},
-        details: {[actor]: {objectId: details, type: 'list',
-          edits: [{action: 'insert', index: 0}],
-          props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
-            species: {[actor]: {value: 'magpie'}},
-            family:  {[actor]: {value: 'corvidae'}}
-          }}}}
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          counts: {[actor]: {objectId: counts, type: 'map', props: {
+            magpies: {[actor]: {value: 2}}
+          }}},
+          details: {[actor]: {objectId: details, type: 'list',
+            edits: [{action: 'insert', index: 0}],
+            props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
+              species: {[actor]: {value: 'magpie'}},
+              family:  {[actor]: {value: 'corvidae'}}
+            }}}}
+          }}
         }}
-      }}}
-      const patch2 = {diffs: {objectId: ROOT_ID, type: 'map', props: {
-        counts: {[actor]: {objectId: counts, type: 'map', props: {
-          magpies: {[actor]: {value: 3}}
-        }}},
-        details: {[actor]: {objectId: details, type: 'list', edits: [],
-          props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
-            species: {[actor]: {value: 'Eurasian magpie'}}
-          }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          counts: {[actor]: {objectId: counts, type: 'map', props: {
+            magpies: {[actor]: {value: 3}}
+          }}},
+          details: {[actor]: {objectId: details, type: 'list', edits: [],
+            props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
+              species: {[actor]: {value: 'Eurasian magpie'}}
+            }}}}
+          }}
         }}
-      }}}
+      }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
       const doc2 = Frontend.applyPatch(doc1, patch2)
       assert.deepStrictEqual(doc1, {counts: {magpies: 2}, details: [{species: 'magpie', family: 'corvidae'}]})

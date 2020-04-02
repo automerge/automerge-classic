@@ -109,8 +109,11 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
   interpretPatch(patch.diffs, doc, updated)
 
   if (fromBackend) {
-    const seq = patch.clock ? patch.clock[actor] : undefined
-    if (seq && seq > state.seq) state.seq = seq
+    if (!patch.clock) throw new RangeError('patch is missing clock field')
+    if (patch.clock[actor] && patch.clock[actor] > state.seq) {
+      state.seq = patch.clock[actor]
+    }
+    state.clock   = patch.clock
     state.version = patch.version
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
@@ -134,7 +137,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], version: 0, canUndo: false, canRedo: false}
+  const state = {seq: 0, requests: [], version: 0, clock: {}, canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }
