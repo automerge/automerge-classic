@@ -205,15 +205,19 @@ describe('Automerge', () => {
             })
           })
         }, /Calls to Automerge.change cannot be nested/)
+        assert.throws(() => {
+          s1 = Automerge.change(s1, doc1 => {
+            s2 = Automerge.change(s1, doc2 => doc2.two = 2)
+            doc1.one = 1
+          })
+        }, /Attempting to use an outdated Automerge document/)
       })
 
-      it('should not interfere with each other when forking', () => {
-        s1 = Automerge.change(s1, doc1 => {
-          s2 = Automerge.change(s1, doc2 => doc2.two = 2)
-          doc1.one = 1
-        })
-        assert.deepStrictEqual(s1, {one: 1})
-        assert.deepStrictEqual(s2, {two: 2})
+      it('should not allow the same base document to be used for multiple changes', () => {
+        assert.throws(() => {
+          Automerge.change(s1, doc => doc.one = 1)
+          Automerge.change(s1, doc => doc.two = 2)
+        }, /Attempting to use an outdated Automerge document/)
       })
 
       it('should work with Object.assign merges', () => {
@@ -832,7 +836,7 @@ describe('Automerge', () => {
       s2 = Automerge.change(s2, doc => doc.birds.push('chaffinch'))
       s3 = Automerge.merge(s1, s2)
       assertEqualsOneOf(s3.birds, ['parakeet', 'starling', 'chaffinch'], ['parakeet', 'chaffinch', 'starling'])
-      s2 = Automerge.merge(s2, s1)
+      s2 = Automerge.merge(s2, s3)
       assert.deepStrictEqual(s2, s3)
     })
 
@@ -867,8 +871,9 @@ describe('Automerge', () => {
       s2 = Automerge.merge(s2, s1)
       s1 = Automerge.change(s1, doc => doc.birds.splice(1, 2))
       s2 = Automerge.change(s2, doc => doc.birds.splice(2, 0, 'starling'))
-      assert.deepStrictEqual(Automerge.merge(s1, s2), {birds: ['blackbird', 'starling']})
-      assert.deepStrictEqual(Automerge.merge(s2, s1), {birds: ['blackbird', 'starling']})
+      s3 = Automerge.merge(s1, s2)
+      assert.deepStrictEqual(s3, {birds: ['blackbird', 'starling']})
+      assert.deepStrictEqual(Automerge.merge(s2, s3), {birds: ['blackbird', 'starling']})
     })
 
     it('should handle concurrent deletion of the same element', () => {
@@ -1426,8 +1431,8 @@ describe('Automerge', () => {
 
     it('should return changes since the last given version', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
-      let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
       let changes1 = Automerge.getAllChanges(s1)
+      let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
       let changes2 = Automerge.getChanges(s1, s2)
       assert.strictEqual(changes1.length, 1) // Add Chaffinch
       assert.strictEqual(changes2.length, 1) // Add Bullfinch
@@ -1435,8 +1440,8 @@ describe('Automerge', () => {
 
     it('should incrementally apply changes since the last given version', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
-      let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
       let changes1 = Automerge.getAllChanges(s1)
+      let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))
       let changes2 = Automerge.getChanges(s1, s2)
       let s3 = Automerge.applyChanges(Automerge.init(), changes1)
       let s4 = Automerge.applyChanges(s3, changes2)
@@ -1461,12 +1466,12 @@ describe('Automerge', () => {
       let s0 = Automerge.init()
       let s1 = Automerge.change(s0, doc => doc.test = ['a'])
       let s2 = Automerge.change(s1, doc => doc.test = ['b'])
+      let changes12 = Automerge.getChanges(s1, s2)
       let s3 = Automerge.change(s2, doc => doc.test = ['c'])
-      let changes1to2 = Automerge.getChanges(s1, s2)
-      let changes2to3 = Automerge.getChanges(s2, s3)
+      let changes23 = Automerge.getChanges(s2, s3)
       let s4 = Automerge.init()
-      let s5 = Automerge.applyChanges(s4, changes2to3)
-      let s6 = Automerge.applyChanges(s5, changes1to2)
+      let s5 = Automerge.applyChanges(s4, changes23)
+      let s6 = Automerge.applyChanges(s5, changes12)
       assert.deepStrictEqual(Automerge.getMissingDeps(s6), {[Automerge.getActorId(s0)]: 2})
     })
   })

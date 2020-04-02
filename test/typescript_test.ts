@@ -277,11 +277,11 @@ describe('TypeScript support', () => {
     it('should allow concurrent changes to be merged', () => {
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
-      let s2 = Automerge.change(s1, doc => doc.birds.unshift('greenfinch'))
-      let s3 = Automerge.merge(Automerge.init<BirdList>(), s1)
-      s3 = Automerge.change(s3, doc => doc.birds.push('chaffinch'))
-      let s4 = Automerge.merge(s2, s3)
-      assert.deepStrictEqual(s4.birds, ['greenfinch', 'goldfinch', 'chaffinch'])
+      let s2 = Automerge.merge(Automerge.init<BirdList>(), s1)
+      s1 = Automerge.change(s1, doc => doc.birds.unshift('greenfinch'))
+      s2 = Automerge.change(s2, doc => doc.birds.push('chaffinch'))
+      let s3 = Automerge.merge(s1, s2)
+      assert.deepStrictEqual(s3.birds, ['greenfinch', 'goldfinch', 'chaffinch'])
     })
   })
 

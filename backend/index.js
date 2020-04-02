@@ -4,6 +4,17 @@ const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { encodeChange, decodeChange } = require('./columnar')
 
+function backendState(backend) {
+  if (backend.frozen) {
+    throw new Error(
+      'Attempting to use an outdated Automerge document that has already been updated. ' +
+      'Please use the latest document state, or call Automerge.clone() if you really ' +
+      'need to use this old document state.'
+    )
+  }
+  return backend.state
+}
+
 /**
  * Processes a change request `request` that is incoming from the frontend. Translates index-based
  * addressing of lists into identifier-based addressing used by the CRDT, translates temporary
@@ -105,7 +116,8 @@ function decodeChanges(binaryChanges) {
  */
 function init() {
   const opSet = OpSet.init(), versionObj = Map({version: 0, localOnly: true, opSet})
-  return Map({opSet, versions: List.of(versionObj), objectIds: Map()})
+  const state = Map({opSet, versions: List.of(versionObj), objectIds: Map()})
+  return {state}
 }
 
 /**
@@ -157,28 +169,33 @@ function apply(state, changes, request, isUndoable, isIncremental) {
 }
 
 /**
- * Applies a list of `changes` from remote nodes to the node state `state`.
+ * Applies a list of `changes` from remote nodes to the node state `backend`.
  * Returns a two-element array `[state, patch]` where `state` is the updated
  * node state, and `patch` describes the modifications that need to be made
  * to the document objects to reflect these changes.
  */
-function applyChanges(state, changes) {
+function applyChanges(backend, changes) {
+  let state = backendState(backend), patch
+
   // The localOnly flag on a version object is set to true if all changes since that version have
   // been local changes. Since we are applying a remote change here, we have to set that flag to
   // false on all existing version objects.
   state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
-  return apply(state, decodeChanges(changes), null, false, true)
+  ;[state, patch] = apply(state, decodeChanges(changes), null, false, true)
+  backend.frozen = true
+  return [{state}, patch]
 }
 
 /**
  * Takes a single change request `request` made by the local user, and applies
- * it to the node state `state`. The difference to `applyChanges()` is that this
+ * it to the node state `backend`. The difference to `applyChanges()` is that this
  * function adds the change to the undo history, so it can be undone (whereas
  * remote changes are not normally added to the undo history). Returns a
- * two-element array `[state, patch]` where `state` is the updated node state,
+ * two-element array `[backend, patch]` where `backend` is the updated node state,
  * and `patch` confirms the modifications to the document objects.
  */
-function applyLocalChange(state, request) {
+function applyLocalChange(backend, request) {
+  let state = backendState(backend)
   if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
   }
@@ -227,40 +244,46 @@ function applyLocalChange(state, request) {
         }
       })
   })
-  return [state, patch]
+  backend.frozen = true
+  return [{state}, patch]
 }
 
 /**
- * Applies a list of `changes` to the node state `state`, and returns the updated
+ * Applies a list of `changes` to the node state `backend`, and returns the updated
  * state with those changes incorporated. Unlike `applyChanges()`, this function
  * does not produce a patch describing the incremental modifications, making it
  * a little faster when loading a document from disk. When all the changes have
  * been loaded, you can use `getPatch()` to construct the latest document state.
  */
-function loadChanges(state, changes) {
+function loadChanges(backend, changes) {
+  const state = backendState(backend)
   const [newState, _] = apply(state, decodeChanges(changes), null, false, false)
-  return newState
+  backend.frozen = true
+  return {state: newState}
 }
 
 /**
  * Returns a patch that, when applied to an empty document, constructs the
- * document tree in the state described by the node state `state`.
+ * document tree in the state described by the node state `backend`.
  */
-function getPatch(state) {
+function getPatch(backend) {
+  const state = backendState(backend)
   const diffs = OpSet.constructObject(state.get('opSet'), OpSet.ROOT_ID)
   return makePatch(state, diffs, null, false)
 }
 
-function getChangesForActor(state, actorId) {
-  // I might want to validate the actorId here
+function getChangesForActor(backend, actorId) {
+  const state = backendState(backend)
   return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS().map(encodeChange)
 }
 
-function getChanges(state, clock) {
+function getChanges(backend, clock) {
+  const state = backendState(backend)
   return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock)).toJS().map(encodeChange)
 }
 
-function getMissingDeps(state) {
+function getMissingDeps(backend) {
+  const state = backendState(backend)
   return OpSet.getMissingDeps(state.get('opSet'))
 }
 
@@ -341,16 +364,15 @@ function redo(state, request, startOp) {
   return [state.set('opSet', opSet), change]
 }
 
-function getUndoStack(state) {
-  return state.getIn(['opSet', 'undoStack']).toJS()
+function getUndoStack(backend) {
+  return backendState(backend).getIn(['opSet', 'undoStack']).toJS()
 }
 
-function getRedoStack(state) {
-  return state.getIn(['opSet', 'redoStack']).toJS()
+function getRedoStack(backend) {
+  return backendState(backend).getIn(['opSet', 'redoStack']).toJS()
 }
 
 module.exports = {
   init, applyChanges, applyLocalChange, loadChanges, getPatch,
-  getChangesForActor, getChanges, getMissingDeps,
-  getUndoStack, getRedoStack
+  getChangesForActor, getChanges, getMissingDeps, getUndoStack, getRedoStack
 }
