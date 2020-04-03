@@ -78,50 +78,61 @@ function maybeParseOpId(value) {
 
 /**
  * Maps an opId of the form {counter: 12345, actorId: 'someActorId'} to the form
- * {counter: 12345, actorNum: 123}, where the actorNum is zero for the actor
- * `ownActor`, and the (1-based) index into the `actorIds` array otherwise.
+ * {counter: 12345, actorNum: 123}, where the actorNum is the index into the
+ * `actorIds` array.
  */
-function actorIdToActorNum(opId, ownActor, actorIds) {
+function actorIdToActorNum(opId, actorIds) {
   if (!opId.actorId) return opId
   const counter = opId.counter
-  if (opId.actorId === ownActor) return {counter, actorNum: 0}
-  const actorNum = actorIds.indexOf(opId.actorId) + 1
-  if (actorNum === 0) throw new RangeError('missing actorId') // should not happen
+  const actorNum = actorIds.indexOf(opId.actorId)
+  if (actorNum < 0) throw new RangeError('missing actorId') // should not happen
   return {counter, actorNum}
 }
 
 /**
- * Returns an object `{change, actorIds}` where `change` is a copy of the argument
- * in which all string opIds have been replaced with `{counter, actorNum}` objects,
+ * Takes `changes`, an array of changes (represented as JS objects). Returns an
+ * object `{changes, actorIds}`, where `changes` is a copy of the argument in
+ * which all string opIds have been replaced with `{counter, actorNum}` objects,
  * and where `actorIds` is a lexicographically sorted array of actor IDs occurring
- * in any of the operations, excluding the actorId of the change itself. An
- * `actorNum` value of zero indicates the actorId is the author of the change
- * itself, and an `actorNum` greater than zero is an index into the array of
- * actorIds (indexed starting from 1).
+ * in any of the operations. `actorNum` is an index into that array of actorIds.
+ * If `single` is true, the actorId of the author of the change is moved to the
+ * beginning of the array of actorIds, so that `actorNum` is zero when referencing
+ * the author of the change itself. This special-casing is omitted if `single` is
+ * false.
  */
-function parseAllOpIds(change) {
-  const actors = {}
-  change = copyObject(change)
-  for (let actor of Object.keys(change.deps)) actors[actor] = true
-  change.ops = change.ops.map(op => {
-    op = copyObject(op)
-    op.obj = maybeParseOpId(op.obj)
-    op.key = maybeParseOpId(op.key)
-    op.child = maybeParseOpId(op.child)
-    if (op.pred) op.pred = op.pred.map(parseOpId)
-    if (op.obj.actorId) actors[op.obj.actorId] = true
-    if (op.key.actorId) actors[op.key.actorId] = true
-    if (op.child.actorId) actors[op.child.actorId] = true
-    for (let pred of op.pred) actors[pred.actorId] = true
-    return op
-  })
-  const actorIds = Object.keys(actors).filter(actor => actor !== change.actor).sort()
-  for (let op of change.ops) {
-    op.obj = actorIdToActorNum(op.obj, change.actor, actorIds)
-    op.key = actorIdToActorNum(op.key, change.actor, actorIds)
-    op.pred = op.pred.map(pred => actorIdToActorNum(pred, change.actor, actorIds))
+function parseAllOpIds(changes, single) {
+  const actors = {}, newChanges = []
+  for (let change of changes) {
+    change = copyObject(change)
+    actors[change.actor] = true
+    for (let actor of Object.keys(change.deps)) actors[actor] = true
+    change.ops = change.ops.map(op => {
+      op = copyObject(op)
+      op.obj = maybeParseOpId(op.obj)
+      op.key = maybeParseOpId(op.key)
+      op.child = maybeParseOpId(op.child)
+      if (op.pred) op.pred = op.pred.map(parseOpId)
+      if (op.obj.actorId) actors[op.obj.actorId] = true
+      if (op.key.actorId) actors[op.key.actorId] = true
+      if (op.child.actorId) actors[op.child.actorId] = true
+      for (let pred of op.pred) actors[pred.actorId] = true
+      return op
+    })
+    newChanges.push(change)
   }
-  return {change, actorIds}
+
+  let actorIds = Object.keys(actors).sort()
+  if (single) {
+    actorIds = [changes[0].actor].concat(actorIds.filter(actor => actor !== changes[0].actor))
+  }
+  for (let change of newChanges) {
+    for (let op of change.ops) {
+      op.obj = actorIdToActorNum(op.obj, actorIds)
+      op.key = actorIdToActorNum(op.key, actorIds)
+      op.pred = op.pred.map(pred => actorIdToActorNum(pred, actorIds))
+    }
+  }
+  return {changes: newChanges, actorIds}
 }
 
 /**
@@ -437,22 +448,6 @@ function decodeColumns(decoder, actorIds) {
   return parsedOps
 }
 
-function encodeChangeHeader(encoder, change, actorIds) {
-  encoder.appendPrefixedString(change.actor)
-  encoder.appendUint53(change.seq)
-  encoder.appendUint53(change.startOp)
-  encoder.appendInt53(change.time)
-  encoder.appendPrefixedString(change.message || '')
-  encoder.appendUint53(actorIds.length)
-  for (let actor of actorIds) encoder.appendPrefixedString(actor)
-  const depsKeys = Object.keys(change.deps).sort()
-  encoder.appendUint53(depsKeys.length)
-  for (let actor of depsKeys) {
-    encoder.appendUint53(actorIds.indexOf(actor) + 1)
-    encoder.appendUint53(change.deps[actor])
-  }
-}
-
 function decodeChangeHeader(decoder) {
   let change = {
     actor:   decoder.readPrefixedString(),
@@ -476,7 +471,7 @@ function decodeChangeHeader(decoder) {
  * Calls the `callback` with an encoder that should be used to encode the
  * contents of the container.
  */
-function encodeContainerHeader(chunkType, callback) {
+function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   const HASH_SIZE = 32 // size of SHA-256 hash
   const HEADER_SPACE = MAGIC_BYTES.byteLength + HASH_SIZE + 1 + 5 // 1 byte type + 5 bytes length
   const body = new Encoder()
@@ -484,9 +479,20 @@ function encodeContainerHeader(chunkType, callback) {
   // copy the header in here later. This is cheaper than copying the body since
   // the body is likely to be much larger than the header.
   body.appendRawBytes(new Uint8Array(HEADER_SPACE))
-  callback(body)
-  const bodyBuf = body.buffer
+  encodeHeaderCallback(body)
 
+  const columnIds = Object.entries(CHANGE_COLUMNS).sort((a, b) => a[1] - b[1])
+  for (let [columnName, columnId] of columnIds) {
+    if (columns[columnName] && !columns[columnName].onlyNulls) {
+      const buffer = columns[columnName].buffer
+      if (buffer.byteLength > 0) {
+        body.appendUint53(columnId)
+        body.appendPrefixedBytes(buffer)
+      }
+    }
+  }
+
+  const bodyBuf = body.buffer
   const header = new Encoder()
   if (chunkType === 'document') {
     header.appendByte(0)
@@ -535,20 +541,22 @@ function decodeContainerHeader(decoder) {
 }
 
 function encodeChange(changeObj) {
-  const { change, actorIds } = parseAllOpIds(changeObj)
-  const columns = encodeOps(change.ops)
-  const columnIds = Object.entries(CHANGE_COLUMNS).sort((a, b) => a[1] - b[1])
+  const { changes, actorIds } = parseAllOpIds([changeObj], true)
+  const change = changes[0]
 
-  return encodeContainerHeader('change', encoder => {
-    encodeChangeHeader(encoder, change, actorIds)
-    for (let [columnName, columnId] of columnIds) {
-      if (columns[columnName] && !columns[columnName].onlyNulls) {
-        const buffer = columns[columnName].buffer
-        if (buffer.byteLength > 0) {
-          encoder.appendUint53(columnId)
-          encoder.appendPrefixedBytes(buffer)
-        }
-      }
+  return encodeContainer('change', encodeOps(change.ops), encoder => {
+    encoder.appendPrefixedString(change.actor)
+    encoder.appendUint53(change.seq)
+    encoder.appendUint53(change.startOp)
+    encoder.appendInt53(change.time)
+    encoder.appendPrefixedString(change.message || '')
+    encoder.appendUint53(actorIds.length - 1)
+    for (let actor of actorIds.slice(1)) encoder.appendPrefixedString(actor)
+    const depsKeys = Object.keys(change.deps).sort()
+    encoder.appendUint53(depsKeys.length)
+    for (let actor of depsKeys) {
+      encoder.appendUint53(actorIds.indexOf(actor))
+      encoder.appendUint53(change.deps[actor])
     }
   })
 }
