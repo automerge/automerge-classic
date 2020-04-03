@@ -38,19 +38,19 @@ const CHANGE_COLUMNS = {
   keyCtr:    1 << 3 | COLUMN_TYPE.INT_DELTA,
   keyStr:    1 << 3 | COLUMN_TYPE.STRING_RLE,
   idActor:   2 << 3 | COLUMN_TYPE.ACTOR_ID,
-  idCtr:     2 << 3 | COLUMN_TYPE.INT_RLE,
+  idCtr:     2 << 3 | COLUMN_TYPE.INT_DELTA,
   insert:    3 << 3 | COLUMN_TYPE.BOOLEAN,
   action:    4 << 3 | COLUMN_TYPE.INT_RLE,
   valLen:    5 << 3 | COLUMN_TYPE.VALUE_LEN,
   valRaw:    5 << 3 | COLUMN_TYPE.VALUE_RAW,
   chldActor: 6 << 3 | COLUMN_TYPE.ACTOR_ID,
-  chldCtr:   6 << 3 | COLUMN_TYPE.INT_RLE,
+  chldCtr:   6 << 3 | COLUMN_TYPE.INT_DELTA,
   predNum:   7 << 3 | COLUMN_TYPE.GROUP_CARD,
   predActor: 7 << 3 | COLUMN_TYPE.ACTOR_ID,
-  predCtr:   7 << 3 | COLUMN_TYPE.INT_RLE,
+  predCtr:   7 << 3 | COLUMN_TYPE.INT_DELTA,
   succNum:   8 << 3 | COLUMN_TYPE.GROUP_CARD,
   succActor: 8 << 3 | COLUMN_TYPE.ACTOR_ID,
-  succCtr:   8 << 3 | COLUMN_TYPE.INT_RLE
+  succCtr:   8 << 3 | COLUMN_TYPE.INT_DELTA
 }
 
 /**
@@ -327,9 +327,9 @@ function encodeOps(ops) {
     valLen    : new RLEEncoder('uint'),
     valRaw    : new Encoder(),
     chldActor : new RLEEncoder('uint'),
-    chldCtr   : new RLEEncoder('uint'),
+    chldCtr   : new DeltaEncoder(),
     predNum   : new RLEEncoder('uint'),
-    predCtr   : new RLEEncoder('uint'),
+    predCtr   : new DeltaEncoder(),
     predActor : new RLEEncoder('uint')
   }
 
