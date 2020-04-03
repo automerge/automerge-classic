@@ -90,11 +90,8 @@ An operation is a JSON object with the following properties:
 * `datatype`: On `set` operations only, this property can optionally be set to
   `'counter'` or `'timestamp'` to change the way the value is interpreted, as
   in the old format.
-* `child`: In the case of a `make*` operation, this property optionally contains
-  a UUID that can be used to refer to this object (this is currently only used
-  for rows of an Automerge.Table object). In the case of a `link` operation,
-  this property contains the ID of the child object being referenced. Not
-  present on other operations.
+* `child`: Only used in the case of a `link` operation, in which case this
+  property contains the ID of the child object being referenced.
 * `pred`: An array of IDs of operations that are overwritten by this operation,
   in the form `counter@actorId`. Any existing operations that are not
   overwritten must be concurrent, and result in a conflict. The `pred` property
