@@ -78,15 +78,15 @@ function maybeParseOpId(value) {
 
 /**
  * Maps an opId of the form {counter: 12345, actorId: 'someActorId'} to the form
- * {counter: 12345, actorNum: 123}, where the actorNum is the index into the
- * `actorIds` array.
+ * {counter: 12345, actorNum: 123, actorId: 'someActorId'}, where the actorNum
+ * is the index into the `actorIds` array.
  */
 function actorIdToActorNum(opId, actorIds) {
   if (!opId.actorId) return opId
   const counter = opId.counter
   const actorNum = actorIds.indexOf(opId.actorId)
   if (actorNum < 0) throw new RangeError('missing actorId') // should not happen
-  return {counter, actorNum}
+  return {counter, actorNum, actorId: opId.actorId}
 }
 
 /**
@@ -126,7 +126,10 @@ function parseAllOpIds(changes, single) {
     actorIds = [changes[0].actor].concat(actorIds.filter(actor => actor !== changes[0].actor))
   }
   for (let change of newChanges) {
-    for (let op of change.ops) {
+    const actorNum = actorIds.indexOf(change.actor)
+    for (let i = 0; i < change.ops.length; i++) {
+      let op = change.ops[i]
+      op.id = {counter: change.startOp + i, actorNum, actorId: change.actor}
       op.obj = actorIdToActorNum(op.obj, actorIds)
       op.key = actorIdToActorNum(op.key, actorIds)
       op.pred = op.pred.map(pred => actorIdToActorNum(pred, actorIds))
@@ -486,6 +489,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
     if (columns[columnName] && !columns[columnName].onlyNulls) {
       const buffer = columns[columnName].buffer
       if (buffer.byteLength > 0) {
+        if (chunkType === 'document') console.log(`${columnName} column: ${buffer.byteLength} bytes`)
         body.appendUint53(columnId)
         body.appendPrefixedBytes(buffer)
       }
@@ -585,4 +589,141 @@ function decodeChanges(binaryChanges) {
   return decoded
 }
 
-module.exports = { encodeChange, decodeChanges }
+function sortOpIds(a, b) {
+  if (a === ROOT_ID) return -1
+  if (b === ROOT_ID) return +1
+  const a_ = parseOpId(a), b_ = parseOpId(b)
+  if (a_.counter < b_.counter) return -1
+  if (a_.counter > b_.counter) return +1
+  if (a_.actorId < b_.actorId) return -1
+  if (a_.actorId > b_.actorId) return +1
+  return 0
+}
+
+function groupDocumentOps(changes) {
+  let byObjectId = {}, byReference = {}, objectType = {}
+  for (let change of changes) {
+    for (let i = 0; i < change.ops.length; i++) {
+      const op = change.ops[i], opId = `${op.id.counter}@${op.id.actorId}`
+      const objectId = (op.obj.value === ROOT_ID) ? ROOT_ID : `${op.obj.counter}@${op.obj.actorId}`
+      if (op.action.startsWith('make')) {
+        objectType[opId] = op.action
+        if (op.action === 'makeList' || op.action === 'makeText') {
+          byReference[opId] = {'_head': []}
+        }
+      }
+
+      let key
+      if (objectId === ROOT_ID || objectType[objectId] === 'makeMap' || objectType[objectId] === 'makeTable') {
+        key = op.key.value
+      } else if (objectType[objectId] === 'makeList' || objectType[objectId] === 'makeText') {
+        if (op.insert) {
+          key = opId
+          const ref = (op.key.value === '_head') ? '_head' : `${op.key.counter}@${op.key.actorId}`
+          byReference[objectId][ref].push(opId)
+          byReference[objectId][opId] = []
+        } else {
+          key = `${op.key.counter}@${op.key.actorId}`
+        }
+      } else {
+        throw new RangeError(`Unknown object type for object ${objectId}`)
+      }
+
+      if (!byObjectId[objectId]) byObjectId[objectId] = {}
+      if (!byObjectId[objectId][key]) byObjectId[objectId][key] = {}
+      byObjectId[objectId][key][opId] = op
+      op.succ = []
+
+      for (let pred of op.pred) {
+        const predId = `${pred.counter}@${pred.actorId}`
+        if (!byObjectId[objectId][key][predId]) {
+          throw new RangeError(`No predecessor operation ${predId}`)
+        }
+        byObjectId[objectId][key][predId].succ.push(op.id)
+      }
+    }
+  }
+
+  let ops = []
+  for (let objectId of Object.keys(byObjectId).sort(sortOpIds)) {
+    let keys = []
+    if (objectType[objectId] === 'makeList' || objectType[objectId] === 'makeText') {
+      let stack = ['_head']
+      while (stack.length > 0) {
+        const key = stack.pop()
+        if (key !== '_head') keys.push(key)
+        stack.push(...byReference[objectId][key].sort(sortOpIds))
+      }
+    } else {
+      keys = Object.keys(byObjectId[objectId]).sort()
+    }
+
+    for (let key of keys) {
+      for (let opId of Object.keys(byObjectId[objectId][key]).sort(sortOpIds)) {
+        const op = byObjectId[objectId][key][opId]
+        if (op.action !== 'del') ops.push(op)
+      }
+    }
+  }
+  return ops
+}
+
+function encodeDocumentOps(ops) {
+  const columns = {
+    objActor  : new RLEEncoder('uint'),
+    objCtr    : new RLEEncoder('uint'),
+    keyActor  : new RLEEncoder('uint'),
+    keyCtr    : new DeltaEncoder(),
+    keyStr    : new RLEEncoder('utf8'),
+    idActor   : new RLEEncoder('uint'),
+    idCtr     : new DeltaEncoder(),
+    insert    : new BooleanEncoder(),
+    action    : new RLEEncoder('uint'),
+    valLen    : new RLEEncoder('uint'),
+    valRaw    : new Encoder(),
+    chldActor : new RLEEncoder('uint'),
+    chldCtr   : new DeltaEncoder(),
+    succNum   : new RLEEncoder('uint'),
+    succActor : new RLEEncoder('uint'),
+    succCtr   : new DeltaEncoder()
+  }
+
+  for (let op of ops) {
+    encodeObjectId(op, columns)
+    encodeOperationKey(op, columns)
+    columns.idActor.appendValue(op.id.actorNum)
+    columns.idCtr.appendValue(op.id.counter)
+    columns.insert.appendValue(!!op.insert)
+    encodeOperationAction(op, columns)
+    encodeValue(op, columns)
+
+    if (op.child.counter) {
+      columns.chldActor.appendValue(op.child.actorNum)
+      columns.chldCtr.appendValue(op.child.counter)
+    } else {
+      columns.chldActor.appendValue(null)
+      columns.chldCtr.appendValue(null)
+    }
+
+    columns.succNum.appendValue(op.succ.length)
+    for (let i = 0; i < op.succ.length; i++) {
+      columns.succActor.appendValue(op.succ[i].actorNum)
+      columns.succCtr.appendValue(op.succ[i].counter)
+    }
+  }
+  return columns
+}
+
+/**
+ * Transforms a list of changes (in JS object form) into a binary representation
+ * of the document state.
+ */
+function encodeDocument(changeObjects) {
+  const { changes, actorIds } = parseAllOpIds(changeObjects, false)
+  const ops = encodeDocumentOps(groupDocumentOps(changes))
+  return encodeContainer('document', ops, encoder => {
+    // TODO add document header
+  })
+}
+
+module.exports = { encodeChange, decodeChanges, encodeDocument }
