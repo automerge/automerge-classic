@@ -52,10 +52,9 @@ and merging**:
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
   functional reactive programming style of [React](https://reactjs.org) and
   [Redux](http://redux.js.org/), for example.
-- **Automatic merging**. Automerge is a _Conflict-Free Replicated Data Type_
-  ([CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)), which allows
-  concurrent changes on different devices to be merged automatically without requiring any central
-  server. It is based on [academic research on JSON CRDTs](https://arxiv.org/abs/1608.03960), but
+- **Automatic merging**. Automerge is a _Conflict-Free Replicated Data Type_ ([CRDT](https://crdt.tech/)),
+  which allows concurrent changes on different devices to be merged automatically without requiring any
+  central server. It is based on [academic research on JSON CRDTs](https://arxiv.org/abs/1608.03960), but
   the details of the algorithm in Automerge are different from the JSON CRDT paper, and we are
   planning to publish more detail about it in the future.
 - **Fairly portable**. We're not yet making an effort to support old platforms, but we have tested
