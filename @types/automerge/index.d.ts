@@ -66,7 +66,7 @@ declare module 'automerge' {
     count: number
     ids: UUID[]
     remove(id: UUID): void
-    rows(): (T & TableRow)[]
+    rows: (T & TableRow)[]
   }
 
   class List<T> extends Array<T> {
