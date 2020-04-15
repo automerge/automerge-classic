@@ -515,6 +515,8 @@ describe('TypeScript support', () => {
     })
 
     describe('standard array operations on rows', () => {
+      it('returns a list of rows', () =>
+        assert.deepEqual(s1.books.rows, [ddiaWithId]))
       it('supports `filter`', () =>
         assert.deepEqual(s1.books.filter(book => book.authors.length === 1), [ddiaWithId]))
       it('supports `find`', () =>

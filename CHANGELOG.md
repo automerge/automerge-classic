@@ -8,6 +8,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+- **Fixed** [#249]: Corrected TypeScript declaration for `Automerge.Table.rows` ([@lauritzsh])
+
 ## [0.14.0] — 2020-03-25
 
 - **Removed** [#236]: Undocumented `Automerge.Table` API that allowed rows to be added by
@@ -263,6 +265,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#249]: https://github.com/automerge/automerge/pull/249
 [#243]: https://github.com/automerge/automerge/pull/243
 [#242]: https://github.com/automerge/automerge/pull/242
 [#241]: https://github.com/automerge/automerge/pull/241
@@ -345,6 +348,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@jimpick]: https://github.com/jimpick
 [@ept]: https://github.com/ept
 [@kpruden]: https://github.com/kpruden
+[@lauritzsh]: https://github.com/lauritzsh
 [@mattkrick]: https://github.com/mattkrick
 [@minhhien1996]: https://github.com/minhhien1996
 [@mmcgrana]: https://github.com/mmcgrana
