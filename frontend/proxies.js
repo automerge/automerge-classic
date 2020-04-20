@@ -132,7 +132,10 @@ const MapHandler = {
     const { context, objectId } = target
     const object = context.getObject(objectId)
     if (key in object) {
-      return {configurable: true, enumerable: true}
+      return {
+        configurable: true, enumerable: true,
+        value: context.getObjectField(objectId, key)
+      }
     }
   },
 
@@ -176,15 +179,18 @@ const ListHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (key === 'length') return {writable: true}
-    if (key === OBJECT_ID) return {configurable: false, enumerable: false}
-
     const [context, objectId] = target
     const object = context.getObject(objectId)
 
+    if (key === 'length') return {writable: true, value: object.length}
+    if (key === OBJECT_ID) return {configurable: false, enumerable: false, value: objectId}
+
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       const index = parseListIndex(key)
-      if (index < object.length) return {configurable: true, enumerable: true}
+      if (index < object.length) return {
+        configurable: true, enumerable: true,
+        value: context.getObjectField(objectId, index)
+      }
     }
   },
 
