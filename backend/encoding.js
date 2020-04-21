@@ -30,6 +30,35 @@ if (typeof TextEncoder === 'function' && typeof TextDecoder === 'function') {
 
 
 /**
+ * Converts a string consisting of hexadecimal digits into an Uint8Array.
+ */
+function hexStringToBytes(value) {
+  if (typeof value !== 'string') {
+    throw new TypeError('value is not a string')
+  }
+  if (!/^([0-9a-f][0-9a-f])*$/.test(value)) {
+    throw new RangeError('value is not hexadecimal')
+  }
+  if (value === '') {
+    return new Uint8Array(0)
+  } else {
+    return new Uint8Array(value.match(/../g).map(b => parseInt(b, 16)))
+  }
+}
+
+/**
+ * Converts a Uint8Array into the equivalent hexadecimal string.
+ */
+function bytesToHexString(bytes) {
+  const hex = []
+  for (let b of bytes) {
+    if (b < 0 || b > 255) throw new RangeError(`value does not fit in one byte: ${b}`)
+    hex.push(('0' + b.toString(16)).slice(-2))
+  }
+  return hex.join('')
+}
+
+/**
  * Wrapper around an Uint8Array that allows values to be appended to the buffer,
  * and that automatically grows the buffer when space runs out.
  */
@@ -243,6 +272,16 @@ class Encoder {
   appendPrefixedString(value) {
     if (typeof value !== 'string') throw new TypeError('value is not a string')
     this.appendPrefixedBytes(stringToUtf8(value))
+    return this
+  }
+
+  /**
+   * Takes a value, which must be a string consisting only of hexadecimal
+   * digits, maps it to a byte array, and appends it to the buffer, prefixed
+   * with its length in bytes.
+   */
+  appendHexString(value) {
+    this.appendPrefixedBytes(hexStringToBytes(value))
     return this
   }
 
@@ -469,6 +508,14 @@ class Decoder {
    */
   readPrefixedString() {
     return utf8ToString(this.readPrefixedBytes())
+  }
+
+  /**
+   * Reads a byte array from the current position in the buffer, prefixed with its
+   * length in bytes. Returns that byte array converted to a hexadecimal string.
+   */
+  readHexString() {
+    return bytesToHexString(this.readPrefixedBytes())
   }
 }
 
@@ -756,4 +803,7 @@ class BooleanDecoder extends Decoder {
   }
 }
 
-module.exports = { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder }
+module.exports = {
+  hexStringToBytes, bytesToHexString,
+  Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
+}

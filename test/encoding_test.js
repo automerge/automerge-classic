@@ -478,6 +478,30 @@ describe('Binary encoding', () => {
         assert.strictEqual(decoder.readPrefixedString(), 'three')
       })
     })
+
+    describe('hex encoding', () => {
+      it('should encode hex strings', () => {
+        checkEncoded(new Encoder().appendHexString(''), [0])
+        checkEncoded(new Encoder().appendHexString('00'), [1, 0])
+        checkEncoded(new Encoder().appendHexString('0123'), [2, 1, 0x23])
+        checkEncoded(new Encoder().appendHexString('fedcba9876543210'), [8, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10])
+      })
+
+      it('should round-trip strings', () => {
+        assert.strictEqual(new Decoder(new Encoder().appendHexString('').buffer).readHexString(), '')
+        assert.strictEqual(new Decoder(new Encoder().appendHexString('00').buffer).readHexString(), '00')
+        assert.strictEqual(new Decoder(new Encoder().appendHexString('0123').buffer).readHexString(), '0123')
+        assert.strictEqual(new Decoder(new Encoder().appendHexString('fedcba9876543210').buffer).readHexString(), 'fedcba9876543210')
+      })
+
+      it('should not allow malformed hex strings', () => {
+        assert.throws(() => { new Encoder().appendHexString(0x1234) }, /value is not a string/)
+        assert.throws(() => { new Encoder().appendHexString('abcd-ef') }, /value is not hexadecimal/)
+        assert.throws(() => { new Encoder().appendHexString('0') }, /value is not hexadecimal/)
+        assert.throws(() => { new Encoder().appendHexString('ABCD') }, /value is not hexadecimal/)
+        assert.throws(() => { new Encoder().appendHexString('zz') }, /value is not hexadecimal/)
+      })
+    })
   })
 
   describe('RLEEncoder and RLEDecoder', () => {

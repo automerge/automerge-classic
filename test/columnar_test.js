@@ -5,18 +5,18 @@ const { ROOT_ID } = require('../src/common')
 
 describe('change encoding', () => {
   it('should encode text edits', () => {
-    const change1 = {actor: 'aaa', seq: 1, startOp: 1, time: 9, message: '', deps: {}, ops: [
+    const change1 = {actor: 'aaaa', seq: 1, startOp: 1, time: 9, message: '', deps: {}, ops: [
       {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
-      {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'h', pred: []},
-      {action: 'del', obj: '1@aaa', key: '2@aaa', pred: ['2@aaa']},
-      {action: 'set', obj: '1@aaa', key: '_head', insert: true, value: 'H', pred: []},
-      {action: 'set', obj: '1@aaa', key: '4@aaa', insert: true, value: 'i', pred: []}
+      {action: 'set', obj: '1@aaaa', key: '_head', insert: true, value: 'h', pred: []},
+      {action: 'del', obj: '1@aaaa', key: '2@aaaa', pred: ['2@aaaa']},
+      {action: 'set', obj: '1@aaaa', key: '_head', insert: true, value: 'H', pred: []},
+      {action: 'set', obj: '1@aaaa', key: '4@aaaa', insert: true, value: 'i', pred: []}
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0x61, 0xe4, 0xb3, 0x14, 0x78, 0xf3, 0x36, 0xbf, 0xdf, 0xf8, 0xfb, 0xf5, 0x3b, 0xa3, 0x26, 0x68, // sha-256
-      0x53, 0x63, 0xda, 0x83, 0xfa, 0x93, 0x2e, 0x25, 0xa0, 0x4f, 0xbb, 0xbb, 0x03, 0xb6, 0x28, 0x4f, // hash
-      1, 90, 3, 0x61, 0x61, 0x61, // chunkType: change, length, actor 'aaa'
+      0xb9, 0x96, 0xef, 0x4c, 0x65, 0xf5, 0x22, 0x05, 0x3c, 0x9c, 0x29, 0x85, 0x79, 0x67, 0xeb, 0x52, // sha-256
+      0x2e, 0x91, 0xd4, 0x8f, 0x91, 0x35, 0x2f, 0x01, 0x61, 0xd2, 0x2f, 0xa0, 0x7d, 0x2e, 0xf8, 0x43, // hash
+      1, 89, 2, 0xaa, 0xaa, // chunkType: change, length, actor 'aaaa'
       1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
       1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
       2, 4, 0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1

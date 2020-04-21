@@ -453,7 +453,7 @@ function decodeColumns(decoder, actorIds) {
 
 function decodeChangeHeader(decoder) {
   let change = {
-    actor:   decoder.readPrefixedString(),
+    actor:   decoder.readHexString(),
     seq:     decoder.readUint53(),
     startOp: decoder.readUint53(),
     time:    decoder.readInt53(),
@@ -461,7 +461,7 @@ function decodeChangeHeader(decoder) {
     deps: {}
   }
   const actorIds = [change.actor], numActorIds = decoder.readUint53()
-  for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readPrefixedString())
+  for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readHexString())
   const numDeps = decoder.readUint53()
   for (let i = 0; i < numDeps; i++) {
     change.deps[actorIds[decoder.readUint53()]] = decoder.readUint53()
@@ -549,13 +549,13 @@ function encodeChange(changeObj) {
   const change = changes[0]
 
   return encodeContainer('change', encodeOps(change.ops), encoder => {
-    encoder.appendPrefixedString(change.actor)
+    encoder.appendHexString(change.actor)
     encoder.appendUint53(change.seq)
     encoder.appendUint53(change.startOp)
     encoder.appendInt53(change.time)
     encoder.appendPrefixedString(change.message || '')
     encoder.appendUint53(actorIds.length - 1)
-    for (let actor of actorIds.slice(1)) encoder.appendPrefixedString(actor)
+    for (let actor of actorIds.slice(1)) encoder.appendHexString(actor)
     const depsKeys = Object.keys(change.deps).sort()
     encoder.appendUint53(depsKeys.length)
     for (let actor of depsKeys) {

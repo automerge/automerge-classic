@@ -43,19 +43,19 @@ describe('Automerge.Backend', () => {
     })
 
     it('should make a conflict on assignment to the same key', () => {
-      const change1 = {actor: 'actor1', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
+      const change1 = {actor: '111111', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, startOp: 2, time: 0, deps: {}, ops: [
+      const change2 = {actor: '222222', seq: 1, startOp: 2, time: 0, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird', pred: []}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
       assert.deepStrictEqual(patch2, {
-        version: 2, clock: {actor1: 1, actor2: 1}, canUndo: false, canRedo: false,
+        version: 2, clock: {111111: 1, 222222: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
-          bird: {'1@actor1': {value: 'magpie'}, '2@actor2': {value: 'blackbird'}}
+          bird: {'1@111111': {value: 'magpie'}, '2@222222': {value: 'blackbird'}}
         }}
       })
     })
@@ -318,40 +318,40 @@ describe('Automerge.Backend', () => {
     })
 
     it('should transform list indexes into element IDs', () => {
-      const remote1 = {actor: 'actor2', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
+      const remote1 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', pred: []}
       ]}
-      const remote2 = {actor: 'actor2', seq: 2, startOp: 2, time: 0, deps: {}, ops: [
-        {obj: '1@actor2', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
+      const remote2 = {actor: '222222', seq: 2, startOp: 2, time: 0, deps: {}, ops: [
+        {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
       ]}
-      const local1 = {requestType: 'change', actor: 'actor1', seq: 1, version: 1, ops: [
-        {obj: '1@actor2', action: 'set', key: 0, insert: true, value: 'goldfinch'}
+      const local1 = {requestType: 'change', actor: '111111', seq: 1, version: 1, ops: [
+        {obj: '1@222222', action: 'set', key: 0, insert: true, value: 'goldfinch'}
       ]}
-      const local2 = {requestType: 'change', actor: 'actor1', seq: 2, version: 1, ops: [
-        {obj: '1@actor2', action: 'set', key: 1, insert: true, value: 'wagtail'}
+      const local2 = {requestType: 'change', actor: '111111', seq: 2, version: 1, ops: [
+        {obj: '1@222222', action: 'set', key: 1, insert: true, value: 'wagtail'}
       ]}
-      const local3 = {requestType: 'change', actor: 'actor1', seq: 3, version: 4, ops: [
-        {obj: '1@actor2', action: 'set', key: 0, value: 'Magpie'},
-        {obj: '1@actor2', action: 'set', key: 1, value: 'Goldfinch'}
+      const local3 = {requestType: 'change', actor: '111111', seq: 3, version: 4, ops: [
+        {obj: '1@222222', action: 'set', key: 0, value: 'Magpie'},
+        {obj: '1@222222', action: 'set', key: 1, value: 'Goldfinch'}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
       const [s2, patch2] = Backend.applyLocalChange(s1, local1)
-      const change12 = decodeOneChange(Backend.getChanges(s2, {actor2: 1}))
+      const change12 = decodeOneChange(Backend.getChanges(s2, {222222: 1}))
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(remote2)])
       const [s4, patch4] = Backend.applyLocalChange(s3, local2)
-      const change34 = decodeOneChange(Backend.getChanges(s4, {actor1: 1, actor2: 2}))
+      const change34 = decodeOneChange(Backend.getChanges(s4, {111111: 1, 222222: 2}))
       const [s5, patch5] = Backend.applyLocalChange(s4, local3)
-      const change45 = decodeOneChange(Backend.getChanges(s5, {actor1: 2, actor2: 2}))
-      assert.deepStrictEqual(change12, {actor: 'actor1', seq: 1, startOp: 2, time: change12.time, message: '', deps: {actor2: 1}, ops: [
-        {obj: '1@actor2', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
+      const change45 = decodeOneChange(Backend.getChanges(s5, {111111: 2, 222222: 2}))
+      assert.deepStrictEqual(change12, {actor: '111111', seq: 1, startOp: 2, time: change12.time, message: '', deps: {222222: 1}, ops: [
+        {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
       ]})
-      assert.deepStrictEqual(change34, {actor: 'actor1', seq: 2, startOp: 3, time: change34.time, message: '', deps: {}, ops: [
-        {obj: '1@actor2', action: 'set', key: '2@actor1', insert: true, value: 'wagtail', pred: []}
+      assert.deepStrictEqual(change34, {actor: '111111', seq: 2, startOp: 3, time: change34.time, message: '', deps: {}, ops: [
+        {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
       ]})
-      assert.deepStrictEqual(change45, {actor: 'actor1', seq: 3, startOp: 4, time: change45.time, message: '', deps: {actor2: 2}, ops: [
-        {obj: '1@actor2', action: 'set', key: '2@actor2', value: 'Magpie',    pred: ['2@actor2']},
-        {obj: '1@actor2', action: 'set', key: '2@actor1', value: 'Goldfinch', pred: ['2@actor1']}
+      assert.deepStrictEqual(change45, {actor: '111111', seq: 3, startOp: 4, time: change45.time, message: '', deps: {222222: 2}, ops: [
+        {obj: '1@222222', action: 'set', key: '2@222222', value: 'Magpie',    pred: ['2@222222']},
+        {obj: '1@222222', action: 'set', key: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
       ]})
     })
 
@@ -403,17 +403,17 @@ describe('Automerge.Backend', () => {
     })
 
     it('should include conflicting values for a key', () => {
-      const change1 = {actor: 'actor1', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
+      const change1 = {actor: '111111', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]}
-      const change2 = {actor: 'actor2', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
+      const change2 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'blackbird', pred: []}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2].map(encodeChange))
       assert.deepStrictEqual(Backend.getPatch(s1), {
-        version: 0, clock: {actor1: 1, actor2: 1}, canUndo: false, canRedo: false,
+        version: 0, clock: {111111: 1, 222222: 1}, canUndo: false, canRedo: false,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
-          bird: {'1@actor1': {value: 'magpie'}, '1@actor2': {value: 'blackbird'}}
+          bird: {'1@111111': {value: 'magpie'}, '1@222222': {value: 'blackbird'}}
         }}
       })
     })
