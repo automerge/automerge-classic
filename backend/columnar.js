@@ -454,8 +454,9 @@ function decodeColumns(decoder, actorIds) {
   return parsedOps
 }
 
-function decodeChangeHeader(decoder) {
+function decodeChangeHeader(decoder, hash) {
   let change = {
+    hash,
     actor:   decoder.readHexString(),
     seq:     decoder.readUint53(),
     startOp: decoder.readUint53(),
@@ -512,17 +513,17 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
 
   // Compute the hash over chunkType, length, and body
   const headerBuf = header.buffer
-  const hash = new Hash()
-  hash.update(headerBuf)
-  hash.update(bodyBuf.subarray(HEADER_SPACE))
-  const checksum = hash.digest().subarray(0, CHECKSUM_SIZE)
+  const sha256 = new Hash()
+  sha256.update(headerBuf)
+  sha256.update(bodyBuf.subarray(HEADER_SPACE))
+  const hash = sha256.digest(), checksum = hash.subarray(0, CHECKSUM_SIZE)
 
   // Copy header into the body buffer so that they are contiguous
   bodyBuf.set(MAGIC_BYTES, HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
   bodyBuf.set(checksum,    HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE)
   bodyBuf.set(headerBuf,   HEADER_SPACE - headerBuf.byteLength)
   //console.log('checksum: ', [...checksum].map(x => `0x${('0' + x.toString(16)).slice(-2)}`).join(', '))
-  return bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
+  return {hash, bytes: bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)}
 }
 
 function decodeContainerHeader(decoder) {
@@ -544,7 +545,7 @@ function decodeContainerHeader(decoder) {
   if (chunkType === 0) {
     // decode document
   } else if (chunkType === 1) {
-    return decodeChangeHeader(chunkData)
+    return decodeChangeHeader(chunkData, bytesToHexString(hash))
   } else {
     console.log(`Warning: ignoring chunk with unknown type ${chunkType}`)
   }
@@ -554,7 +555,7 @@ function encodeChange(changeObj) {
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
 
-  return encodeContainer('change', encodeOps(change.ops), encoder => {
+  const { hash, bytes } = encodeContainer('change', encodeOps(change.ops), encoder => {
     encoder.appendHexString(change.actor)
     encoder.appendUint53(change.seq)
     encoder.appendUint53(change.startOp)
@@ -569,6 +570,12 @@ function encodeChange(changeObj) {
       encoder.appendUint53(change.deps[actor])
     }
   })
+
+  const hexHash = bytesToHexString(hash)
+  if (changeObj.hash && changeObj.hash !== hexHash) {
+    throw new RangeError(`Change hash does not match encoding: ${changeObj.hash} != ${hexHash}`)
+  }
+  return bytes
 }
 
 function decodeChange(buffer) {
@@ -729,7 +736,7 @@ function encodeDocument(changeObjects) {
   const ops = encodeDocumentOps(groupDocumentOps(changes))
   return encodeContainer('document', ops, encoder => {
     // TODO add document header
-  })
+  }).bytes
 }
 
 module.exports = { encodeChange, decodeChanges, encodeDocument }

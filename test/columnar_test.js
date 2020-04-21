@@ -30,6 +30,7 @@ describe('change encoding', () => {
       57, 2, 0x7f, 0, // predActor column: 0
       59, 2, 0x7f, 2 // predCtr column: 2
     ])
-    assert.deepStrictEqual(decodeChanges([encodeChange(change1)]), [change1])
+    const decoded = decodeChanges([encodeChange(change1)])
+    assert.deepStrictEqual(decoded, [Object.assign({hash: decoded[0].hash}, change1)])
   })
 })
