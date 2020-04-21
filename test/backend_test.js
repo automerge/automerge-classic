@@ -256,7 +256,7 @@ describe('Automerge.Backend', () => {
   describe('applyLocalChange()', () => {
     it('should apply change requests', () => {
       const actor = uuid()
-      const change1 = {requestType: 'change', actor, seq: 1, version: 0, ops: [
+      const change1 = {requestType: 'change', actor, seq: 1, time: 0, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
       const s0 = Backend.init()
@@ -275,10 +275,10 @@ describe('Automerge.Backend', () => {
 
     it('should throw an exception on duplicate requests', () => {
       const actor = uuid()
-      const change1 = {requestType: 'change', actor, seq: 1, version: 0, ops: [
+      const change1 = {requestType: 'change', actor, seq: 1, time: 0, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const change2 = {requestType: 'change', actor, seq: 2, version: 0, ops: [
+      const change2 = {requestType: 'change', actor, seq: 2, time: 0, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
       ]}
       const s0 = Backend.init()
@@ -290,10 +290,10 @@ describe('Automerge.Backend', () => {
 
     it('should handle frontend and backend changes happening concurrently', () => {
       const actor1 = uuid(), actor2 = uuid()
-      const local1 = {requestType: 'change', actor: actor1, seq: 1, version: 0, ops: [
+      const local1 = {requestType: 'change', actor: actor1, seq: 1, time: 0, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
       ]}
-      const local2 = {requestType: 'change', actor: actor1, seq: 2, version: 0, ops: [
+      const local2 = {requestType: 'change', actor: actor1, seq: 2, time: 0, version: 0, ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
       ]}
       const remote1 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: {}, ops: [
@@ -324,13 +324,13 @@ describe('Automerge.Backend', () => {
       const remote2 = {actor: '222222', seq: 2, startOp: 2, time: 0, deps: {}, ops: [
         {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
       ]}
-      const local1 = {requestType: 'change', actor: '111111', seq: 1, version: 1, ops: [
+      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 1, ops: [
         {obj: '1@222222', action: 'set', key: 0, insert: true, value: 'goldfinch'}
       ]}
-      const local2 = {requestType: 'change', actor: '111111', seq: 2, version: 1, ops: [
+      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, version: 1, ops: [
         {obj: '1@222222', action: 'set', key: 1, insert: true, value: 'wagtail'}
       ]}
-      const local3 = {requestType: 'change', actor: '111111', seq: 3, version: 4, ops: [
+      const local3 = {requestType: 'change', actor: '111111', seq: 3, time: 0, version: 4, ops: [
         {obj: '1@222222', action: 'set', key: 0, value: 'Magpie'},
         {obj: '1@222222', action: 'set', key: 1, value: 'Goldfinch'}
       ]}
@@ -357,10 +357,10 @@ describe('Automerge.Backend', () => {
 
     it('should handle list element insertion and deletion in the same change', () => {
       const actor = uuid()
-      const local1 = {requestType: 'change', actor, seq: 1, startOp: 1, version: 0, ops: [
+      const local1 = {requestType: 'change', actor, seq: 1, startOp: 1, time: 0, version: 0, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'birds'}
       ]}
-      const local2 = {requestType: 'change', actor, seq: 2, startOp: 2, version: 0, ops: [
+      const local2 = {requestType: 'change', actor, seq: 2, startOp: 2, time: 0, version: 0, ops: [
         {obj: `1@${actor}`, action: 'set', key: 0, insert: true, value: 'magpie'},
         {obj: `1@${actor}`, action: 'del', key: 0}
       ]}

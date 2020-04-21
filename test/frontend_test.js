@@ -51,19 +51,23 @@ describe('Automerge.Frontend', () => {
       const actor = uuid()
       const [doc, req] = Frontend.change(Frontend.init(actor), doc => doc.bird = 'magpie')
       assert.deepStrictEqual(doc, {bird: 'magpie'})
-      assert.deepStrictEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-        {obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}
-      ]})
+      assert.deepStrictEqual(req, {
+        requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}
+        ]
+      })
     })
 
     it('should create nested maps', () => {
       const [doc, req] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 3})
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepStrictEqual(doc, {birds: {wrens: 3}})
-      assert.deepStrictEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-        {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: birds},
-        {obj: birds,   action: 'set',     key: 'wrens', value: 3}
-      ]})
+      assert.deepStrictEqual(req, {
+        requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: birds},
+          {obj: birds,   action: 'set',     key: 'wrens', value: 3}
+        ]
+      })
     })
 
     it('should apply updates inside nested maps', () => {
@@ -72,9 +76,11 @@ describe('Automerge.Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc1)
       assert.deepStrictEqual(doc1, {birds: {wrens: 3}})
       assert.deepStrictEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-        {obj: birds, action: 'set', key: 'sparrows', value: 15}
-      ]})
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: birds, action: 'set', key: 'sparrows', value: 15}
+        ]
+      })
     })
 
     it('should delete keys in maps', () => {
@@ -83,19 +89,23 @@ describe('Automerge.Frontend', () => {
       const [doc2, req2] = Frontend.change(doc1, doc => delete doc['magpies'])
       assert.deepStrictEqual(doc1, {magpies: 2, sparrows: 15})
       assert.deepStrictEqual(doc2, {sparrows: 15})
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-        {obj: ROOT_ID, action: 'del', key: 'magpies'}
-      ]})
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'del', key: 'magpies'}
+        ]
+      })
     })
 
     it('should create lists', () => {
       const [doc, req] = Frontend.change(Frontend.init(), doc => doc.birds = ['chaffinch'])
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepStrictEqual(doc, {birds: ['chaffinch']})
-      assert.deepStrictEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-        {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds},
-        {obj: birds, action: 'set', key: 0, insert: true, value: 'chaffinch'}
-      ]})
+      assert.deepStrictEqual(req, {
+        requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds},
+          {obj: birds, action: 'set', key: 0, insert: true, value: 'chaffinch'}
+        ]
+      })
     })
 
     it('should apply updates inside lists', () => {
@@ -104,9 +114,11 @@ describe('Automerge.Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
       assert.deepStrictEqual(doc1, {birds: ['chaffinch']})
       assert.deepStrictEqual(doc2, {birds: ['greenfinch']})
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-        {obj: birds, action: 'set', key: 0, value: 'greenfinch'}
-      ]})
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: birds, action: 'set', key: 0, value: 'greenfinch'}
+        ]
+      })
     })
 
     it('should delete list elements', () => {
@@ -115,9 +127,11 @@ describe('Automerge.Frontend', () => {
       const birds = Frontend.getObjectId(doc2.birds), actor = Frontend.getActorId(doc2)
       assert.deepStrictEqual(doc1, {birds: ['chaffinch', 'goldfinch']})
       assert.deepStrictEqual(doc2, {birds: ['goldfinch']})
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-        {obj: birds, action: 'del', key: 0}
-      ]})
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: birds, action: 'del', key: 0}
+        ]
+      })
     })
 
     it('should store Date objects as timestamps', () => {
@@ -126,9 +140,11 @@ describe('Automerge.Frontend', () => {
       const actor = Frontend.getActorId(doc)
       assert.strictEqual(doc.now instanceof Date, true)
       assert.strictEqual(doc.now.getTime(), now.getTime())
-      assert.deepStrictEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-        {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
-      ]})
+      assert.deepStrictEqual(req, {
+        requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
+        ]
+      })
     })
 
     describe('counters', () => {
@@ -144,12 +160,16 @@ describe('Automerge.Frontend', () => {
         const actor = Frontend.getActorId(doc2)
         assert.deepStrictEqual(doc1, {wrens: new Frontend.Counter(0)})
         assert.deepStrictEqual(doc2, {wrens: new Frontend.Counter(1)})
-        assert.deepStrictEqual(req1, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'wrens', value: 0, datatype: 'counter'}
-        ]})
-        assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-          {obj: ROOT_ID, action: 'inc', key: 'wrens', value: 1}
-        ]})
+        assert.deepStrictEqual(req1, {
+          requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
+            {obj: ROOT_ID, action: 'set', key: 'wrens', value: 0, datatype: 'counter'}
+          ]
+        })
+        assert.deepStrictEqual(req2, {
+          requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+            {obj: ROOT_ID, action: 'inc', key: 'wrens', value: 1}
+          ]
+        })
       })
 
       it('should handle counters inside lists', () => {
@@ -164,13 +184,17 @@ describe('Automerge.Frontend', () => {
         const counts = Frontend.getObjectId(doc2.counts), actor = Frontend.getActorId(doc2)
         assert.deepStrictEqual(doc1, {counts: [new Frontend.Counter(1)]})
         assert.deepStrictEqual(doc2, {counts: [new Frontend.Counter(3)]})
-        assert.deepStrictEqual(req1, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-          {obj: ROOT_ID, action: 'makeList', key: 'counts', child: counts},
-          {obj: counts, action: 'set', key: 0, insert: true, value: 1, datatype: 'counter'}
-        ]})
-        assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-          {obj: counts, action: 'inc', key: 0, value: 2}
-        ]})
+        assert.deepStrictEqual(req1, {
+          requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
+            {obj: ROOT_ID, action: 'makeList', key: 'counts', child: counts},
+            {obj: counts, action: 'set', key: 0, insert: true, value: 1, datatype: 'counter'}
+          ]
+        })
+        assert.deepStrictEqual(req2, {
+          requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+            {obj: counts, action: 'inc', key: 0, value: 2}
+          ]
+        })
       })
 
       it('should refuse to overwrite a property with a counter value', () => {
@@ -220,8 +244,9 @@ describe('Automerge.Frontend', () => {
       }
       let doc1 = Frontend.applyPatch(Frontend.init(local), patch1)
       let [doc2, req] = Frontend.change(doc1, doc => doc.partridges = 1)
-      assert.deepStrictEqual(getRequests(doc2), [
-        {requestType: 'change', actor: local, seq: 5, version: 3, ops: [
+      let requests = getRequests(doc2)
+      assert.deepStrictEqual(requests, [
+        {requestType: 'change', actor: local, seq: 5, time: requests[0].time, message: '', version: 3, ops: [
           {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
         ]}
       ])
@@ -231,9 +256,14 @@ describe('Automerge.Frontend', () => {
       const actor = uuid()
       let [doc1, change1] = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)
       let [doc2, change2] = Frontend.change(doc1, doc => doc.partridges = 1)
-      assert.deepStrictEqual(getRequests(doc2), [
-        {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]},
-        {requestType: 'change', actor, seq: 2, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+      let requests = getRequests(doc2)
+      assert.deepStrictEqual(requests, [
+        {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+        ]},
+        {requestType: 'change', actor, seq: 2, time: requests[1].time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+        ]}
       ])
 
       doc2 = Frontend.applyPatch(doc2, {
@@ -241,9 +271,12 @@ describe('Automerge.Frontend', () => {
           objectId: ROOT_ID, type: 'map', props: {blackbirds: {[actor]: {value: 24}}}
         }
       })
+      requests = getRequests(doc2)
       assert.deepStrictEqual(doc2, {blackbirds: 24, partridges: 1})
-      assert.deepStrictEqual(getRequests(doc2), [
-        {requestType: 'change', actor, seq: 2, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}]}
+      assert.deepStrictEqual(requests, [
+        {requestType: 'change', actor, seq: 2, time: requests[0].time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+        ]}
       ])
 
       doc2 = Frontend.applyPatch(doc2, {
@@ -258,8 +291,11 @@ describe('Automerge.Frontend', () => {
     it('should leave the request queue unchanged on remote patches', () => {
       const actor = uuid(), other = uuid()
       let [doc, req] = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)
-      assert.deepStrictEqual(getRequests(doc), [
-        {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+      let requests = getRequests(doc)
+      assert.deepStrictEqual(requests, [
+        {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+        ]}
       ])
 
       doc = Frontend.applyPatch(doc, {
@@ -267,9 +303,12 @@ describe('Automerge.Frontend', () => {
           objectId: ROOT_ID, type: 'map', props: {pheasants: {[other]: {value: 2}}}
         }
       })
+      requests = getRequests(doc)
       assert.deepStrictEqual(doc, {blackbirds: 24})
-      assert.deepStrictEqual(getRequests(doc), [
-        {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}]}
+      assert.deepStrictEqual(requests, [
+        {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+        ]}
       ])
 
       doc = Frontend.applyPatch(doc, {
@@ -343,13 +382,25 @@ describe('Automerge.Frontend', () => {
       const actor = uuid()
       const [doc1, req1] = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
       const [doc2, req2] = Frontend.change(doc1, doc => doc.number = 2)
-      assert.deepStrictEqual(req1, {requestType: 'change', actor, seq: 1, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 1}]})
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 2}]})
+      assert.deepStrictEqual(req1, {
+        requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', value: 1}
+        ]
+      })
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', value: 2}
+        ]
+      })
       const state0 = Backend.init()
       const [state1, patch1] = Backend.applyLocalChange(state0, req1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const [doc3, req3] = Frontend.change(doc2a, doc => doc.number = 3)
-      assert.deepStrictEqual(req3, {requestType: 'change', actor, seq: 3, version: 1, ops: [{obj: ROOT_ID, action: 'set', key: 'number', value: 3}]})
+      assert.deepStrictEqual(req3, {
+        requestType: 'change', actor, seq: 3, time: req3.time, message: '', version: 1, ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', value: 3}
+        ]
+      })
     })
   })
 
@@ -621,7 +672,7 @@ describe('Automerge.Frontend', () => {
       const doc1a = Frontend.applyPatch(doc1, patch1)
       assert.strictEqual(Frontend.canUndo(doc1a), true)
       const [doc2, req2] = Frontend.undo(doc1a)
-      assert.deepStrictEqual(req2, {actor, requestType: 'undo', seq: 2, version: 1})
+      assert.deepStrictEqual(req2, {actor, requestType: 'undo', seq: 2, time: req2.time, message: '', version: 1})
       const [b2, patch2] = Backend.applyLocalChange(b1, req2)
       const doc2a = Frontend.applyPatch(doc2, patch2)
       assert.deepStrictEqual(doc2a, {})

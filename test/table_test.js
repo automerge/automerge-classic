@@ -25,9 +25,11 @@ describe('Automerge.Table', () => {
         doc.books = new Automerge.Table()
       })
       const books = Frontend.getObjectId(doc.books)
-      assert.deepStrictEqual(req, {requestType: 'change', actor, seq: 1, version: 0, ops: [
-        {obj: ROOT_ID, action: 'makeTable', key: 'books', child: books}
-      ]})
+      assert.deepStrictEqual(req, {
+        requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
+          {obj: ROOT_ID, action: 'makeTable', key: 'books', child: books}
+        ]
+      })
     })
 
     it('should generate ops to insert a row', () => {
@@ -40,11 +42,13 @@ describe('Automerge.Table', () => {
         rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
       const books = Frontend.getObjectId(doc2.books)
-      assert.deepStrictEqual(req2, {requestType: 'change', actor, seq: 2, version: 0, ops: [
-        {obj: books, action: 'makeMap', key: rowId, child: rowId},
-        {obj: rowId, action: 'set', key: 'authors', value: 'Kleppmann, Martin'},
-        {obj: rowId, action: 'set', key: 'title', value: 'Designing Data-Intensive Applications'}
-      ]})
+      assert.deepStrictEqual(req2, {
+        requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
+          {obj: books, action: 'makeMap', key: rowId, child: rowId},
+          {obj: rowId, action: 'set', key: 'authors', value: 'Kleppmann, Martin'},
+          {obj: rowId, action: 'set', key: 'title', value: 'Designing Data-Intensive Applications'}
+        ]
+      })
     })
   })
 

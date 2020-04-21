@@ -186,9 +186,9 @@ as the result of local user input.
 A change request is a JSON object with the following properties:
 
 * `requestType`: One of `'change'`, `'undo'`, or `'redo'`.
-* `actor`, `seq` and `message`: As in the old format. The frontend knows
-  the local actorId and generates the sequence number. These properties
-  appear on all request types (`message` is optional).
+* `actor`, `seq`, `time` and `message`: As in the change format. The
+  frontend knows the local actorId and generates the sequence number.
+  These properties appear on all request types.
 * `version`: An integer containing the highest document version number
   (as assigned by the backend) that the frontend has seen at the time it
   generated this change request. The version number is zero for a newly

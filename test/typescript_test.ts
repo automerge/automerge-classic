@@ -198,9 +198,10 @@ describe('TypeScript support', () => {
       const [s2, req2] = Frontend.change(s1, doc => doc.birds.push('chaffinch'))
       assert.strictEqual(s2.birds[1], 'chaffinch')
       assert.deepStrictEqual(s2, { birds: ['goldfinch', 'chaffinch'] })
-      assert.strictEqual(req2.message, undefined)
       assert.strictEqual(req2.actor, Frontend.getActorId(s0))
       assert.strictEqual(req2.seq, 2)
+      assert.strictEqual(req2.time > 0, true)
+      assert.strictEqual(req2.message, '')
     })
 
     it('should accept a message in the frontend', () => {

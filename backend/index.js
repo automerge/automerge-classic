@@ -24,9 +24,8 @@ function backendState(backend) {
  * the backend has already applied, but that the frontend has not yet seen).
  */
 function processChangeRequest(state, opSet, request, startOp) {
-  const { actor, seq, deps } = request
-  const change = { actor, seq, startOp, deps, time: new Date().getTime(), ops: [] }
-  if (request.message) change.message = request.message
+  const { actor, seq, deps, time, message } = request
+  const change = { actor, seq, startOp, deps, time, message, ops: [] }
 
   let objectIds = state.get('objectIds'), objectTypes = {}, elemIds = {}, assignments = {}
   for (let op of request.ops) {
@@ -192,6 +191,9 @@ function applyLocalChange(backend, request) {
   if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
   }
+  if (typeof request.time !== 'number') {
+    throw new TypeError('Change request requires `time` property')
+  }
   // Throw error if we have already applied this change request
   if (request.seq <= state.getIn(['opSet', 'clock', request.actor], 0)) {
     throw new RangeError('Change request has already been applied')
@@ -293,11 +295,8 @@ function undo(state, request, startOp) {
   if (undoPos < 1 || !undoOps) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
-  const { actor, seq, deps, message } = request
-  const change = Map({
-    actor, seq, startOp, deps: fromJS(deps), message,
-    time: new Date().getTime(), ops: undoOps
-  })
+  const { actor, seq, deps, time, message } = request
+  const change = Map({actor, seq, startOp, deps: fromJS(deps), time, message, ops: undoOps})
 
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
@@ -345,11 +344,8 @@ function redo(state, request, startOp) {
   if (!redoOps) {
     throw new RangeError('Cannot redo: the last change was not an undo')
   }
-  const { actor, seq, deps, message } = request
-  const change = Map({
-    actor, seq, startOp, deps: fromJS(deps), message,
-    time: new Date().getTime(), ops: redoOps
-  })
+  const { actor, seq, deps, time, message } = request
+  const change = Map({actor, seq, startOp, deps: fromJS(deps), time, message, ops: redoOps})
 
   let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)

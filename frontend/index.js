@@ -82,9 +82,11 @@ function makeChange(doc, requestType, context, options) {
   const state = copyObject(doc[STATE])
   state.seq += 1
 
-  const request = {requestType, actor, seq: state.seq, version: state.version}
-  if (options && options.message !== undefined) {
-    request.message = options.message
+  const request = {
+    requestType, actor, seq: state.seq,
+    time: new Date().getTime(),
+    message: (options && typeof options.message === 'string') ? options.message : '',
+    version: state.version
   }
   if (options && options.undoable === false) {
     request.undoable = false

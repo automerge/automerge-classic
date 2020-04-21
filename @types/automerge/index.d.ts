@@ -159,9 +159,10 @@ declare module 'automerge' {
   // A change request, sent from the frontend to the backend
   interface Request {
     requestType: RequestType
-    message?: string
     actor: string
     seq: number
+    time: number
+    message: string
     version: number
     ops: Op[]
   }
