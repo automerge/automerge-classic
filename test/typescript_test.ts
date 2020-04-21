@@ -2,7 +2,7 @@ import * as assert from 'assert'
 import * as Automerge from 'automerge'
 import { Backend, Frontend, Counter, Doc } from 'automerge'
 
-const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
+const UUID_PATTERN = /^[0-9a-f]{32}$/
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 interface BirdList {
@@ -57,16 +57,16 @@ describe('TypeScript support', () => {
     })
 
     it('should allow passing options when initializing with `from`', () => {
-      const actorId = '123'
+      const actorId = '1234'
       const s1 = Automerge.from<BirdList>({ birds: [] }, actorId)
-      assert.strictEqual(Automerge.getActorId(s1), '123')
+      assert.strictEqual(Automerge.getActorId(s1), '1234')
       const s2 = Automerge.from<BirdList>({ birds: [] }, { actorId })
-      assert.strictEqual(Automerge.getActorId(s2), '123')
+      assert.strictEqual(Automerge.getActorId(s2), '1234')
     })
 
     it('should allow the actorId to be configured', () => {
-      let s1 = Automerge.init<BirdList>('actor1')
-      assert.strictEqual(Automerge.getActorId(s1), 'actor1')
+      let s1 = Automerge.init<BirdList>('111111')
+      assert.strictEqual(Automerge.getActorId(s1), '111111')
       let s2 = Automerge.init<BirdList>()
       assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s2)), true)
     })
@@ -94,14 +94,14 @@ describe('TypeScript support', () => {
     })
 
     it('should allow a frontend actorId to be configured', () => {
-      const s0 = Frontend.init<NumberBox>('actor1')
-      assert.strictEqual(Frontend.getActorId(s0), 'actor1')
+      const s0 = Frontend.init<NumberBox>('111111')
+      assert.strictEqual(Frontend.getActorId(s0), '111111')
     })
 
     it('should allow frontend actorId assignment to be deferred', () => {
       const s0 = Frontend.init<NumberBox>({ deferActorId: true })
       assert.strictEqual(Frontend.getActorId(s0), undefined)
-      const s1 = Frontend.setActorId(s0, 'asdf123')
+      const s1 = Frontend.setActorId(s0, 'abcdef1234')
       const [s2, req] = Frontend.change(s1, doc => (doc.number = 15))
       assert.deepStrictEqual(s2, { number: 15 })
     })
@@ -114,11 +114,11 @@ describe('TypeScript support', () => {
     })
 
     it('should allow options to be passed to Frontend.from()', () => {
-      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '123' })
-      assert.strictEqual(Frontend.getActorId(s1), '123')
+      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '1234' })
+      assert.strictEqual(Frontend.getActorId(s1), '1234')
       assert.deepStrictEqual(s1, { birds: [] })
-      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '123')
-      assert.strictEqual(Frontend.getActorId(s2), '123')
+      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '1234')
+      assert.strictEqual(Frontend.getActorId(s2), '1234')
     })
   })
 
@@ -143,8 +143,8 @@ describe('TypeScript support', () => {
     it('should allow the actorId to be configured', () => {
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
-      let s2 = Automerge.load<BirdList>(Automerge.save(s1), 'actor1')
-      assert.strictEqual(Automerge.getActorId(s2), 'actor1')
+      let s2 = Automerge.load<BirdList>(Automerge.save(s1), '111111')
+      assert.strictEqual(Automerge.getActorId(s2), '111111')
     })
 
     it('should allow the freeze option to be passed in', () => {
@@ -181,15 +181,15 @@ describe('TypeScript support', () => {
     })
 
     it('should allow inspection of conflicts', () => {
-      let s1 = Automerge.init<NumberBox>('actor1')
+      let s1 = Automerge.init<NumberBox>('111111')
       s1 = Automerge.change(s1, doc => (doc.number = 3))
-      let s2 = Automerge.init<NumberBox>('actor2')
+      let s2 = Automerge.init<NumberBox>('222222')
       s2 = Automerge.change(s2, doc => (doc.number = 42))
       let s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.number, 42)
       assert.deepStrictEqual(
         Automerge.getConflicts(s3, 'number'),
-        { '1@actor1': 3, '1@actor2': 42 })
+        { '1@111111': 3, '1@222222': 42 })
     })
 
     it('should allow changes in the frontend', () => {

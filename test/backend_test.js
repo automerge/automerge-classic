@@ -554,8 +554,8 @@ describe('Automerge.Backend', () => {
     let oneDoc, twoDoc, mergeDoc
 
     beforeEach(() => {
-      oneDoc = Automerge.change(Automerge.init('actor1'), doc => doc.document = 'watch me now')
-      twoDoc = Automerge.init('actor2')
+      oneDoc = Automerge.change(Automerge.init('111111'), doc => doc.document = 'watch me now')
+      twoDoc = Automerge.init('222222')
       twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can mash potato')
       twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can do the twist')
       mergeDoc = Automerge.merge(oneDoc, twoDoc)
@@ -563,10 +563,10 @@ describe('Automerge.Backend', () => {
 
     it('should get changes for a single actor', () => {
       const state = Automerge.Frontend.getBackendState(mergeDoc)
-      const actorChanges = Backend.getChangesForActor(state, 'actor2')
+      const actorChanges = Backend.getChangesForActor(state, '222222')
 
       assert.strictEqual(actorChanges.length, 2)
-      assert.strictEqual(decodeChanges([actorChanges[0]])[0].actor, 'actor2')
+      assert.strictEqual(decodeChanges([actorChanges[0]])[0].actor, '222222')
     })
   })
 })

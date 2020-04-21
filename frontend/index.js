@@ -9,6 +9,22 @@ const { Table } = require('./table')
 const { Counter } = require('./counter')
 
 /**
+ * Actor IDs must consist only of hexadecimal digits so that they can be encoded
+ * compactly in binary form.
+ */
+function checkActorId(actorId) {
+  if (typeof actorId !== 'string') {
+    throw new TypeError(`Unsupported type of actorId: ${typeof actorId}`)
+  }
+  if (!/^[0-9a-f]+$/.test(actorId)) {
+    throw new RangeError('actorId must consist only of lowercase hex digits')
+  }
+  if (actorId.length % 2 !== 0) {
+    throw new RangeError('actorId must consist of an even number of digits')
+  }
+}
+
+/**
  * Takes a set of objects that have been updated (in `updated`) and an updated state object
  * `state`, and returns a new immutable document root object based on `doc` that reflects
  * those updates.
@@ -132,8 +148,12 @@ function init(options) {
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported value for init() options: ${options}`)
   }
-  if (options.actorId === undefined && !options.deferActorId) {
-    options.actorId = uuid()
+
+  if (!options.deferActorId) {
+    if (options.actorId === undefined) {
+      options.actorId = uuid()
+    }
+    checkActorId(options.actorId)
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
@@ -378,6 +398,7 @@ function getActorId(doc) {
  * document object with updated metadata.
  */
 function setActorId(doc, actorId) {
+  checkActorId(actorId)
   const state = Object.assign({}, doc[STATE], {actorId})
   return updateRootObject(doc, {}, state)
 }

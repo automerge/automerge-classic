@@ -2,8 +2,8 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf, decodeOneChange } = require('./helpers')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
-const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
-const OPID_PATTERN = /^[0-9]+@[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
+const UUID_PATTERN = /^[0-9a-f]{32}$/
+const OPID_PATTERN = /^[0-9]+@[0-9a-f]{32}$/
 
 describe('Automerge', () => {
 
@@ -26,9 +26,9 @@ describe('Automerge', () => {
     })
 
     it('should allow passing an actorId when instantiating from an existing object', () => {
-      const actorId = '123'
+      const actorId = '1234'
       let doc = Automerge.from({ foo: 1 }, actorId)
-      assert.strictEqual(Automerge.getActorId(doc), '123')
+      assert.strictEqual(Automerge.getActorId(doc), '1234')
     })
 
     it('accepts an empty object as initial state', () => {
@@ -936,8 +936,8 @@ describe('Automerge', () => {
 
     describe('multiple insertions at the same list position', () => {
       it('should handle insertion by greater actor ID', () => {
-        s1 = Automerge.init('A')
-        s2 = Automerge.init('B')
+        s1 = Automerge.init('aaaa')
+        s2 = Automerge.init('bbbb')
         s1 = Automerge.change(s1, doc => doc.list = ['two'])
         s2 = Automerge.merge(s2, s1)
         s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, 'one'))
@@ -945,8 +945,8 @@ describe('Automerge', () => {
       })
 
       it('should handle insertion by lesser actor ID', () => {
-        s1 = Automerge.init('B')
-        s2 = Automerge.init('A')
+        s1 = Automerge.init('bbbb')
+        s2 = Automerge.init('aaaa')
         s1 = Automerge.change(s1, doc => doc.list = ['two'])
         s2 = Automerge.merge(s2, s1)
         s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, 'one'))
@@ -1332,8 +1332,8 @@ describe('Automerge', () => {
     })
 
     it('should allow a custom actor ID to be set', () => {
-      let s = Automerge.load(Automerge.save(Automerge.init()), 'actor3')
-      assert.strictEqual(Automerge.getActorId(s), 'actor3')
+      let s = Automerge.load(Automerge.save(Automerge.init()), '333333')
+      assert.strictEqual(Automerge.getActorId(s), '333333')
     })
 
     it('should reconstitute complex datatypes', () => {
@@ -1343,31 +1343,31 @@ describe('Automerge', () => {
     })
 
     it('should reconstitute conflicts', () => {
-      let s1 = Automerge.change(Automerge.init('actor1'), doc => doc.x = 3)
-      let s2 = Automerge.change(Automerge.init('actor2'), doc => doc.x = 5)
+      let s1 = Automerge.change(Automerge.init('111111'), doc => doc.x = 3)
+      let s2 = Automerge.change(Automerge.init('222222'), doc => doc.x = 5)
       s1 = Automerge.merge(s1, s2)
       let s3 = Automerge.load(Automerge.save(s1))
       assert.strictEqual(s1.x, 5)
       assert.strictEqual(s3.x, 5)
-      assert.deepStrictEqual(Automerge.getConflicts(s1, 'x'), {'1@actor1': 3, '1@actor2': 5})
-      assert.deepStrictEqual(Automerge.getConflicts(s3, 'x'), {'1@actor1': 3, '1@actor2': 5})
+      assert.deepStrictEqual(Automerge.getConflicts(s1, 'x'), {'1@111111': 3, '1@222222': 5})
+      assert.deepStrictEqual(Automerge.getConflicts(s3, 'x'), {'1@111111': 3, '1@222222': 5})
     })
 
     it('should reconstitute element ID counters', () => {
-      const s1 = Automerge.init('actorid')
+      const s1 = Automerge.init('01234567')
       const s2 = Automerge.change(s1, doc => doc.list = ['a'])
       const listId = Automerge.getObjectId(s2.list)
       const change12 = decodeOneChange(Automerge.getChanges(s1, s2))
-      assert.deepStrictEqual(change12, {actor: 'actorid', seq: 1, startOp: 1, time: change12.time, message: '', deps: {}, ops: [
+      assert.deepStrictEqual(change12, {actor: '01234567', seq: 1, startOp: 1, time: change12.time, message: '', deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'list', pred: []},
         {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a', pred: []}
       ]})
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
-      const s4 = Automerge.load(Automerge.save(s3), 'actorid')
+      const s4 = Automerge.load(Automerge.save(s3), '01234567')
       const s5 = Automerge.change(s4, doc => doc.list.push('b'))
       const change45 = decodeOneChange(Automerge.getChanges(s4, s5))
       assert.deepStrictEqual(s5, {list: ['b']})
-      assert.deepStrictEqual(change45, {actor: 'actorid', seq: 3, startOp: 4, time: change45.time, message: '', deps: {}, ops: [
+      assert.deepStrictEqual(change45, {actor: '01234567', seq: 3, startOp: 4, time: change45.time, message: '', deps: {}, ops: [
         {obj: listId, action: 'set', key: '_head', insert: true, value: 'b', pred: []}
       ]})
     })

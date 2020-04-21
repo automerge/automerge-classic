@@ -4,7 +4,7 @@ const { Backend } = require('../src/automerge')
 const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const uuid = require('../src/uuid')
 const { STATE } = require('../frontend/constants')
-const UUID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/
+const UUID_PATTERN = /^[0-9a-f]{32}$/
 
 describe('Automerge.Frontend', () => {
   describe('initializing', () => {
