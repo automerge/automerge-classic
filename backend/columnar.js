@@ -1,5 +1,8 @@
 const { ROOT_ID, copyObject, parseOpId } = require('../src/common')
-const { Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder } = require('./encoding')
+const {
+  hexStringToBytes, bytesToHexString,
+  Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
+} = require('./encoding')
 
 // Maybe we should be using the platform's built-in hash implementation?
 // Node has the crypto module: https://nodejs.org/api/crypto.html and browsers have
@@ -475,8 +478,8 @@ function decodeChangeHeader(decoder) {
  * contents of the container.
  */
 function encodeContainer(chunkType, columns, encodeHeaderCallback) {
-  const HASH_SIZE = 32 // size of SHA-256 hash
-  const HEADER_SPACE = MAGIC_BYTES.byteLength + HASH_SIZE + 1 + 5 // 1 byte type + 5 bytes length
+  const CHECKSUM_SIZE = 4 // checksum is first 4 bytes of SHA-256 hash of the rest of the data
+  const HEADER_SPACE = MAGIC_BYTES.byteLength + CHECKSUM_SIZE + 1 + 5 // 1 byte type + 5 bytes length
   const body = new Encoder()
   // Make space for the header at the beginning of the body buffer. We will
   // copy the header in here later. This is cheaper than copying the body since
@@ -512,28 +515,31 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   const hash = new Hash()
   hash.update(headerBuf)
   hash.update(bodyBuf.subarray(HEADER_SPACE))
+  const checksum = hash.digest().subarray(0, CHECKSUM_SIZE)
 
   // Copy header into the body buffer so that they are contiguous
-  bodyBuf.set(MAGIC_BYTES,   HEADER_SPACE - headerBuf.byteLength - HASH_SIZE - MAGIC_BYTES.byteLength)
-  bodyBuf.set(hash.digest(), HEADER_SPACE - headerBuf.byteLength - HASH_SIZE)
-  bodyBuf.set(headerBuf,     HEADER_SPACE - headerBuf.byteLength)
-  //console.log('hash: ', [...hash.digest()].map(x => `0x${x.toString(16)}`).join(', '))
-  return bodyBuf.subarray(   HEADER_SPACE - headerBuf.byteLength - HASH_SIZE - MAGIC_BYTES.byteLength)
+  bodyBuf.set(MAGIC_BYTES, HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
+  bodyBuf.set(checksum,    HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE)
+  bodyBuf.set(headerBuf,   HEADER_SPACE - headerBuf.byteLength)
+  //console.log('checksum: ', [...checksum].map(x => `0x${('0' + x.toString(16)).slice(-2)}`).join(', '))
+  return bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
 }
 
 function decodeContainerHeader(decoder) {
   if (!compareBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
     throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
   }
-  const expectedHash = decoder.readRawBytes(32)
+  const expectedHash = decoder.readRawBytes(4)
   const hashStartOffset = decoder.offset
   const chunkType = decoder.readByte()
   const chunkLength = decoder.readUint53()
   const chunkData = new Decoder(decoder.readRawBytes(chunkLength))
-  const hash = new Hash()
-  hash.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
-  if (!compareBytes(hash.digest(), expectedHash)) {
-    throw new RangeError('Hash does not match data')
+  const sha256 = new Hash()
+  sha256.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
+  const hash = sha256.digest()
+
+  if (!compareBytes(hash.subarray(0, 4), expectedHash)) {
+    throw new RangeError('checksum does not match data')
   }
   if (chunkType === 0) {
     // decode document
