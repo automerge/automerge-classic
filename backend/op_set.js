@@ -514,6 +514,8 @@ function addLocalChange(opSet, change, isUndoable, patch) {
 }
 
 function getMissingChanges(opSet, haveDeps) {
+  if (haveDeps.isEmpty()) return opSet.get('history')
+
   const allDeps = transitiveDeps(opSet, haveDeps)
   return opSet.get('states')
     .map((states, actor) => states.skip(allDeps.get(actor, 0)))

@@ -270,7 +270,7 @@ describe('Automerge', () => {
                          ['first change', 'empty change'])
       })
 
-      it.skip('should reference dependencies', () => {
+      it('should reference dependencies', () => {
         s1 = Automerge.change(s1, doc => doc.field = 123)
         s2 = Automerge.merge(Automerge.init(), s1)
         s2 = Automerge.change(s2, doc => doc.other = 'hello')
