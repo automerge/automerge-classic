@@ -349,30 +349,18 @@ function finalizePatch(opSet, patch) {
 
 /**
  * Applies the operations in the `change` to `opSet`. As a side-effect, `patch`
- * is mutated to describe the changes. Returns a two-element array containing
- * the updated `opSet` and the `change`. In the change that is returned, the
- * operations' `pred` properties have been filled in (if `isLocal` is true).
+ * is mutated to describe the changes. Returns the updated `opSet`.
  */
-function applyOps(opSet, change, isLocal, patch) {
+function applyOps(opSet, change, patch) {
   const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
   let newObjects = Set()
-  const ops = change.get('ops').map((op, index) => {
+  change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
     if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
       throw new RangeError(`Unknown operation action: ${action}`)
     }
-
-    let opId = `${startOp + index}@${actor}`
-
-    if (isLocal) {
-      if (op.get('pred')) {
-        throw new RangeError(`Unexpected 'pred' field in local operation ${op}`)
-      }
-      const key = insert ? opId : op.get('key')
-      const fieldOps = getFieldOps(opSet, obj, key)
-      op = op.set('pred', fieldOps.map(fieldOp => fieldOp.get('opId')))
-    } else if (!op.get('pred')) {
-      throw new RangeError(`Missing 'pred' field in remote operation ${op}`)
+    if (!op.get('pred')) {
+      throw new RangeError(`Missing 'pred' field in operation ${op}`)
     }
 
     let localPatch = patch
@@ -382,7 +370,7 @@ function applyOps(opSet, change, isLocal, patch) {
       }
     }
 
-    const opWithId = op.merge({opId})
+    const opWithId = op.merge({opId: `${startOp + index}@${actor}`})
     if (insert) {
       opSet = applyInsert(opSet, opWithId)
     }
@@ -393,9 +381,8 @@ function applyOps(opSet, change, isLocal, patch) {
       opSet = recordUndoHistory(opSet, opWithId)
     }
     opSet = applyAssign(opSet, opWithId, localPatch)
-    return op
   })
-  return [opSet, change.set('ops', ops)]
+  return opSet
 }
 
 /**
@@ -403,7 +390,7 @@ function applyOps(opSet, change, isLocal, patch) {
  * in which case we do nothing). As a side-effect, `patch` is mutated to describe
  * the changes. Returns the updated `opSet`.
  */
-function applyChange(opSet, change, isLocal, patch) {
+function applyChange(opSet, change, patch) {
   const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
   if (typeof actor !== 'string' || typeof seq !== 'number' || typeof startOp !== 'number') {
     throw new TypeError(`Missing change metadata: actor = ${actor}, seq = ${seq}, startOp = ${startOp}`)
@@ -424,7 +411,7 @@ function applyChange(opSet, change, isLocal, patch) {
     }
   }
 
-  ;[opSet, change] = applyOps(opSet, change, isLocal, patch)
+  opSet = applyOps(opSet, change, patch)
 
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   const remainingDeps = opSet.get('deps')
@@ -445,7 +432,7 @@ function applyQueuedOps(opSet, patch) {
   while (true) {
     for (let change of opSet.get('queue')) {
       if (causallyReady(opSet, change)) {
-        opSet = applyChange(opSet, change, false, patch)
+        opSet = applyChange(opSet, change, patch)
       } else {
         queue = queue.push(change)
       }
@@ -497,18 +484,17 @@ function addChange(opSet, change, patch) {
 
 /**
  * Applies a change made by the local user and adds it to `opSet`. The `change`
- * is given as an Immutable.js Map object. The operations in this change will be
- * extended with `pred` properties before they are added to the `opSet`. If
- * `isUndoable` is true, an undo history entry is created. `patch` is mutated
- * to describe the change (in the format used by patches).
+ * is given as an Immutable.js Map object. If `isUndoable` is true, an undo
+ * history entry is created. `patch` is mutated to describe the change (in the
+ * format used by patches).
  */
 function addLocalChange(opSet, change, isUndoable, patch) {
   if (isUndoable) {
     opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
-    opSet = applyChange(opSet, change, true, patch)
+    opSet = applyChange(opSet, change, patch)
     opSet = pushUndoHistory(opSet)
   } else {
-    opSet = applyChange(opSet, change, true, patch)
+    opSet = applyChange(opSet, change, patch)
   }
   return opSet
 }

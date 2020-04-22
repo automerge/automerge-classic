@@ -16,6 +16,28 @@ function backendState(backend) {
 }
 
 /**
+ * Mutates the operations in `change` to include the opIds of prior value
+ * operations on the appropriate properties in `opSet`.
+ */
+function fillInPred(opSet, change) {
+  let myOps = {} // maps objectId => key => opId
+  change.ops.forEach((op, index) => {
+    const opId = `${change.startOp + index}@${change.actor}`
+    const key = op.insert ? opId : op.key
+
+    if (myOps[op.obj] && myOps[op.obj][key]) {
+      op.pred = [myOps[op.obj][key]]
+    } else {
+      const fieldOps = OpSet.getFieldOps(opSet, op.obj, key)
+      op.pred = fieldOps.map(fieldOp => fieldOp.get('opId')).toJS()
+    }
+
+    if (!myOps[op.obj]) myOps[op.obj] = {}
+    if (!myOps[op.obj][key]) myOps[op.obj][key] = opId
+  })
+}
+
+/**
  * Processes a change request `request` that is incoming from the frontend. Translates index-based
  * addressing of lists into identifier-based addressing used by the CRDT, translates temporary
  * objectIds into operationId-based identifiers, and removes duplicate assignments to the same
@@ -91,7 +113,7 @@ function processChangeRequest(state, opSet, request, startOp) {
     change.ops.push(op)
   }
 
-  return [state.set('objectIds', objectIds), fromJS(change)]
+  return [state.set('objectIds', objectIds), change]
 }
 
 /**
@@ -217,6 +239,8 @@ function applyLocalChange(backend, request) {
     throw new RangeError(`Unknown requestType: ${request.requestType}`)
   }
 
+  fillInPred(versionObj.get('opSet'), change)
+  change = fromJS(change)
   let patch, isUndoable = (request.requestType === 'change' && request.undoable !== false)
   ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
 
@@ -296,7 +320,7 @@ function undo(state, request, startOp) {
     throw new RangeError('Cannot undo: there is nothing to be undone')
   }
   const { actor, seq, deps, time, message } = request
-  const change = Map({actor, seq, startOp, deps: fromJS(deps), time, message, ops: undoOps})
+  const change = {actor, seq, startOp, deps, time, message, ops: undoOps.toJS()}
 
   let opSet = state.get('opSet')
   let redoOps = List().withMutations(redoOps => {
@@ -345,7 +369,7 @@ function redo(state, request, startOp) {
     throw new RangeError('Cannot redo: the last change was not an undo')
   }
   const { actor, seq, deps, time, message } = request
-  const change = Map({actor, seq, startOp, deps: fromJS(deps), time, message, ops: redoOps})
+  const change = {actor, seq, startOp, deps, time, message, ops: redoOps.toJS()}
 
   let opSet = state.get('opSet')
     .update('undoPos', undoPos => undoPos + 1)

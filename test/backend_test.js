@@ -327,6 +327,38 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should detect conflicts based on the frontend version', () => {
+      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 0, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'goldfinch'}
+      ]}
+      const remote1 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: {'111111': 1}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: ['1@111111']}
+      ]}
+      // local2 is concurrent with remote1 (because version < 2)
+      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, version: 1, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, local1)
+      const change01 = decodeOneChange(Backend.getChanges(s1, {}))
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(remote1)])
+      const change12 = decodeOneChange(Backend.getChanges(s2, {'111111': 1}))
+      const [s3, patch3] = Backend.applyLocalChange(s2, local2)
+      const change23 = decodeOneChange(Backend.getChanges(s3, {'111111': 1, '222222': 1}))
+      assert.deepStrictEqual(patch3, {
+        actor: '111111', seq: 2, version: 3, clock: {'111111': 2, '222222': 1}, canUndo: true, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {
+          bird: {'1@222222': {value: 'magpie'}, '2@111111': {value: 'jay'}}
+        }}
+      })
+      assert.deepStrictEqual(change23, {
+        hash: '15f15dda518b0fbebf6e07b72919b0f63b38446becb4538a48453c7fa12e2b06',
+        actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: {}, ops: [
+          {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: ['1@111111']}
+        ]
+      })
+    })
+
     it('should transform list indexes into element IDs', () => {
       const remote1 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: {}, ops: [
         {obj: ROOT_ID, action: 'makeList', key: 'birds', pred: []}
