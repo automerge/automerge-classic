@@ -135,6 +135,7 @@ function parseAllOpIds(changes, single) {
       op.id = {counter: change.startOp + i, actorNum, actorId: change.actor}
       op.obj = actorIdToActorNum(op.obj, actorIds)
       op.key = actorIdToActorNum(op.key, actorIds)
+      op.child = actorIdToActorNum(op.child, actorIds)
       op.pred = op.pred.map(pred => actorIdToActorNum(pred, actorIds))
     }
   }
@@ -309,7 +310,13 @@ function decodeValue(columns, colIndex, actorIds, value) {
     }
     return 2
   } else if (columnId % 8 === COLUMN_TYPE.ACTOR_ID) {
-    value[columnName] = actorIds[decoder.readValue()]
+    const actorNum = decoder.readValue()
+    if (actorNum === null) {
+      value[columnName] = null
+    } else {
+      if (!actorIds[actorNum]) throw new RangeError(`No actor index ${actorNum}`)
+      value[columnName] = actorIds[actorNum]
+    }
   } else {
     value[columnName] = decoder.readValue()
   }
@@ -380,6 +387,9 @@ function decodeOps(ops) {
     if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
       newOp.value = op.valLen
       if (op.valLen_datatype) newOp.datatype = op.valLen_datatype
+    }
+    if (!!op.chldCtr !== !!op.chldActor) {
+      throw new RangeError(`Mismatched child columns: ${op.chldCtr} and ${op.chldActor}`)
     }
     if (op.chldCtr !== null) newOp.child = `${op.chldCtr}@${op.chldActor}`
     newOps.push(newOp)
