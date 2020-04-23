@@ -1,4 +1,4 @@
-const { ROOT_ID, copyObject, parseOpId } = require('../src/common')
+const { ROOT_ID, copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
   hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
@@ -54,17 +54,6 @@ const CHANGE_COLUMNS = {
   succNum:   8 << 3 | COLUMN_TYPE.GROUP_CARD,
   succActor: 8 << 3 | COLUMN_TYPE.ACTOR_ID,
   succCtr:   8 << 3 | COLUMN_TYPE.INT_DELTA
-}
-
-/**
- * Returns true if the two byte arrays contain the same data, false if not.
- */
-function compareBytes(array1, array2) {
-  if (array1.byteLength !== array2.byteLength) return false
-  for (let i = 0; i < array1.byteLength; i++) {
-    if (array1[i] !== array2[i]) return false
-  }
-  return true
 }
 
 /**
@@ -537,7 +526,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
 }
 
 function decodeContainerHeader(decoder) {
-  if (!compareBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
+  if (!equalBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
     throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
   }
   const expectedHash = decoder.readRawBytes(4)
@@ -549,7 +538,7 @@ function decodeContainerHeader(decoder) {
   sha256.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
   const hash = sha256.digest()
 
-  if (!compareBytes(hash.subarray(0, 4), expectedHash)) {
+  if (!equalBytes(hash.subarray(0, 4), expectedHash)) {
     throw new RangeError('checksum does not match data')
   }
   if (chunkType === 0) {
@@ -605,7 +594,7 @@ function decodeChange(buffer) {
 function splitContainers(buffer) {
   let decoder = new Decoder(buffer), chunks = [], startOffset = 0
   while (!decoder.done) {
-    if (!compareBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
+    if (!equalBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
       throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
     }
     decoder.skip(5) // skip checksum (4 bytes) and chunk type (1 byte)

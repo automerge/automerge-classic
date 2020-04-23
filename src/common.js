@@ -29,6 +29,20 @@ function parseOpId(opId) {
   return {counter: parseInt(match[1]), actorId: match[2]}
 }
 
+/**
+ * Returns true if the two byte arrays contain the same data, false if not.
+ */
+function equalBytes(array1, array2) {
+  if (!(array1 instanceof Uint8Array) || !(array2 instanceof Uint8Array)) {
+    throw new TypeError('equalBytes can only compare Uint8Arrays')
+  }
+  if (array1.byteLength !== array2.byteLength) return false
+  for (let i = 0; i < array1.byteLength; i++) {
+    if (array1[i] !== array2[i]) return false
+  }
+  return true
+}
+
 module.exports = {
-  ROOT_ID, isObject, copyObject, parseOpId
+  ROOT_ID, isObject, copyObject, parseOpId, equalBytes
 }
