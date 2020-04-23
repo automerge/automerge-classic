@@ -1,5 +1,6 @@
-const { Map, List, Set } = require('immutable')
+const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
+const { decodeChange } = require('./columnar')
 const { ROOT_ID, parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
@@ -390,7 +391,8 @@ function applyOps(opSet, change, patch) {
  * in which case we do nothing). As a side-effect, `patch` is mutated to describe
  * the changes. Returns the updated `opSet`.
  */
-function applyChange(opSet, change, patch) {
+function applyChange(opSet, binaryChange, patch) {
+  const change = fromJS(decodeChange(binaryChange))
   const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
   if (typeof actor !== 'string' || typeof seq !== 'number' || typeof startOp !== 'number') {
     throw new TypeError(`Missing change metadata: actor = ${actor}, seq = ${seq}, startOp = ${startOp}`)
@@ -398,14 +400,14 @@ function applyChange(opSet, change, patch) {
 
   const prior = opSet.getIn(['states', actor], List())
   if (seq <= prior.size) {
-    if (!prior.get(seq - 1).get('change').equals(change)) {
+    if (!equalBytes(prior.get(seq - 1).get('change'), binaryChange)) {
       throw new RangeError(`Inconsistent reuse of sequence number ${seq} by ${actor}`)
     }
     return opSet // change already applied, return unchanged
   }
   if (seq > 1) {
-    const prevChange = prior.get(seq - 2).get('change')
-    const minExpected = prevChange.get('startOp') + prevChange.get('ops').size
+    const prevChange = decodeChange(prior.get(seq - 2).get('change'))
+    const minExpected = prevChange.startOp + prevChange.ops.length
     if (startOp < minExpected) {
       throw new RangeError(`Operation ID counter moved backwards: ${startOp} < ${minExpected}`)
     }
@@ -419,11 +421,11 @@ function applyChange(opSet, change, patch) {
     .set(actor, seq)
 
   opSet = opSet
-    .setIn(['states', actor], prior.push(Map({allDeps, change})))
+    .setIn(['states', actor], prior.push(Map({allDeps, change: binaryChange})))
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
     .update('maxOp', maxOp => Math.max(maxOp, startOp + change.get('ops').size - 1))
-    .update('history', history => history.push(change))
+    .update('history', history => history.push(binaryChange))
   return opSet
 }
 
@@ -431,7 +433,7 @@ function applyQueuedOps(opSet, patch) {
   let queue = List()
   while (true) {
     for (let change of opSet.get('queue')) {
-      if (causallyReady(opSet, change)) {
+      if (causallyReady(opSet, fromJS(decodeChange(change)))) {
         opSet = applyChange(opSet, change, patch)
       } else {
         queue = queue.push(change)
@@ -500,7 +502,7 @@ function addLocalChange(opSet, change, isUndoable, patch) {
 }
 
 function getMissingChanges(opSet, haveDeps) {
-  if (haveDeps.isEmpty()) return opSet.get('history')
+  if (haveDeps.isEmpty()) return opSet.get('history').toJSON()
 
   const allDeps = transitiveDeps(opSet, haveDeps)
   return opSet.get('states')
@@ -508,6 +510,7 @@ function getMissingChanges(opSet, haveDeps) {
     .valueSeq()
     .flatten(1)
     .map(state => state.get('change'))
+    .toJSON()
 }
 
 function getChangesForActor(opSet, forActor, afterSeq) {
@@ -519,11 +522,13 @@ function getChangesForActor(opSet, forActor, afterSeq) {
     .valueSeq()
     .flatten(1)
     .map(state => state.get('change'))
+    .toJSON()
 }
 
 function getMissingDeps(opSet) {
   let missing = {}
-  for (let change of opSet.get('queue')) {
+  for (let binaryChange of opSet.get('queue')) {
+    const change = fromJS(decodeChange(binaryChange))
     const deps = change.get('deps').set(change.get('actor'), change.get('seq') - 1)
     deps.forEach((depSeq, depActor) => {
       if (opSet.getIn(['clock', depActor], 0) < depSeq) {

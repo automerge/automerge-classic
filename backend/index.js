@@ -2,7 +2,7 @@ const { Map, List, fromJS } = require('immutable')
 const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
-const { encodeChange, decodeChanges } = require('./columnar')
+const { splitContainers, encodeChange } = require('./columnar')
 
 function backendState(backend) {
   if (backend.frozen) {
@@ -160,10 +160,12 @@ function apply(state, changes, request, isUndoable, isIncremental) {
   let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
-    if (request) {
-      opSet = OpSet.addLocalChange(opSet, change, isUndoable, diffs)
-    } else {
-      opSet = OpSet.addChange(opSet, change, diffs)
+    for (let chunk of splitContainers(change)) {
+      if (request) {
+        opSet = OpSet.addLocalChange(opSet, change, isUndoable, diffs)
+      } else {
+        opSet = OpSet.addChange(opSet, change, diffs)
+      }
     }
   }
 
@@ -195,7 +197,7 @@ function applyChanges(backend, changes) {
   // been local changes. Since we are applying a remote change here, we have to set that flag to
   // false on all existing version objects.
   state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
-  ;[state, patch] = apply(state, fromJS(decodeChanges(changes)), null, false, true)
+  ;[state, patch] = apply(state, changes, null, false, true)
   backend.frozen = true
   return [{state}, patch]
 }
@@ -240,9 +242,9 @@ function applyLocalChange(backend, request) {
   }
 
   fillInPred(versionObj.get('opSet'), change)
-  change = fromJS(change)
+  const binaryChange = encodeChange(change)
   let patch, isUndoable = (request.requestType === 'change' && request.undoable !== false)
-  ;[state, patch] = apply(state, List.of(change), request, isUndoable, true)
+  ;[state, patch] = apply(state, [binaryChange], request, isUndoable, true)
 
   state = state.update('versions', versions => {
     // Remove any versions before the one referenced by the current request, since future requests
@@ -259,7 +261,7 @@ function applyLocalChange(backend, request) {
         if (v.get('localOnly')) {
           return v.set('opSet', state.get('opSet'))
         } else {
-          return v.set('opSet', OpSet.addLocalChange(v.get('opSet'), change, false, null))
+          return v.set('opSet', OpSet.addLocalChange(v.get('opSet'), binaryChange, false, null))
         }
       })
   })
@@ -276,7 +278,7 @@ function applyLocalChange(backend, request) {
  */
 function loadChanges(backend, changes) {
   const state = backendState(backend)
-  const [newState, _] = apply(state, fromJS(decodeChanges(changes)), null, false, false)
+  const [newState, _] = apply(state, changes, null, false, false)
   backend.frozen = true
   return {state: newState}
 }
@@ -293,12 +295,12 @@ function getPatch(backend) {
 
 function getChangesForActor(backend, actorId) {
   const state = backendState(backend)
-  return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS().map(encodeChange)
+  return OpSet.getChangesForActor(state.get('opSet'), actorId)
 }
 
 function getChanges(backend, clock) {
   const state = backendState(backend)
-  return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock)).toJS().map(encodeChange)
+  return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock))
 }
 
 function getMissingDeps(backend) {
