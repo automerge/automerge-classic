@@ -300,6 +300,9 @@ class Encoder {
  */
 class Decoder {
   constructor(buffer) {
+    if (!(buffer instanceof Uint8Array)) {
+      throw new TypeError(`Not a byte array: ${buffer}`)
+    }
     this.buf = buffer
     this.offset = 0
   }
@@ -310,6 +313,17 @@ class Decoder {
    */
   get done() {
     return this.offset === this.buf.byteLength
+  }
+
+  /**
+   * Moves the current decoding position forward by the specified number of
+   * bytes, without decoding anything.
+   */
+  skip(bytes) {
+    if (this.offset + bytes > this.buf.byteLength) {
+      throw new RangeError('cannot skip beyond end of buffer')
+    }
+    this.offset += bytes
   }
 
   /**

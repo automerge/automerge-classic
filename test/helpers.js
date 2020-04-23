@@ -30,15 +30,4 @@ function checkEncoded(encoder, bytes) {
   }
 }
 
-/**
- * Checks that the given array contains exactly one change, encoded in binary
- * format. If so, decodes and returns that change as JavaScript object.
- */
-function decodeOneChange(changes) {
-  assert.strictEqual(changes.length, 1)
-  const decoded = decodeChanges(changes)
-  assert.strictEqual(decoded.length, 1)
-  return decoded[0]
-}
-
-module.exports = { assertEqualsOneOf, checkEncoded, decodeOneChange }
+module.exports = { assertEqualsOneOf, checkEncoded }

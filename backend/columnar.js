@@ -588,13 +588,33 @@ function encodeChange(changeObj) {
   return bytes
 }
 
+/**
+ * Decodes one change in binary format into its JS object representation.
+ */
 function decodeChange(buffer) {
-  const decoder = new Decoder(buffer), changes = []
-  do {
-    const change = decodeContainerHeader(decoder)
-    if (change) changes.push(change)
-  } while (!decoder.done)
-  return changes
+  const decoder = new Decoder(buffer)
+  const change = decodeContainerHeader(decoder)
+  if (!decoder.done) throw new RangeError('Encoded change has trailing data')
+  return change
+}
+
+/**
+ * Takes an Uint8Array that may contain multiple concatenated changes, and
+ * returns an array of subarrays, each subarray containing one change.
+ */
+function splitContainers(buffer) {
+  let decoder = new Decoder(buffer), chunks = [], startOffset = 0
+  while (!decoder.done) {
+    if (!compareBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
+      throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
+    }
+    decoder.skip(5) // skip checksum (4 bytes) and chunk type (1 byte)
+    const chunkLength = decoder.readUint53()
+    decoder.skip(chunkLength) // skip chunk content
+    chunks.push(buffer.subarray(startOffset, decoder.offset))
+    startOffset = decoder.offset
+  }
+  return chunks
 }
 
 /**
@@ -604,10 +624,9 @@ function decodeChange(buffer) {
 function decodeChanges(binaryChanges) {
   let decoded = []
   for (let binaryChange of binaryChanges) {
-    if (!(binaryChange instanceof Uint8Array)) {
-      throw new RangeError(`Unexpected type of change: ${binaryChange}`)
+    for (let chunk of splitContainers(binaryChange)) {
+      decoded.push(decodeChange(chunk))
     }
-    for (let change of decodeChange(binaryChange)) decoded.push(change)
   }
   return decoded
 }
@@ -749,4 +768,4 @@ function encodeDocument(changeObjects) {
   }).bytes
 }
 
-module.exports = { encodeChange, decodeChanges, encodeDocument }
+module.exports = { splitContainers, encodeChange, decodeChange, decodeChanges, encodeDocument }
