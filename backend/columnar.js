@@ -453,9 +453,8 @@ function decodeColumns(decoder, actorIds) {
   return parsedOps
 }
 
-function decodeChangeHeader(decoder, hash) {
+function decodeChangeHeader(decoder) {
   let change = {
-    hash,
     actor:   decoder.readHexString(),
     seq:     decoder.readUint53(),
     startOp: decoder.readUint53(),
@@ -469,7 +468,7 @@ function decodeChangeHeader(decoder, hash) {
   for (let i = 0; i < numDeps; i++) {
     change.deps[actorIds[decoder.readUint53()]] = decoder.readUint53()
   }
-  change.ops = decodeOps(decodeColumns(decoder, actorIds))
+  change.actorIds = actorIds
   return change
 }
 
@@ -525,7 +524,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   return {hash, bytes: bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)}
 }
 
-function decodeContainerHeader(decoder) {
+function decodeContainerHeader(decoder, computeHash) {
   if (!equalBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
     throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
   }
@@ -533,21 +532,18 @@ function decodeContainerHeader(decoder) {
   const hashStartOffset = decoder.offset
   const chunkType = decoder.readByte()
   const chunkLength = decoder.readUint53()
-  const chunkData = new Decoder(decoder.readRawBytes(chunkLength))
-  const sha256 = new Hash()
-  sha256.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
-  const hash = sha256.digest()
+  const header = {chunkType, chunkLength, chunkData: decoder.readRawBytes(chunkLength)}
 
-  if (!equalBytes(hash.subarray(0, 4), expectedHash)) {
-    throw new RangeError('checksum does not match data')
+  if (computeHash) {
+    const sha256 = new Hash()
+    sha256.update(decoder.buf.subarray(hashStartOffset, decoder.offset))
+    const binaryHash = sha256.digest()
+    if (!equalBytes(binaryHash.subarray(0, 4), expectedHash)) {
+      throw new RangeError('checksum does not match data')
+    }
+    header.hash = bytesToHexString(binaryHash)
   }
-  if (chunkType === 0) {
-    // decode document
-  } else if (chunkType === 1) {
-    return decodeChangeHeader(chunkData, bytesToHexString(hash))
-  } else {
-    console.log(`Warning: ignoring chunk with unknown type ${chunkType}`)
-  }
+  return header
 }
 
 function encodeChange(changeObj) {
@@ -582,9 +578,33 @@ function encodeChange(changeObj) {
  */
 function decodeChange(buffer) {
   const decoder = new Decoder(buffer)
-  const change = decodeContainerHeader(decoder)
+  const header = decodeContainerHeader(decoder, true)
+  const chunkDecoder = new Decoder(header.chunkData)
   if (!decoder.done) throw new RangeError('Encoded change has trailing data')
-  return change
+
+  if (header.chunkType === 0) {
+    // decode document
+  } else if (header.chunkType === 1) {
+    let change = decodeChangeHeader(chunkDecoder)
+    change.hash = header.hash
+    change.ops = decodeOps(decodeColumns(chunkDecoder, change.actorIds))
+    delete change.actorIds
+    return change
+  } else {
+    console.log(`Warning: ignoring chunk with unknown type ${header.chunkType}`)
+  }
+}
+
+/**
+ * Decodes the header fields of a change in binary format, but does not decode
+ * the operations. Saves work when we only need to inspect the headers.
+ */
+function decodeChangeMeta(buffer) {
+  const header = decodeContainerHeader(new Decoder(buffer), false)
+  if (header.chunkType !== 1) {
+    throw new RangeError('Buffer chunk type is not a change')
+  }
+  return decodeChangeHeader(new Decoder(header.chunkData))
 }
 
 /**
@@ -594,12 +614,7 @@ function decodeChange(buffer) {
 function splitContainers(buffer) {
   let decoder = new Decoder(buffer), chunks = [], startOffset = 0
   while (!decoder.done) {
-    if (!equalBytes(decoder.readRawBytes(MAGIC_BYTES.byteLength), MAGIC_BYTES)) {
-      throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
-    }
-    decoder.skip(5) // skip checksum (4 bytes) and chunk type (1 byte)
-    const chunkLength = decoder.readUint53()
-    decoder.skip(chunkLength) // skip chunk content
+    decodeContainerHeader(decoder, false)
     chunks.push(buffer.subarray(startOffset, decoder.offset))
     startOffset = decoder.offset
   }
@@ -757,4 +772,4 @@ function encodeDocument(changeObjects) {
   }).bytes
 }
 
-module.exports = { splitContainers, encodeChange, decodeChange, decodeChanges, encodeDocument }
+module.exports = { splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument }

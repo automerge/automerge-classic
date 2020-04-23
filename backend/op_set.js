@@ -1,6 +1,6 @@
 const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
-const { decodeChange } = require('./columnar')
+const { decodeChange, decodeChangeMeta } = require('./columnar')
 const { ROOT_ID, parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
@@ -406,22 +406,22 @@ function applyChange(opSet, binaryChange, patch) {
     return opSet // change already applied, return unchanged
   }
   if (seq > 1) {
-    const prevChange = decodeChange(prior.get(seq - 2).get('change'))
-    const minExpected = prevChange.startOp + prevChange.ops.length
-    if (startOp < minExpected) {
-      throw new RangeError(`Operation ID counter moved backwards: ${startOp} < ${minExpected}`)
+    const lastOpId = prior.get(seq - 2).get('maxOpId')
+    if (startOp <= lastOpId) {
+      throw new RangeError(`Operation ID counter reuse: ${startOp} <= ${lastOpId}`)
     }
   }
 
   opSet = applyOps(opSet, change, patch)
 
+  const maxOpId = startOp + change.get('ops').size - 1
   const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
   const remainingDeps = opSet.get('deps')
     .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
     .set(actor, seq)
 
   opSet = opSet
-    .setIn(['states', actor], prior.push(Map({allDeps, change: binaryChange})))
+    .setIn(['states', actor], prior.push(Map({allDeps, maxOpId, change: binaryChange})))
     .set('deps', remainingDeps)
     .setIn(['clock', actor], seq)
     .update('maxOp', maxOp => Math.max(maxOp, startOp + change.get('ops').size - 1))
@@ -433,7 +433,7 @@ function applyQueuedOps(opSet, patch) {
   let queue = List()
   while (true) {
     for (let change of opSet.get('queue')) {
-      if (causallyReady(opSet, fromJS(decodeChange(change)))) {
+      if (causallyReady(opSet, fromJS(decodeChangeMeta(change)))) {
         opSet = applyChange(opSet, change, patch)
       } else {
         queue = queue.push(change)
@@ -528,13 +528,13 @@ function getChangesForActor(opSet, forActor, afterSeq) {
 function getMissingDeps(opSet) {
   let missing = {}
   for (let binaryChange of opSet.get('queue')) {
-    const change = fromJS(decodeChange(binaryChange))
-    const deps = change.get('deps').set(change.get('actor'), change.get('seq') - 1)
-    deps.forEach((depSeq, depActor) => {
-      if (opSet.getIn(['clock', depActor], 0) < depSeq) {
-        missing[depActor] = Math.max(depSeq, missing[depActor] || 0)
+    const change = decodeChangeMeta(binaryChange)
+    change.deps[change.actor] = change.seq - 1
+    for (let depActor of Object.keys(change.deps)) {
+      if (opSet.getIn(['clock', depActor], 0) < change.deps[depActor]) {
+        missing[depActor] = Math.max(change.deps[depActor], missing[depActor] || 0)
       }
-    })
+    }
   }
   return missing
 }
