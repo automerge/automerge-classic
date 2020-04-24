@@ -132,6 +132,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
       state.seq = patch.clock[actor]
     }
     state.clock   = patch.clock
+    state.deps    = patch.deps
     state.version = patch.version
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
@@ -159,7 +160,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], version: 0, clock: {}, canUndo: false, canRedo: false}
+  const state = {seq: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }
@@ -406,12 +407,11 @@ function setActorId(doc, actorId) {
 }
 
 /**
- * Returns the vector clock (object where keys are actorIds, and values are the
- * highest sequence number we've processed from that actor) corresponding to
- * the current document state.
+ * Returns an array of hashes of the "head" changes (i.e. those changes that
+ * are not depended on by any other change), according to the current doc state.
  */
-function getClock(doc) {
-  return doc[STATE].clock
+function getDeps(doc) {
+  return doc[STATE].deps
 }
 
 /**
@@ -437,7 +437,7 @@ function getBackendState(doc) {
 module.exports = {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
-  getObjectId, getObjectById, getActorId, setActorId, getClock, getConflicts,
+  getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,
   getBackendState,
   Text, Table, Counter
 }

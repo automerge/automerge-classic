@@ -31,10 +31,14 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Removed**: `Automerge.diff` and `Backend.merge`, because they depended on the assumption of
   an immutable backend. We hope to bring back a better implementation of `Automerge.diff` in the
   future.
-- **Changed**: `Backend.getChanges()` arguments are now the latest backend state and a vector
-  clock. This was previously the function signature of `Backend.getMissingChanges()`, which has
-  been removed.
-- **Added**: `Frontend.getClock()` returns the vector clock of the latest document state.
+- **Changed**: Dependencies between changes are now expressed by referencing the hashes of
+  dependencies, rather than their actorId and sequence number. APIs have changed accordingly:
+  `Automerge.getMissingDeps` now returns a list of hashes rather than a vector clock; the second
+  argument of `Backend.getChanges()` is now also a list of hashes. This change also affects
+  network sync protocols, e.g. based on `Automerge.Connection`, which need to now exchange
+  hashes rather than vector clocks.
+- **Removed**: `Backend.getMissingChanges()`; use `Backend.getChanges()` instead.
+- **Added**: `Frontend.getDeps()` returns the latest change hashes in the current document state.
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been
   moved to a separate [automerge-connection](https://github.com/automerge/automerge-connection)
   repository.

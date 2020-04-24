@@ -6,22 +6,10 @@ const { ROOT_ID, parseOpId } = require('../src/common')
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
 function causallyReady(opSet, change) {
-  const actor = change.get('actor'), seq = change.get('seq')
-  let satisfied = true
-  change.get('deps').set(actor, seq - 1).forEach((depSeq, depActor) => {
-    if (opSet.getIn(['clock', depActor], 0) < depSeq) satisfied = false
-  })
-  return satisfied
-}
-
-function transitiveDeps(opSet, baseDeps) {
-  return baseDeps.reduce((deps, depSeq, depActor) => {
-    if (depSeq <= 0) return deps
-    const transitive = opSet.getIn(['states', depActor, depSeq - 1, 'allDeps'])
-    return deps
-      .mergeWith((a, b) => Math.max(a, b), transitive)
-      .set(depActor, depSeq)
-  }, Map())
+  for (let hash of change.deps) {
+    if (!opSet.hasIn(['hashes', hash])) return false
+  }
+  return true
 }
 
 /**
@@ -393,47 +381,62 @@ function applyOps(opSet, change, patch) {
  */
 function applyChange(opSet, binaryChange, patch) {
   const change = fromJS(decodeChange(binaryChange))
-  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
+  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp'), hash = change.get('hash')
   if (typeof actor !== 'string' || typeof seq !== 'number' || typeof startOp !== 'number') {
     throw new TypeError(`Missing change metadata: actor = ${actor}, seq = ${seq}, startOp = ${startOp}`)
   }
+  if (opSet.hasIn(['hashes', hash])) return opSet // change already applied, return unchanged
 
-  const prior = opSet.getIn(['states', actor], List())
-  if (seq <= prior.size) {
-    if (!equalBytes(prior.get(seq - 1).get('change'), binaryChange)) {
-      throw new RangeError(`Inconsistent reuse of sequence number ${seq} by ${actor}`)
-    }
-    return opSet // change already applied, return unchanged
+  const expectedSeq = opSet.getIn(['states', actor], List()).size + 1
+  if (seq !== expectedSeq) {
+    throw new RangeError(`Expected change ${expectedSeq} by ${actor}, got change ${seq}`)
   }
-  if (seq > 1) {
-    const lastOpId = prior.get(seq - 2).get('maxOpId')
-    if (startOp <= lastOpId) {
-      throw new RangeError(`Operation ID counter reuse: ${startOp} <= ${lastOpId}`)
+
+  let maxOpId = 0
+  for (let depHash of change.get('deps')) {
+    maxOpId = Math.max(maxOpId, opSet.getIn(['hashes', depHash, 'maxOpId']))
+    opSet = opSet.updateIn(['hashes', depHash, 'depsFuture'], Set(), future => future.add(hash))
+  }
+  if (startOp !== maxOpId + 1) {
+    throw new RangeError(`Expected startOp to be ${maxOpId + 1}, was ${startOp}`)
+  }
+
+  let queue = change.get('deps'), sameActorDep = (seq === 1)
+  while (!sameActorDep && !queue.isEmpty()) {
+    const dep = opSet.getIn(['hashes', queue.first()])
+    queue = queue.shift()
+    if (dep.get('actor') === actor && dep.get('seq') === seq - 1) {
+      sameActorDep = true
+    } else {
+      queue = queue.concat(dep.get('depsPast'))
     }
   }
+  if (!sameActorDep) {
+    throw new RangeError('Change lacks dependency on prior sequence number by the same actor')
+  }
+
+  const changeInfo = Map({
+    actor, seq, startOp,
+    change: binaryChange,
+    maxOpId: startOp + change.get('ops').size - 1,
+    depsPast: change.get('deps').toSet(),
+    depsFuture: Set()
+  })
 
   opSet = applyOps(opSet, change, patch)
-
-  const maxOpId = startOp + change.get('ops').size - 1
-  const allDeps = transitiveDeps(opSet, change.get('deps').set(actor, seq - 1))
-  const remainingDeps = opSet.get('deps')
-    .filter((depSeq, depActor) => depSeq > allDeps.get(depActor, 0))
-    .set(actor, seq)
-
-  opSet = opSet
-    .setIn(['states', actor], prior.push(Map({allDeps, maxOpId, change: binaryChange})))
-    .set('deps', remainingDeps)
-    .setIn(['clock', actor], seq)
-    .update('maxOp', maxOp => Math.max(maxOp, startOp + change.get('ops').size - 1))
-    .update('history', history => history.push(binaryChange))
   return opSet
+    .setIn(['hashes', hash], changeInfo)
+    .updateIn(['states', actor], List(), prior => prior.push(hash))
+    .update('deps', deps => deps.subtract(change.get('deps')).add(hash))
+    .update('maxOp', maxOp => Math.max(maxOp, changeInfo.get('maxOpId')))
+    .update('history', history => history.push(hash))
 }
 
 function applyQueuedOps(opSet, patch) {
   let queue = List()
   while (true) {
     for (let change of opSet.get('queue')) {
-      if (causallyReady(opSet, fromJS(decodeChangeMeta(change)))) {
+      if (causallyReady(opSet, decodeChangeMeta(change, false))) {
         opSet = applyChange(opSet, change, patch)
       } else {
         queue = queue.push(change)
@@ -464,8 +467,8 @@ function init() {
     .set('states',   Map())
     .set('history',  List())
     .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
-    .set('clock',    Map())
-    .set('deps',     Map())
+    .set('hashes',   Map())
+    .set('deps',     Set())
     .set('maxOp',     0)
     .set('undoPos',   0)
     .set('undoStack', List())
@@ -501,42 +504,54 @@ function addLocalChange(opSet, change, isUndoable, patch) {
   return opSet
 }
 
+/**
+ * Returns all the changes in `opSet` that need to be sent to another replica.
+ * `haveDeps` is an Immutable.js List object containing the hashes (as hex
+ * strings) of the heads that the other replica has. Those changes in `haveDeps`
+ * and any of their transitive dependencies will not be returned; any changes
+ * later than or concurrent to the hashes in `haveDeps` will be returned.
+ * If `haveDeps` is an empty list, all changes are returned.
+ *
+ * NOTE: This function throws an exception if any of the given hashes are not
+ * known to this replica. This means that if the other replica is ahead of us,
+ * this function cannot be used directly to find the changes to send.
+ * TODO need to fix this.
+ */
 function getMissingChanges(opSet, haveDeps) {
-  if (haveDeps.isEmpty()) return opSet.get('history').toJSON()
+  let stack = haveDeps, seenHashes = {}
+  while (!stack.isEmpty()) {
+    const hash = stack.last()
+    const deps = opSet.getIn(['hashes', hash, 'depsPast'])
+    if (!deps) throw new RangeError(`hash not found: ${hash}`)
+    stack = stack.pop().concat(deps)
+    seenHashes[hash] = true
+  }
 
-  const allDeps = transitiveDeps(opSet, haveDeps)
-  return opSet.get('states')
-    .map((states, actor) => states.skip(allDeps.get(actor, 0)))
-    .valueSeq()
-    .flatten(1)
-    .map(state => state.get('change'))
+  return opSet.get('history')
+    .filter(hash => !seenHashes[hash])
+    .map(hash => opSet.getIn(['hashes', hash, 'change']))
     .toJSON()
 }
 
 function getChangesForActor(opSet, forActor, afterSeq) {
   afterSeq = afterSeq || 0
 
-  return opSet.get('states')
-    .filter((states, actor) => actor === forActor)
-    .map((states, actor) => states.skip(afterSeq))
-    .valueSeq()
-    .flatten(1)
-    .map(state => state.get('change'))
+  return opSet.getIn(['states', forActor], List())
+    .skip(afterSeq)
+    .map(hash => opSet.getIn(['hashes', hash, 'change']))
     .toJSON()
 }
 
 function getMissingDeps(opSet) {
-  let missing = {}
+  let missing = {}, inQueue = {}
   for (let binaryChange of opSet.get('queue')) {
-    const change = decodeChangeMeta(binaryChange)
-    change.deps[change.actor] = change.seq - 1
-    for (let depActor of Object.keys(change.deps)) {
-      if (opSet.getIn(['clock', depActor], 0) < change.deps[depActor]) {
-        missing[depActor] = Math.max(change.deps[depActor], missing[depActor] || 0)
-      }
+    const change = decodeChangeMeta(binaryChange, true)
+    inQueue[change.hash] = true
+    for (let depHash of change.deps) {
+      if (!opSet.hasIn(['hashes', depHash])) missing[depHash] = true
     }
   }
-  return missing
+  return Object.keys(missing).filter(hash => !inQueue[hash]).sort()
 }
 
 function getFieldOps(opSet, objectId, key) {

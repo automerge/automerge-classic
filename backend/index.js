@@ -1,4 +1,4 @@
-const { Map, List, fromJS } = require('immutable')
+const { Map, List } = require('immutable')
 const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
@@ -140,10 +140,11 @@ function free(backend) {
  */
 function makePatch(state, diffs, request, isIncremental) {
   const version = state.get('versions').last().get('version')
-  const clock   = state.getIn(['opSet', 'clock']).toJS()
+  const clock   = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toJSON()
+  const deps    = state.getIn(['opSet', 'deps']).toJSON().sort()
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
-  const patch = {version, clock, canUndo, canRedo, diffs}
+  const patch = {version, clock, deps, canUndo, canRedo, diffs}
 
   if (isIncremental && request) {
     patch.actor = request.actor
@@ -219,7 +220,7 @@ function applyLocalChange(backend, request) {
     throw new TypeError('Change request requires `time` property')
   }
   // Throw error if we have already applied this change request
-  if (request.seq <= state.getIn(['opSet', 'clock', request.actor], 0)) {
+  if (request.seq <= state.getIn(['opSet', 'states', request.actor], List()).size) {
     throw new RangeError('Change request has already been applied')
   }
 
@@ -227,10 +228,9 @@ function applyLocalChange(backend, request) {
   if (!versionObj) {
     throw new RangeError(`Unknown base document version ${request.version}`)
   }
-  const deps = versionObj.getIn(['opSet', 'deps']).remove(request.actor).toJS()
-  request = Object.assign(request, {deps})
+  request.deps = versionObj.getIn(['opSet', 'deps']).toJSON()
 
-  let change, startOp = state.getIn(['opSet', 'maxOp'], 0) + 1
+  let change, startOp = versionObj.getIn(['opSet', 'maxOp'], 0) + 1
   if (request.requestType === 'change') {
     ;[state, change] = processChangeRequest(state, versionObj.get('opSet'), request, startOp)
   } else if (request.requestType === 'undo') {
@@ -298,9 +298,12 @@ function getChangesForActor(backend, actorId) {
   return OpSet.getChangesForActor(state.get('opSet'), actorId)
 }
 
-function getChanges(backend, clock) {
+function getChanges(backend, haveDeps) {
+  if (!Array.isArray(haveDeps)) {
+    throw new TypeError('Pass an array of hashes to Backend.getChanges()')
+  }
   const state = backendState(backend)
-  return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock))
+  return OpSet.getMissingChanges(state.get('opSet'), List(haveDeps))
 }
 
 function getMissingDeps(backend) {

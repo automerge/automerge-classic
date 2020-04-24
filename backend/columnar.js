@@ -97,7 +97,6 @@ function parseAllOpIds(changes, single) {
   for (let change of changes) {
     change = copyObject(change)
     actors[change.actor] = true
-    for (let actor of Object.keys(change.deps)) actors[actor] = true
     change.ops = change.ops.map(op => {
       op = copyObject(op)
       op.obj = maybeParseOpId(op.obj)
@@ -460,13 +459,13 @@ function decodeChangeHeader(decoder) {
     startOp: decoder.readUint53(),
     time:    decoder.readInt53(),
     message: decoder.readPrefixedString(),
-    deps: {}
+    deps: []
   }
   const actorIds = [change.actor], numActorIds = decoder.readUint53()
   for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readHexString())
   const numDeps = decoder.readUint53()
   for (let i = 0; i < numDeps; i++) {
-    change.deps[actorIds[decoder.readUint53()]] = decoder.readUint53()
+    change.deps.push(bytesToHexString(decoder.readRawBytes(32)))
   }
   change.actorIds = actorIds
   return change
@@ -558,11 +557,10 @@ function encodeChange(changeObj) {
     encoder.appendPrefixedString(change.message || '')
     encoder.appendUint53(actorIds.length - 1)
     for (let actor of actorIds.slice(1)) encoder.appendHexString(actor)
-    const depsKeys = Object.keys(change.deps).sort()
-    encoder.appendUint53(depsKeys.length)
-    for (let actor of depsKeys) {
-      encoder.appendUint53(actorIds.indexOf(actor))
-      encoder.appendUint53(change.deps[actor])
+    if (!Array.isArray(change.deps)) throw new TypeError('deps is not an array')
+    encoder.appendUint53(change.deps.length)
+    for (let hash of change.deps.slice().sort()) {
+      encoder.appendRawBytes(hexStringToBytes(hash))
     }
   })
 
@@ -597,14 +595,17 @@ function decodeChange(buffer) {
 
 /**
  * Decodes the header fields of a change in binary format, but does not decode
- * the operations. Saves work when we only need to inspect the headers.
+ * the operations. Saves work when we only need to inspect the headers. Only
+ * computes the hash of the change if `computeHash` is true.
  */
-function decodeChangeMeta(buffer) {
-  const header = decodeContainerHeader(new Decoder(buffer), false)
+function decodeChangeMeta(buffer, computeHash) {
+  const header = decodeContainerHeader(new Decoder(buffer), computeHash)
   if (header.chunkType !== 1) {
     throw new RangeError('Buffer chunk type is not a change')
   }
-  return decodeChangeHeader(new Decoder(header.chunkData))
+  const meta = decodeChangeHeader(new Decoder(header.chunkData))
+  if (computeHash) meta.hash = header.hash
+  return meta
 }
 
 /**

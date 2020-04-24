@@ -41,7 +41,7 @@ declare module 'automerge' {
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
-  function getMissingDeps<T>(doc: Doc<T>): Clock
+  function getMissingDeps<T>(doc: Doc<T>): Hash[]
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
 
@@ -126,14 +126,16 @@ declare module 'automerge' {
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
-    function getChanges(state: BackendState, clock: Clock): Uint8Array[]
+    function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
     function getChangesForActor(state: BackendState, actorId: string): Uint8Array[]
-    function getMissingDeps(state: BackendState): Clock
+    function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
   }
 
   // Internals
+
+  type Hash = string
 
   type UUID = string
   type UUIDGenerator = () => UUID
@@ -171,7 +173,7 @@ declare module 'automerge' {
     message?: string
     actor: string
     seq: number
-    deps: Clock
+    deps: Hash[]
     ops: Op[]
   }
 
@@ -189,6 +191,7 @@ declare module 'automerge' {
     actor?: string
     seq?: number
     clock?: Clock
+    deps: Hash[]
     version: number
     canUndo?: boolean
     canRedo?: boolean

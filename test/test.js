@@ -277,8 +277,8 @@ describe('Automerge', () => {
         s2 = Automerge.change(s2, doc => doc.other = 'hello')
         s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
         const history = Automerge.getHistory(s1)
-        const emptyChange = history[history.length - 1].change
-        assert.deepStrictEqual(emptyChange.deps, {[Automerge.getActorId(s2)]: 1})
+        const emptyChange = history[2].change
+        assert.deepStrictEqual(emptyChange.deps, [history[1].change.hash])
         assert.deepStrictEqual(emptyChange.ops, [])
       })
     })
@@ -661,13 +661,13 @@ describe('Automerge', () => {
         })
         assert.deepStrictEqual(s1, {birds: {}})
         assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
-        const changes = Automerge.getChanges(s1, s2).map(decodeChange)
-        assert.deepStrictEqual(changes, [{
-          hash: changes[0].hash, actor: Automerge.getActorId(s2), seq: 2, startOp: 2,
-          time: changes[0].time, message: '', deps: {}, ops: [
+        const changes = Automerge.getAllChanges(s2).map(decodeChange)
+        assert.deepStrictEqual(changes[1], {
+          hash: changes[1].hash, actor: Automerge.getActorId(s2), seq: 2, startOp: 2,
+          time: changes[1].time, message: '', deps: [changes[0].hash], ops: [
             {obj: Automerge.getObjectId(s2.birds), action: 'set', key: 'wrens', value: 3, datatype: 'counter', pred: []}
           ]
-        }])
+        })
       })
 
       it('should coalesce multiple increments', () => {
@@ -679,12 +679,13 @@ describe('Automerge', () => {
         })
         assert.deepStrictEqual(s1, {birds: {wrens: new Automerge.Counter(0)}})
         assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(4)}})
-        const changes = Automerge.getChanges(s1, s2).map(decodeChange), actor = Automerge.getActorId(s2)
-        assert.deepStrictEqual(changes, [{
-          hash: changes[0].hash, actor, seq: 2, startOp: 3, time: changes[0].time, message: '', deps: {}, ops: [
+        const changes = Automerge.getAllChanges(s2).map(decodeChange), actor = Automerge.getActorId(s2)
+        assert.deepStrictEqual(changes[1], {
+          hash: changes[1].hash, actor, seq: 2, startOp: 3, time: changes[1].time,
+          message: '', deps: [changes[0].hash], ops: [
             {obj: Automerge.getObjectId(s2.birds), action: 'inc', key: 'wrens', value: 4, pred: [`2@${actor}`]}
           ]
-        }])
+        })
       })
     })
   })
@@ -1363,9 +1364,10 @@ describe('Automerge', () => {
       const s1 = Automerge.init('01234567')
       const s2 = Automerge.change(s1, doc => doc.list = ['a'])
       const listId = Automerge.getObjectId(s2.list)
-      const changes12 = Automerge.getChanges(s1, s2).map(decodeChange)
+      const changes12 = Automerge.getAllChanges(s2).map(decodeChange)
       assert.deepStrictEqual(changes12, [{
-        hash: changes12[0].hash, actor: '01234567', seq: 1, startOp: 1, time: changes12[0].time, message: '', deps: {}, ops: [
+        hash: changes12[0].hash, actor: '01234567', seq: 1, startOp: 1,
+        time: changes12[0].time, message: '', deps: [], ops: [
           {obj: ROOT_ID, action: 'makeList', key: 'list', pred: []},
           {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a', pred: []}
         ]
@@ -1373,13 +1375,14 @@ describe('Automerge', () => {
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
       const s4 = Automerge.load(Automerge.save(s3), '01234567')
       const s5 = Automerge.change(s4, doc => doc.list.push('b'))
-      const changes45 = Automerge.getChanges(s4, s5).map(decodeChange)
+      const changes45 = Automerge.getAllChanges(s5).map(decodeChange)
       assert.deepStrictEqual(s5, {list: ['b']})
-      assert.deepStrictEqual(changes45, [{
-        hash: changes45[0].hash, actor: '01234567', seq: 3, startOp: 4, time: changes45[0].time, message: '', deps: {}, ops: [
+      assert.deepStrictEqual(changes45[2], {
+        hash: changes45[2].hash, actor: '01234567', seq: 3, startOp: 4,
+        time: changes45[2].time, message: '', deps: [changes45[1].hash], ops: [
           {obj: listId, action: 'set', key: '_head', insert: true, value: 'b', pred: []}
         ]
-      }])
+      })
     })
 
     it('should allow a reloaded list to be mutated', () => {
@@ -1477,15 +1480,16 @@ describe('Automerge', () => {
       let changes = Automerge.getAllChanges(s2)
       let s3 = Automerge.applyChanges(Automerge.init(), [changes[1]])
       assert.deepStrictEqual(s3, {})
-      assert.deepStrictEqual(Automerge.getMissingDeps(s3), {[Automerge.getActorId(s1)]: 1})
+      assert.deepStrictEqual(Automerge.getMissingDeps(s3), decodeChange(changes[1]).deps)
       s3 = Automerge.applyChanges(s3, [changes[0]])
       assert.deepStrictEqual(s3.birds, ['Chaffinch', 'Bullfinch'])
-      assert.deepStrictEqual(Automerge.getMissingDeps(s3), {})
+      assert.deepStrictEqual(Automerge.getMissingDeps(s3), [])
     })
 
     it('should report missing dependencies with out-of-order applyChanges', () => {
       let s0 = Automerge.init()
       let s1 = Automerge.change(s0, doc => doc.test = ['a'])
+      let changes01 = Automerge.getAllChanges(s1)
       let s2 = Automerge.change(s1, doc => doc.test = ['b'])
       let changes12 = Automerge.getChanges(s1, s2)
       let s3 = Automerge.change(s2, doc => doc.test = ['c'])
@@ -1493,7 +1497,7 @@ describe('Automerge', () => {
       let s4 = Automerge.init()
       let s5 = Automerge.applyChanges(s4, changes23)
       let s6 = Automerge.applyChanges(s5, changes12)
-      assert.deepStrictEqual(Automerge.getMissingDeps(s6), {[Automerge.getActorId(s0)]: 2})
+      assert.deepStrictEqual(Automerge.getMissingDeps(s6), [decodeChange(changes01[0]).hash])
     })
   })
 })
