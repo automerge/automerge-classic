@@ -56,6 +56,16 @@ const CHANGE_COLUMNS = {
   succCtr:   8 << 3 | COLUMN_TYPE.INT_DELTA
 }
 
+const DOCUMENT_COLUMNS = {
+  actor:     0 << 3 | COLUMN_TYPE.ACTOR_ID,
+  seq:       0 << 3 | COLUMN_TYPE.INT_DELTA,
+  maxOp:     1 << 3 | COLUMN_TYPE.INT_DELTA,
+  time:      2 << 3 | COLUMN_TYPE.INT_DELTA,
+  message:   3 << 3 | COLUMN_TYPE.STRING_RLE,
+  depsNum:   4 << 3 | COLUMN_TYPE.GROUP_CARD,
+  depsIndex: 4 << 3 | COLUMN_TYPE.INT_DELTA
+}
+
 /**
  * Parses a string of the form '12345@someActorId' into an object of the form
  * {counter: 12345, actorId: 'someActorId'}, and any other string into an object
@@ -117,10 +127,10 @@ function parseAllOpIds(changes, single) {
     actorIds = [changes[0].actor].concat(actorIds.filter(actor => actor !== changes[0].actor))
   }
   for (let change of newChanges) {
-    const actorNum = actorIds.indexOf(change.actor)
+    change.actorNum = actorIds.indexOf(change.actor)
     for (let i = 0; i < change.ops.length; i++) {
       let op = change.ops[i]
-      op.id = {counter: change.startOp + i, actorNum, actorId: change.actor}
+      op.id = {counter: change.startOp + i, actorNum: change.actorNum, actorId: change.actor}
       op.obj = actorIdToActorNum(op.obj, actorIds)
       op.key = actorIdToActorNum(op.key, actorIds)
       op.child = actorIdToActorNum(op.child, actorIds)
@@ -355,7 +365,12 @@ function encodeOps(ops) {
       columns.predCtr.appendValue(op.pred[i].counter)
     }
   }
-  return columns
+
+  let columnList = []
+  for (let [name, id] of Object.entries(CHANGE_COLUMNS)) {
+    if (columns[name]) columnList.push({id, name, encoder: columns[name]})
+  }
+  return columnList.sort((a, b) => a.id - b.id)
 }
 
 /**
@@ -472,8 +487,9 @@ function decodeChangeHeader(decoder) {
 }
 
 /**
- * Calls the `callback` with an encoder that should be used to encode the
- * contents of the container.
+ * Assembles a chunk of encoded data containing a checksum, headers, and a
+ * series of encoded columns. Calls `encodeHeaderCallback` with an encoder that
+ * should be used to add the headers. The columns should be given as `columns`.
  */
 function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   const CHECKSUM_SIZE = 4 // checksum is first 4 bytes of SHA-256 hash of the rest of the data
@@ -485,15 +501,12 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   body.appendRawBytes(new Uint8Array(HEADER_SPACE))
   encodeHeaderCallback(body)
 
-  const columnIds = Object.entries(CHANGE_COLUMNS).sort((a, b) => a[1] - b[1])
-  for (let [columnName, columnId] of columnIds) {
-    if (columns[columnName] && !columns[columnName].onlyNulls) {
-      const buffer = columns[columnName].buffer
-      if (buffer.byteLength > 0) {
-        if (chunkType === 'document') console.log(`${columnName} column: ${buffer.byteLength} bytes`)
-        body.appendUint53(columnId)
-        body.appendPrefixedBytes(buffer)
-      }
+  for (let column of columns) {
+    const buffer = column.encoder.buffer
+    if (!column.encoder.onlyNulls && buffer.byteLength > 0) {
+      if (chunkType === 'document') console.log(`${column.name} column: ${buffer.byteLength} bytes`)
+      body.appendUint53(column.id)
+      body.appendPrefixedBytes(buffer)
     }
   }
 
@@ -637,6 +650,7 @@ function decodeChanges(binaryChanges) {
 }
 
 function sortOpIds(a, b) {
+  if (a === b) return 0
   if (a === ROOT_ID) return -1
   if (b === ROOT_ID) return +1
   const a_ = parseOpId(a), b_ = parseOpId(b)
@@ -699,7 +713,7 @@ function groupDocumentOps(changes) {
       while (stack.length > 0) {
         const key = stack.pop()
         if (key !== '_head') keys.push(key)
-        stack.push(...byReference[objectId][key].sort(sortOpIds))
+        for (let opId of byReference[objectId][key].sort(sortOpIds)) stack.push(opId)
       }
     } else {
       keys = Object.keys(byObjectId[objectId]).sort()
@@ -758,18 +772,69 @@ function encodeDocumentOps(ops) {
       columns.succCtr.appendValue(op.succ[i].counter)
     }
   }
-  return columns
+
+  let columnList = []
+  for (let [name, id] of Object.entries(CHANGE_COLUMNS)) {
+    if (columns[name]) columnList.push({id, name, encoder: columns[name]})
+  }
+  return columnList.sort((a, b) => a.id - b.id)
+}
+
+function encodeDocumentChanges(changes) {
+  const columns = { // see DOCUMENT_COLUMNS
+    actor     : new RLEEncoder('uint'),
+    seq       : new DeltaEncoder(),
+    maxOp     : new DeltaEncoder(),
+    time      : new DeltaEncoder(),
+    message   : new RLEEncoder('utf8'),
+    depsNum   : new RLEEncoder('uint'),
+    depsIndex : new DeltaEncoder()
+  }
+  let indexByHash = {} // map from change hash to its index in the changes array
+  let heads = {} // change hashes that are not a dependency of any other change
+
+  for (let i = 0; i < changes.length; i++) {
+    const change = changes[i]
+    indexByHash[change.hash] = i
+    heads[change.hash] = true
+
+    columns.actor.appendValue(change.actorNum)
+    columns.seq.appendValue(change.seq)
+    columns.maxOp.appendValue(change.startOp + change.ops.length - 1)
+    columns.time.appendValue(change.time)
+    columns.message.appendValue(change.message)
+    columns.depsNum.appendValue(change.deps.length)
+
+    for (let dep of change.deps) {
+      if (typeof indexByHash[dep] !== 'number') {
+        throw new RangeError(`Unknown dependency hash: ${dep}`)
+      }
+      columns.depsIndex.appendValue(indexByHash[dep])
+      if (heads[dep]) delete heads[dep]
+    }
+  }
+
+  let changesColumns = []
+  for (let [name, id] of Object.entries(DOCUMENT_COLUMNS)) {
+    changesColumns.push({id, name, encoder: columns[name]})
+  }
+  changesColumns.sort((a, b) => a.id - b.id)
+  return { changesColumns, heads: Object.keys(heads).sort() }
 }
 
 /**
- * Transforms a list of changes (in JS object form) into a binary representation
- * of the document state.
+ * Transforms a list of changes into a binary representation of the document state.
  */
-function encodeDocument(changeObjects) {
-  const { changes, actorIds } = parseAllOpIds(changeObjects, false)
-  const ops = encodeDocumentOps(groupDocumentOps(changes))
-  return encodeContainer('document', ops, encoder => {
-    // TODO add document header
+function encodeDocument(binaryChanges) {
+  const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
+  const { changesColumns, heads } = encodeDocumentChanges(changes)
+  const opsColumns = encodeDocumentOps(groupDocumentOps(changes))
+
+  return encodeContainer('document', changesColumns.concat(opsColumns), encoder => {
+    encoder.appendUint53(heads.length)
+    for (let head of heads.sort()) {
+      encoder.appendRawBytes(hexStringToBytes(head))
+    }
   }).bytes
 }
 
