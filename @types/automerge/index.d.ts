@@ -128,10 +128,10 @@ declare module 'automerge' {
 
   type WatchableDocHandler<T> = (doc: Doc<T>) => void
   class WatchableDoc<D, T = Proxy<D>> {
-    constructor(doc: D)
+    constructor(doc: Doc<D>)
     applyChanges(changes: Change[]): D
-    get(): D
-    set(doc: D): void
+    get(): Doc<D>
+    set(doc: Doc<D>): void
     registerHandler(handler: WatchableDocHandler<T>): void
     unregisterHandler(handler: WatchableDocHandler<T>): void
   }
