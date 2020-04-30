@@ -323,10 +323,12 @@ function decodeValue(columns, colIndex, actorIds, value) {
 
 /**
  * Encodes an array of operations in a set of columns. The operations need to
- * be parsed with `parseAllOpIds()` beforehand. Returns a map from column name
+ * be parsed with `parseAllOpIds()` beforehand. If `forDocument` is true, we use
+ * the column structure of a whole document, otherwise we use the column
+ * structure for an individual change. Returns a map from column name
  * to Encoder object.
  */
-function encodeOps(ops) {
+function encodeOps(ops, forDocument) {
   const columns = {
     objActor  : new RLEEncoder('uint'),
     objCtr    : new RLEEncoder('uint'),
@@ -338,10 +340,19 @@ function encodeOps(ops) {
     valLen    : new RLEEncoder('uint'),
     valRaw    : new Encoder(),
     chldActor : new RLEEncoder('uint'),
-    chldCtr   : new DeltaEncoder(),
-    predNum   : new RLEEncoder('uint'),
-    predCtr   : new DeltaEncoder(),
-    predActor : new RLEEncoder('uint')
+    chldCtr   : new DeltaEncoder()
+  }
+
+  if (forDocument) {
+    columns.idActor   = new RLEEncoder('uint')
+    columns.idCtr     = new DeltaEncoder()
+    columns.succNum   = new RLEEncoder('uint')
+    columns.succActor = new RLEEncoder('uint')
+    columns.succCtr   = new DeltaEncoder()
+  } else {
+    columns.predNum   = new RLEEncoder('uint')
+    columns.predCtr   = new DeltaEncoder()
+    columns.predActor = new RLEEncoder('uint')
   }
 
   for (let op of ops) {
@@ -359,10 +370,20 @@ function encodeOps(ops) {
       columns.chldCtr.appendValue(null)
     }
 
-    columns.predNum.appendValue(op.pred.length)
-    for (let i = 0; i < op.pred.length; i++) {
-      columns.predActor.appendValue(op.pred[i].actorNum)
-      columns.predCtr.appendValue(op.pred[i].counter)
+    if (forDocument) {
+      columns.idActor.appendValue(op.id.actorNum)
+      columns.idCtr.appendValue(op.id.counter)
+      columns.succNum.appendValue(op.succ.length)
+      for (let i = 0; i < op.succ.length; i++) {
+        columns.succActor.appendValue(op.succ[i].actorNum)
+        columns.succCtr.appendValue(op.succ[i].counter)
+      }
+    } else {
+      columns.predNum.appendValue(op.pred.length)
+      for (let i = 0; i < op.pred.length; i++) {
+        columns.predActor.appendValue(op.pred[i].actorNum)
+        columns.predCtr.appendValue(op.pred[i].counter)
+      }
     }
   }
 
@@ -562,7 +583,7 @@ function encodeChange(changeObj) {
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
 
-  const { hash, bytes } = encodeContainer('change', encodeOps(change.ops), encoder => {
+  const { hash, bytes } = encodeContainer('change', encodeOps(change.ops, false), encoder => {
     encoder.appendHexString(change.actor)
     encoder.appendUint53(change.seq)
     encoder.appendUint53(change.startOp)
@@ -729,57 +750,6 @@ function groupDocumentOps(changes) {
   return ops
 }
 
-function encodeDocumentOps(ops) {
-  const columns = {
-    objActor  : new RLEEncoder('uint'),
-    objCtr    : new RLEEncoder('uint'),
-    keyActor  : new RLEEncoder('uint'),
-    keyCtr    : new DeltaEncoder(),
-    keyStr    : new RLEEncoder('utf8'),
-    idActor   : new RLEEncoder('uint'),
-    idCtr     : new DeltaEncoder(),
-    insert    : new BooleanEncoder(),
-    action    : new RLEEncoder('uint'),
-    valLen    : new RLEEncoder('uint'),
-    valRaw    : new Encoder(),
-    chldActor : new RLEEncoder('uint'),
-    chldCtr   : new DeltaEncoder(),
-    succNum   : new RLEEncoder('uint'),
-    succActor : new RLEEncoder('uint'),
-    succCtr   : new DeltaEncoder()
-  }
-
-  for (let op of ops) {
-    encodeObjectId(op, columns)
-    encodeOperationKey(op, columns)
-    columns.idActor.appendValue(op.id.actorNum)
-    columns.idCtr.appendValue(op.id.counter)
-    columns.insert.appendValue(!!op.insert)
-    encodeOperationAction(op, columns)
-    encodeValue(op, columns)
-
-    if (op.child.counter) {
-      columns.chldActor.appendValue(op.child.actorNum)
-      columns.chldCtr.appendValue(op.child.counter)
-    } else {
-      columns.chldActor.appendValue(null)
-      columns.chldCtr.appendValue(null)
-    }
-
-    columns.succNum.appendValue(op.succ.length)
-    for (let i = 0; i < op.succ.length; i++) {
-      columns.succActor.appendValue(op.succ[i].actorNum)
-      columns.succCtr.appendValue(op.succ[i].counter)
-    }
-  }
-
-  let columnList = []
-  for (let [name, id] of Object.entries(CHANGE_COLUMNS)) {
-    if (columns[name]) columnList.push({id, name, encoder: columns[name]})
-  }
-  return columnList.sort((a, b) => a.id - b.id)
-}
-
 function encodeDocumentChanges(changes) {
   const columns = { // see DOCUMENT_COLUMNS
     actor     : new RLEEncoder('uint'),
@@ -828,7 +798,7 @@ function encodeDocumentChanges(changes) {
 function encodeDocument(binaryChanges) {
   const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
   const { changesColumns, heads } = encodeDocumentChanges(changes)
-  const opsColumns = encodeDocumentOps(groupDocumentOps(changes))
+  const opsColumns = encodeOps(groupDocumentOps(changes), true)
 
   return encodeContainer('document', changesColumns.concat(opsColumns), encoder => {
     encoder.appendUint53(heads.length)
