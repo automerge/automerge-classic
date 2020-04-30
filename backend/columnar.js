@@ -396,16 +396,17 @@ function encodeOps(ops, forDocument) {
 
 /**
  * Takes a change as decoded by `decodeColumns`, and changes it into the form
- * expected by the rest of the backend.
+ * expected by the rest of the backend. If `forDocument` is true, we use the op
+ * structure of a whole document, otherwise we use the op structure for an
+ * individual change.
  */
-function decodeOps(ops) {
+function decodeOps(ops, forDocument) {
   const newOps = []
   for (let op of ops) {
     const newOp = {
       obj: op.objCtr === null ? ROOT_ID : `${op.objCtr}@${op.objActor}`,
       key: op.keyCtr === 0 ? '_head' : (op.keyStr || `${op.keyCtr}@${op.keyActor}`),
-      action: ACTIONS[op.action] || op.action,
-      pred: op.predNum.map(pred => `${pred.predCtr}@${pred.predActor}`)
+      action: ACTIONS[op.action] || op.action
     }
     if (op.insert) newOp.insert = true
     if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
@@ -416,6 +417,12 @@ function decodeOps(ops) {
       throw new RangeError(`Mismatched child columns: ${op.chldCtr} and ${op.chldActor}`)
     }
     if (op.chldCtr !== null) newOp.child = `${op.chldCtr}@${op.chldActor}`
+    if (forDocument) {
+      newOp.id = `${op.idCtr}@${op.idActor}`
+      newOp.succ = op.succNum.map(succ => `${succ.succCtr}@${succ.succActor}`)
+    } else {
+      newOp.pred = op.predNum.map(pred => `${pred.predCtr}@${pred.predActor}`)
+    }
     newOps.push(newOp)
   }
   return newOps
@@ -435,32 +442,26 @@ function decoderByColumnId(columnId, buffer) {
   }
 }
 
-function decodeColumns(decoder, actorIds) {
+function decodeColumns(columns, actorIds, columnSpec) {
   // By default, every column decodes an empty byte array
   const emptyBuf = Uint8Array.of(), decoders = {}
-  for (let [columnName, columnId] of Object.entries(CHANGE_COLUMNS)) {
+  for (let [columnName, columnId] of Object.entries(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }
-
-  let lastColumnId = -1
-  while (!decoder.done) {
-    const columnId = decoder.readUint32()
-    const columnBuf = decoder.readPrefixedBytes()
-    if (columnId <= lastColumnId) throw new RangeError('Columns must be in ascending order')
-    lastColumnId = columnId
-    decoders[columnId] = decoderByColumnId(columnId, columnBuf)
+  for (let column of columns) {
+    decoders[column.columnId] = decoderByColumnId(column.columnId, column.buffer)
   }
 
-  let columns = []
-  for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort()) {
-    let [columnName, _] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === columnId)
+  columns = []
+  for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort((a, b) => a - b)) {
+    let [columnName, _] = Object.entries(columnSpec).find(([name, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
     columns.push({columnId, columnName, decoder: decoders[columnId]})
   }
 
-  let parsedOps = []
+  let parsedRows = []
   while (columns.some(col => !col.decoder.done)) {
-    let op = {}, col = 0
+    let row = {}, col = 0
     while (col < columns.length) {
       const columnId = columns[col].columnId
       let groupId = columnId >> 3, groupCols = 1
@@ -477,15 +478,28 @@ function decodeColumns(decoder, actorIds) {
           }
           values.push(value)
         }
-        op[columns[col].columnName] = values
+        row[columns[col].columnName] = values
         col += groupCols
       } else {
-        col += decodeValue(columns, col, actorIds, op)
+        col += decodeValue(columns, col, actorIds, row)
       }
     }
-    parsedOps.push(op)
+    parsedRows.push(row)
   }
-  return parsedOps
+  return parsedRows
+}
+
+function readColumns(decoder, numColumns) {
+  if (numColumns === undefined) numColumns = Number.MAX_SAFE_INTEGER
+  let lastColumnId = -1, columns = []
+  while (!decoder.done && columns.length < numColumns) {
+    const columnId = decoder.readUint32()
+    const columnBuf = decoder.readPrefixedBytes()
+    if (columnId <= lastColumnId) throw new RangeError('Columns must be in ascending order')
+    lastColumnId = columnId
+    columns.push({columnId, buffer: columnBuf})
+  }
+  return columns
 }
 
 function decodeChangeHeader(decoder) {
@@ -613,18 +627,13 @@ function decodeChange(buffer) {
   const header = decodeContainerHeader(decoder, true)
   const chunkDecoder = new Decoder(header.chunkData)
   if (!decoder.done) throw new RangeError('Encoded change has trailing data')
+  if (header.chunkType !== 1) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
-  if (header.chunkType === 0) {
-    // decode document
-  } else if (header.chunkType === 1) {
-    let change = decodeChangeHeader(chunkDecoder)
-    change.hash = header.hash
-    change.ops = decodeOps(decodeColumns(chunkDecoder, change.actorIds))
-    delete change.actorIds
-    return change
-  } else {
-    console.log(`Warning: ignoring chunk with unknown type ${header.chunkType}`)
-  }
+  const change = decodeChangeHeader(chunkDecoder), columns = readColumns(chunkDecoder)
+  change.hash = header.hash
+  change.ops = decodeOps(decodeColumns(columns, change.actorIds, CHANGE_COLUMNS), false)
+  delete change.actorIds
+  return change
 }
 
 /**
@@ -664,7 +673,13 @@ function decodeChanges(binaryChanges) {
   let decoded = []
   for (let binaryChange of binaryChanges) {
     for (let chunk of splitContainers(binaryChange)) {
-      decoded.push(decodeChange(chunk))
+      if (chunk[8] === 0) {
+        decoded = decoded.concat(decodeDocument(chunk))
+      } else if (chunk[8] === 1) {
+        decoded.push(decodeChange(chunk))
+      } else {
+        // ignoring chunk of unknown type
+      }
     }
   }
   return decoded
@@ -737,6 +752,8 @@ function groupDocumentOps(changes) {
         for (let opId of byReference[objectId][key].sort(sortOpIds)) stack.push(opId)
       }
     } else {
+      // FIXME JavaScript sorts based on UTF-16 encoding. We should change this to use the UTF-8
+      // encoding instead (the sort order will be different beyond the basic multilingual plane)
       keys = Object.keys(byObjectId[objectId]).sort()
     }
 
@@ -748,6 +765,76 @@ function groupDocumentOps(changes) {
     }
   }
   return ops
+}
+
+/**
+ * Takes a set of operations `ops` loaded from an encoded document, and
+ * reconstructs the changes that they originally came from.
+ * Does not return anything, only mutates `changes`.
+ */
+function groupChangeOps(changes, ops) {
+  let changesByActor = {} // map from actorId to array of changes by that actor
+  for (let change of changes) {
+    change.ops = []
+    if (!changesByActor[change.actor]) changesByActor[change.actor] = []
+    if (change.seq !== changesByActor[change.actor].length + 1) {
+      throw new RangeError(`Expected seq = ${changesByActor[change.actor].length + 1}, got ${change.seq}`)
+    }
+    if (change.seq > 1 && changesByActor[change.actor][change.seq - 2].maxOp > change.maxOp) {
+      throw new RangeError('maxOp must increase monotonically per actor')
+    }
+    changesByActor[change.actor].push(change)
+  }
+
+  let opsById = {}
+  for (let op of ops) {
+    if (op.action === 'del') throw new RangeError('document should not contain del operations')
+    op.pred = opsById[op.id] ? opsById[op.id].pred : []
+    opsById[op.id] = op
+    for (let succ of op.succ) {
+      if (!opsById[succ]) {
+        const key = op.insert ? op.id : op.key
+        opsById[succ] = {id: succ, action: 'del', obj: op.obj, key, pred: []}
+      }
+      opsById[succ].pred.push(op.id)
+    }
+    delete op.succ
+  }
+  for (let op of Object.values(opsById)) {
+    if (op.action === 'del') ops.push(op)
+  }
+
+  for (let op of ops) {
+    const { counter, actorId } = parseOpId(op.id)
+    const actorChanges = changesByActor[actorId]
+    // Binary search to find the change that should contain this operation
+    let left = 0, right = actorChanges.length
+    while (left < right) {
+      const index = Math.floor((left + right) / 2)
+      if (actorChanges[index].maxOp < counter) {
+        left = index + 1
+      } else {
+        right = index
+      }
+    }
+    if (left >= actorChanges.length) {
+      throw new RangeError(`Operation ID ${op.id} outside of allowed range`)
+    }
+    actorChanges[left].ops.push(op)
+  }
+
+  for (let change of changes) {
+    change.ops.sort((op1, op2) => sortOpIds(op1.id, op2.id))
+    change.startOp = change.maxOp - change.ops.length + 1
+    delete change.maxOp
+    for (let i = 0; i < change.ops.length; i++) {
+      const op = change.ops[i], expectedId = `${change.startOp + i}@${change.actor}`
+      if (op.id !== expectedId) {
+        throw new RangeError(`Expected opId ${expectedId}, got ${op.id}`)
+      }
+      delete op.id
+    }
+  }
 }
 
 function encodeDocumentChanges(changes) {
@@ -792,6 +879,38 @@ function encodeDocumentChanges(changes) {
   return { changesColumns, heads: Object.keys(heads).sort() }
 }
 
+function decodeDocumentChanges(changes, expectedHeads) {
+  let heads = {} // change hashes that are not a dependency of any other change
+  for (let i = 0; i < changes.length; i++) {
+    let change = changes[i]
+    change.deps = []
+    for (let index of change.depsNum.map(d => d.depsIndex)) {
+      if (!changes[index] || !changes[index].hash) {
+        throw new RangeError(`No hash for index ${index} while processing index ${i}`)
+      }
+      const hash = changes[index].hash
+      change.deps.push(hash)
+      if (heads[hash]) delete heads[hash]
+    }
+    change.deps.sort()
+    delete change.depsNum
+
+    // Encoding and decoding again to compute the hash of the change
+    changes[i] = decodeChange(encodeChange(change))
+    heads[changes[i].hash] = true
+  }
+
+  const actualHeads = Object.keys(heads).sort()
+  let headsEqual = (actualHeads.length === expectedHeads.length), i = 0
+  while (headsEqual && i < actualHeads.length) {
+    headsEqual = (actualHeads[i] === expectedHeads[i])
+    i++
+  }
+  if (!headsEqual) {
+    throw new RangeError(`Mismatched heads hashes: expected ${expectedHeads.join(', ')}, got ${actualHeads.join(', ')}`)
+  }
+}
+
 /**
  * Transforms a list of changes into a binary representation of the document state.
  */
@@ -800,12 +919,48 @@ function encodeDocument(binaryChanges) {
   const { changesColumns, heads } = encodeDocumentChanges(changes)
   const opsColumns = encodeOps(groupDocumentOps(changes), true)
 
+  let numChangesColumns = 0
+  for (let column of changesColumns) {
+    if (!column.encoder.onlyNulls && column.encoder.buffer.byteLength > 0) numChangesColumns++
+  }
+
   return encodeContainer('document', changesColumns.concat(opsColumns), encoder => {
+    encoder.appendUint53(actorIds.length)
+    for (let actor of actorIds) {
+      encoder.appendHexString(actor)
+    }
     encoder.appendUint53(heads.length)
     for (let head of heads.sort()) {
       encoder.appendRawBytes(hexStringToBytes(head))
     }
+    encoder.appendUint53(numChangesColumns)
   }).bytes
 }
 
-module.exports = { splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument }
+function decodeDocument(buffer) {
+  const documentDecoder = new Decoder(buffer)
+  const header = decodeContainerHeader(documentDecoder, true)
+  const decoder = new Decoder(header.chunkData)
+  if (!documentDecoder.done) throw new RangeError('Encoded document has trailing data')
+  if (header.chunkType !== 0) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+
+  const actors = [], numActors = decoder.readUint53()
+  for (let i = 0; i < numActors; i++) {
+    actors.push(decoder.readHexString())
+  }
+  const heads = [], numHeads = decoder.readUint53()
+  for (let i = 0; i < numHeads; i++) {
+    heads.push(bytesToHexString(decoder.readRawBytes(32)))
+  }
+
+  const changesColumns = readColumns(decoder, decoder.readUint53())
+  const changes = decodeColumns(changesColumns, actors, DOCUMENT_COLUMNS)
+  const opsColumns = readColumns(decoder)
+  const ops = decodeOps(decodeColumns(opsColumns, actors, CHANGE_COLUMNS), true)
+  groupChangeOps(changes, ops)
+  decodeDocumentChanges(changes, heads)
+  return changes
+}
+
+
+module.exports = { splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument }
