@@ -5,17 +5,6 @@ const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
-/**
- * Constructs a new frontend document that reflects the given list of changes.
- */
-function docFromChanges(options, changes) {
-  const doc = init(options)
-  const state = backend.loadChanges(backend.init(), changes)
-  const patch = backend.getPatch(state)
-  patch.state = state
-  return Frontend.applyPatch(doc, patch)
-}
-
 ///// Automerge.* API
 
 function init(options) {
@@ -68,12 +57,15 @@ function free(doc) {
   backend.free(Frontend.getBackendState(doc))
 }
 
-function load(changes, options) {
-  return docFromChanges(options, changes) // TODO change this to use encoded document format
+function load(data, options) {
+  const state = backend.load(data)
+  const patch = backend.getPatch(state)
+  patch.state = state
+  return Frontend.applyPatch(init(options), patch)
 }
 
 function save(doc) {
-  return getAllChanges(doc) // TODO change this to use encoded document format
+  return backend.save(Frontend.getBackendState(doc))
 }
 
 function merge(localDoc, remoteDoc) {
@@ -124,7 +116,10 @@ function getHistory(doc) {
         return decodeChange(change)
       },
       get snapshot () {
-        return docFromChanges(actor, history.slice(0, index + 1))
+        const state = backend.loadChanges(backend.init(), history.slice(0, index + 1))
+        const patch = backend.getPatch(state)
+        patch.state = state
+        return Frontend.applyPatch(init(actor), patch)
       }
     }
   })

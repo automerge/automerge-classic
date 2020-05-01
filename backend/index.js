@@ -2,7 +2,7 @@ const { Map, List } = require('immutable')
 const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
-const { splitContainers, encodeChange } = require('./columnar')
+const { splitContainers, encodeChange, decodeChanges, encodeDocument } = require('./columnar')
 
 function backendState(backend) {
   if (backend.frozen) {
@@ -270,6 +270,24 @@ function applyLocalChange(backend, request) {
 }
 
 /**
+ * Returns the state of the document serialised to an Uint8Array.
+ */
+function save(backend) {
+  return encodeDocument(getChanges(backend, []))
+}
+
+/**
+ * Loads the document and/or changes contained in an Uint8Array, and returns a
+ * backend initialised with this state.
+ */
+function load(data) {
+  // Reconstruct the original change history that created the document.
+  // It's a bit silly to convert to and from the binary encoding several times...!
+  const binaryChanges = decodeChanges([data]).map(encodeChange)
+  return loadChanges(init(), binaryChanges)
+}
+
+/**
  * Applies a list of `changes` to the node state `backend`, and returns the updated
  * state with those changes incorporated. Unlike `applyChanges()`, this function
  * does not produce a patch describing the incremental modifications, making it
@@ -391,6 +409,6 @@ function getRedoStack(backend) {
 }
 
 module.exports = {
-  init, clone, free, applyChanges, applyLocalChange, loadChanges, getPatch,
+  init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
   getChangesForActor, getChanges, getMissingDeps, getUndoStack, getRedoStack
 }

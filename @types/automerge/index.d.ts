@@ -45,8 +45,8 @@ declare module 'automerge' {
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
 
-  function load<T>(doc: string, options?: any): Doc<T>
-  function save<T>(doc: Doc<T>): string
+  function load<T>(data: Uint8Array, options?: any): Doc<T>
+  function save<T>(doc: Doc<T>): Uint8Array
 
   function canRedo<T>(doc: Doc<T>): boolean
   function canUndo<T>(doc: Doc<T>): boolean
