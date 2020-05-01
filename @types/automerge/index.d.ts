@@ -34,7 +34,7 @@ declare module 'automerge' {
   function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): Doc<T>
   function equals<T>(val1: T, val2: T): boolean
   function encodeChange(change: Change): Uint8Array
-  function decodeChange(binaryChange: Uint8Array): Change[]
+  function decodeChange(binaryChange: Uint8Array): Change
 
   function getActorId<T>(doc: Doc<T>): string
   function getAllChanges<T>(doc: Doc<T>): Uint8Array[]

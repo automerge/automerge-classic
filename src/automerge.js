@@ -1,7 +1,7 @@
 const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
-const { encodeChange, decodeChanges } = require('../backend/columnar')
+const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
@@ -121,11 +121,7 @@ function getHistory(doc) {
   return history.map((change, index) => {
     return {
       get change () {
-        const decoded = decodeChanges([change])
-        if (decoded.length !== 1) {
-          throw new RangeError(`Unexpected number of decoded changes: ${decoded.length}`)
-        }
-        return decoded[0]
+        return decodeChange(change)
       },
       get snapshot () {
         return docFromChanges(actor, history.slice(0, index + 1))
@@ -140,10 +136,6 @@ function getHistory(doc) {
  */
 function setDefaultBackend(newBackend) {
   backend = newBackend
-}
-
-function decodeChange(change) {
-  return decodeChanges([change])
 }
 
 module.exports = {

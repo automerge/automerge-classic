@@ -247,7 +247,7 @@ describe('TypeScript support', () => {
       let s2 = Automerge.change(s1, 'add chaffinch', doc => doc.birds.push('chaffinch'))
       const changes = Automerge.getChanges(s1, s2)
       assert.strictEqual(changes.length, 1)
-      const change = Automerge.decodeChange(changes[0])[0]
+      const change = Automerge.decodeChange(changes[0])
       assert.strictEqual(change.message, 'add chaffinch')
       assert.strictEqual(change.actor, Automerge.getActorId(s2))
       assert.strictEqual(change.seq, 2)
@@ -258,7 +258,7 @@ describe('TypeScript support', () => {
       s1 = Automerge.change(s1, doc => (doc.number = 3))
       const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
-      const change = Automerge.decodeChange(changes[0])[0]
+      const change = Automerge.decodeChange(changes[0])
       assert.strictEqual(change.ops.length, 1)
       assert.strictEqual(change.ops[0].action, 'set')
       assert.strictEqual(change.ops[0].obj, ROOT_ID)
