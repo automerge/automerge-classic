@@ -126,11 +126,16 @@ declare module 'automerge' {
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
+    function clone(state: BackendState): BackendState
+    function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
     function getChangesForActor(state: BackendState, actorId: string): Uint8Array[]
     function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
+    function load(data: Uint8Array): BackendState
+    function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
+    function save(state: BackendState): Uint8Array
   }
 
   // Internals
@@ -170,7 +175,7 @@ declare module 'automerge' {
   }
 
   interface Change {
-    message?: string
+    message: string
     actor: string
     seq: number
     deps: Hash[]
@@ -185,16 +190,17 @@ declare module 'automerge' {
     child?: UUID
     value?: number | boolean | string | null
     datatype?: DataType
+    pred?: UUID[]
   }
 
   interface Patch {
     actor?: string
     seq?: number
-    clock?: Clock
+    clock: Clock
     deps: Hash[]
     version: number
-    canUndo?: boolean
-    canRedo?: boolean
+    canUndo: boolean
+    canRedo: boolean
     diffs: ObjectDiff
   }
 
