@@ -355,9 +355,9 @@ function undo(state, request, startOp) {
       const key = OpSet.getOperationKey(op)
       const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), key)
       if (op.get('action') === 'inc') {
-        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key, value: -op.get('value')}))
+        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key, insert: false, value: -op.get('value')}))
       } else if (fieldOps.isEmpty()) {
-        redoOps.push(Map({action: 'del', obj: op.get('obj'), key}))
+        redoOps.push(Map({action: 'del', obj: op.get('obj'), key, insert: false}))
       } else {
         for (let fieldOp of fieldOps) {
           if (fieldOp.get('insert')) {
@@ -367,7 +367,7 @@ function undo(state, request, startOp) {
             const childId = fieldOp.get('child', fieldOp.get('opId'))
             fieldOp = fieldOp.set('action', 'link').set('child', childId)
           }
-          fieldOp = fieldOp.remove('opId').remove('pred')
+          fieldOp = fieldOp.remove('opId').remove('pred').set('insert', false)
           redoOps.push(fieldOp)
         }
       }

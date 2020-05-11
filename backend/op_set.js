@@ -118,7 +118,7 @@ function recordUndoHistory(opSet, op) {
 
   let undoOps
   if (op.get('action') === 'inc') {
-    undoOps = List.of(Map({action: 'inc', obj: objectId, key, value: -value}))
+    undoOps = List.of(Map({action: 'inc', obj: objectId, key, insert: false, value: -value}))
   } else {
     undoOps = getFieldOps(opSet, objectId, key).map(ref => {
       if (ref.get('insert')) {
@@ -128,11 +128,12 @@ function recordUndoHistory(opSet, op) {
         ref = ref.set('action', 'link').set('child', getChildId(ref))
       }
       ref = ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype', 'child'].includes(k))
+      ref = ref.set('insert', false)
       return ref
     })
   }
   if (undoOps.isEmpty()) {
-    undoOps = List.of(Map({action: 'del', obj: objectId, key}))
+    undoOps = List.of(Map({action: 'del', obj: objectId, key, insert: false}))
   }
   return opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
 }

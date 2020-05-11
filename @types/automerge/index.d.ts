@@ -181,7 +181,7 @@ declare module 'automerge' {
     action: OpAction
     obj: UUID
     key: string | number
-    insert?: boolean
+    insert: boolean
     child?: UUID
     value?: number | boolean | string | null
     datatype?: DataType

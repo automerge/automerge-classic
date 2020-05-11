@@ -408,7 +408,7 @@ function decodeOps(ops, forDocument) {
       key: op.keyCtr === 0 ? '_head' : (op.keyStr || `${op.keyCtr}@${op.keyActor}`),
       action: ACTIONS[op.action] || op.action
     }
-    if (op.insert) newOp.insert = true
+    newOp.insert = !!op.insert
     if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
       newOp.value = op.valLen
       if (op.valLen_datatype) newOp.datatype = op.valLen_datatype

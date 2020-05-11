@@ -53,7 +53,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc, {bird: 'magpie'})
       assert.deepStrictEqual(req, {
         requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'bird', value: 'magpie'}
+          {obj: ROOT_ID, action: 'set', key: 'bird', insert: false, value: 'magpie'}
         ]
       })
     })
@@ -64,8 +64,8 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc, {birds: {wrens: 3}})
       assert.deepStrictEqual(req, {
         requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: birds},
-          {obj: birds,   action: 'set',     key: 'wrens', value: 3}
+          {obj: ROOT_ID, action: 'makeMap', key: 'birds', insert: false, child: birds},
+          {obj: birds,   action: 'set',     key: 'wrens', insert: false, value: 3}
         ]
       })
     })
@@ -78,7 +78,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
       assert.deepStrictEqual(req2, {
         requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: birds, action: 'set', key: 'sparrows', value: 15}
+          {obj: birds, action: 'set', key: 'sparrows', insert: false, value: 15}
         ]
       })
     })
@@ -91,7 +91,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {sparrows: 15})
       assert.deepStrictEqual(req2, {
         requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'del', key: 'magpies'}
+          {obj: ROOT_ID, action: 'del', key: 'magpies', insert: false}
         ]
       })
     })
@@ -102,7 +102,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc, {birds: ['chaffinch']})
       assert.deepStrictEqual(req, {
         requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'makeList', key: 'birds', child: birds},
+          {obj: ROOT_ID, action: 'makeList', key: 'birds', insert: false, child: birds},
           {obj: birds, action: 'set', key: 0, insert: true, value: 'chaffinch'}
         ]
       })
@@ -116,7 +116,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['greenfinch']})
       assert.deepStrictEqual(req2, {
         requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: birds, action: 'set', key: 0, value: 'greenfinch'}
+          {obj: birds, action: 'set', key: 0, insert: false, value: 'greenfinch'}
         ]
       })
     })
@@ -129,7 +129,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['goldfinch']})
       assert.deepStrictEqual(req2, {
         requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: birds, action: 'del', key: 0}
+          {obj: birds, action: 'del', key: 0, insert: false}
         ]
       })
     })
@@ -142,7 +142,7 @@ describe('Automerge.Frontend', () => {
       assert.strictEqual(doc.now.getTime(), now.getTime())
       assert.deepStrictEqual(req, {
         requestType: 'change', actor, seq: 1, time: req.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
+          {obj: ROOT_ID, action: 'set', key: 'now', insert: false, value: now.getTime(), datatype: 'timestamp'}
         ]
       })
     })
@@ -162,12 +162,12 @@ describe('Automerge.Frontend', () => {
         assert.deepStrictEqual(doc2, {wrens: new Frontend.Counter(1)})
         assert.deepStrictEqual(req1, {
           requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
-            {obj: ROOT_ID, action: 'set', key: 'wrens', value: 0, datatype: 'counter'}
+            {obj: ROOT_ID, action: 'set', key: 'wrens', insert: false, value: 0, datatype: 'counter'}
           ]
         })
         assert.deepStrictEqual(req2, {
           requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-            {obj: ROOT_ID, action: 'inc', key: 'wrens', value: 1}
+            {obj: ROOT_ID, action: 'inc', key: 'wrens', insert: false, value: 1}
           ]
         })
       })
@@ -186,13 +186,13 @@ describe('Automerge.Frontend', () => {
         assert.deepStrictEqual(doc2, {counts: [new Frontend.Counter(3)]})
         assert.deepStrictEqual(req1, {
           requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
-            {obj: ROOT_ID, action: 'makeList', key: 'counts', child: counts},
+            {obj: ROOT_ID, action: 'makeList', key: 'counts', insert: false, child: counts},
             {obj: counts, action: 'set', key: 0, insert: true, value: 1, datatype: 'counter'}
           ]
         })
         assert.deepStrictEqual(req2, {
           requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-            {obj: counts, action: 'inc', key: 0, value: 2}
+            {obj: counts, action: 'inc', key: 0, insert: false, value: 2}
           ]
         })
       })
@@ -247,7 +247,7 @@ describe('Automerge.Frontend', () => {
       let requests = getRequests(doc2)
       assert.deepStrictEqual(requests, [
         {requestType: 'change', actor: local, seq: 5, time: requests[0].time, message: '', version: 3, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1}
         ]}
       ])
     })
@@ -259,10 +259,10 @@ describe('Automerge.Frontend', () => {
       let requests = getRequests(doc2)
       assert.deepStrictEqual(requests, [
         {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24}
         ]},
         {requestType: 'change', actor, seq: 2, time: requests[1].time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1}
         ]}
       ])
 
@@ -275,7 +275,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {blackbirds: 24, partridges: 1})
       assert.deepStrictEqual(requests, [
         {requestType: 'change', actor, seq: 2, time: requests[0].time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'partridges', value: 1}
+          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1}
         ]}
       ])
 
@@ -294,7 +294,7 @@ describe('Automerge.Frontend', () => {
       let requests = getRequests(doc)
       assert.deepStrictEqual(requests, [
         {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24}
         ]}
       ])
 
@@ -307,7 +307,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc, {blackbirds: 24})
       assert.deepStrictEqual(requests, [
         {requestType: 'change', actor, seq: 1, time: requests[0].time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'blackbirds', value: 24}
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24}
         ]}
       ])
 
@@ -384,12 +384,12 @@ describe('Automerge.Frontend', () => {
       const [doc2, req2] = Frontend.change(doc1, doc => doc.number = 2)
       assert.deepStrictEqual(req1, {
         requestType: 'change', actor, seq: 1, time: req1.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', value: 1}
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1}
         ]
       })
       assert.deepStrictEqual(req2, {
         requestType: 'change', actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', value: 2}
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2}
         ]
       })
       const state0 = Backend.init()
@@ -398,7 +398,7 @@ describe('Automerge.Frontend', () => {
       const [doc3, req3] = Frontend.change(doc2a, doc => doc.number = 3)
       assert.deepStrictEqual(req3, {
         requestType: 'change', actor, seq: 3, time: req3.time, message: '', version: 1, ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', value: 3}
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 3}
         ]
       })
     })

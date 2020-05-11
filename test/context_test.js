@@ -23,7 +23,7 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         sparrows: {[context.actorId]: {value: 5}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'sparrows', value: 5}])
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'sparrows', insert: false, value: 5}])
     })
 
     it('should do nothing if the value was not changed', () => {
@@ -40,7 +40,7 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         goldfinches: {[context.actorId]: {value: 3}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'set', key: 'goldfinches', insert: false, value: 3}])
     })
 
     it('should create nested maps', () => {
@@ -53,8 +53,8 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'makeMap', key: 'birds', child: objectId},
-        {obj: objectId, action: 'set', key: 'goldfinches', value: 3}
+        {obj: ROOT_ID, action: 'makeMap', key: 'birds', insert: false, child: objectId},
+        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3}
       ])
     })
 
@@ -69,7 +69,7 @@ describe('Proxying context', () => {
           goldfinches: {[context.actorId]: {value: 3}}
         }}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3}])
     })
 
     it('should perform assignment inside conflicted maps', () => {
@@ -87,7 +87,7 @@ describe('Proxying context', () => {
           goldfinches: {[context.actorId]: {value: 3}}
         }}
       }}})
-      assert.deepStrictEqual(context.ops, [{obj: objectId2, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId2, action: 'set', key: 'goldfinches', insert: false, value: 3}])
     })
 
     it('should handle conflict values of various types', () => {
@@ -105,7 +105,7 @@ describe('Proxying context', () => {
         actor4: {value: null},
         actor5: {objectId, type: 'map', props: {goldfinches: {[context.actorId]: {value: 3}}}}
       }}})
-      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', value: 3}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3}])
     })
 
     it('should create nested lists', () => {
@@ -121,7 +121,7 @@ describe('Proxying context', () => {
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'makeList', key: 'birds', child: objectId},
+        {obj: ROOT_ID, action: 'makeList', key: 'birds', insert: false, child: objectId},
         {obj: objectId, action: 'set', key: 0, insert: true, value: 'sparrow'},
         {obj: objectId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
       ])
@@ -140,7 +140,7 @@ describe('Proxying context', () => {
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'makeText', key: 'text', child: objectId},
+        {obj: ROOT_ID, action: 'makeText', key: 'text', insert: false, child: objectId},
         {obj: objectId, action: 'set', key: 0, insert: true, value: 'h'},
         {obj: objectId, action: 'set', key: 1, insert: true, value: 'i'}
       ])
@@ -154,7 +154,7 @@ describe('Proxying context', () => {
         books: {[context.actorId]: {objectId, type: 'table', props: {}}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'makeTable', key: 'books', child: objectId}
+        {obj: ROOT_ID, action: 'makeTable', key: 'books', insert: false, child: objectId}
       ])
     })
 
@@ -166,7 +166,7 @@ describe('Proxying context', () => {
         now: {[context.actorId]: {value: now.getTime(), datatype: 'timestamp'}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'set', key: 'now', value: now.getTime(), datatype: 'timestamp'}
+        {obj: ROOT_ID, action: 'set', key: 'now', insert: false, value: now.getTime(), datatype: 'timestamp'}
       ])
     })
 
@@ -178,7 +178,7 @@ describe('Proxying context', () => {
         counter: {[context.actorId]: {value: 3, datatype: 'counter'}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: ROOT_ID, action: 'set', key: 'counter', value: 3, datatype: 'counter'}
+        {obj: ROOT_ID, action: 'set', key: 'counter', insert: false, value: 3, datatype: 'counter'}
       ])
     })
   })
@@ -189,7 +189,7 @@ describe('Proxying context', () => {
       context.deleteMapKey([], 'goldfinches')
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {goldfinches: {}}})
-      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'del', key: 'goldfinches'}])
+      assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'del', key: 'goldfinches', insert: false}])
     })
 
     it('should do nothing if the key does not exist', () => {
@@ -209,7 +209,7 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId, type: 'map', props: {goldfinches: {}}}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'del', key: 'goldfinches'}])
+      assert.deepStrictEqual(context.ops, [{obj: objectId, action: 'del', key: 'goldfinches', insert: false}])
     })
   })
 
@@ -233,7 +233,7 @@ describe('Proxying context', () => {
           0: {[context.actorId]: {value: 'starling'}}
         }}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: listId, action: 'set', key: 0, value: 'starling'}])
+      assert.deepStrictEqual(context.ops, [{obj: listId, action: 'set', key: 0, insert: false, value: 'starling'}])
     })
 
     it('should create nested objects on assignment', () => {
@@ -249,9 +249,9 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'makeMap', key: 1, child: nestedId},
-        {obj: nestedId, action: 'set', key: 'english', value: 'goldfinch'},
-        {obj: nestedId, action: 'set', key: 'latin', value: 'carduelis'}
+        {obj: listId, action: 'makeMap', key: 1, insert: false, child: nestedId},
+        {obj: nestedId, action: 'set', key: 'english', insert: false, value: 'goldfinch'},
+        {obj: nestedId, action: 'set', key: 'latin', insert: false, value: 'carduelis'}
       ])
     })
 
@@ -271,8 +271,8 @@ describe('Proxying context', () => {
       }})
       assert.deepStrictEqual(context.ops, [
         {obj: listId, action: 'makeMap', key: 2, insert: true, child: nestedId},
-        {obj: nestedId, action: 'set', key: 'english', value: 'goldfinch'},
-        {obj: nestedId, action: 'set', key: 'latin', value: 'carduelis'}
+        {obj: nestedId, action: 'set', key: 'english', insert: false, value: 'goldfinch'},
+        {obj: nestedId, action: 'set', key: 'latin', insert: false, value: 'carduelis'}
       ])
     })
 
@@ -285,8 +285,8 @@ describe('Proxying context', () => {
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'del', key: 0},
-        {obj: listId, action: 'del', key: 0}
+        {obj: listId, action: 'del', key: 0, insert: false},
+        {obj: listId, action: 'del', key: 0, insert: false}
       ])
     })
 
@@ -304,7 +304,7 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'del', key: 0},
+        {obj: listId, action: 'del', key: 0, insert: false},
         {obj: listId, action: 'set', key: 0, insert: true, value: 'starling'},
         {obj: listId, action: 'set', key: 1, insert: true, value: 'goldfinch'}
       ])
@@ -333,9 +333,9 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: tableId, action: 'makeMap', key: rowId, child: rowId},
-        {obj: rowId, action: 'set', key: 'author', value: 'Mary Shelley'},
-        {obj: rowId, action: 'set', key: 'title', value: 'Frankenstein'}
+        {obj: tableId, action: 'makeMap', key: rowId, insert: false, child: rowId},
+        {obj: rowId, action: 'set', key: 'author', insert: false, value: 'Mary Shelley'},
+        {obj: rowId, action: 'set', key: 'title', insert: false, value: 'Frankenstein'}
       ])
     })
 
@@ -349,7 +349,7 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {actor1: {objectId: tableId, type: 'table', props: {[rowId]: {}}}}
       }})
-      assert.deepStrictEqual(context.ops, [{obj: tableId, action: 'del', key: rowId}])
+      assert.deepStrictEqual(context.ops, [{obj: tableId, action: 'del', key: rowId, insert: false}])
     })
   })
 
@@ -361,6 +361,6 @@ describe('Proxying context', () => {
     assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
       counter: {[context.actorId]: {value: 1, datatype: 'counter'}}
     }})
-    assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'inc', key: 'counter', value: 1}])
+    assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'inc', key: 'counter', insert: false, value: 1}])
   })
 })

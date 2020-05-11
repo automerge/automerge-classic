@@ -274,7 +274,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(changes01, [{
         hash: '3850bbab44d475dd2cc1329e6db0f4b01ce5e711c065558a1acf9673fd7d08e6',
         actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
-          {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
+          {action: 'set', obj: ROOT_ID, key: 'bird', insert: false, value: 'magpie', pred: []}
         ]
       }])
     })
@@ -314,19 +314,19 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(changes01, [{
         hash: '3850bbab44d475dd2cc1329e6db0f4b01ce5e711c065558a1acf9673fd7d08e6',
         actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
-          {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
+          {action: 'set', obj: ROOT_ID, key: 'bird', insert: false, value: 'magpie', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes12, [{
         hash: '060cff6dd560d803726ce61d49dfdc107378f3fc248b2c4804853597ce37940a',
         actor: '222222', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
-          {action: 'set', obj: ROOT_ID, key: 'fish', value: 'goldfish', pred: []}
+          {action: 'set', obj: ROOT_ID, key: 'fish', insert: false, value: 'goldfish', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes23, [{
         hash: '0e5057d5f295792c2a588cdf5dd7e3f43ef220ef9721798b4d4acd948c99aaf4',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes01[0].hash], ops: [
-          {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: ['1@111111']}
+          {action: 'set', obj: ROOT_ID, key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
         ]
       }])
     })
@@ -361,7 +361,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(changes23, [{
         hash: 'bcc9036490c4cbda4b2f87a27d5babc109e165e72fa79be43759c5dd98bdb04f',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes01[0].hash], ops: [
-          {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: ['1@111111']}
+          {action: 'set', obj: ROOT_ID, key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
         ]
       }])
     })
@@ -408,8 +408,8 @@ describe('Automerge.Backend', () => {
         hash: 'ffdad9c9acbbfa199cfc363c1002a504f98e78b6e15062a059558d2a9336fa25',
         actor: '111111', seq: 3, startOp: 4, time: 0, message: '',
         deps: [hash(remote2), changes34[0].hash].sort(), ops: [
-          {obj: '1@222222', action: 'set', key: '2@222222', value: 'Magpie',    pred: ['2@222222']},
-          {obj: '1@222222', action: 'set', key: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
+          {obj: '1@222222', action: 'set', key: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
+          {obj: '1@222222', action: 'set', key: '2@111111', insert: false, value: 'Goldfinch', pred: ['2@111111']}
         ]
       }])
     })
@@ -438,13 +438,13 @@ describe('Automerge.Backend', () => {
       })
       assert.deepStrictEqual(changes, [{
         hash: changes[0].hash, actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
-          {obj: ROOT_ID, action: 'makeList', key: 'birds', pred: []}
+          {obj: ROOT_ID, action: 'makeList', key: 'birds', insert: false, pred: []}
         ]
       }, {
         hash: 'a474b2d9b6fb66e1b422f504a9f69552c592403b8245e0e439d4be11261b840b',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {obj: '1@111111', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
-          {obj: '1@111111', action: 'del', key: '2@111111', pred: ['2@111111']}
+          {obj: '1@111111', action: 'del', key: '2@111111', insert: false, pred: ['2@111111']}
         ]
       }])
     })

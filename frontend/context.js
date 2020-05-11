@@ -193,10 +193,7 @@ class Context {
 
     if (value instanceof Text) {
       // Create a new Text object
-      const operation = {action: 'makeText', obj, key, child}
-      if (insert) operation.insert = true
-      this.addOp(operation)
-
+      this.addOp({action: 'makeText', obj, key, insert, child})
       const subpatch = {objectId: child, type: 'text', edits: [], props: {}}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
@@ -206,27 +203,19 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      const operation = {action: 'makeTable', obj, key, child}
-      if (insert) operation.insert = true
-      this.addOp(operation)
+      this.addOp({action: 'makeTable', obj, key, insert, child})
       return {objectId: child, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      const operation = {action: 'makeList', obj, key, child}
-      if (insert) operation.insert = true
-      this.addOp(operation)
-
+      this.addOp({action: 'makeList', obj, key, insert, child})
       const subpatch = {objectId: child, type: 'list', edits: [], props: {}}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
-      const operation = {action: 'makeMap', obj, key, child}
-      if (insert) operation.insert = true
-      this.addOp(operation)
-
+      this.addOp({action: 'makeMap', obj, key, insert, child})
       let props = {}
       for (let nested of Object.keys(value)) {
         const valuePatch = this.setValue(child, nested, value[nested], false)
@@ -259,9 +248,7 @@ class Context {
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      const operation = Object.assign({action: 'set', obj: objectId, key}, description)
-      if (insert) operation.insert = true
-      this.addOp(operation)
+      this.addOp(Object.assign({action: 'set', obj: objectId, key, insert}, description))
       return description
     }
   }
@@ -309,7 +296,7 @@ class Context {
     const object = this.getObject(objectId)
 
     if (object[key] !== undefined) {
-      this.addOp({action: 'del', obj: objectId, key})
+      this.addOp({action: 'del', obj: objectId, key, insert: false})
       this.applyAtPath(path, subpatch => {
         subpatch.props[key] = {}
       })
@@ -380,7 +367,7 @@ class Context {
 
     if (deletions > 0) {
       for (let i = 0; i < deletions; i++) {
-        this.addOp({action: 'del', obj: objectId, key: start})
+        this.addOp({action: 'del', obj: objectId, key: start, insert: false})
         subpatch.edits.push({action: 'remove', index: start})
       }
     }
@@ -420,7 +407,7 @@ class Context {
     const objectId = path[path.length - 1].objectId, table = this.getObject(objectId)
 
     if (table.byId(rowId)) {
-      this.addOp({action: 'del', obj: objectId, key: rowId})
+      this.addOp({action: 'del', obj: objectId, key: rowId, insert: false})
       this.applyAtPath(path, subpatch => {
         subpatch.props[rowId] = {}
       })
@@ -440,7 +427,7 @@ class Context {
 
     // TODO what if there is a conflicting value on the same key as the counter?
     const value = object[key].value + delta
-    this.addOp({action: 'inc', obj: objectId, key, value: delta})
+    this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false})
     this.applyAtPath(path, subpatch => {
       subpatch.props[key] = {[this.actorId]: {value, datatype: 'counter'}}
     })

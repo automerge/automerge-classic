@@ -6,9 +6,9 @@ const { ROOT_ID } = require('../src/common')
 describe('change encoding', () => {
   it('should encode text edits', () => {
     const change1 = {actor: 'aaaa', seq: 1, startOp: 1, time: 9, message: '', deps: [], ops: [
-      {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
+      {action: 'makeText', obj: ROOT_ID, key: 'text', insert: false, pred: []},
       {action: 'set', obj: '1@aaaa', key: '_head', insert: true, value: 'h', pred: []},
-      {action: 'del', obj: '1@aaaa', key: '2@aaaa', pred: ['2@aaaa']},
+      {action: 'del', obj: '1@aaaa', key: '2@aaaa', insert: false, pred: ['2@aaaa']},
       {action: 'set', obj: '1@aaaa', key: '_head', insert: true, value: 'H', pred: []},
       {action: 'set', obj: '1@aaaa', key: '4@aaaa', insert: true, value: 'i', pred: []}
     ]}
