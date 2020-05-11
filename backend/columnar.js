@@ -287,7 +287,7 @@ function decodeValue(columns, colIndex, actorIds, value) {
       } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
         value[columnName] = valDecoder.readInt53()
       } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
-        const view = new DataView(bytes.buffer)
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         if (bytes.byteLength === 4) {
           value[columnName] = view.getFloat32(0, true) // true means little-endian
         } else if (bytes.byteLength === 8) {

@@ -292,6 +292,11 @@ describe('Automerge', () => {
         assert.deepStrictEqual(s1, {foo: 'bar', zip: 'zap'})
       })
 
+      it('should allow floating-point values', () => {
+        s1 = Automerge.change(s1, doc => doc.number = 1589032171.1)
+        assert.strictEqual(s1.number, 1589032171.1)
+      })
+
       it('should handle multi-property assignment', () => {
         s1 = Automerge.change(s1, 'multi-assign', doc => {
           Object.assign(doc, {foo: 'bar', answer: 42})
