@@ -84,7 +84,7 @@ function makeChange(doc, requestType, context, options) {
 
   const request = {
     requestType, actor, seq: state.seq,
-    time: new Date().getTime(),
+    time: Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
     version: state.version
   }
