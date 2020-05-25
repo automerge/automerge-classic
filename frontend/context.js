@@ -72,7 +72,11 @@ class Context {
    * object is an existing Automerge object, its existing ID is returned.
    */
   createNestedObjects(value) {
-    if (typeof value[OBJECT_ID] === 'string') return value[OBJECT_ID]
+    if (typeof value[OBJECT_ID] === 'string') {
+      throw new TypeError(
+        'Cannot assign an object that already belongs to an Automerge document. ' +
+        'See https://github.com/automerge/automerge#making-fine-grained-changes')
+    }
     const objectId = uuid()
 
     if (value instanceof Text) {

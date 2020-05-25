@@ -270,6 +270,49 @@ unmodified. The only special things about it are:
   the same property concurrently (see [below](#conflicting-changes)). You can get conflicts using
   the `Automerge.getConflicts()` function.
 
+### Making fine-grained changes
+
+If you have previously worked with immutable state in JavaScript, you might be in the habit of
+using [idioms like these](https://redux.js.org/recipes/structuring-reducers/updating-normalized-data):
+
+```js
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
+  doc.cards = {
+    ids: [...doc.cards.ids, newItem.id],
+    entities: { ...doc.cards.entities, [newItem.id]: newItem }
+  }
+})
+```
+
+While this pattern works fine outside of Automerge, please **don't do this in Automerge**! Please
+use mutable idioms to update the state instead, like this:
+
+```js
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
+  doc.cards.ids.push(newItem.id)
+  doc.cards.entities[newItem.id] = newItem
+})
+```
+
+Even though you are using mutating APIs, Automerge ensures that the code above does not actually
+mutate `state`, but returns a new copy of `state` in which the changes are reflected. The problem
+with the first example is that from Automerge's point of view, you are replacing the entire
+`doc.cards` object (and everything inside it) with a brand new object. Thus, if two users
+concurrently update the document, Automerge will not be able to merge those changes (instead, you
+will just get a conflict on the `doc.cards` property).
+
+The second example avoids this problem by making the changes at a fine-grained level: adding one
+item to the array of IDs with `ids.push(newItem.id)`, and adding one item to the map of entities
+with `entities[newItem.id] = newItem`. This code works much better, since it tells Automerge
+exactly which changes you are making to the state, and this information allows Automerge to deal
+much better with concurrent updates by different users.
+
+As a general principle with Automerge, you should make state updates at the most fine-grained
+level possible. Don't replace an entire object if you're only modifying one property of that
+object; just assign that one property instead.
+
 ### Persisting a document
 
 `Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can

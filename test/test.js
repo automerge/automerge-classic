@@ -420,15 +420,27 @@ describe('Automerge', () => {
         assert.strictEqual(s1.color, '#ff7f00')
       })
 
-      it('should allow several references to the same map object', () => {
-        s1 = Automerge.change(s1, 'create object', doc => {
-          doc.position = {x: 1, y: 1}
-          doc.size = doc.position
+      it('should not allow several references to the same map object', () => {
+        assert.throws(() => {
+          s1 = Automerge.change(s1, 'create object', doc => {
+            doc.position = {x: 1, y: 1}
+            doc.size = doc.position
+          })
+        }, /object that already belongs to an Automerge document/)
+      })
+
+      it('should not allow object-copying idioms', () => {
+        s1 = Automerge.change(s1, doc => {
+          doc.items = [{id: 'id1', name: 'one'}, {id: 'id2', name: 'two'}]
         })
-        s2 = Automerge.change(s1, 'update y', doc => doc.position.y = 2)
-        assert.strictEqual(s1.size.y, 1)
-        assert.strictEqual(s2.size.y, 2)
-        assert.strictEqual(Automerge.getObjectId(s1.position), Automerge.getObjectId(s1.size))
+        // People who have previously worked with immutable state in JavaScript may be tempted
+        // to use idioms like this, which don't work well with Automerge -- see e.g.
+        // https://github.com/automerge/automerge/issues/260
+        assert.throws(() => {
+          Automerge.change(s1, doc => {
+            doc.items = [...doc.items, {id: 'id3', name: 'three'}]
+          })
+        }, /object that already belongs to an Automerge document/)
       })
 
       it('should handle deletion of properties within a map', () => {
@@ -566,7 +578,7 @@ describe('Automerge', () => {
 
       it('should handle replacement of the entire list', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = ['udon', 'soba', 'ramen'])
-        s1 = Automerge.change(s1, doc => doc.japaneseNoodles = doc.noodles)
+        s1 = Automerge.change(s1, doc => doc.japaneseNoodles = doc.noodles.slice())
         s1 = Automerge.change(s1, doc => doc.noodles = ['wonton', 'pho'])
         assert.deepEqual(s1, {
           noodles: ['wonton', 'pho'],
@@ -620,18 +632,11 @@ describe('Automerge', () => {
         assert.deepEqual(s1.maze[0][0][0][0][0][0][0][1][1], 'here')
       })
 
-      it('should allow several references to the same list object', () => {
+      it('should not allow several references to the same list object', () => {
         s1 = Automerge.change(s1, doc => doc.japaneseNoodles = ['udon', 'soba'])
-        s1 = Automerge.change(s1, doc => doc.theBestNoodles = doc.japaneseNoodles)
-        s1 = Automerge.change(s1, doc => doc.theBestNoodles.push('ramen'))
-        assert.deepEqual(s1, {
-          japaneseNoodles: ['udon', 'soba', 'ramen'],
-          theBestNoodles: ['udon', 'soba', 'ramen']
-        })
-        assert.strictEqual(s1.japaneseNoodles[2], 'ramen')
-        assert.strictEqual(s1.japaneseNoodles.length, 3)
-        assert.strictEqual(s1.theBestNoodles[2], 'ramen')
-        assert.strictEqual(s1.theBestNoodles.length, 3)
+        assert.throws(() => {
+          s1 = Automerge.change(s1, doc => doc.theBestNoodles = doc.japaneseNoodles)
+        }, /object that already belongs to an Automerge document/)
       })
     })
   })
