@@ -1337,6 +1337,17 @@ describe('Automerge', () => {
       assert.strictEqual(Automerge.Frontend.getElementIds(s.list)[0], 'actorid:2')
     })
 
+    it('should reconstitute queued changes', () => {
+      let s1 = Automerge.init()
+      s1 = Automerge.change(s1, doc => doc.fish = 'trout')
+      s1 = Automerge.change(s1, doc => doc.fish = 'salmon')
+      const changes = Automerge.getAllChanges(s1)
+      let s2 = Automerge.applyChanges(Automerge.init(), [changes[1]])
+      s2 = Automerge.load(Automerge.save(s2))
+      s2 = Automerge.applyChanges(s2, [changes[0]])
+      assert.strictEqual(s2.fish, 'salmon')
+    })
+
     it('should allow a reloaded list to be mutated', () => {
       let doc = Automerge.change(Automerge.init(), doc => doc.foo = [])
       doc = Automerge.load(Automerge.save(doc))

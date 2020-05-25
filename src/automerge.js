@@ -62,7 +62,7 @@ function load(string, options) {
 
 function save(doc) {
   const state = Frontend.getBackendState(doc)
-  return transit.toJSON(state.getIn(['opSet', 'history']))
+  return transit.toJSON(state.getIn(['opSet', 'history']).concat(state.getIn(['opSet', 'queue'])))
 }
 
 function merge(localDoc, remoteDoc) {
