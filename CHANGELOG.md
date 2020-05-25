@@ -8,7 +8,14 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.1] — 2020-05-25
+
 - **Fixed** [#249]: Corrected TypeScript declaration for `Automerge.Table.rows` ([@lauritzsh])
+- **Fixed** [#252]: Corrected TypeScript declaration for `WatchableDoc` ([@vincentcapicotto])
+- **Fixed** [#258]: Changes whose dependencies are missing are now preserved when saving and
+  reloading a document ([@KarenSarmiento], [@ept])
+- **Changed** [#260]: If you try to assign an object that is already in an Automerge document,
+  you now get a more descriptive error message ([@johannesjo], [@ept])
 
 ## [0.14.0] — 2020-03-25
 
@@ -265,6 +272,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#260]: https://github.com/automerge/automerge/issues/260
+[#258]: https://github.com/automerge/automerge/issues/258
+[#252]: https://github.com/automerge/automerge/pull/252
 [#249]: https://github.com/automerge/automerge/pull/249
 [#243]: https://github.com/automerge/automerge/pull/243
 [#242]: https://github.com/automerge/automerge/pull/242
@@ -346,7 +356,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@izuchukwu]: https://github.com/izuchukwu
 [@jeffpeterson]: https://github.com/jeffpeterson
 [@jimpick]: https://github.com/jimpick
+[@johannesjo]: https://github.com/johannesjo
 [@ept]: https://github.com/ept
+[@KarenSarmiento]: https://github.com/KarenSarmiento
 [@kpruden]: https://github.com/kpruden
 [@lauritzsh]: https://github.com/lauritzsh
 [@mattkrick]: https://github.com/mattkrick
@@ -358,4 +370,5 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
 [@skokenes]: https://github.com/skokenes
+[@vincentcapicotto]: https://github.com/vincentcapicotto
 [@wincent]: https://github.com/wincent
