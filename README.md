@@ -1,6 +1,6 @@
 # Automerge
 
-💬 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
+💬 [Join the Automerge Slack community](https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw)
 
 [![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
 [![Browser Test Status](https://app.saucelabs.com/buildstatus/automerge)](https://app.saucelabs.com/open_sauce/user/automerge/builds)
