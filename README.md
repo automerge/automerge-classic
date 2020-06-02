@@ -702,8 +702,8 @@ practices. However, it currently has a few limitations that you should be aware 
   encryption, authentication, and access control) need to be handled by separate layers
   outside of Automerge.
 - Storage overhead: Automerge needs to store additional metadata besides the actual objects you
-  create; for some datatypes, such as text, the overhead is substantial. We are working on improving
-  this.
+  create; for some datatypes, such as text, the overhead is substantial. We are
+  [working to improve this](https://github.com/automerge/automerge/pull/253).
 
 See also the [list of open issues](https://github.com/automerge/automerge/issues).
 
