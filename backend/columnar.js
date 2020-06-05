@@ -32,7 +32,8 @@ const VALUE_TYPE = {
   UTF8: 6, BYTES: 7, COUNTER: 8, TIMESTAMP: 9, MIN_UNKNOWN: 10, MAX_UNKNOWN: 15
 }
 
-const ACTIONS = ['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable']
+// make* actions must be at even-numbered indexes in this list
+const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable', 'link']
 
 const CHANGE_COLUMNS = {
   objActor:  0 << 3 | COLUMN_TYPE.ACTOR_ID,

@@ -14,7 +14,7 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0xb9, 0x96, 0xef, 0x4c, // checksum
+      0x43, 0x18, 0xa5, 0xde, // checksum
       1, 89, 2, 0xaa, 0xaa, // chunkType: change, length, actor 'aaaa'
       1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
       1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
@@ -23,7 +23,7 @@ describe('change encoding', () => {
       11, 7, 0, 1, 0x7c, 0, 2, 0x7e, 4, // keyCtr column: null, 0, 2, 0, 4
       13, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // keyStr column: 'text', null, null, null, null
       28, 4, 1, 1, 1, 2, // insert column: false, true, false, true, true
-      34, 6, 0x7d, 6, 0, 1, 2, 0, // action column: makeText, set, del, set, set
+      34, 6, 0x7d, 4, 1, 3, 2, 1, // action column: makeText, set, del, set, set
       46, 6, 0x7d, 0, 0x16, 0, 2, 0x16, // valLen column: 0, 0x16, 0, 0x16, 0x16
       47, 3, 0x68, 0x48, 0x69, // valRaw column: 'h', 'H', 'i'
       56, 6, 2, 0, 0x7f, 1, 2, 0, // predNum column: 0, 0, 1, 0, 0
