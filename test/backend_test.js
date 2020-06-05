@@ -502,6 +502,24 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should handle deletion of a counter', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter', pred: []}
+      ]}
+      const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
+        {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2, pred: [`1@${actor}`]}
+      ]}
+      const change3 = {actor, seq: 3, startOp: 3, time: 0, deps: [hash(change2)], ops: [
+        {action: 'del', obj: ROOT_ID, key: 'counter', pred: [`1@${actor}`]}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        version: 0, clock: {[actor]: 3}, deps: [hash(change3)], canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map'}
+      })
+    })
+
     it('should create nested maps', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [

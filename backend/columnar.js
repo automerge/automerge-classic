@@ -261,63 +261,71 @@ function encodeValue(op, columns) {
 }
 
 /**
+ * Given decoders for two columns with type tags VALUE_LEN and VALUE_RAW respectively,
+ * reads one value from those columns. Returns an object of the form
+ * `{value: value, datatype: datatypeTag}`.
+ */
+function decodeValue(lenColumn, rawColumn) {
+  const sizeTag = lenColumn.readValue()
+  if (sizeTag === VALUE_TYPE.NULL) {
+    return {value: null}
+  } else if (sizeTag === VALUE_TYPE.FALSE) {
+    return {value: false}
+  } else if (sizeTag === VALUE_TYPE.TRUE) {
+    return {value: true}
+  } else if (sizeTag % 16 === VALUE_TYPE.UTF8) {
+    return {value: rawColumn.readRawString(sizeTag >> 4)}
+  } else {
+    const bytes = rawColumn.readRawBytes(sizeTag >> 4), valDecoder = new Decoder(bytes)
+    if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
+      return {value: valDecoder.readUint53()}
+    } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
+      return {value: valDecoder.readInt53()}
+    } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      if (bytes.byteLength === 4) {
+        return {value: view.getFloat32(0, true)} // true means little-endian
+      } else if (bytes.byteLength === 8) {
+        return {value: view.getFloat64(0, true)}
+      } else {
+        throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
+      }
+    } else if (sizeTag % 16 === VALUE_TYPE.COUNTER) {
+      return {value: valDecoder.readInt53(), datatype: 'counter'}
+    } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
+      return {value: valDecoder.readInt53(), datatype: 'timestamp'}
+    } else {
+      return {value: bytes, datatype: sizeTag % 16}
+    }
+  }
+}
+
+/**
  * Reads one value from the column `columns[colIndex]` and interprets it based
  * on the column type. `actorIds` is a list of actors that appear in the change;
- * `actorIds[0]` is the actorId of the change's author. Mutates the `value`
+ * `actorIds[0]` is the actorId of the change's author. Mutates the `result`
  * object with the value, and returns the number of columns processed (this is 2
  * in the case of a pair of VALUE_LEN and VALUE_RAW columns, which are processed
  * in one go).
  */
-function decodeValue(columns, colIndex, actorIds, value) {
+function decodeValueColumns(columns, colIndex, actorIds, result) {
   const { columnId, columnName, decoder } = columns[colIndex]
   if (columnId % 8 === COLUMN_TYPE.VALUE_LEN && colIndex + 1 < columns.length &&
       columns[colIndex + 1].columnId === columnId + 1) {
-    const sizeTag = decoder.readValue(), rawDecoder = columns[colIndex + 1].decoder
-    if (sizeTag === VALUE_TYPE.NULL) {
-      value[columnName] = null
-    } else if (sizeTag === VALUE_TYPE.FALSE) {
-      value[columnName] = false
-    } else if (sizeTag === VALUE_TYPE.TRUE) {
-      value[columnName] = true
-    } else if (sizeTag % 16 === VALUE_TYPE.UTF8) {
-      value[columnName] = rawDecoder.readRawString(sizeTag >> 4)
-    } else {
-      const bytes = rawDecoder.readRawBytes(sizeTag >> 4), valDecoder = new Decoder(bytes)
-      if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
-        value[columnName] = valDecoder.readUint53()
-      } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
-        value[columnName] = valDecoder.readInt53()
-      } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-        if (bytes.byteLength === 4) {
-          value[columnName] = view.getFloat32(0, true) // true means little-endian
-        } else if (bytes.byteLength === 8) {
-          value[columnName] = view.getFloat64(0, true)
-        } else {
-          throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
-        }
-      } else if (sizeTag % 16 === VALUE_TYPE.COUNTER) {
-        value[columnName] = valDecoder.readInt53()
-        value[columnName + '_datatype'] = 'counter'
-      } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
-        value[columnName] = valDecoder.readInt53()
-        value[columnName + '_datatype'] = 'timestamp'
-      } else {
-        value[columnName] = bytes
-        value[columnName + '_datatype'] = sizeTag % 16
-      }
-    }
+    const { value, datatype } = decodeValue(decoder, columns[colIndex + 1].decoder)
+    result[columnName] = value
+    if (datatype) result[columnName + '_datatype'] = datatype
     return 2
   } else if (columnId % 8 === COLUMN_TYPE.ACTOR_ID) {
     const actorNum = decoder.readValue()
     if (actorNum === null) {
-      value[columnName] = null
+      result[columnName] = null
     } else {
       if (!actorIds[actorNum]) throw new RangeError(`No actor index ${actorNum}`)
-      value[columnName] = actorIds[actorNum]
+      result[columnName] = actorIds[actorNum]
     }
   } else {
-    value[columnName] = decoder.readValue()
+    result[columnName] = decoder.readValue()
   }
   return 1
 }
@@ -443,7 +451,7 @@ function decoderByColumnId(columnId, buffer) {
   }
 }
 
-function decodeColumns(columns, actorIds, columnSpec) {
+function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
   const emptyBuf = Uint8Array.of(), decoders = {}
   for (let [columnName, columnId] of Object.entries(columnSpec)) {
@@ -453,13 +461,17 @@ function decodeColumns(columns, actorIds, columnSpec) {
     decoders[column.columnId] = decoderByColumnId(column.columnId, column.buffer)
   }
 
-  columns = []
+  let result = []
   for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort((a, b) => a - b)) {
     let [columnName, _] = Object.entries(columnSpec).find(([name, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
-    columns.push({columnId, columnName, decoder: decoders[columnId]})
+    result.push({columnId, columnName, decoder: decoders[columnId]})
   }
+  return result
+}
 
+function decodeColumns(columns, actorIds, columnSpec) {
+  columns = makeDecoders(columns, columnSpec)
   let parsedRows = []
   while (columns.some(col => !col.decoder.done)) {
     let row = {}, col = 0
@@ -475,14 +487,14 @@ function decodeColumns(columns, actorIds, columnSpec) {
         for (let i = 0; i < count; i++) {
           let value = {}
           for (let colOffset = 1; colOffset < groupCols; colOffset++) {
-            decodeValue(columns, col + colOffset, actorIds, value)
+            decodeValueColumns(columns, col + colOffset, actorIds, value)
           }
           values.push(value)
         }
         row[columns[col].columnName] = values
         col += groupCols
       } else {
-        col += decodeValue(columns, col, actorIds, row)
+        col += decodeValueColumns(columns, col, actorIds, row)
       }
     }
     parsedRows.push(row)
@@ -490,8 +502,7 @@ function decodeColumns(columns, actorIds, columnSpec) {
   return parsedRows
 }
 
-function readColumns(decoder, numColumns) {
-  if (numColumns === undefined) numColumns = Number.MAX_SAFE_INTEGER
+function readColumns(decoder, numColumns = Number.MAX_SAFE_INTEGER) {
   let lastColumnId = -1, columns = []
   while (!decoder.done && columns.length < numColumns) {
     const columnId = decoder.readUint32()
@@ -540,7 +551,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   for (let column of columns) {
     const buffer = column.encoder.buffer
     if (!column.encoder.onlyNulls && buffer.byteLength > 0) {
-      if (chunkType === 'document') console.log(`${column.name} column: ${buffer.byteLength} bytes`)
+      //if (chunkType === 'document') console.log(`${column.name} column: ${buffer.byteLength} bytes`)
       body.appendUint53(column.id)
       body.appendPrefixedBytes(buffer)
     }
@@ -938,7 +949,7 @@ function encodeDocument(binaryChanges) {
   }).bytes
 }
 
-function decodeDocument(buffer) {
+function decodeDocumentHeader(buffer) {
   const documentDecoder = new Decoder(buffer)
   const header = decodeContainerHeader(documentDecoder, true)
   const decoder = new Decoder(header.chunkData)
@@ -955,13 +966,138 @@ function decodeDocument(buffer) {
   }
 
   const changesColumns = readColumns(decoder, decoder.readUint53())
-  const changes = decodeColumns(changesColumns, actors, DOCUMENT_COLUMNS)
   const opsColumns = readColumns(decoder)
+  return { changesColumns, opsColumns, actors, heads }
+}
+
+function decodeDocument(buffer) {
+  const { changesColumns, opsColumns, actors, heads } = decodeDocumentHeader(buffer)
+  const changes = decodeColumns(changesColumns, actors, DOCUMENT_COLUMNS)
   const ops = decodeOps(decodeColumns(opsColumns, actors, CHANGE_COLUMNS), true)
   groupChangeOps(changes, ops)
   decodeDocumentChanges(changes, heads)
   return changes
 }
 
+/**
+ * Takes all the operations for the same property (i.e. the same key in a map, or the same list
+ * element) and mutates the object patch to reflect the current value(s) of that property. There
+ * might be multiple values in the case of a conflict. `objects` is a map from objectId to the
+ * patch for that object. `property` contains `objId`, `key`, and list of `ops`.
+ */
+function addPatchProperty(objects, property) {
+  let values = {}, counter = null
+  for (let op of property.ops) {
+    // Apply counters and their increments regardless of the number of successor operations
+    if (op.actionName === 'set' && op.value.datatype === 'counter') {
+      if (!counter) counter = {opId: op.opId, value: 0, succ: {}}
+      counter.value += op.value.value
+      for (let succId of op.succ) counter.succ[succId] = true
+    } else if (op.actionName === 'inc') {
+      if (!counter) throw new RangeError(`inc operation ${op.opId} without a counter`)
+      counter.value += op.value.value
+      delete counter.succ[op.opId]
+      for (let succId of op.succ) counter.succ[succId] = true
 
-module.exports = { splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument }
+    } else if (op.succ.length === 0) { // Ignore any ops that have been overwritten
+      if (op.actionName.startsWith('make')) {
+        values[op.opId] = objects[op.opId]
+      } else if (op.actionName === 'set') {
+        values[op.opId] = op.value
+      } else if (op.actionName === 'link') {
+        // NB. This assumes that the ID of the child object is greater than the ID of the current
+        // object. This is true as long as link operations are only used to redo undone make*
+        // operations, but it will cease to be true once subtree moves are allowed.
+        if (!op.childId) throw new RangeError(`link operation ${op.opId} without a childId`)
+        values[op.opId] = objects[op.childId]
+      } else {
+        throw new RangeError(`Unexpected action type: ${op.actionName}`)
+      }
+    }
+  }
+
+  // If the counter had any successor operation that was not an increment, that means the counter
+  // must have been deleted, so we omit it from the patch.
+  if (counter && Object.keys(counter.succ).length === 0) {
+    values[counter.opId] = {value: counter.value, datatype: 'counter'}
+  }
+
+  if (Object.keys(values).length > 0) {
+    let obj = objects[property.objId]
+    if (!obj.props) obj.props = {}
+    if (obj.type === 'map' || obj.type === 'table') {
+      obj.props[property.key] = values
+    } else if (obj.type === 'list' || obj.type === 'text') {
+      if (!obj.edits) obj.edits = []
+      obj.props[obj.edits.length] = values
+      obj.edits.push({action: 'insert', index: obj.edits.length})
+    }
+  }
+}
+
+/**
+ * Parses the document (in compressed binary format) given as `documentBuffer`
+ * and returns a patch that can be sent to the frontend to instantiate the
+ * current state of that document.
+ */
+function constructPatch(documentBuffer) {
+  const { opsColumns, actors } = decodeDocumentHeader(documentBuffer)
+  const col = makeDecoders(opsColumns, CHANGE_COLUMNS).reduce(
+    (acc, col) => Object.assign(acc, {[col.columnName]: col.decoder}), {})
+
+  const objType = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
+  let objects = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map'}}
+  let property = null
+
+  while (!col.idActor.done) {
+    const opId = `${col.idCtr.readValue()}@${actors[col.idActor.readValue()]}`
+    const action = col.action.readValue(), actionName = ACTIONS[action]
+    if (action % 2 === 0) { // even-numbered actions are object creation
+      objects[opId] = {objectId: opId, type: objType[actionName] || 'unknown'}
+    }
+
+    const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
+    const objId = objActor === null ? ROOT_ID : `${objCtr}@${actors[objActor]}`
+    let obj = objects[objId]
+    if (!obj) throw new RangeError(`Operation for nonexistent object: ${objId}`)
+
+    const keyActor = col.keyActor.readValue(), keyCtr = col.keyCtr.readValue()
+    const keyStr = col.keyStr.readValue(), insert = !!col.insert.readValue()
+    const chldActor = col.chldActor.readValue(), chldCtr = col.chldCtr.readValue()
+    const childId = chldActor === null ? null : `${chldCtr}@${actors[chldActor]}`
+    const value = decodeValue(col.valLen, col.valRaw), succNum = col.succNum.readValue()
+    let succ = []
+    for (let i = 0; i < succNum; i++) {
+      succ.push(`${col.succCtr.readValue()}@${actors[col.succActor.readValue()]}`)
+    }
+
+    if (!actionName || obj.type === 'unknown') continue
+
+    let key
+    if (obj.type === 'list' || obj.type === 'text') {
+      if (keyActor === null || keyCtr === null || (keyCtr === 0 && !insert)) {
+        throw new RangeError(`Operation ${opId} on ${obj.type} object has no key`)
+      }
+      key = insert ? opId : `${keyCtr}@${actors[keyActor]}`
+    } else {
+      if (keyStr === null) {
+        throw new RangeError(`Operation ${opId} on ${obj.type} object has no key`)
+      }
+      key = keyStr
+    }
+
+    if (!property || property.objId !== objId || property.key !== key) {
+      if (property) addPatchProperty(objects, property)
+      property = {objId, key, ops: []}
+    }
+    property.ops.push({opId, actionName, value, childId, succ})
+  }
+
+  if (property) addPatchProperty(objects, property)
+  return objects[ROOT_ID]
+}
+
+module.exports = {
+  splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
+  constructPatch
+}
