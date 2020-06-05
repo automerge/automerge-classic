@@ -1060,6 +1060,7 @@ describe('Automerge', () => {
                              [[1, 'set 1'], [2, 'set 2'], [3, 'undo!']])
       s2 = Automerge.merge(s2, s1)
       assert.deepStrictEqual(s1, {value: 1})
+      assert.deepStrictEqual(s2, {value: 1})
     })
 
     it("should ignore other actors' updates to an undo-reverted field", () => {
