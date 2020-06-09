@@ -1,6 +1,7 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { encodeChange, decodeChange } = require('../backend/columnar')
+const { encodeChange, decodeChange, applyChange } = require('../backend/columnar')
+const Automerge = require('../src/automerge')
 const { ROOT_ID } = require('../src/common')
 
 describe('change encoding', () => {
@@ -32,5 +33,26 @@ describe('change encoding', () => {
     ])
     const decoded = decodeChange(encodeChange(change1))
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))
+  })
+
+  it('should apply a change to a document', () => {
+    let state1 = Automerge.change(Automerge.init(), doc => {
+      doc.authors = ['me', 'someone else']
+      doc.text = new Automerge.Text()
+      doc.title = 'Hello'
+    })
+    const doc1 = Automerge.save(state1)
+    state1 = Automerge.change(state1, doc => doc.text.insertAt(0, 'a', 'b', 'e'))
+    const doc2 = Automerge.save(state1)
+    let state2 = Automerge.merge(Automerge.init(), state1)
+    state2 = Automerge.change(state2, doc => { doc.foo = 'bar'; doc.text.insertAt(2, 'C', 'D') })
+    const doc3 = Automerge.save(state2)
+    state1 = Automerge.change(state1, doc => doc.text.insertAt(2, 'c', 'd'))
+    state2 = Automerge.merge(state2, state1)
+    assert.strictEqual(state2.text.join(''), 'abCDcde')
+    const [change0, change1, change2, change3] = Automerge.getAllChanges(state2)
+    assert.strictEqual(applyChange(doc1, change1), 5)
+    assert.strictEqual(applyChange(doc2, change2), 7)
+    assert.strictEqual(applyChange(doc3, change3), 10)
   })
 })

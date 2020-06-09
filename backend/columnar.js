@@ -631,20 +631,27 @@ function encodeChange(changeObj) {
   return bytes
 }
 
-/**
- * Decodes one change in binary format into its JS object representation.
- */
-function decodeChange(buffer) {
+function decodeChangeColumns(buffer) {
   const decoder = new Decoder(buffer)
   const header = decodeContainerHeader(decoder, true)
   const chunkDecoder = new Decoder(header.chunkData)
   if (!decoder.done) throw new RangeError('Encoded change has trailing data')
   if (header.chunkType !== 1) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
-  const change = decodeChangeHeader(chunkDecoder), columns = readColumns(chunkDecoder)
+  const change = decodeChangeHeader(chunkDecoder)
   change.hash = header.hash
-  change.ops = decodeOps(decodeColumns(columns, change.actorIds, CHANGE_COLUMNS), false)
+  change.columns = readColumns(chunkDecoder)
+  return change
+}
+
+/**
+ * Decodes one change in binary format into its JS object representation.
+ */
+function decodeChange(buffer) {
+  const change = decodeChangeColumns(buffer)
+  change.ops = decodeOps(decodeColumns(change.columns, change.actorIds, CHANGE_COLUMNS), false)
   delete change.actorIds
+  delete change.columns
   return change
 }
 
@@ -956,9 +963,9 @@ function decodeDocumentHeader(buffer) {
   if (!documentDecoder.done) throw new RangeError('Encoded document has trailing data')
   if (header.chunkType !== 0) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
-  const actors = [], numActors = decoder.readUint53()
+  const actorIds = [], numActors = decoder.readUint53()
   for (let i = 0; i < numActors; i++) {
-    actors.push(decoder.readHexString())
+    actorIds.push(decoder.readHexString())
   }
   const heads = [], numHeads = decoder.readUint53()
   for (let i = 0; i < numHeads; i++) {
@@ -967,13 +974,13 @@ function decodeDocumentHeader(buffer) {
 
   const changesColumns = readColumns(decoder, decoder.readUint53())
   const opsColumns = readColumns(decoder)
-  return { changesColumns, opsColumns, actors, heads }
+  return { changesColumns, opsColumns, actorIds, heads }
 }
 
 function decodeDocument(buffer) {
-  const { changesColumns, opsColumns, actors, heads } = decodeDocumentHeader(buffer)
-  const changes = decodeColumns(changesColumns, actors, DOCUMENT_COLUMNS)
-  const ops = decodeOps(decodeColumns(opsColumns, actors, CHANGE_COLUMNS), true)
+  const { changesColumns, opsColumns, actorIds, heads } = decodeDocumentHeader(buffer)
+  const changes = decodeColumns(changesColumns, actorIds, DOCUMENT_COLUMNS)
+  const ops = decodeOps(decodeColumns(opsColumns, actorIds, CHANGE_COLUMNS), true)
   groupChangeOps(changes, ops)
   decodeDocumentChanges(changes, heads)
   return changes
@@ -1041,7 +1048,7 @@ function addPatchProperty(objects, property) {
  * current state of that document.
  */
 function constructPatch(documentBuffer) {
-  const { opsColumns, actors } = decodeDocumentHeader(documentBuffer)
+  const { opsColumns, actorIds } = decodeDocumentHeader(documentBuffer)
   const col = makeDecoders(opsColumns, CHANGE_COLUMNS).reduce(
     (acc, col) => Object.assign(acc, {[col.columnName]: col.decoder}), {})
 
@@ -1050,25 +1057,25 @@ function constructPatch(documentBuffer) {
   let property = null
 
   while (!col.idActor.done) {
-    const opId = `${col.idCtr.readValue()}@${actors[col.idActor.readValue()]}`
+    const opId = `${col.idCtr.readValue()}@${actorIds[col.idActor.readValue()]}`
     const action = col.action.readValue(), actionName = ACTIONS[action]
     if (action % 2 === 0) { // even-numbered actions are object creation
       objects[opId] = {objectId: opId, type: objType[actionName] || 'unknown'}
     }
 
     const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
-    const objId = objActor === null ? ROOT_ID : `${objCtr}@${actors[objActor]}`
+    const objId = objActor === null ? ROOT_ID : `${objCtr}@${actorIds[objActor]}`
     let obj = objects[objId]
     if (!obj) throw new RangeError(`Operation for nonexistent object: ${objId}`)
 
     const keyActor = col.keyActor.readValue(), keyCtr = col.keyCtr.readValue()
     const keyStr = col.keyStr.readValue(), insert = !!col.insert.readValue()
     const chldActor = col.chldActor.readValue(), chldCtr = col.chldCtr.readValue()
-    const childId = chldActor === null ? null : `${chldCtr}@${actors[chldActor]}`
+    const childId = chldActor === null ? null : `${chldCtr}@${actorIds[chldActor]}`
     const value = decodeValue(col.valLen, col.valRaw), succNum = col.succNum.readValue()
     let succ = []
     for (let i = 0; i < succNum; i++) {
-      succ.push(`${col.succCtr.readValue()}@${actors[col.succActor.readValue()]}`)
+      succ.push(`${col.succCtr.readValue()}@${actorIds[col.succActor.readValue()]}`)
     }
 
     if (!actionName || obj.type === 'unknown') continue
@@ -1078,7 +1085,7 @@ function constructPatch(documentBuffer) {
       if (keyActor === null || keyCtr === null || (keyCtr === 0 && !insert)) {
         throw new RangeError(`Operation ${opId} on ${obj.type} object has no key`)
       }
-      key = insert ? opId : `${keyCtr}@${actors[keyActor]}`
+      key = insert ? opId : `${keyCtr}@${actorIds[keyActor]}`
     } else {
       if (keyStr === null) {
         throw new RangeError(`Operation ${opId} on ${obj.type} object has no key`)
@@ -1097,7 +1104,167 @@ function constructPatch(documentBuffer) {
   return objects[ROOT_ID]
 }
 
+function applyOps(docCols, ops, changeCols, actorIds) {
+  for (let col of docCols) col.decoder.reset()
+  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action } = ops[0]
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
+    = docCols.map(col => col.decoder)
+  let skipCount = 0, nextObjActor = null, nextObjCtr = null
+  let nextIdActor = null, nextIdCtr = null, nextKeyStr = null
+
+  // Seek to the beginning of the object being updated
+  if (objCtr !== null) {
+    while (!objCtrD.done && !objActorD.done) {
+      nextObjCtr = objCtrD.readValue()
+      nextObjActor = actorIds[objActorD.readValue()]
+      if (nextObjCtr === null || !nextObjActor || nextObjCtr < objCtr ||
+          (nextObjCtr === objCtr && nextObjActor < objActor)) {
+        skipCount += 1
+      } else {
+        break
+      }
+    }
+  }
+
+  // Seek to the appropriate key (if string key is used)
+  if (keyStr !== null && nextObjCtr === objCtr && nextObjActor === objActor) {
+    keyStrD.skipValues(skipCount)
+    while (!keyStrD.done) {
+      nextKeyStr = keyStrD.readValue()
+      nextObjCtr = objCtrD.readValue()
+      nextObjActor = actorIds[objActorD.readValue()]
+      if (nextKeyStr !== null && nextKeyStr < keyStr &&
+          nextObjCtr === objCtr && nextObjActor === objActor) {
+        skipCount += 1
+      } else {
+        break
+      }
+    }
+  }
+
+  // Seek to the appropriate list element (if opId key is used)
+  if (keyCtr !== null && keyActor !== null && keyCtr > 0 && nextObjCtr === objCtr && nextObjActor === objActor) {
+    idCtrD.skipValues(skipCount)
+    idActorD.skipValues(skipCount)
+    while (!idCtrD.done && !idActorD.done && (nextIdCtr !== keyCtr || nextIdActor !== keyActor)) {
+      nextIdCtr = idCtrD.readValue()
+      nextIdActor = actorIds[idActorD.readValue()]
+      nextObjCtr = objCtrD.readValue()
+      nextObjActor = actorIds[objActorD.readValue()]
+      if (nextObjCtr === objCtr && nextObjActor === objActor) skipCount += 1; else break
+    }
+    if (nextIdCtr !== keyCtr || nextIdActor !== keyActor) {
+      throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
+    }
+
+    // Skip over any list elements with greater ID than the new one
+    while (!idCtrD.done && !idActorD.done) {
+      nextIdCtr = idCtrD.readValue()
+      nextIdActor = actorIds[idActorD.readValue()]
+      nextObjCtr = objCtrD.readValue()
+      nextObjActor = actorIds[objActorD.readValue()]
+      if ((nextIdCtr > idCtr || (nextIdCtr === idCtr && nextIdActor > idActor)) &&
+          nextObjCtr === objCtr && nextObjActor === objActor) {
+        skipCount += 1
+      } else {
+        break
+      }
+    }
+  }
+
+  // TODO: if there are several ops with the target key, need to rewrite them to update their succ
+  // field, and insert the new op at the appropriate position
+  return skipCount
+}
+
+function applyChange(docBuffer, changeBuffer) {
+  const doc = decodeDocumentHeader(docBuffer) // { changesColumns, opsColumns, actorIds, heads }
+  const docCols = makeDecoders(doc.opsColumns, CHANGE_COLUMNS)
+  const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+  const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+  const expectedCols = [
+    'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
+    'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr',
+    'succNum', 'succActor', 'succCtr'
+  ]
+  for (let cols of [docCols, changeCols]) {
+    for (let i = 0; i < expectedCols.length; i++) {
+      if (cols[i].columnName !== expectedCols[i]) {
+        throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${cols[i].columnName}`)
+      }
+    }
+  }
+
+  // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
+  if (doc.actorIds.indexOf(change.actorIds[0]) < 0) {
+    if (change.seq !== 1) {
+      throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
+    }
+    doc.actorIds.push(change.actorIds[0])
+  }
+  for (let actorId of change.actorIds) {
+    if (doc.actorIds.indexOf(actorId) < 0) {
+      throw new RangeError(`actorId ${actorId} is not known to document`)
+    }
+  }
+
+  const currentActor = change.actorIds[0]
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
+    = changeCols.map(col => col.decoder)
+  let consecutiveOps = [], opIdCtr = change.startOp
+
+  while (!actionD.done) {
+    const objActor = objActorD.readValue(), keyActor = keyActorD.readValue()
+    const thisOp = {
+      objActor : objActor === null ? null : change.actorIds[objActor],
+      objCtr   : objCtrD.readValue(),
+      keyActor : keyActor === null ? null : change.actorIds[keyActor],
+      keyCtr   : keyCtrD.readValue(),
+      keyStr   : keyStrD.readValue(),
+      idActor  : currentActor,
+      idCtr    : opIdCtr,
+      insert   : insertD.readValue(),
+      action   : actionD.readValue()
+    }
+    if ((thisOp.objCtr === null && thisOp.objActor !== null) ||
+        (thisOp.objCtr !== null && typeof thisOp.objActor !== 'string')) {
+      throw new RangeError(`Mismatched object reference: (${thisOp.objCtr}, ${thisOp.objActor})`)
+    }
+    if ((thisOp.keyCtr === null && thisOp.keyActor !== null) ||
+        (thisOp.keyCtr !== null && typeof thisOp.keyActor !== 'string')) {
+      throw new RangeError(`Mismatched operation key: (${thisOp.keyCtr}, ${thisOp.keyActor})`)
+    }
+
+    // Collect any operations that are guaranteed to be consecutive in the compressed document.
+    // These must all be for the same object (since objectIds of concurrently created objects may be
+    // interleaved in the compressed document). For ops that reference a string key, the object
+    // being updated must have been created in the current change, and keys must be in ascending
+    // order. For ops that reference an opId key, the opId must match the preceding operation (this
+    // is the case when a sequence of list elements/text chars are inserted consecutively).
+    if (consecutiveOps.length === 0) {
+      consecutiveOps.push(thisOp)
+    } else {
+      const lastOp = consecutiveOps[consecutiveOps.length - 1]
+      if (thisOp.objActor === lastOp.objActor && thisOp.objCtr === lastOp.objCtr && (
+          (thisOp.keyStr !== null && lastOp.keyStr !== null && lastOp.keyStr <= thisOp.keyStr &&
+           thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp) ||
+          (thisOp.keyActor === lastOp.idActor && thisOp.keyCtr === lastOp.idCtr && lastOp.insert))) {
+        consecutiveOps.push(thisOp)
+      } else {
+        applyOps(docCols, consecutiveOps, changeCols, doc.actorIds)
+        consecutiveOps = [thisOp]
+      }
+    }
+
+    opIdCtr += 1
+  }
+  if (consecutiveOps.length > 0) return applyOps(docCols, consecutiveOps, changeCols, doc.actorIds)
+}
+
+/*
+*/
+
 module.exports = {
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
-  constructPatch
+  constructPatch, applyChange
 }

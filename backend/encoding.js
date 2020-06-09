@@ -316,6 +316,14 @@ class Decoder {
   }
 
   /**
+   * Resets the cursor position, so that the next read goes back to the
+   * beginning of the buffer.
+   */
+  reset() {
+    this.offset = 0
+  }
+
+  /**
    * Moves the current decoding position forward by the specified number of
    * bytes, without decoding anything.
    */
@@ -648,31 +656,58 @@ class RLEDecoder extends Decoder {
   }
 
   /**
+   * Resets the cursor position, so that the next read goes back to the
+   * beginning of the buffer.
+   */
+  reset() {
+    this.offset = 0
+    this.count = 0
+  }
+
+  /**
    * Returns the next value (or null) in the sequence.
    */
   readValue() {
     if (this.done) return null
-
-    if (this.count === 0) {
-      this.count = this.readInt53()
-      if (this.count > 0) {
-        this.lastValue = this.readRawValue()
-        this.literal = false
-      } else if (this.count < 0) {
-        this.count = -this.count
-        this.literal = true
-      } else { // this.count == 0
-        this.count = this.readUint53()
-        this.lastValue = null
-        this.literal = false
-      }
-    }
-
+    if (this.count === 0) this.readRecord()
     this.count -= 1
     if (this.literal) {
       return this.readRawValue()
     } else {
       return this.lastValue
+    }
+  }
+
+  /**
+   * Discards the next `numSkip` values in the sequence.
+   */
+  skipValues(numSkip) {
+    while (numSkip > 0 && !this.done) {
+      if (this.count === 0) this.readRecord()
+      const consume = Math.min(numSkip, this.count)
+      if (this.literal) {
+        for (let i = 0; i < consume; i++) this.readRawValue()
+      }
+      numSkip -= consume
+      this.count -= consume
+    }
+  }
+
+  /**
+   * Private method, do not call from outside the class.
+   */
+  readRecord() {
+    this.count = this.readInt53()
+    if (this.count > 0) {
+      this.lastValue = this.readRawValue()
+      this.literal = false
+    } else if (this.count < 0) {
+      this.count = -this.count
+      this.literal = true
+    } else { // this.count == 0
+      this.count = this.readUint53()
+      this.lastValue = null
+      this.literal = false
     }
   }
 
@@ -732,6 +767,16 @@ class DeltaDecoder extends RLEDecoder {
   }
 
   /**
+   * Resets the cursor position, so that the next read goes back to the
+   * beginning of the buffer.
+   */
+  reset() {
+    this.offset = 0
+    this.count = 0
+    this.absoluteValue = 0
+  }
+
+  /**
    * Returns the next integer (or null) value in the sequence.
    */
   readValue() {
@@ -739,6 +784,23 @@ class DeltaDecoder extends RLEDecoder {
     if (value === null) return null
     this.absoluteValue += value
     return this.absoluteValue
+  }
+
+  /**
+   * Discards the next `numSkip` values in the sequence.
+   */
+  skipValues(numSkip) {
+    while (numSkip > 0 && !this.done) {
+      if (this.count === 0) this.readRecord()
+      const consume = Math.min(numSkip, this.count)
+      if (this.literal) {
+        for (let i = 0; i < consume; i++) this.absoluteValue += this.readRawValue()
+      } else {
+        this.absoluteValue += consume * this.lastValue
+      }
+      numSkip -= consume
+      this.count -= consume
+    }
   }
 }
 

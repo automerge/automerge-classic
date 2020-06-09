@@ -572,6 +572,17 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'a', null, null, 'a', 'a'])), ['a', 'a', null, null, 'a', 'a'])
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', [null, null, null, null, 'abc'])), [null, null, null, null, 'abc'])
     })
+
+    it('should allow skipping values', () => {
+      const example = [null, null, null, 'a', 'a', 'a', 'b', 'c', 'd', 'e']
+      const encoded = encodeRLE('utf8', example)
+      for (let skipNum = 0; skipNum < example.length; skipNum++) {
+        const decoder = new RLEDecoder('utf8', encoded), values = []
+        decoder.skipValues(skipNum)
+        while (!decoder.done) values.push(decoder.readValue())
+        assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
+      }
+    })
   })
 
   describe('DeltaEncoder and DeltaDecoder', () => {
@@ -607,6 +618,17 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 0, 1, 2, 3])), [10, 11, 12, 13, 0, 1, 2, 3])
       assert.deepStrictEqual(decodeDelta(encodeDelta([0, 1, 2, 3, null, null, null, 4, 5, 6])), [0, 1, 2, 3, null, null, null, 4, 5, 6])
       assert.deepStrictEqual(decodeDelta(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36])), [-64, -60, -56, -52, -48, -44, -40, -36])
+    })
+
+    it('should allow skipping values', () => {
+      const example = [null, null, null, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 40, 11, 13, 21, 103]
+      const encoded = encodeDelta(example)
+      for (let skipNum = 0; skipNum < example.length; skipNum++) {
+        const decoder = new DeltaDecoder(encoded), values = []
+        decoder.skipValues(skipNum)
+        while (!decoder.done) values.push(decoder.readValue())
+        assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
+      }
     })
   })
 
