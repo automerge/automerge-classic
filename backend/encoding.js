@@ -726,11 +726,23 @@ class RLEDecoder extends Decoder {
    */
   skipValues(numSkip) {
     while (numSkip > 0 && !this.done) {
-      if (this.count === 0) this.readRecord()
-      const consume = Math.min(numSkip, this.count)
-      if (this.literal) {
-        for (let i = 0; i < consume; i++) this.readRawValue()
+      if (this.count === 0) {
+        this.count = this.readInt53()
+        if (this.count > 0) {
+          this.lastValue = (this.count <= numSkip) ? this.skipRawValues(1) : this.readRawValue()
+          this.literal = false
+        } else if (this.count < 0) {
+          this.count = -this.count
+          this.literal = true
+        } else { // this.count == 0
+          this.count = this.readUint53()
+          this.lastValue = null
+          this.literal = false
+        }
       }
+
+      const consume = Math.min(numSkip, this.count)
+      if (this.literal) this.skipRawValues(consume)
       numSkip -= consume
       this.count -= consume
     }
@@ -738,6 +750,7 @@ class RLEDecoder extends Decoder {
 
   /**
    * Private method, do not call from outside the class.
+   * Reads a repetition count from the buffer and sets up the state appropriately.
    */
   readRecord() {
     this.count = this.readInt53()
@@ -756,6 +769,7 @@ class RLEDecoder extends Decoder {
 
   /**
    * Private method, do not call from outside the class.
+   * Reads one value of the datatype configured on construction.
    */
   readRawValue() {
     if (this.type === 'int') {
@@ -766,6 +780,22 @@ class RLEDecoder extends Decoder {
       return this.readPrefixedString()
     } else {
       throw new RangeError(`Unknown RLEDecoder datatype: ${this.type}`)
+    }
+  }
+
+  /**
+   * Private method, do not call from outside the class.
+   * Skips over `num` values of the datatype configured on construction.
+   */
+  skipRawValues(num) {
+    if (this.type === 'utf8') {
+      for (let i = 0; i < num; i++) this.skip(this.readUint53())
+    } else {
+      while (num > 0 && this.offset < this.buf.byteLength) {
+        if ((this.buf[this.offset] & 0x80) === 0) num--
+        this.offset++
+      }
+      if (num > 0) throw new RangeError('cannot skip beyond end of buffer')
     }
   }
 }
@@ -919,6 +949,25 @@ class BooleanDecoder extends Decoder {
     }
     this.count -= 1
     return this.lastValue
+  }
+
+  /**
+   * Discards the next `numSkip` values in the sequence.
+   */
+  skipValues(numSkip) {
+    while (numSkip > 0 && !this.done) {
+      if (this.count === 0) {
+        this.count = this.readUint53()
+        this.lastValue = !this.lastValue
+      }
+      if (this.count < numSkip) {
+        numSkip -= this.count
+        this.count = 0
+      } else {
+        this.count -= numSkip
+        numSkip = 0
+      }
+    }
   }
 }
 

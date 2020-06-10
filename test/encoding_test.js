@@ -577,11 +577,22 @@ describe('Binary encoding', () => {
       assert.strictEqual(encodeRLE('uint', [null, null, null, null]).byteLength, 0)
     })
 
-    it('should allow skipping values', () => {
+    it('should allow skipping string values', () => {
       const example = [null, null, null, 'a', 'a', 'a', 'b', 'c', 'd', 'e']
       const encoded = encodeRLE('utf8', example)
       for (let skipNum = 0; skipNum < example.length; skipNum++) {
         const decoder = new RLEDecoder('utf8', encoded), values = []
+        decoder.skipValues(skipNum)
+        while (!decoder.done) values.push(decoder.readValue())
+        assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
+      }
+    })
+
+    it('should allow skipping integer values', () => {
+      const example = [null, null, null, 1, 1, 1, 2, 3, 4, 5]
+      const encoded = encodeRLE('uint', example)
+      for (let skipNum = 0; skipNum < example.length; skipNum++) {
+        const decoder = new RLEDecoder('uint', encoded), values = []
         decoder.skipValues(skipNum)
         while (!decoder.done) values.push(decoder.readValue())
         assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
@@ -670,6 +681,17 @@ describe('Binary encoding', () => {
       assert.throws(() => { encodeBools([null]) }, /Unsupported value/)
       assert.throws(() => { encodeBools(['false']) }, /Unsupported value/)
       assert.throws(() => { encodeBools([undefined]) }, /Unsupported value/)
+    })
+
+    it('should allow skipping values', () => {
+      const example = [false, false, false, true, true, true, false, true, false, true]
+      const encoded = encodeBools(example)
+      for (let skipNum = 0; skipNum < example.length; skipNum++) {
+        const decoder = new BooleanDecoder(encoded), values = []
+        decoder.skipValues(skipNum)
+        while (!decoder.done) values.push(decoder.readValue())
+        assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
+      }
     })
   })
 })
