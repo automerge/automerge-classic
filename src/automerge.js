@@ -50,7 +50,7 @@ function clone(doc) {
   const state = backend.clone(Frontend.getBackendState(doc))
   const patch = backend.getPatch(state)
   patch.state = state
-  return Frontend.applyPatch(doc, patch)
+  return Frontend.applyPatch(init(), patch)
 }
 
 function free(doc) {
