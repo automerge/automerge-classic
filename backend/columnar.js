@@ -1104,9 +1104,8 @@ function constructPatch(documentBuffer) {
   return objects[ROOT_ID]
 }
 
-function applyOps(docCols, ops, changeCols, actorIds) {
-  for (let col of docCols) col.decoder.reset()
-  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action } = ops[0]
+function applyOps(ops, docCols, changeCols, actorIds) {
+  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action, consecutiveOps } = ops
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = docCols.map(col => col.decoder)
   let skipCount = 0, nextObjActor = null, nextObjCtr = null
@@ -1211,7 +1210,7 @@ function applyChange(docBuffer, changeBuffer) {
   const currentActor = change.actorIds[0]
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = changeCols.map(col => col.decoder)
-  let consecutiveOps = [], opIdCtr = change.startOp
+  let objIdSeen = {}, firstOp = null, lastOp = null, opSequences = [], opIdCtr = change.startOp
 
   while (!actionD.done) {
     const objActor = objActorD.readValue(), keyActor = keyActorD.readValue()
@@ -1224,7 +1223,8 @@ function applyChange(docBuffer, changeBuffer) {
       idActor  : currentActor,
       idCtr    : opIdCtr,
       insert   : insertD.readValue(),
-      action   : actionD.readValue()
+      action   : actionD.readValue(),
+      consecutiveOps: 1
     }
     if ((thisOp.objCtr === null && thisOp.objActor !== null) ||
         (thisOp.objCtr !== null && typeof thisOp.objActor !== 'string')) {
@@ -1241,28 +1241,38 @@ function applyChange(docBuffer, changeBuffer) {
     // being updated must have been created in the current change, and keys must be in ascending
     // order. For ops that reference an opId key, the opId must match the preceding operation (this
     // is the case when a sequence of list elements/text chars are inserted consecutively).
-    if (consecutiveOps.length === 0) {
-      consecutiveOps.push(thisOp)
+    if (!firstOp) {
+      firstOp = thisOp
+      lastOp = thisOp
     } else {
-      const lastOp = consecutiveOps[consecutiveOps.length - 1]
       if (thisOp.objActor === lastOp.objActor && thisOp.objCtr === lastOp.objCtr && (
           (thisOp.keyStr !== null && lastOp.keyStr !== null && lastOp.keyStr <= thisOp.keyStr &&
-           thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp) ||
-          (thisOp.keyActor === lastOp.idActor && thisOp.keyCtr === lastOp.idCtr && lastOp.insert))) {
-        consecutiveOps.push(thisOp)
+           thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp &&
+           !objIdSeen[`${thisOp.objCtr}@${thisOp.objActor}`]) ||
+          (thisOp.keyActor === lastOp.idActor && thisOp.keyCtr === lastOp.idCtr &&
+           lastOp.insert && thisOp.insert))) {
+        firstOp.consecutiveOps += 1
+        lastOp = thisOp
       } else {
-        applyOps(docCols, consecutiveOps, changeCols, doc.actorIds)
-        consecutiveOps = [thisOp]
+        objIdSeen[`${firstOp.objCtr}@${firstOp.objActor}`] = true
+        opSequences.push(firstOp)
+        firstOp = thisOp
+        lastOp = thisOp
       }
     }
 
     opIdCtr += 1
   }
-  if (consecutiveOps.length > 0) return applyOps(docCols, consecutiveOps, changeCols, doc.actorIds)
-}
 
-/*
-*/
+  if (firstOp) opSequences.push(firstOp)
+  for (let col of changeCols) col.decoder.reset()
+  let result
+  for (let op of opSequences) {
+    result = applyOps(op, docCols, changeCols, doc.actorIds)
+    for (let col of docCols) col.decoder.reset()
+  }
+  return result
+}
 
 module.exports = {
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
