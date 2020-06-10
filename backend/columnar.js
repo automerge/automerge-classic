@@ -550,7 +550,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
 
   for (let column of columns) {
     const buffer = column.encoder.buffer
-    if (!column.encoder.onlyNulls && buffer.byteLength > 0) {
+    if (buffer.byteLength > 0) {
       //if (chunkType === 'document') console.log(`${column.name} column: ${buffer.byteLength} bytes`)
       body.appendUint53(column.id)
       body.appendPrefixedBytes(buffer)
@@ -940,7 +940,7 @@ function encodeDocument(binaryChanges) {
 
   let numChangesColumns = 0
   for (let column of changesColumns) {
-    if (!column.encoder.onlyNulls && column.encoder.buffer.byteLength > 0) numChangesColumns++
+    if (column.encoder.buffer.byteLength > 0) numChangesColumns++
   }
 
   return encodeContainer('document', changesColumns.concat(opsColumns), encoder => {

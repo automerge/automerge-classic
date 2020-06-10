@@ -567,47 +567,88 @@ class RLEEncoder extends Encoder {
   constructor(type) {
     super()
     this.type = type
+    this.state = 'empty'
     this.lastValue = undefined
     this.count = 0
     this.literal = []
-    this.onlyNulls = true
   }
 
   /**
    * Appends a new value to the sequence.
    */
   appendValue(value) {
-    if (value !== null && value !== undefined) {
-      this.onlyNulls = false
-    }
-    if (this.lastValue === undefined) {
+    if (this.state === 'empty') {
+      this.state = (value === null ? 'nulls' : 'loneValue')
       this.lastValue = value
+      this.count = 1
+    } else if (this.state === 'loneValue') {
+      if (value === null) {
+        this.flush()
+        this.state = 'nulls'
+        this.count = 1
+      } else if (value === this.lastValue) {
+        this.state = 'repetition'
+        this.count = 2
+      } else {
+        this.state = 'literal'
+        this.literal = [this.lastValue]
+        this.lastValue = value
+      }
+    } else if (this.state === 'repetition') {
+      if (value === null) {
+        this.flush()
+        this.state = 'nulls'
+        this.count = 1
+      } else if (value === this.lastValue) {
+        this.count += 1
+      } else {
+        this.flush()
+        this.state = 'loneValue'
+        this.lastValue = value
+      }
+    } else if (this.state === 'literal') {
+      if (value === null) {
+        this.literal.push(this.lastValue)
+        this.flush()
+        this.state = 'nulls'
+        this.count = 1
+      } else if (value === this.lastValue) {
+        this.flush()
+        this.state = 'repetition'
+        this.count = 2
+      } else {
+        this.literal.push(this.lastValue)
+        this.lastValue = value
+      }
+    } else if (this.state === 'nulls') {
+      if (value === null) {
+        this.count += 1
+      } else {
+        this.flush()
+        this.state = 'loneValue'
+        this.lastValue = value
+      }
     }
-    if (this.lastValue === value) {
-      this.count += 1
-      return
-    }
-    if (this.lastValue !== null && this.count === 1) {
-      this.literal.push(this.lastValue)
-      this.lastValue = value
-      this.count = 0
-    }
+  }
 
-    if ((value === null || value === undefined || this.count > 1) && this.literal.length > 0) {
-      this.appendInt53(-this.literal.length)
-      for (let v of this.literal) this.appendRawValue(v)
-      this.literal = []
-    }
-
-    if (this.lastValue === null && this.count > 0) {
-      this.appendInt32(0)
-      this.appendUint53(this.count)
-    } else if (this.count > 1) {
+  /**
+   * Private method, do not call from outside the class.
+   */
+  flush() {
+    if (this.state === 'loneValue') {
+      this.appendInt53(-1)
+      this.appendRawValue(this.lastValue)
+    } else if (this.state === 'repetition') {
       this.appendInt53(this.count)
       this.appendRawValue(this.lastValue)
+    } else if (this.state === 'literal') {
+      this.appendInt53(-this.literal.length)
+      for (let v of this.literal) this.appendRawValue(v)
+    } else if (this.state === 'nulls') {
+      this.appendInt32(0)
+      this.appendUint53(this.count)
     }
-    this.lastValue = value
-    this.count = (value === undefined ? 0 : 1)
+    this.state = 'empty'
   }
 
   /**
@@ -630,7 +671,9 @@ class RLEEncoder extends Encoder {
    * the buffer constructed by this Encoder.
    */
   finish() {
-    this.appendValue(undefined)
+    if (this.state === 'literal') this.literal.push(this.lastValue)
+    // Don't write anything if the only values we have seen are nulls
+    if (this.state !== 'nulls' || this.offset > 0) this.flush()
   }
 }
 

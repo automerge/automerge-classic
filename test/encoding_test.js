@@ -528,7 +528,6 @@ describe('Binary encoding', () => {
     })
 
     it('should encode sequences containing nulls', () => {
-      checkEncoded(encodeRLE('uint', [null]), [0, 1])
       checkEncoded(encodeRLE('uint', [null, 1]), [0, 1, 0x7f, 1])
       checkEncoded(encodeRLE('uint', [1, null]), [0x7f, 1, 0, 1])
       checkEncoded(encodeRLE('uint', [1, 1, 1, null]), [3, 1, 0, 1])
@@ -548,7 +547,6 @@ describe('Binary encoding', () => {
     })
 
     it('should round-trip sequences containing nulls', () => {
-      assert.deepStrictEqual(decodeRLE('uint', encodeRLE('uint', [null])), [null])
       assert.deepStrictEqual(decodeRLE('uint', encodeRLE('uint', [null, 1])), [null, 1])
       assert.deepStrictEqual(decodeRLE('uint', encodeRLE('uint', [1, null])), [1, null])
       assert.deepStrictEqual(decodeRLE('uint', encodeRLE('uint', [1, 1, 1, null])), [1, 1, 1, null])
@@ -571,6 +569,12 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'a', 'a', 'a'])), ['a', 'a', 'a', 'a'])
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', ['a', 'a', null, null, 'a', 'a'])), ['a', 'a', null, null, 'a', 'a'])
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', [null, null, null, null, 'abc'])), [null, null, null, null, 'abc'])
+    })
+
+    it('should return an empty buffer if the values are only nulls', () => {
+      assert.strictEqual(encodeRLE('uint', []).byteLength, 0)
+      assert.strictEqual(encodeRLE('uint', [null]).byteLength, 0)
+      assert.strictEqual(encodeRLE('uint', [null, null, null, null]).byteLength, 0)
     })
 
     it('should allow skipping values', () => {
@@ -600,7 +604,6 @@ describe('Binary encoding', () => {
 
     it('should encode sequences', () => {
       checkEncoded(encodeDelta([]), [])
-      checkEncoded(encodeDelta([null]), [0, 1])
       checkEncoded(encodeDelta([18, 2, 9, 15, 16, 19, 25]), [0x79, 18, 0x70, 7, 6, 1, 3, 6])
       checkEncoded(encodeDelta([1, 2, 3, 4, 5, 6, 7, 8]), [8, 1])
       checkEncoded(encodeDelta([10, 11, 12, 13, 14, 15]), [0x7f, 10, 5, 1])
@@ -611,7 +614,6 @@ describe('Binary encoding', () => {
 
     it('should encode-decode round-trip sequences', () => {
       assert.deepStrictEqual(decodeDelta(encodeDelta([])), [])
-      assert.deepStrictEqual(decodeDelta(encodeDelta([null])), [null])
       assert.deepStrictEqual(decodeDelta(encodeDelta([18, 2, 9, 15, 16, 19, 25])), [18, 2, 9, 15, 16, 19, 25])
       assert.deepStrictEqual(decodeDelta(encodeDelta([1, 2, 3, 4, 5, 6, 7, 8])), [1, 2, 3, 4, 5, 6, 7, 8])
       assert.deepStrictEqual(decodeDelta(encodeDelta([10, 11, 12, 13, 14, 15])), [10, 11, 12, 13, 14, 15])
