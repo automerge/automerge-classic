@@ -512,6 +512,7 @@ describe('Binary encoding', () => {
     }
 
     function decodeRLE(type, buffer) {
+      if (Array.isArray(buffer)) buffer = Uint8Array.from(buffer)
       const decoder = new RLEDecoder(type, buffer), values = []
       while (!decoder.done) values.push(decoder.readValue())
       return values
@@ -575,6 +576,17 @@ describe('Binary encoding', () => {
       assert.strictEqual(encodeRLE('uint', []).byteLength, 0)
       assert.strictEqual(encodeRLE('uint', [null]).byteLength, 0)
       assert.strictEqual(encodeRLE('uint', [null, null, null, null]).byteLength, 0)
+    })
+
+    it('should strictly enforce canonical encoded form', () => {
+      assert.throws(() => { decodeRLE('int', [1, 1]) }, /Repetition count of 1 is not allowed/)
+      assert.throws(() => { decodeRLE('int', [2, 1, 2, 1]) }, /Successive repetitions with the same value/)
+      assert.throws(() => { decodeRLE('int', [0, 1, 0, 2]) }, /Successive null runs are not allowed/)
+      assert.throws(() => { decodeRLE('int', [0, 0]) }, /Zero-length null runs are not allowed/)
+      assert.throws(() => { decodeRLE('int', [0x7f, 1, 0x7f, 2]) }, /Successive literals are not allowed/)
+      assert.throws(() => { decodeRLE('int', [0x7d, 1, 2, 2]) }, /Repetition of values is not allowed/)
+      assert.throws(() => { decodeRLE('int', [2, 0, 0x7e, 0, 1]) }, /Repetition of values is not allowed/)
+      assert.throws(() => { decodeRLE('int', [0x7e, 1, 2, 2, 2]) }, /Successive repetitions with the same value/)
     })
 
     it('should allow skipping string values', () => {
@@ -653,6 +665,7 @@ describe('Binary encoding', () => {
     }
 
     function decodeBools(buffer) {
+      if (Array.isArray(buffer)) buffer = Uint8Array.from(buffer)
       const decoder = new BooleanDecoder(buffer), values = []
       while (!decoder.done) values.push(decoder.readValue())
       return values
@@ -692,6 +705,14 @@ describe('Binary encoding', () => {
         while (!decoder.done) values.push(decoder.readValue())
         assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
       }
+    })
+
+    it('should strictly enforce canonical encoded form', () => {
+      assert.throws(() => { decodeBools([1, 0]) }, /Zero-length runs are not allowed/)
+      assert.throws(() => { decodeBools([1, 1, 0]) }, /Zero-length runs are not allowed/)
+      const decoder = new BooleanDecoder(Uint8Array.from([2, 0, 1]))
+      decoder.skipValues(1)
+      assert.throws(() => { decoder.skipValues(2) }, /Zero-length runs are not allowed/)
     })
   })
 })

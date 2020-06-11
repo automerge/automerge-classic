@@ -687,7 +687,7 @@ class RLEDecoder extends Decoder {
     this.type = type
     this.lastValue = undefined
     this.count = 0
-    this.literal = false
+    this.state = undefined
   }
 
   /**
@@ -704,7 +704,9 @@ class RLEDecoder extends Decoder {
    */
   reset() {
     this.offset = 0
+    this.lastValue = undefined
     this.count = 0
+    this.state = undefined
   }
 
   /**
@@ -714,8 +716,11 @@ class RLEDecoder extends Decoder {
     if (this.done) return null
     if (this.count === 0) this.readRecord()
     this.count -= 1
-    if (this.literal) {
-      return this.readRawValue()
+    if (this.state === 'literal') {
+      const value = this.readRawValue()
+      if (value === this.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
+      this.lastValue = value
+      return value
     } else {
       return this.lastValue
     }
@@ -730,19 +735,19 @@ class RLEDecoder extends Decoder {
         this.count = this.readInt53()
         if (this.count > 0) {
           this.lastValue = (this.count <= numSkip) ? this.skipRawValues(1) : this.readRawValue()
-          this.literal = false
+          this.state = 'repetition'
         } else if (this.count < 0) {
           this.count = -this.count
-          this.literal = true
+          this.state = 'literal'
         } else { // this.count == 0
           this.count = this.readUint53()
           this.lastValue = null
-          this.literal = false
+          this.state = 'nulls'
         }
       }
 
       const consume = Math.min(numSkip, this.count)
-      if (this.literal) this.skipRawValues(consume)
+      if (this.state === 'literal') this.skipRawValues(consume)
       numSkip -= consume
       this.count -= consume
     }
@@ -754,16 +759,25 @@ class RLEDecoder extends Decoder {
    */
   readRecord() {
     this.count = this.readInt53()
-    if (this.count > 0) {
-      this.lastValue = this.readRawValue()
-      this.literal = false
+    if (this.count > 1) {
+      const value = this.readRawValue()
+      if ((this.state === 'repetition' || this.state === 'literal') && this.lastValue === value) {
+        throw new RangeError('Successive repetitions with the same value are not allowed')
+      }
+      this.state = 'repetition'
+      this.lastValue = value
+    } else if (this.count === 1) {
+      throw new RangeError('Repetition count of 1 is not allowed, use a literal instead')
     } else if (this.count < 0) {
       this.count = -this.count
-      this.literal = true
+      if (this.state === 'literal') throw new RangeError('Successive literals are not allowed')
+      this.state = 'literal'
     } else { // this.count == 0
+      if (this.state === 'nulls') throw new RangeError('Successive null runs are not allowed')
       this.count = this.readUint53()
+      if (this.count === 0) throw new RangeError('Zero-length null runs are not allowed')
       this.lastValue = null
-      this.literal = false
+      this.state = 'nulls'
     }
   }
 
@@ -846,6 +860,7 @@ class DeltaDecoder extends RLEDecoder {
   reset() {
     this.offset = 0
     this.count = 0
+    this.state = undefined
     this.absoluteValue = 0
   }
 
@@ -866,9 +881,12 @@ class DeltaDecoder extends RLEDecoder {
     while (numSkip > 0 && !this.done) {
       if (this.count === 0) this.readRecord()
       const consume = Math.min(numSkip, this.count)
-      if (this.literal) {
-        for (let i = 0; i < consume; i++) this.absoluteValue += this.readRawValue()
-      } else {
+      if (this.state === 'literal') {
+        for (let i = 0; i < consume; i++) {
+          this.lastValue = this.readRawValue()
+          this.absoluteValue += this.lastValue
+        }
+      } else if (this.state === 'repetition') {
         this.absoluteValue += consume * this.lastValue
       }
       numSkip -= consume
@@ -928,6 +946,7 @@ class BooleanDecoder extends Decoder {
   constructor(buffer) {
     super(buffer)
     this.lastValue = true // is negated the first time we read a count
+    this.firstRun = true
     this.count = 0
   }
 
@@ -940,12 +959,27 @@ class BooleanDecoder extends Decoder {
   }
 
   /**
-   * Returns the next value (or null) in the sequence.
+   * Resets the cursor position, so that the next read goes back to the
+   * beginning of the buffer.
+   */
+  reset() {
+    this.offset = 0
+    this.lastValue = true
+    this.firstRun = true
+    this.count = 0
+  }
+
+  /**
+   * Returns the next value in the sequence.
    */
   readValue() {
     while (this.count === 0) {
       this.count = this.readUint53()
       this.lastValue = !this.lastValue
+      if (this.count === 0 && !this.firstRun) {
+        throw new RangeError('Zero-length runs are not allowed')
+      }
+      this.firstRun = false
     }
     this.count -= 1
     return this.lastValue
@@ -959,6 +993,7 @@ class BooleanDecoder extends Decoder {
       if (this.count === 0) {
         this.count = this.readUint53()
         this.lastValue = !this.lastValue
+        if (this.count === 0) throw new RangeError('Zero-length runs are not allowed')
       }
       if (this.count < numSkip) {
         numSkip -= this.count
