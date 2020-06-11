@@ -610,6 +610,90 @@ describe('Binary encoding', () => {
         assert.deepStrictEqual(values, example.slice(skipNum), `skipping ${skipNum} values failed`)
       }
     })
+
+    describe('copying from a decoder', () => {
+      function doCopy(input1, input2, skip = 0, count, translationTable) {
+        let encoder1 = input1
+        if (Array.isArray(input1)) {
+          encoder1 = new RLEEncoder('uint')
+          for (let value of input1) encoder1.appendValue(value)
+        }
+
+        const encoder2 = new RLEEncoder('uint')
+        for (let value of input2) encoder2.appendValue(value)
+        const decoder2 = new RLEDecoder('uint', encoder2.buffer)
+        decoder2.skipValues(skip)
+        encoder1.copyFrom(decoder2, count, translationTable)
+        return encoder1
+      }
+
+      it('should copy a sequence', () => {
+        checkEncoded(doCopy([0, 1, 2], []), [0x7d, 0, 1, 2])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6]), [0x79, 0, 1, 2, 3, 4, 5, 6])
+        checkEncoded(doCopy([0, 1], [2, 3, 4, 4, 4]), [0x7c, 0, 1, 2, 3, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 4, 4]), [0x7c, 0, 1, 2, 3, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 3, 3, 4, 4, 4]), [0x7d, 0, 1, 2, 3, 3, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [null, null, 4, 4, 4]), [0x7d, 0, 1, 2, 0, 2, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 4, null, null]), [0x7c, 0, 1, 2, 3, 2, 4, 0, 2])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 4, 5, 6, 6]), [0x7c, 0, 1, 2, 3, 2, 4, 0x7f, 5, 2, 6])
+        checkEncoded(doCopy([0, 1, 2], [2, 2, 3, 3, 4, 5, 6]), [0x7e, 0, 1, 3, 2, 2, 3, 0x7d, 4, 5, 6])
+        checkEncoded(doCopy([0, 0, 0], [0, 0, 0]), [6, 0])
+        checkEncoded(doCopy([0, 0, 0], [0, 1, 1]), [4, 0, 2, 1])
+        checkEncoded(doCopy([0, 0, 0], [1, 2, 2]), [3, 0, 0x7f, 1, 2, 2])
+        checkEncoded(doCopy([0, 0, 0], [1, 2, 3]), [3, 0, 0x7d, 1, 2, 3])
+        checkEncoded(doCopy([0, 0, 0], [null, null, 2, 2]), [3, 0, 0, 2, 2, 2])
+        checkEncoded(doCopy([0, 0, 0], [null, 0, 0, 0]), [3, 0, 0, 1, 3, 0])
+        checkEncoded(doCopy([0, 0, null], [null, 0, 0]), [2, 0, 0, 2, 2, 0])
+        checkEncoded(doCopy([0, 0, null], [0, 0, 0]), [2, 0, 0, 1, 3, 0])
+        checkEncoded(doCopy([0, 0, null], [1, 2, 3]), [2, 0, 0, 1, 0x7d, 1, 2, 3])
+      })
+
+      it('should copy multiple sequences', () => {
+        checkEncoded(doCopy(doCopy([0, 0, 1], [1, 2]), [2, 3]), [2, 0, 2, 1, 2, 2, 0x7f, 3])
+        checkEncoded(doCopy(doCopy([0, 1, 2], [3, 4]), [5, 6]), [0x79, 0, 1, 2, 3, 4, 5, 6])
+        checkEncoded(doCopy(doCopy([0, 0, 0], [0, 0, 1, 1]), [1, 1]), [5, 0, 4, 1])
+        checkEncoded(doCopy(doCopy([0, null], [null, 1, null]), [null, 2]), [0x7f, 0, 0, 2, 0x7f, 1, 0, 2, 0x7f, 2])
+      })
+
+      it('should copy a sub-sequence', () => {
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], 0, 0), [0x7d, 0, 1, 2])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], 0, 1), [0x7c, 0, 1, 2, 3])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], 0, 2), [0x7b, 0, 1, 2, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], 1, 1), [0x7c, 0, 1, 2, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], 1, 2), [0x7b, 0, 1, 2, 4, 5])
+        checkEncoded(doCopy([0, 1, 2], [3, 3, 3, 3], 0, 2), [0x7d, 0, 1, 2, 2, 3])
+        checkEncoded(doCopy([0, 0, 0], [0, 0, 0, 0], 0, 2), [5, 0])
+        checkEncoded(doCopy([0, 0], [0, 0, 1, 1, 1], 0, 4), [4, 0, 2, 1])
+        checkEncoded(doCopy([0, 0], [0, 0, 1, 1, 2, 2], 1, 4), [3, 0, 2, 1, 0x7f, 2])
+        checkEncoded(doCopy([0, 0], [1, 1, 2, 3, 4, 5], 0, 3), [2, 0, 2, 1, 0x7f, 2])
+        checkEncoded(doCopy([null], [null, 1, 1, null], 0, 2), [0, 2, 0x7f, 1])
+        checkEncoded(doCopy([null], [null, 1, 1, null], 1, 3), [0, 1, 2, 1, 0, 1])
+      })
+
+      it('should copy values with a translation table', () => {
+        const table = [3, 2, 1, 0]
+        checkEncoded(doCopy([0, 1, 2], [0, 1, 2], 0, 3, table), [0x7a, 0, 1, 2, 3, 2, 1])
+        checkEncoded(doCopy([0, 1, 2], [1, 1, 2, 2], 0, 4, table), [0x7e, 0, 1, 3, 2, 2, 1])
+        checkEncoded(doCopy([0, 0], [3, 3, 2, 1, 0], 0, 5, table), [4, 0, 0x7d, 1, 2, 3])
+        checkEncoded(doCopy([0, 0], [2, 2, 3], 0, 3, table), [2, 0, 2, 1, 0x7f, 0])
+        checkEncoded(doCopy([null, 0], [0, 1, null, null], 0, 4, table), [0, 1, 0x7d, 0, 3, 2, 0, 2])
+      })
+
+      it('should throw an exception if the decoder has too few values', () => {
+        assert.throws(() => { doCopy([0, 1, 2], [], 0, 1) }, /cannot copy 1 values/)
+        assert.throws(() => { doCopy([0, 1, 2], [3], 0, 2) }, /cannot copy 2 values/)
+        assert.throws(() => { doCopy([0, 1, 2], [3, 4, 5, 6], 0, 5) }, /cannot copy 5 values/)
+        assert.throws(() => { doCopy([0, 1, 2], [3], 0, 2) }, /cannot copy 2 values/)
+        assert.throws(() => { doCopy([0, 1, 2], [3, 3, 3], 0, 4) }, /cannot copy 4 values/)
+        assert.throws(() => { doCopy([0, 1, 2], [3, 3, 4, 4, 5, 5], 0, 7) }, /cannot copy 7 values/)
+      })
+
+      it('should check the type of the decoder', () => {
+        const encoder1 = new RLEEncoder('uint')
+        assert.throws(() => { encoder1.copyFrom(new Decoder(new Uint8Array(0))) }, /incompatible type of decoder/)
+        assert.throws(() => { encoder1.copyFrom(new RLEDecoder('int', new Uint8Array(0))) }, /incompatible type of decoder/)
+      })
+    })
   })
 
   describe('DeltaEncoder and DeltaDecoder', () => {

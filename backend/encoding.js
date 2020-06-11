@@ -632,11 +632,91 @@ class RLEEncoder extends Encoder {
   }
 
   /**
+   * Copies `count` values from the RLEDecoder `decoder` into this encoder. If `count` is not
+   * specified, copies all remaining values. If `translationTable` is specified, every value `v`
+   * is translated into value `translationTable[v]` as it is copied.
+   */
+  copyFrom(decoder, count, translationTable) {
+    if (!(decoder instanceof RLEDecoder) || (decoder.type !== this.type)) {
+      throw new TypeError('incompatible type of decoder')
+    }
+    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER)
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+    if (remaining === 0 || decoder.done) return
+
+    // Copy one value so that we have a well-defined starting state
+    this.appendValue(translationTable ? translationTable[decoder.readValue()] : decoder.readValue())
+    remaining--
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+    if (remaining === 0 || decoder.done) return
+
+    // Copy values until the next record boundary (transition between repetition/literal/nulls)
+    if (decoder.state === 'literal') {
+      while (decoder.count > 0 && remaining > 0 && !decoder.done) {
+        this.appendValue(translationTable ? translationTable[decoder.readValue()] : decoder.readValue())
+        remaining--
+      }
+    } else if (decoder.state === 'repetition') {
+      if (decoder.count > 0) {
+        this.appendValue(translationTable ? translationTable[decoder.lastValue] : decoder.lastValue)
+        if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
+        const values = Math.min(decoder.count, remaining)
+        this.count += values - 1
+        decoder.count -= values
+        remaining -= values
+      }
+    } else if (decoder.state === 'nulls') {
+      if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
+      const values = Math.min(decoder.count, remaining)
+      this.count += values
+      decoder.count -= values
+      remaining -= values
+    }
+
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+    if (remaining === 0 || decoder.done) return
+    if (this.state === 'literal') this.literal.push(this.lastValue)
+    this.flush()
+    if (decoder.count !== 0) throw new RangeError(`Unexpected decoder.count = ${decoder.count}`)
+
+    // Now it's safe to copy data at the record level without expanding repetitions
+    while (remaining > 0 && !decoder.done) {
+      this.flush()
+      const repCount = decoder.readInt53()
+
+      if (repCount > 0) {
+        this.state = (remaining === 1 ? 'loneValue' : 'repetition')
+        this.count = Math.min(repCount, remaining)
+        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
+        remaining -= this.count
+      } else if (repCount === 0) {
+        this.state = 'nulls'
+        this.count = Math.min(decoder.readUint53(), remaining)
+        remaining -= this.count
+      } else if (repCount === -1) {
+        this.state = 'loneValue'
+        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
+        remaining -= 1
+      } else { // repCount < -1
+        this.state = (remaining === 1 ? 'loneValue' : 'literal')
+        const toCopy = Math.min(-repCount, remaining)
+        this.literal = []
+        for (let i = 1; i < toCopy; i++) {
+          this.literal.push(translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue())
+        }
+        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
+        remaining -= toCopy
+      }
+    }
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+  }
+
+  /**
    * Private method, do not call from outside the class.
    */
   flush() {
     if (this.state === 'loneValue') {
-      this.appendInt53(-1)
+      this.appendInt32(-1)
       this.appendRawValue(this.lastValue)
     } else if (this.state === 'repetition') {
       this.appendInt53(this.count)
