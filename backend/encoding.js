@@ -680,32 +680,48 @@ class RLEEncoder extends Encoder {
     if (decoder.count !== 0) throw new RangeError(`Unexpected decoder.count = ${decoder.count}`)
 
     // Now it's safe to copy data at the record level without expanding repetitions
+    let startOffset = decoder.offset, endOffset, skipValues = !translationTable
     while (remaining > 0 && !decoder.done) {
-      this.flush()
+      if (!skipValues) this.flush()
+      endOffset = decoder.offset
       const repCount = decoder.readInt53()
 
       if (repCount > 0) {
-        this.state = (remaining === 1 ? 'loneValue' : 'repetition')
         this.count = Math.min(repCount, remaining)
-        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
-        remaining -= this.count
-      } else if (repCount === 0) {
-        this.state = 'nulls'
-        this.count = Math.min(decoder.readUint53(), remaining)
-        remaining -= this.count
-      } else if (repCount === -1) {
-        this.state = 'loneValue'
-        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
-        remaining -= 1
-      } else { // repCount < -1
-        this.state = (remaining === 1 ? 'loneValue' : 'literal')
-        const toCopy = Math.min(-repCount, remaining)
-        this.literal = []
-        for (let i = 1; i < toCopy; i++) {
-          this.literal.push(translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue())
+        this.state = (this.count === 1 ? 'loneValue' : 'repetition')
+        if (skipValues) {
+          decoder.skipRawValues(1)
+        } else {
+          this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
         }
-        this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
-        remaining -= toCopy
+      } else if (repCount === 0) {
+        this.count = Math.min(decoder.readUint53(), remaining)
+        this.state = 'nulls'
+      } else { // repCount < 0
+        this.count = Math.min(-repCount, remaining)
+        this.state = (this.count === 1 ? 'loneValue' : 'literal')
+        this.literal = []
+        if (skipValues) {
+          decoder.skipRawValues(this.count)
+        } else {
+          for (let i = 1; i < this.count; i++) {
+            this.literal.push(translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue())
+          }
+          this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
+        }
+      }
+
+      // If that was the last record, and we skipped over its values, we have to go back and re-read
+      // it. However, we can directly copy the previous records at the byte level.
+      if ((decoder.done || remaining === this.count) && skipValues) {
+        skipValues = false
+        decoder.offset = endOffset
+        this.state = 'empty'
+        if (startOffset < endOffset) {
+          this.appendRawBytes(decoder.buf.subarray(startOffset, endOffset))
+        }
+      } else {
+        remaining -= this.count
       }
     }
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)

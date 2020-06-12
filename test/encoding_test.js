@@ -628,6 +628,7 @@ describe('Binary encoding', () => {
       }
 
       it('should copy a sequence', () => {
+        checkEncoded(doCopy([], [0, 1, 2]), [0x7d, 0, 1, 2])
         checkEncoded(doCopy([0, 1, 2], []), [0x7d, 0, 1, 2])
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6]), [0x79, 0, 1, 2, 3, 4, 5, 6])
         checkEncoded(doCopy([0, 1], [2, 3, 4, 4, 4]), [0x7c, 0, 1, 2, 3, 3, 4])
@@ -650,6 +651,7 @@ describe('Binary encoding', () => {
 
       it('should copy multiple sequences', () => {
         checkEncoded(doCopy(doCopy([0, 0, 1], [1, 2]), [2, 3]), [2, 0, 2, 1, 2, 2, 0x7f, 3])
+        checkEncoded(doCopy(doCopy([0], [0, 0, 1, 1, 2]), [2, 3, 3, 4]), [3, 0, 2, 1, 2, 2, 2, 3, 0x7f, 4])
         checkEncoded(doCopy(doCopy([0, 1, 2], [3, 4]), [5, 6]), [0x79, 0, 1, 2, 3, 4, 5, 6])
         checkEncoded(doCopy(doCopy([0, 0, 0], [0, 0, 1, 1]), [1, 1]), [5, 0, 4, 1])
         checkEncoded(doCopy(doCopy([0, null], [null, 1, null]), [null, 2]), [0x7f, 0, 0, 2, 0x7f, 1, 0, 2, 0x7f, 2])
