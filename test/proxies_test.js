@@ -110,7 +110,7 @@ describe('Automerge proxy API', () => {
   describe('list object', () => {
     let root
     beforeEach(() => {
-      root = Automerge.change(Automerge.init(), doc => { doc.list = [1, 2, 3]; doc.empty = [] })
+      root = Automerge.change(Automerge.init(), doc => { doc.list = [1, 2, 3]; doc.empty = [], doc.listObjects = [ {id: "first"}, {id: "second"} ] })
     })
 
     it('should look like a JavaScript array', () => {
@@ -170,7 +170,7 @@ describe('Automerge proxy API', () => {
     it('should support JSON.stringify()', () => {
       Automerge.change(root, doc => {
         assert.deepEqual(JSON.parse(JSON.stringify(doc)), {
-          list: [1, 2, 3], empty: []
+          list: [1, 2, 3], empty: [], listObjects: [ {id: "first"}, {id: "second"} ]
         })
         assert.deepEqual(JSON.stringify(doc.list), '[1,2,3]')
       })
@@ -268,6 +268,18 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.list.indexOf(1, 1), -1)
           assert.strictEqual(doc.list.indexOf(2, -2), 1)
           assert.strictEqual(doc.list.indexOf(0), -1)
+        })
+      })
+
+      it('indexOf() with objects', () => {
+        Automerge.change(root, doc => {
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[0]), 0)
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[1]), 1)
+
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[0], 0), 0)
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[0], 1), -1)
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[1], 0), 1)
+          assert.strictEqual(doc.listObjects.indexOf(doc.listObjects[1], 1), 1)
         })
       })
 
