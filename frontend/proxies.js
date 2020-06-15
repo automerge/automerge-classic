@@ -29,6 +29,21 @@ function listMethods(context, listId) {
       return this
     },
 
+    indexOf(o, start = 0) {
+      const id = o[OBJECT_ID]
+      if (id) {
+        const list = context.getObject(listId)
+        for (let index = start; index < list.length; index++) {
+          if (list[index][OBJECT_ID] === id) {
+            return index
+          }
+        }
+        return -1  
+      } else {
+        return context.getObject(listId).indexOf(o, start)
+      }
+    },
+
     insertAt(index, ...values) {
       context.splice(listId, parseListIndex(index), 0, values)
       return this
@@ -84,7 +99,7 @@ function listMethods(context, listId) {
 
   // Read-only methods that can delegate to the JavaScript built-in implementations
   for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach', 'includes',
-                      'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
+                      'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
