@@ -12,13 +12,13 @@ model objects, such as a JSON document. For example, imagine you are developing 
 in which each task is represented by a card. In vanilla JavaScript you might write the following:
 
 ```js
-var doc = { cards: [] };
+var doc = { cards: [] }
 
 // User adds a card
-doc.cards.push({ title: "Reticulate splines", done: false });
+doc.cards.push({ title: 'Reticulate splines', done: false })
 
 // User marks a task as done
-doc.cards[0].done = true;
+doc.cards[0].done = true
 ```
 
 Automerge is used in a similar way, but the big difference is that it supports **automatic syncing
@@ -95,12 +95,12 @@ The following code sample gives a quick overview of how to use Automerge.
 ```js
 // This is how you load Automerge in Node. In a browser, simply including the
 // script tag will set up the Automerge object.
-const Automerge = require("automerge");
+const Automerge = require('automerge')
 
 // Let's say doc1 is the application state on device 1.
 // Further down we'll simulate a second device.
 // We initialize the document to initially contain an empty list of cards.
-let doc1 = Automerge.from({ cards: [] });
+let doc1 = Automerge.from({ cards: [] })
 
 // The doc1 object is treated as immutable -- you must never change it
 // directly. To change it, you need to call Automerge.change() with a callback
@@ -108,21 +108,18 @@ let doc1 = Automerge.from({ cards: [] });
 // description of the change, like a commit message, which is stored in the
 // change history (see below).
 
-doc1 = Automerge.change(doc1, "Add card", (doc) => {
-  doc.cards.push({ title: "Rewrite everything in Clojure", done: false });
-});
+doc1 = Automerge.change(doc1, 'Add card', doc => {
+  doc.cards.push({ title: 'Rewrite everything in Clojure', done: false })
+})
 
 // Now the state of doc1 is:
 // { cards: [ { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // Automerge also defines an insertAt() method for inserting a new element at
 // a particular position in a list. Or you could use splice(), if you prefer.
-doc1 = Automerge.change(doc1, "Add another card", (doc) => {
-  doc.cards.insertAt(0, {
-    title: "Rewrite everything in Haskell",
-    done: false,
-  });
-});
+doc1 = Automerge.change(doc1, 'Add another card', doc => {
+  doc.cards.insertAt(0, { title: 'Rewrite everything in Haskell', done: false })
+})
 
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: false },
@@ -132,22 +129,22 @@ doc1 = Automerge.change(doc1, "Add another card", (doc) => {
 // initialise it separately, and merge doc1 into it. After merging, doc2 has
 // a copy of all the cards in doc1.
 
-let doc2 = Automerge.init();
-doc2 = Automerge.merge(doc2, doc1);
+let doc2 = Automerge.init()
+doc2 = Automerge.merge(doc2, doc1)
 
 // Now make a change on device 1:
-doc1 = Automerge.change(doc1, "Mark card as done", (doc) => {
-  doc.cards[0].done = true;
-});
+doc1 = Automerge.change(doc1, 'Mark card as done', doc => {
+  doc.cards[0].done = true
+})
 
 // { cards:
 //    [ { title: 'Rewrite everything in Haskell', done: true },
 //      { title: 'Rewrite everything in Clojure', done: false } ] }
 
 // And, unbeknownst to device 1, also make a change on device 2:
-doc2 = Automerge.change(doc2, "Delete card", (doc) => {
-  delete doc.cards[1];
-});
+doc2 = Automerge.change(doc2, 'Delete card', doc => {
+  delete doc.cards[1]
+})
 
 // { cards: [ { title: 'Rewrite everything in Haskell', done: false } ] }
 
@@ -157,7 +154,7 @@ doc2 = Automerge.change(doc2, "Delete card", (doc) => {
 // Haskell' was set to true, and that 'Rewrite everything in Clojure' was
 // deleted:
 
-let finalDoc = Automerge.merge(doc1, doc2);
+let finalDoc = Automerge.merge(doc1, doc2)
 
 // { cards: [ { title: 'Rewrite everything in Haskell', done: true } ] }
 
@@ -168,10 +165,7 @@ let finalDoc = Automerge.merge(doc1, doc2);
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(finalDoc).map((state) => [
-  state.change.message,
-  state.snapshot.cards.length,
-]);
+Automerge.getHistory(finalDoc).map(state => [state.change.message, state.snapshot.cards.length])
 // [ [ 'Initialization', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],
@@ -186,14 +180,14 @@ Automerge.getHistory(finalDoc).map((state) => [
 `Automerge.init()` creates a new, empty Automerge document.
 
 ```js
-const doc = Automerge.init(); // doc = {}
+const doc = Automerge.init() // doc = {}
 ```
 
 `Automerge.from(initialState)` creates a new Automerge document and populates it with the contents
 of the object `initialState`.
 
 ```js
-const doc = Automerge.from({ cards: [] }); // doc = { cards: [] }
+const doc = Automerge.from({ cards: [] }) // doc = { cards: [] }
 ```
 
 The value passed to `Automerge.from` **must always be an object**.
@@ -222,47 +216,47 @@ Within the callback you can use standard JavaScript object manipulation operatio
 document:
 
 ```js
-newDoc = Automerge.change(currentDoc, (doc) => {
+newDoc = Automerge.change(currentDoc, doc => {
   // NOTE: never modify `currentDoc` directly, only ever change `doc`!
 
-  doc.property = "value"; // assigns a string value to a property
-  doc["property"] = "value"; // equivalent to the previous line
+  doc.property = 'value' // assigns a string value to a property
+  doc['property'] = 'value' // equivalent to the previous line
 
-  delete doc["property"]; // removes a property
+  delete doc['property'] // removes a property
 
   // all JSON primitive datatypes are supported
-  doc.stringValue = "value";
-  doc.numberValue = 1;
-  doc.boolValue = true;
-  doc.nullValue = null;
+  doc.stringValue = 'value'
+  doc.numberValue = 1
+  doc.boolValue = true
+  doc.nullValue = null
 
-  doc.nestedObject = {}; // creates a nested object
-  doc.nestedObject.property = "value";
+  doc.nestedObject = {} // creates a nested object
+  doc.nestedObject.property = 'value'
 
   // you can also assign an object that already has some properties
-  doc.otherObject = { key: "value", number: 42 };
+  doc.otherObject = { key: 'value', number: 42 }
 
   // Arrays are fully supported
-  doc.list = []; // creates an empty list object
-  doc.list.push(2, 3); // push() adds elements to the end
-  doc.list.unshift(0, 1); // unshift() adds elements at the beginning
-  doc.list[3] = Math.PI; // overwriting list element by index
+  doc.list = [] // creates an empty list object
+  doc.list.push(2, 3) // push() adds elements to the end
+  doc.list.unshift(0, 1) // unshift() adds elements at the beginning
+  doc.list[3] = Math.PI // overwriting list element by index
   // now doc.list is [0, 1, 2, 3.141592653589793]
 
   // Looping over lists works as you'd expect:
-  for (let i = 0; i < doc.list.length; i++) doc.list[i] *= 2;
+  for (let i = 0; i < doc.list.length; i++) doc.list[i] *= 2
   // now doc.list is [0, 2, 4, 6.283185307179586]
 
-  doc.list.splice(2, 2, "automerge");
+  doc.list.splice(2, 2, 'automerge')
   // now doc.list is [0, 'hello', 'automerge', 4]
 
-  doc.list[4] = { key: "value" }; // objects can be nested inside lists as well
+  doc.list[4] = { key: 'value' } // objects can be nested inside lists as well
 
   // Arrays in Automerge offer the convenience functions `insertAt` and `deleteAt`
-  doc.list.insertAt(1, "hello", "world"); // inserts elements at given index
-  doc.list.deleteAt(5); // deletes element at given index
+  doc.list.insertAt(1, 'hello', 'world') // inserts elements at given index
+  doc.list.deleteAt(5) // deletes element at given index
   // now doc.list is [0, 'hello', 'world', 2, 4]
-});
+})
 ```
 
 The `newDoc` returned by `Automerge.change()` is a regular JavaScript object containing all the
@@ -282,24 +276,24 @@ If you have previously worked with immutable state in JavaScript, you might be i
 using [idioms like these](https://redux.js.org/recipes/structuring-reducers/updating-normalized-data):
 
 ```js
-state = Automerge.change(state, "Add card", (doc) => {
-  const newItem = { id: 123, title: "Rewrite everything in Rust", done: false };
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
   doc.cards = {
     ids: [...doc.cards.ids, newItem.id],
-    entities: { ...doc.cards.entities, [newItem.id]: newItem },
-  };
-});
+    entities: { ...doc.cards.entities, [newItem.id]: newItem }
+  }
+})
 ```
 
 While this pattern works fine outside of Automerge, please **don't do this in Automerge**! Please
 use mutable idioms to update the state instead, like this:
 
 ```js
-state = Automerge.change(state, "Add card", (doc) => {
-  const newItem = { id: 123, title: "Rewrite everything in Rust", done: false };
-  doc.cards.ids.push(newItem.id);
-  doc.cards.entities[newItem.id] = newItem;
-});
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
+  doc.cards.ids.push(newItem.id)
+  doc.cards.entities[newItem.id] = newItem
+})
 ```
 
 Even though you are using mutating APIs, Automerge ensures that the code above does not actually
@@ -333,10 +327,10 @@ like a git repository).
 > The Automerge `init`, `from`, and `load` functions take an optional `actorId` parameter:
 >
 > ```js
-> const actorId = "1234-abcd-56789-qrstuv";
-> const doc1 = Automerge.init(actorId);
-> const doc2 = Automerge.from({ foo: 1 }, actorId);
-> const doc3 = Automerge.load(str, actorId);
+> const actorId = '1234-abcd-56789-qrstuv'
+> const doc1 = Automerge.init(actorId)
+> const doc2 = Automerge.from({ foo: 1 }, actorId)
+> const doc3 = Automerge.load(str, actorId)
 > ```
 >
 > The `actorId` is a string that uniquely identifies the current node; if you omit `actorId`, a
@@ -367,22 +361,22 @@ call `Automerge.undo(doc)` to perform an undo. The functions `canRedo()` and `re
 inverse:
 
 ```js
-let doc = Automerge.change(Automerge.init(), (doc) => {
-  doc.birds = [];
-});
-doc = Automerge.change(doc, (doc) => {
-  doc.birds.push("blackbird");
-});
-doc = Automerge.change(doc, (doc) => {
-  doc.birds.push("robin");
-});
+let doc = Automerge.change(Automerge.init(), doc => {
+  doc.birds = []
+})
+doc = Automerge.change(doc, doc => {
+  doc.birds.push('blackbird')
+})
+doc = Automerge.change(doc, doc => {
+  doc.birds.push('robin')
+})
 // now doc is {birds: ['blackbird', 'robin']}
 
-Automerge.canUndo(doc); // returns true
-doc = Automerge.undo(doc); // now doc is {birds: ['blackbird']}
-doc = Automerge.undo(doc); // now doc is {birds: []}
-doc = Automerge.redo(doc); // now doc is {birds: ['blackbird']}
-doc = Automerge.redo(doc); // now doc is {birds: ['blackbird', 'robin']}
+Automerge.canUndo(doc) // returns true
+doc = Automerge.undo(doc) // now doc is {birds: ['blackbird']}
+doc = Automerge.undo(doc) // now doc is {birds: []}
+doc = Automerge.redo(doc) // now doc is {birds: ['blackbird']}
+doc = Automerge.redo(doc) // now doc is {birds: ['blackbird', 'robin']}
 ```
 
 You can pass an optional `message` as second argument to `Automerge.undo(doc, message)` and
@@ -416,15 +410,15 @@ The `getChanges()/applyChanges()` API works as follows:
 
 ```js
 // On one node
-newDoc = Automerge.change(currentDoc, (doc) => {
+newDoc = Automerge.change(currentDoc, doc => {
   // make arbitrary change to the document
-});
-let changes = Automerge.getChanges(currentDoc, newDoc);
-network.broadcast(JSON.stringify(changes));
+})
+let changes = Automerge.getChanges(currentDoc, newDoc)
+network.broadcast(JSON.stringify(changes))
 
 // On another node
-let changes = JSON.parse(network.receive());
-newDoc = Automerge.applyChanges(currentDoc, changes);
+let changes = JSON.parse(network.receive())
+newDoc = Automerge.applyChanges(currentDoc, changes)
 ```
 
 Note that `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old state and
@@ -462,18 +456,18 @@ values as the "winner":
 
 ```js
 // Initialize documents with known actor IDs
-let doc1 = Automerge.change(Automerge.init("actor-1"), (doc) => {
-  doc.x = 1;
-});
-let doc2 = Automerge.change(Automerge.init("actor-2"), (doc) => {
-  doc.x = 2;
-});
-doc1 = Automerge.merge(doc1, doc2);
-doc2 = Automerge.merge(doc2, doc1);
+let doc1 = Automerge.change(Automerge.init('actor-1'), doc => {
+  doc.x = 1
+})
+let doc2 = Automerge.change(Automerge.init('actor-2'), doc => {
+  doc.x = 2
+})
+doc1 = Automerge.merge(doc1, doc2)
+doc2 = Automerge.merge(doc2, doc1)
 
 // Now, doc1 might be either {x: 1} or {x: 2} -- the choice is random.
 // However, doc2 will be the same, whichever value is chosen as winner.
-assert.deepEqual(doc1, doc2);
+assert.deepEqual(doc1, doc2)
 ```
 
 Although only one of the concurrently written values shows up in the object, the other values are
@@ -481,10 +475,10 @@ not lost. They are merely relegated to a conflicts object. Suppose `doc.x = 2` i
 "winning" value:
 
 ```js
-doc1; // {x: 2}
-doc2; // {x: 2}
-Automerge.getConflicts(doc1, "x"); // {'actor-1': 1}
-Automerge.getConflicts(doc2, "x"); // {'actor-1': 1}
+doc1 // {x: 2}
+doc2 // {x: 2}
+Automerge.getConflicts(doc1, 'x') // {'actor-1': 1}
+Automerge.getConflicts(doc2, 'x') // {'actor-1': 1}
 ```
 
 Here, we've recorded a conflict on property `x`. The key `actor-1` is the actor ID that "lost" the
@@ -506,7 +500,7 @@ with two properties: `change` is the internal representation of the change (in t
 change was applied.
 
 ```js
-Automerge.getHistory(doc2);
+Automerge.getHistory(doc2)
 // [ { change: { message: 'Set x to 1', ... }, snapshot: { x: 1 } },
 //   { change: { message: 'Set x to 2', ... }, snapshot: { x: 2 } } ]
 ```
@@ -524,8 +518,8 @@ versions.
 The data returned by `Automerge.diff()` has the following form:
 
 ```js
-let history = Automerge.getHistory(doc2);
-Automerge.diff(history[2].snapshot, doc2); // get all changes since history[2]
+let history = Automerge.getHistory(doc2)
+Automerge.diff(history[2].snapshot, doc2) // get all changes since history[2]
 // [ { action: 'set', type: 'map', obj: '...', key: 'x', value: 1 },
 //   { action: 'set', type: 'map', obj: '...', key: 'x', value: 2 } ]
 ```
@@ -576,22 +570,22 @@ instead of a plain number, because it deals with concurrent changes correctly.
 To set up a `Counter`:
 
 ```js
-state = Automerge.change(state, (doc) => {
+state = Automerge.change(state, doc => {
   // The counter is initialized to 0 by default. You can pass a number to the
   // Automerge.Counter constructor if you want a different initial value.
-  doc.buttonClicks = new Automerge.Counter();
-});
+  doc.buttonClicks = new Automerge.Counter()
+})
 ```
 
 To get the current counter value, use `doc.buttonClicks.value`. Whenever you want to increase or
 decrease the counter value, you can use the `.increment()` or `.decrement()` method:
 
 ```js
-state = Automerge.change(state, (doc) => {
-  doc.buttonClicks.increment(); // Add 1 to counter value
-  doc.buttonClicks.increment(4); // Add 4 to counter value
-  doc.buttonClicks.decrement(3); // Subtract 3 from counter value
-});
+state = Automerge.change(state, doc => {
+  doc.buttonClicks.increment() // Add 1 to counter value
+  doc.buttonClicks.increment(4) // Add 4 to counter value
+  doc.buttonClicks.decrement(3) // Subtract 3 from counter value
+})
 ```
 
 > **Note:** In relational databases it is common to use an auto-incrementing counter to generate
@@ -619,22 +613,22 @@ You can create a Text object inside a change callback. Then you can use `insertA
 [above](#updating-a-document)):
 
 ```js
-newDoc = Automerge.change(currentDoc, (doc) => {
-  doc.text = new Automerge.Text();
-  doc.text.insertAt(0, "h", "e", "l", "l", "o");
-  doc.text.deleteAt(0);
-  doc.text.insertAt(0, "H");
-});
+newDoc = Automerge.change(currentDoc, doc => {
+  doc.text = new Automerge.Text()
+  doc.text.insertAt(0, 'h', 'e', 'l', 'l', 'o')
+  doc.text.deleteAt(0)
+  doc.text.insertAt(0, 'H')
+})
 ```
 
 To inspect a text object and render it, you can use the following methods (outside of a change
 callback):
 
 ```js
-newDoc.text.length; // returns 5, the number of characters
-newDoc.text.get(0); // returns 'H', the 0th character in the text
-newDoc.text.toString(); // returns 'Hello', the concatenation of all characters
-for (let char of newDoc.text) console.log(char); // iterates over all characters
+newDoc.text.length // returns 5, the number of characters
+newDoc.text.get(0) // returns 'H', the 0th character in the text
+newDoc.text.toString() // returns 'Hello', the concatenation of all characters
+for (let char of newDoc.text) console.log(char) // iterates over all characters
 ```
 
 ### Table
@@ -652,48 +646,45 @@ own IDs.
 You can create new tables and insert rows like this:
 
 ```js
-let database = Automerge.change(Automerge.init(), (doc) => {
-  doc.authors = new Automerge.Table();
-  doc.publications = new Automerge.Table();
+let database = Automerge.change(Automerge.init(), doc => {
+  doc.authors = new Automerge.Table()
+  doc.publications = new Automerge.Table()
 
   // Automerge.Table.add() inserts a new row into the database
   // and returns the primary key (unique ID) of the new row
-  const martinID = doc.authors.add({
-    surname: "Kleppmann",
-    forename: "Martin",
-  });
+  const martinID = doc.authors.add({ surname: 'Kleppmann', forename: 'Martin' })
 
   // Adding a publication that references the above author ID
   const ddia = doc.publications.add({
-    type: "book",
+    type: 'book',
     authors: [martinID],
-    title: "Designing Data-Intensive Applications",
+    title: 'Designing Data-Intensive Applications',
     publisher: "O'Reilly Media",
-    year: 2017,
-  });
-});
+    year: 2017
+  })
+})
 ```
 
 You can read the contents of a table like this:
 
 ```js
 // Array of row objects
-database.publications.rows;
+database.publications.rows
 
 // Array of row IDs (primary keys)
-database.publications.ids;
+database.publications.ids
 
 // Looking up a row by primary key
-database.publications.byId("29f6cd15-61ff-460d-b7fb-39a5594f32d5");
+database.publications.byId('29f6cd15-61ff-460d-b7fb-39a5594f32d5')
 
 // Number of rows in the table
-database.publications.count;
+database.publications.count
 
 // Like "SELECT * FROM publications WHERE title LIKE 'Designing%'"
-database.publications.filter((pub) => pub.title.startsWith("Designing"));
+database.publications.filter(pub => pub.title.startsWith('Designing'))
 
 // Like "SELECT publisher FROM publications"
-database.publications.map((pub) => pub.publisher);
+database.publications.map(pub => pub.publisher)
 ```
 
 Note that currently the `Automerge.Table` type does not enforce a schema. By convention, the row
