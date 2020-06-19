@@ -577,6 +577,13 @@ class RLEEncoder extends Encoder {
    * Appends a new value to the sequence.
    */
   appendValue(value) {
+    this.appendOneValue(value)
+  }
+
+  /**
+   * Like `appendValue(value)`, but this method is not overridden by `DeltaEncoder`.
+   */
+  appendOneValue(value) {
     if (this.state === 'empty') {
       this.state = (value === null ? 'nulls' : 'loneValue')
       this.lastValue = value
@@ -632,99 +639,96 @@ class RLEEncoder extends Encoder {
   }
 
   /**
-   * Copies `count` values from the RLEDecoder `decoder` into this encoder. If `count` is not
-   * specified, copies all remaining values. If `translationTable` is specified, every value `v`
-   * is translated into value `translationTable[v]` as it is copied.
+   * Copies values from the RLEDecoder `decoder` into this encoder. The `options` object may
+   * contain the following keys:
+   *  - `count`: The number of values to copy. If not specified, copies all remaining values.
+   *  - `lookupTable`: If specified, every value `v` is translated into value `lookupTable[v]`.
+   *  - `sumValues`: If true, the function computes the sum of all numeric values as they are
+   *    copied (null values are counted as zero), and returns that number.
    */
-  copyFrom(decoder, count, translationTable) {
+  copyFrom(decoder, options = {}) {
+    const { count, lookupTable, sumValues } = options
     if (!(decoder instanceof RLEDecoder) || (decoder.type !== this.type)) {
       throw new TypeError('incompatible type of decoder')
     }
-    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER)
+    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER), sum = 0
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (remaining === 0 || decoder.done) return
+    if (remaining === 0 || decoder.done) return sum
 
-    // Copy one value so that we have a well-defined starting state
-    this.appendValue(translationTable ? translationTable[decoder.readValue()] : decoder.readValue())
+    // Copy a value so that we have a well-defined starting state
+    const firstValue = decoder.readValue()
+    this.appendValue((lookupTable && firstValue !== null) ? lookupTable[firstValue] : firstValue)
     remaining--
+    if (sumValues) sum += firstValue
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (remaining === 0 || decoder.done) return
+    if (remaining === 0 || decoder.done) return sum
 
-    // Copy values until the next record boundary (transition between repetition/literal/nulls)
-    if (decoder.state === 'literal') {
-      while (decoder.count > 0 && remaining > 0 && !decoder.done) {
-        this.appendValue(translationTable ? translationTable[decoder.readValue()] : decoder.readValue())
-        remaining--
-      }
-    } else if (decoder.state === 'repetition') {
-      if (decoder.count > 0) {
-        this.appendValue(translationTable ? translationTable[decoder.lastValue] : decoder.lastValue)
-        if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
-        const values = Math.min(decoder.count, remaining)
-        this.count += values - 1
-        decoder.count -= values
-        remaining -= values
-      }
-    } else if (decoder.state === 'nulls') {
-      if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
-      const values = Math.min(decoder.count, remaining)
-      this.count += values
-      decoder.count -= values
-      remaining -= values
-    }
-
-    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (remaining === 0 || decoder.done) return
-    if (this.state === 'literal') this.literal.push(this.lastValue)
-    this.flush()
-    if (decoder.count !== 0) throw new RangeError(`Unexpected decoder.count = ${decoder.count}`)
-
-    // Now it's safe to copy data at the record level without expanding repetitions
-    let startOffset = decoder.offset, endOffset, skipValues = !translationTable
+    // Copy data at the record level without expanding repetitions
+    let startOffset, endOffset, skipValues = !lookupTable && !sumValues, firstRun = true
     while (remaining > 0 && !decoder.done) {
-      if (!skipValues) this.flush()
       endOffset = decoder.offset
-      const repCount = decoder.readInt53()
+      if (firstRun && decoder.count === 0) {
+        firstRun = false
+        startOffset = decoder.offset
+      }
+      if (!firstRun) decoder.readRecord()
 
-      if (repCount > 0) {
-        this.count = Math.min(repCount, remaining)
-        this.state = (this.count === 1 ? 'loneValue' : 'repetition')
-        if (skipValues) {
-          decoder.skipRawValues(1)
+      const numValues = Math.min(decoder.count, remaining)
+      decoder.count -= numValues
+
+      if (decoder.state === 'literal') {
+        if (skipValues && !firstRun) {
+          decoder.skipRawValues(numValues)
         } else {
-          this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
-        }
-      } else if (repCount === 0) {
-        this.count = Math.min(decoder.readUint53(), remaining)
-        this.state = 'nulls'
-      } else { // repCount < 0
-        this.count = Math.min(-repCount, remaining)
-        this.state = (this.count === 1 ? 'loneValue' : 'literal')
-        this.literal = []
-        if (skipValues) {
-          decoder.skipRawValues(this.count)
-        } else {
-          for (let i = 1; i < this.count; i++) {
-            this.literal.push(translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue())
+          for (let i = 0; i < numValues; i++) {
+            if (decoder.done) throw new RangeError('incomplete literal')
+            const value = decoder.readRawValue()
+            if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
+            decoder.lastValue = value
+            this.appendOneValue((lookupTable && value !== null) ? lookupTable[value] : value)
+            if (sumValues) sum += value
           }
-          this.lastValue = translationTable ? translationTable[decoder.readRawValue()] : decoder.readRawValue()
+        }
+      } else if (decoder.state === 'repetition') {
+        if (sumValues) sum += numValues * decoder.lastValue
+        if (!skipValues || firstRun) {
+          const mappedValue = (lookupTable && decoder.lastValue !== null) ? lookupTable[decoder.lastValue] : decoder.lastValue
+          this.appendOneValue(mappedValue)
+          if (numValues > 1) {
+            this.appendOneValue(mappedValue)
+            if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
+            this.count += numValues - 2
+          }
+        }
+      } else if (decoder.state === 'nulls') {
+        if (!skipValues || firstRun) {
+          this.appendOneValue(null)
+          if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
+          this.count += numValues - 1
         }
       }
 
-      // If that was the last record, and we skipped over its values, we have to go back and re-read
-      // it. However, we can directly copy the previous records at the byte level.
-      if ((decoder.done || remaining === this.count) && skipValues) {
+      if (firstRun) {
+        firstRun = false
+        startOffset = decoder.offset
+        remaining -= numValues
+      } else if ((decoder.done || remaining === numValues) && skipValues) {
+        // If that was the last record, and we skipped over its values, we have to go back and re-read
+        // it. However, we can directly copy the previous records at the byte level.
         skipValues = false
         decoder.offset = endOffset
-        this.state = 'empty'
+        decoder.state = undefined
+        if (this.state === 'literal') this.literal.push(this.lastValue)
+        this.flush()
         if (startOffset < endOffset) {
           this.appendRawBytes(decoder.buf.subarray(startOffset, endOffset))
         }
       } else {
-        remaining -= this.count
+        remaining -= numValues
       }
     }
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+    if (sumValues) return sum
   }
 
   /**
@@ -936,6 +940,45 @@ class DeltaEncoder extends RLEEncoder {
     } else {
       super.appendValue(value)
     }
+  }
+
+  /**
+   * Copies values from the DeltaDecoder `decoder` into this encoder. The `options` object may
+   * contain the key `count`, indicating the number of values to copy. If not specified, copies
+   * all remaining values in the decoder.
+   */
+  copyFrom(decoder, options = {}) {
+    if (options.lookupTable || options.sumValues) {
+      throw new RangeError('unsupported options for DeltaEncoder.copyFrom()')
+    }
+    if (!(decoder instanceof DeltaDecoder)) {
+      throw new TypeError('incompatible type of decoder')
+    }
+
+    if (options.count > 0 && decoder.done) throw new RangeError(`cannot copy ${options.count} values`)
+    if (options.count === 0 || decoder.done) return
+
+    // Copy any null values, and the first non-null value, so that appendValue() computes the
+    // difference between the encoder's last value and the decoder's first (absolute) value.
+    let value = decoder.readValue(), nulls = 0
+    this.appendValue(value)
+    if (value === null) {
+      nulls = decoder.count + 1
+      if (options.count && options.count < nulls) nulls = options.count
+      decoder.count -= nulls - 1
+      this.count += nulls - 1
+      if (options.count > nulls && decoder.done) throw new RangeError(`cannot copy ${options.count} values`)
+      if (options.count === nulls || decoder.done) return
+
+      // The next value read is certain to be non-null because we're not at the end of the decoder,
+      // and a run of nulls must be followed by a run of non-nulls.
+      if (decoder.count === 0) this.appendValue(decoder.readValue())
+    }
+
+    // Once we have the first value, the subsequent relative values can be
+    // copied verbatim without any further processing.
+    if (options.count) options.count -= nulls + 1
+    super.copyFrom(decoder, options)
   }
 }
 
