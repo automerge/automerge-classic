@@ -2,7 +2,7 @@
 
 💬 [Join the Automerge Slack community](https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw)
 
-[![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
+[![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=main)](https://travis-ci.org/automerge/automerge)
 [![Browser Test Status](https://app.saucelabs.com/buildstatus/automerge)](https://app.saucelabs.com/open_sauce/user/automerge/builds)
 
 Automerge is a library of data structures for building collaborative applications in JavaScript.
@@ -60,7 +60,7 @@ and merging**:
 - **Fairly portable**. We're not yet making an effort to support old platforms, but we have tested
   Automerge in Node.js, Chrome, Firefox, Safari, MS Edge, and [Electron](https://electron.atom.io/).
   For TypeScript users, Automerge comes with
-  [type definitions](https://github.com/automerge/automerge/blob/master/@types/automerge/index.d.ts)
+  [type definitions](https://github.com/automerge/automerge/blob/main/@types/automerge/index.d.ts)
   that allow you to use Automerge in a type-safe way.
 
 ## Setup
@@ -391,7 +391,7 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/master/src/connection.js), is
+- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/main/src/connection.js), is
   an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
   contains an example that runs the Connection protocol over a simple TCP connection.

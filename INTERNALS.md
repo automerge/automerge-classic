@@ -144,7 +144,7 @@ Change structure and operation types
 ------------------------------------
 
 **NB. This section describes the format used by the currently released version
-of Automerge (on the `master` branch). A new format is in development on the
+of Automerge (on the `main` branch). A new format is in development on the
 `performance` branch).**
 
 Every change is a JSON object with five properties:
@@ -364,7 +364,7 @@ called **patches** (because they describe a modification that needs to be made
 to the frontend state).
 
 **NB. This section describes the frontend/backend communication protocol used by
-the currently released version of Automerge (on the `master` branch). An updated
+the currently released version of Automerge (on the `main` branch). An updated
 protocol has been implemented on the `performance` branch).**
 
 ### Change requests
