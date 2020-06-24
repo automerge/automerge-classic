@@ -874,5 +874,46 @@ describe('Binary encoding', () => {
       decoder.skipValues(1)
       assert.throws(() => { decoder.skipValues(2) }, /Zero-length runs are not allowed/)
     })
+
+    describe('copying from a decoder', () => {
+      function doCopy(input1, input2, options = {}) {
+        let encoder1 = input1
+        if (Array.isArray(input1)) {
+          encoder1 = new BooleanEncoder()
+          for (let value of input1) encoder1.appendValue(value)
+        }
+
+        const encoder2 = new BooleanEncoder()
+        for (let value of input2) encoder2.appendValue(value)
+        const decoder2 = new BooleanDecoder(encoder2.buffer)
+        if (options.skip) decoder2.skipValues(options.skip)
+        encoder1.copyFrom(decoder2, options)
+        return encoder1
+      }
+
+      it('should copy a sequence', () => {
+        checkEncoded(doCopy([], [false, false, true, true]), [2, 2])
+        checkEncoded(doCopy([false, false], [false, false, true, true]), [4, 2])
+        checkEncoded(doCopy([true, true], [false, false, true, true]), [0, 2, 2, 2])
+        checkEncoded(doCopy([true, true], [true, true]), [0, 4])
+      })
+
+      it('should copy a sub-sequence', () => {
+        checkEncoded(doCopy([false], [false, false, false, true], {count: 2}), [3])
+        checkEncoded(doCopy([false], [true, true, true, true], {count: 3}), [1, 3])
+        checkEncoded(doCopy([false], [false, true, true, true], {skip: 1}), [1, 3])
+        checkEncoded(doCopy([false], [false, true, true, true], {skip: 2}), [1, 2])
+      })
+
+      it('should throw an exception if the decoder has too few values', () => {
+        assert.throws(() => { doCopy([false], [], {count: 1}) }, /cannot copy 1 values/)
+        assert.throws(() => { doCopy([false], [true, false], {count: 3}) }, /cannot copy 3 values/)
+      })
+
+      it('should check the arguments are valid', () => {
+        assert.throws(() => { new BooleanEncoder().copyFrom(new Decoder(new Uint8Array(0))) }, /incompatible type of decoder/)
+        assert.throws(() => { new BooleanEncoder().copyFrom(new BooleanDecoder(new Uint8Array([2, 0]))) }, /Zero-length runs/)
+      })
+    })
   })
 })

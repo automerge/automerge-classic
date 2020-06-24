@@ -1066,6 +1066,44 @@ class BooleanEncoder extends Encoder {
   }
 
   /**
+   * Copies values from the BooleanDecoder `decoder` into this encoder. The `options` object may
+   * contain the key `count`, indicating the number of values to copy. If not specified, copies
+   * all remaining values in the decoder.
+   */
+  copyFrom(decoder, options = {}) {
+    if (!(decoder instanceof BooleanDecoder)) {
+      throw new TypeError('incompatible type of decoder')
+    }
+
+    const { count } = options
+    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER)
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+
+    // Copy one value to bring decoder and encoder state into sync, then finish that value's repetitions
+    this.appendValue(decoder.readValue())
+    remaining--
+    const firstCopy = Math.min(decoder.count, remaining)
+    this.count += firstCopy
+    decoder.count -= firstCopy
+    remaining -= firstCopy
+
+    while (remaining > 0 && !decoder.done) {
+      decoder.count = decoder.readUint53()
+      if (decoder.count === 0) throw new RangeError('Zero-length runs are not allowed')
+      decoder.lastValue = !decoder.lastValue
+      this.appendUint53(this.count)
+
+      const numCopied = Math.min(decoder.count, remaining)
+      this.count = numCopied
+      this.lastValue = decoder.lastValue
+      decoder.count -= numCopied
+      remaining -= numCopied
+    }
+
+    if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+  }
+
+  /**
    * Flushes any unwritten data to the buffer. Call this before reading from
    * the buffer constructed by this Encoder.
    */
