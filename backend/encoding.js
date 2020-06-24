@@ -574,28 +574,35 @@ class RLEEncoder extends Encoder {
   }
 
   /**
-   * Appends a new value to the sequence.
+   * Appends a new value to the sequence. If `repetitions` is given, the value is repeated
+   * `repetitions` times.
    */
-  appendValue(value) {
-    this.appendOneValue(value)
+  appendValue(value, repetitions = 1) {
+    this._appendValue(value, repetitions)
   }
 
   /**
-   * Like `appendValue(value)`, but this method is not overridden by `DeltaEncoder`.
+   * Like `appendValue()`, but this method is not overridden by `DeltaEncoder`.
    */
-  appendOneValue(value) {
+  _appendValue(value, repetitions = 1) {
+    if (repetitions <= 0) return
     if (this.state === 'empty') {
-      this.state = (value === null ? 'nulls' : 'loneValue')
+      this.state = (value === null ? 'nulls' : (repetitions === 1 ? 'loneValue' : 'repetition'))
       this.lastValue = value
-      this.count = 1
+      this.count = repetitions
     } else if (this.state === 'loneValue') {
       if (value === null) {
         this.flush()
         this.state = 'nulls'
-        this.count = 1
+        this.count = repetitions
       } else if (value === this.lastValue) {
         this.state = 'repetition'
-        this.count = 2
+        this.count = 1 + repetitions
+      } else if (repetitions > 1) {
+        this.flush()
+        this.state = 'repetition'
+        this.count = repetitions
+        this.lastValue = value
       } else {
         this.state = 'literal'
         this.literal = [this.lastValue]
@@ -605,9 +612,14 @@ class RLEEncoder extends Encoder {
       if (value === null) {
         this.flush()
         this.state = 'nulls'
-        this.count = 1
+        this.count = repetitions
       } else if (value === this.lastValue) {
-        this.count += 1
+        this.count += repetitions
+      } else if (repetitions > 1) {
+        this.flush()
+        this.state = 'repetition'
+        this.count = repetitions
+        this.lastValue = value
       } else {
         this.flush()
         this.state = 'loneValue'
@@ -618,18 +630,29 @@ class RLEEncoder extends Encoder {
         this.literal.push(this.lastValue)
         this.flush()
         this.state = 'nulls'
-        this.count = 1
+        this.count = repetitions
       } else if (value === this.lastValue) {
         this.flush()
         this.state = 'repetition'
-        this.count = 2
+        this.count = 1 + repetitions
+      } else if (repetitions > 1) {
+        this.literal.push(this.lastValue)
+        this.flush()
+        this.state = 'repetition'
+        this.count = repetitions
+        this.lastValue = value
       } else {
         this.literal.push(this.lastValue)
         this.lastValue = value
       }
     } else if (this.state === 'nulls') {
       if (value === null) {
-        this.count += 1
+        this.count += repetitions
+      } else if (repetitions > 1) {
+        this.flush()
+        this.state = 'repetition'
+        this.count = repetitions
+        this.lastValue = value
       } else {
         this.flush()
         this.state = 'loneValue'
@@ -685,7 +708,7 @@ class RLEEncoder extends Encoder {
             const value = decoder.readRawValue()
             if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
             decoder.lastValue = value
-            this.appendOneValue((lookupTable && value !== null) ? lookupTable[value] : value)
+            this._appendValue((lookupTable && value !== null) ? lookupTable[value] : value)
             if (sumValues) sum += value
           }
         }
@@ -693,16 +716,16 @@ class RLEEncoder extends Encoder {
         if (sumValues) sum += numValues * decoder.lastValue
         if (!skipValues || firstRun) {
           const mappedValue = (lookupTable && decoder.lastValue !== null) ? lookupTable[decoder.lastValue] : decoder.lastValue
-          this.appendOneValue(mappedValue)
+          this._appendValue(mappedValue)
           if (numValues > 1) {
-            this.appendOneValue(mappedValue)
+            this._appendValue(mappedValue)
             if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
             this.count += numValues - 2
           }
         }
       } else if (decoder.state === 'nulls') {
         if (!skipValues || firstRun) {
-          this.appendOneValue(null)
+          this._appendValue(null)
           if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
           this.count += numValues - 1
         }
@@ -931,14 +954,17 @@ class DeltaEncoder extends RLEEncoder {
   }
 
   /**
-   * Appends a new integer value to the sequence.
+   * Appends a new integer value to the sequence. If `repetitions` is given, the value is repeated
+   * `repetitions` times.
    */
-  appendValue(value) {
+  appendValue(value, repetitions = 1) {
+    if (repetitions <= 0) return
     if (typeof value === 'number') {
-      super.appendValue(value - this.absoluteValue)
+      super.appendValue(value - this.absoluteValue, 1)
       this.absoluteValue = value
+      if (repetitions > 1) super.appendValue(0, repetitions - 1)
     } else {
-      super.appendValue(value)
+      super.appendValue(value, repetitions)
     }
   }
 
@@ -1050,18 +1076,20 @@ class BooleanEncoder extends Encoder {
   }
 
   /**
-   * Appends a new value to the sequence.
+   * Appends a new value to the sequence. If `repetitions` is given, the value is repeated
+   * `repetitions` times.
    */
-  appendValue(value) {
+  appendValue(value, repetitions = 1) {
     if (value !== false && value !== true) {
       throw new RangeError(`Unsupported value for BooleanEncoder: ${value}`)
     }
+    if (repetitions <= 0) return
     if (this.lastValue === value) {
-      this.count += 1
+      this.count += repetitions
     } else {
       this.appendUint53(this.count)
       this.lastValue = value
-      this.count = 1
+      this.count = repetitions
     }
   }
 

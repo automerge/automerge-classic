@@ -572,6 +572,20 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeRLE('utf8', encodeRLE('utf8', [null, null, null, null, 'abc'])), [null, null, null, null, 'abc'])
     })
 
+    it('should allow repetition counts to be specified', () => {
+      let e
+      e = new RLEEncoder('uint'); e.appendValue(3, 0); checkEncoded(e, [])
+      e = new RLEEncoder('uint'); e.appendValue(3, 10); checkEncoded(e, [10, 3])
+      e = new RLEEncoder('uint'); e.appendValue(3, 10); e.appendValue(3, 10); checkEncoded(e, [20, 3])
+      e = new RLEEncoder('uint'); e.appendValue(3, 10); e.appendValue(4, 10); checkEncoded(e, [10, 3, 10, 4])
+      e = new RLEEncoder('uint'); e.appendValue(3, 10); e.appendValue(null, 10); checkEncoded(e, [10, 3, 0, 10])
+      e = new RLEEncoder('uint'); e.appendValue(1); e.appendValue(1, 2); checkEncoded(e, [3, 1])
+      e = new RLEEncoder('uint'); e.appendValue(1); e.appendValue(2, 3); checkEncoded(e, [0x7f, 1, 3, 2])
+      e = new RLEEncoder('uint'); e.appendValue(1); e.appendValue(2); e.appendValue(3, 3); checkEncoded(e, [0x7e, 1, 2, 3, 3])
+      e = new RLEEncoder('uint'); e.appendValue(null); e.appendValue(3, 3); checkEncoded(e, [0, 1, 3, 3])
+      e = new RLEEncoder('uint'); e.appendValue(null); e.appendValue(null, 3); e.appendValue(1); checkEncoded(e, [0, 4, 0x7f, 1])
+    })
+
     it('should return an empty buffer if the values are only nulls', () => {
       assert.strictEqual(encodeRLE('uint', []).byteLength, 0)
       assert.strictEqual(encodeRLE('uint', [null]).byteLength, 0)
@@ -749,6 +763,13 @@ describe('Binary encoding', () => {
       assert.deepStrictEqual(decodeDelta(encodeDelta([-64, -60, -56, -52, -48, -44, -40, -36])), [-64, -60, -56, -52, -48, -44, -40, -36])
     })
 
+    it('should allow repetition counts to be specified', () => {
+      let e
+      e = new DeltaEncoder(); e.appendValue(3, 0); checkEncoded(e, [])
+      e = new DeltaEncoder(); e.appendValue(3, 10); checkEncoded(e, [0x7f, 3, 9, 0])
+      e = new DeltaEncoder(); e.appendValue(1, 3); e.appendValue(1, 3); checkEncoded(e, [0x7f, 1, 5, 0])
+    })
+
     it('should allow skipping values', () => {
       const example = [null, null, null, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 40, 11, 13, 21, 103]
       const encoded = encodeDelta(example)
@@ -854,6 +875,13 @@ describe('Binary encoding', () => {
       assert.throws(() => { encodeBools([null]) }, /Unsupported value/)
       assert.throws(() => { encodeBools(['false']) }, /Unsupported value/)
       assert.throws(() => { encodeBools([undefined]) }, /Unsupported value/)
+    })
+
+    it('should allow repetition counts to be specified', () => {
+      let e
+      e = new BooleanEncoder(); e.appendValue(false, 0); checkEncoded(e, [])
+      e = new BooleanEncoder(); e.appendValue(false, 2); e.appendValue(false, 2); checkEncoded(e, [4])
+      e = new BooleanEncoder(); e.appendValue(true, 2); e.appendValue(false, 2); checkEncoded(e, [0, 2, 2])
     })
 
     it('should allow skipping values', () => {
