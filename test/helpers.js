@@ -20,10 +20,10 @@ function assertEqualsOneOf(actual, ...expected) {
  * Asserts that the byte array maintained by `encoder` contains the same byte
  * sequence as the array `bytes`.
  */
-function checkEncoded(encoder, bytes) {
+function checkEncoded(encoder, bytes, detail) {
   const encoded = (encoder instanceof Encoder) ? encoder.buffer : encoder
   const expected = new Uint8Array(bytes)
-  const message = `${encoded} expected to equal ${expected}`
+  const message = (detail ? `${detail}: ` : '') + `${encoded} expected to equal ${expected}`
   assert(encoded.byteLength === expected.byteLength, message)
   for (let i = 0; i < encoded.byteLength; i++) {
     assert(encoded[i] === expected[i], message)

@@ -437,6 +437,20 @@ function decodeOps(ops, forDocument) {
   return newOps
 }
 
+function encoderByColumnId(columnId) {
+  if ((columnId & 7) === COLUMN_TYPE.INT_DELTA) {
+    return new DeltaEncoder()
+  } else if ((columnId & 7) === COLUMN_TYPE.BOOLEAN) {
+    return new BooleanEncoder()
+  } else if ((columnId & 7) === COLUMN_TYPE.STRING_RLE) {
+    return new RLEEncoder('utf8')
+  } else if ((columnId & 7) === COLUMN_TYPE.VALUE_RAW) {
+    return new Encoder()
+  } else {
+    return new RLEEncoder('uint')
+  }
+}
+
 function decoderByColumnId(columnId, buffer) {
   if ((columnId & 7) === COLUMN_TYPE.INT_DELTA) {
     return new DeltaDecoder(buffer)
@@ -1104,7 +1118,12 @@ function constructPatch(documentBuffer) {
   return objects[ROOT_ID]
 }
 
-function applyOps(ops, docCols, changeCols, actorIds) {
+/**
+ * Scans a chunk of document operations, encoded as columns `docCols`, to find the position at which
+ * an operation (or sequence of operations) `ops` should be inserted. Returns the number of
+ * operations, counted from the start of the chunk, after which the insertion should be made.
+ */
+function seekToOp(ops, docCols, actorIds) {
   const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action, consecutiveOps } = ops
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = docCols.map(col => col.decoder)
@@ -1170,10 +1189,70 @@ function applyOps(ops, docCols, changeCols, actorIds) {
       }
     }
   }
+  return skipCount
+}
 
+function copyColumns(outCols, inCols, count, actorTable) {
+  let inIndex = 0, lastGroup = -1, lastCardinality = 0, valueColumn = -1, valueBytes = 0
+  for (let outCol of outCols) {
+    while (inIndex < inCols.length && inCols[inIndex].columnId < outCol.columnId) inIndex++
+    let inCol = null
+    if (inIndex < inCols.length && inCols[inIndex].columnId === outCol.columnId &&
+        inCols[inIndex].decoder.buf.byteLength > 0) {
+      inCol = inCols[inIndex].decoder
+    }
+    const colCount = (outCol.columnId >> 3 === lastGroup) ? lastCardinality : count
+
+    if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
+      lastGroup = outCol.columnId >> 3
+      if (inCol) {
+        lastCardinality = outCol.encoder.copyFrom(inCol, {count, sumValues: true})
+      } else {
+        outCol.encoder.appendValue(0, count)
+        lastCardinality = 0
+      }
+    } else if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_LEN) {
+      if (inCol) {
+        if (inIndex + 1 === inCols.length || inCols[inIndex + 1].columnId !== outCol.columnId + 1) {
+          throw new RangeError('VALUE_LEN column without accompanying VALUE_RAW column')
+        }
+        valueColumn = outCol.columnId + 1
+        valueBytes = outCol.encoder.copyFrom(inCol, {count: colCount, sumValues: true, sumShift: 4})
+      } else {
+        outCol.encoder.appendValue(null, colCount)
+        valueColumn = outCol.columnId + 1
+        valueBytes = 0
+      }
+    } else if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
+      if (outCol.columnId !== valueColumn) {
+        throw new RangeError('VALUE_RAW column without accompanying VALUE_LEN column')
+      }
+      if (valueBytes > 0) {
+        outCol.encoder.appendRawBytes(inCol.readRawBytes(valueBytes))
+      }
+    } else { // ACTOR_ID, INT_RLE, INT_DELTA, BOOLEAN, or STRING_RLE
+      if (inCol) {
+        const options = {count: colCount, lookupTable: null}
+        if (outCol.columnId % 8 === COLUMN_TYPE.ACTOR_ID) options.lookupTable = actorTable
+        outCol.encoder.copyFrom(inCol, options)
+      } else {
+        const blankValue = (outCol.columnId % 8 === COLUMN_TYPE.BOOLEAN) ? false : null
+        outCol.encoder.appendValue(blankValue, colCount)
+      }
+    }
+  }
+}
+
+function applyOps(ops, beforeCount, allCols, docCols, changeCols, actorTable) {
+  let outCols = allCols.map(columnId => {
+    return {columnId, encoder: encoderByColumnId(columnId)}
+  })
+  copyColumns(outCols, docCols, beforeCount)
+  copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
+  copyColumns(outCols, docCols)
   // TODO: if there are several ops with the target key, need to rewrite them to update their succ
   // field, and insert the new op at the appropriate position
-  return skipCount
+  return outCols
 }
 
 function applyChange(docBuffer, changeBuffer) {
@@ -1186,13 +1265,22 @@ function applyChange(docBuffer, changeBuffer) {
     'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr',
     'succNum', 'succActor', 'succCtr'
   ]
+  let allCols = {}
   for (let cols of [docCols, changeCols]) {
     for (let i = 0; i < expectedCols.length; i++) {
       if (cols[i].columnName !== expectedCols[i]) {
         throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${cols[i].columnName}`)
       }
     }
+    for (let col of cols) allCols[col.columnId] = true
   }
+
+  // Final document should contain any columns in either the document or the change, except for
+  // pred, since the document encoding uses succ instead of pred
+  delete allCols[CHANGE_COLUMNS.predNum]
+  delete allCols[CHANGE_COLUMNS.predActor]
+  delete allCols[CHANGE_COLUMNS.predCtr]
+  allCols = Object.keys(allCols).map(id => parseInt(id)).sort((a, b) => a - b)
 
   // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
   if (doc.actorIds.indexOf(change.actorIds[0]) < 0) {
@@ -1201,10 +1289,13 @@ function applyChange(docBuffer, changeBuffer) {
     }
     doc.actorIds.push(change.actorIds[0])
   }
+  const actorTable = [] // translate from change's actor index to doc's actor index
   for (let actorId of change.actorIds) {
-    if (doc.actorIds.indexOf(actorId) < 0) {
+    const index = doc.actorIds.indexOf(actorId)
+    if (index < 0) {
       throw new RangeError(`actorId ${actorId} is not known to document`)
     }
+    actorTable.push(index)
   }
 
   const currentActor = change.actorIds[0]
@@ -1241,6 +1332,7 @@ function applyChange(docBuffer, changeBuffer) {
     // being updated must have been created in the current change, and keys must be in ascending
     // order. For ops that reference an opId key, the opId must match the preceding operation (this
     // is the case when a sequence of list elements/text chars are inserted consecutively).
+    // TODO also handle a sequence of consecutive list element deletions?
     if (!firstOp) {
       firstOp = thisOp
       lastOp = thisOp
@@ -1266,15 +1358,16 @@ function applyChange(docBuffer, changeBuffer) {
 
   if (firstOp) opSequences.push(firstOp)
   for (let col of changeCols) col.decoder.reset()
-  let result
   for (let op of opSequences) {
-    result = applyOps(op, docCols, changeCols, doc.actorIds)
     for (let col of docCols) col.decoder.reset()
+    const skipCount = seekToOp(op, docCols, doc.actorIds)
+    for (let col of docCols) col.decoder.reset()
+    return applyOps(op, skipCount, allCols, docCols, changeCols, actorTable)
   }
-  return result
 }
 
 module.exports = {
+  COLUMN_TYPE, VALUE_TYPE, ACTIONS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
-  constructPatch, applyChange
+  constructPatch, applyChange, decodeDocumentHeader
 }

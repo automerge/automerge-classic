@@ -675,6 +675,7 @@ describe('Binary encoding', () => {
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 0, count: 0}), [0x7d, 0, 1, 2])
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 0, count: 1}), [0x7c, 0, 1, 2, 3])
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 0, count: 2}), [0x7b, 0, 1, 2, 3, 4])
+        checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 0, count: 4}), [0x79, 0, 1, 2, 3, 4, 5, 6])
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 1, count: 1}), [0x7c, 0, 1, 2, 4])
         checkEncoded(doCopy([0, 1, 2], [3, 4, 5, 6], {skip: 1, count: 2}), [0x7b, 0, 1, 2, 4, 5])
         checkEncoded(doCopy([0, 1, 2], [3, 3, 3, 3], {skip: 0, count: 2}), [0x7d, 0, 1, 2, 2, 3])
@@ -684,6 +685,7 @@ describe('Binary encoding', () => {
         checkEncoded(doCopy([0, 0], [1, 1, 2, 3, 4, 5], {skip: 0, count: 3}), [2, 0, 2, 1, 0x7f, 2])
         checkEncoded(doCopy([null], [null, 1, 1, null], {skip: 0, count: 2}), [0, 2, 0x7f, 1])
         checkEncoded(doCopy([null], [null, 1, 1, null], {skip: 1, count: 3}), [0, 1, 2, 1, 0, 1])
+        checkEncoded(doCopy([], [null, null, null, 0, 0], {skip: 0, count: 5}), [0, 3, 2, 0])
       })
 
       it('should allow insertion into a sequence', () => {
@@ -709,6 +711,7 @@ describe('Binary encoding', () => {
         const encoder1 = new RLEEncoder('uint'), encoder2 = new RLEEncoder('uint')
         for (let v of [1, 2, 3, 10, 10, 10]) encoder2.appendValue(v)
         assert.strictEqual(encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true}), 36)
+        assert.strictEqual(encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true, sumShift: 2}), 7)
       })
 
       it('should throw an exception if the decoder has too few values', () => {
@@ -920,6 +923,7 @@ describe('Binary encoding', () => {
       }
 
       it('should copy a sequence', () => {
+        checkEncoded(doCopy([false, false, true], []), [2, 1])
         checkEncoded(doCopy([], [false, false, true, true]), [2, 2])
         checkEncoded(doCopy([false, false], [false, false, true, true]), [4, 2])
         checkEncoded(doCopy([true, true], [false, false, true, true]), [0, 2, 2, 2])

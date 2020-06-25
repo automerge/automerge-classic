@@ -668,9 +668,10 @@ class RLEEncoder extends Encoder {
    *  - `lookupTable`: If specified, every value `v` is translated into value `lookupTable[v]`.
    *  - `sumValues`: If true, the function computes the sum of all numeric values as they are
    *    copied (null values are counted as zero), and returns that number.
+   *  - `sumShift`: If set, values are shifted right by `sumShift` bits before adding to the sum.
    */
   copyFrom(decoder, options = {}) {
-    const { count, lookupTable, sumValues } = options
+    const { count, lookupTable, sumValues, sumShift } = options
     if (!(decoder instanceof RLEDecoder) || (decoder.type !== this.type)) {
       throw new TypeError('incompatible type of decoder')
     }
@@ -682,7 +683,7 @@ class RLEEncoder extends Encoder {
     const firstValue = decoder.readValue()
     this.appendValue((lookupTable && firstValue !== null) ? lookupTable[firstValue] : firstValue)
     remaining--
-    if (sumValues) sum += firstValue
+    if (sumValues) sum += firstValue >>> (sumShift || 0)
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
     if (remaining === 0 || decoder.done) return sum
 
@@ -709,11 +710,11 @@ class RLEEncoder extends Encoder {
             if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
             decoder.lastValue = value
             this._appendValue((lookupTable && value !== null) ? lookupTable[value] : value)
-            if (sumValues) sum += value
+            if (sumValues) sum += value >>> (sumShift || 0)
           }
         }
       } else if (decoder.state === 'repetition') {
-        if (sumValues) sum += numValues * decoder.lastValue
+        if (sumValues) sum += (numValues * decoder.lastValue) >>> (sumShift || 0)
         if (!skipValues || firstRun) {
           const mappedValue = (lookupTable && decoder.lastValue !== null) ? lookupTable[decoder.lastValue] : decoder.lastValue
           this._appendValue(mappedValue)
@@ -1106,6 +1107,7 @@ class BooleanEncoder extends Encoder {
     const { count } = options
     let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER)
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+    if (remaining === 0 || decoder.done) return
 
     // Copy one value to bring decoder and encoder state into sync, then finish that value's repetitions
     this.appendValue(decoder.readValue())

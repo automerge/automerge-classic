@@ -1,8 +1,17 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { encodeChange, decodeChange, applyChange } = require('../backend/columnar')
+const { CHANGE_COLUMNS, encodeChange, decodeChange, applyChange, decodeDocumentHeader } = require('../backend/columnar')
 const Automerge = require('../src/automerge')
 const { ROOT_ID } = require('../src/common')
+
+function checkColumns(actualCols, expectedCols) {
+  for (let actual of actualCols) {
+    const [colName, colId] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === actual.columnId)
+    if (expectedCols[colName]) {
+      checkEncoded(actual.buffer ? actual.buffer : actual.encoder, expectedCols[colName], `${colName} column`)
+    }
+  }
+}
 
 describe('change encoding', () => {
   it('should encode text edits', () => {
@@ -42,17 +51,46 @@ describe('change encoding', () => {
       doc.title = 'Hello'
     })
     const doc1 = Automerge.save(state1)
+    state1 = Automerge.emptyChange(state1)
     state1 = Automerge.change(state1, doc => doc.text.insertAt(0, 'a', 'b', 'e'))
-    const doc2 = Automerge.save(state1)
+    /*const doc2 = Automerge.save(state1)
     let state2 = Automerge.merge(Automerge.init(), state1)
     state2 = Automerge.change(state2, doc => { doc.foo = 'bar'; doc.text.insertAt(2, 'C', 'D') })
     const doc3 = Automerge.save(state2)
     state1 = Automerge.change(state1, doc => doc.text.insertAt(2, 'c', 'd'))
     state2 = Automerge.merge(state2, state1)
-    assert.strictEqual(state2.text.join(''), 'abCDcde')
-    const [change0, change1, change2, change3] = Automerge.getAllChanges(state2)
-    assert.strictEqual(applyChange(doc1, change1), 5)
-    assert.strictEqual(applyChange(doc2, change2), 7)
-    assert.strictEqual(applyChange(doc3, change3), 10)
+    assert.strictEqual(state2.text.join(''), 'abCDcde') */
+
+    const [change0, change1, change2] = Automerge.getAllChanges(state1)
+
+    checkColumns(decodeDocumentHeader(doc1).opsColumns, {
+      objActor: [0,3,2,0],
+      objCtr:   [0,3,2,1],
+      keyActor: [0,3,2,0],
+      keyCtr:   [0,3,126,0,2],
+      keyStr:   [125,7,97,117,116,104,111,114,115,4,116,101,120,116,5,116,105,116,108,101,0,2],
+      idActor:  [5,0],
+      idCtr:    [123,1,3,1,125,1],
+      insert:   [3,2],
+      action:   [126,2,4,3,1],
+      valLen:   [2,0,125,86,38,198,1],
+      valRaw:   [72,101,108,108,111,109,101,115,111,109,101,111,110,101,32,101,108,115,101],
+      succNum:  [5,0]
+    })
+
+    checkColumns(applyChange(doc1, change2), {
+      objActor: [0,3,5,0],
+      objCtr:   [0,3,2,1,3,4],
+      keyActor: [0,3,5,0],
+      keyCtr:   [0,3,123,0,2,126,6,1],
+      keyStr:   [125,7,97,117,116,104,111,114,115,4,116,101,120,116,5,116,105,116,108,101,0,5],
+      idActor:  [5,0,0,3],
+      idCtr:    [123,1,3,1,125,1,0,3],
+      insert:   [3,5],
+      action:   [126,2,4,6,1],
+      valLen:   [2,0,125,86,38,198,1,3,22],
+      valRaw:   [72,101,108,108,111,109,101,115,111,109,101,111,110,101,32,101,108,115,101,97,98,101],
+      succNum:  [8,0]
+    })
   })
 })
