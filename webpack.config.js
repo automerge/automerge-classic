@@ -1,7 +1,19 @@
-var path = require('path');
+const path = require('path');
 
-module.exports = {
-  entry: './src/automerge.js',
+const typescriptConfig = {
+  resolve: {
+    extensions: [ '.ts', '.js' ],
+  },
+  module: {
+    rules: [
+      // all files with a `.ts` extension will be handled by `ts-loader`
+      { test: /\.ts$/, loader: "ts-loader" }
+    ]
+  }
+};
+
+const commonConfig = {
+  entry: './src/automerge.ts',
   mode: 'development',
   output: {
     filename: 'automerge.js',
@@ -14,7 +26,12 @@ module.exports = {
   devtool: 'source-map',
   module: {
     rules: [
+      // Order important
+      ...typescriptConfig.module.rules,
       { test: /\.js$/, exclude: /node_modules/, loader: "babel-loader" }
     ]
-  }
-}
+  },
+  resolve: typescriptConfig.resolve
+};
+
+module.exports = commonConfig

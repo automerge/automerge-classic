@@ -13,4 +13,4 @@ function makeUuid() {
 makeUuid.setFactory = newFactory => { factory = newFactory }
 makeUuid.reset = () => { factory = defaultFactory }
 
-module.exports = makeUuid
+export default makeUuid

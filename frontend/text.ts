@@ -1,6 +1,9 @@
 const { OBJECT_ID } = require('./constants')
 
 class Text {
+  elems: any[];
+  context: any;
+  path: any;
   constructor (text) {
     if (typeof text === 'string') {
       const elems = text.split('').map(value => ({value}))
@@ -168,4 +171,4 @@ function instantiateText(objectId, elems) {
   return instance
 }
 
-module.exports = { Text, instantiateText }
+export default { Text, instantiateText }

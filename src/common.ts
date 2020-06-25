@@ -43,6 +43,6 @@ function equalBytes(array1, array2) {
   return true
 }
 
-module.exports = {
+export default {
   ROOT_ID, isObject, copyObject, parseOpId, equalBytes
 }

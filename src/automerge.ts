@@ -7,7 +7,7 @@ let backend = require('../backend') // mutable: can be overridden with setDefaul
 
 ///// Automerge.* API
 
-function init(options) {
+function init(options?: any) {
   if (typeof options === 'string') {
     options = {actorId: options}
   } else if (typeof options === 'undefined') {
@@ -133,7 +133,7 @@ function setDefaultBackend(newBackend) {
   backend = newBackend
 }
 
-module.exports = {
+export default {
   init, from, change, emptyChange, undo, redo, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,

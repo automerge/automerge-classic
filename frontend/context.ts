@@ -13,6 +13,12 @@ const uuid = require('../src/uuid')
  * and to apply the requested changes.
  */
 class Context {
+  actorId: any
+  cache: any
+  updated: any
+  ops: any[]
+  applyPatch: any
+  instantiateObject: any
   constructor (doc, actorId, applyPatch) {
     this.actorId = actorId
     this.cache = doc[CACHE]
@@ -434,6 +440,6 @@ class Context {
   }
 }
 
-module.exports = {
+export default {
   Context
 }

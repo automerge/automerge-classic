@@ -50,6 +50,7 @@
     "nyc": "^15.1.0",
     "sinon": "^9.0.1",
     "ts-node": "^8.6.2",
+    "ts-loader": "^7.0.5",
     "tsconfig-paths": "^3.9.0",
     "typescript": "^3.8.3",
     "watchify": "^3.11.1",

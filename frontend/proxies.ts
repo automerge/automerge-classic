@@ -197,7 +197,7 @@ const ListHandler = {
   }
 }
 
-function mapProxy(context, objectId, path, readonly) {
+function mapProxy(context, objectId, path, readonly?: any) {
   return new Proxy({context, objectId, path, readonly}, MapHandler)
 }
 
@@ -227,4 +227,4 @@ function rootObjectProxy(context) {
   return mapProxy(context, ROOT_ID, [])
 }
 
-module.exports = { rootObjectProxy }
+export default { rootObjectProxy }

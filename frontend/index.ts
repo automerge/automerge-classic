@@ -82,7 +82,7 @@ function makeChange(doc, requestType, context, options) {
   const state = copyObject(doc[STATE])
   state.seq += 1
 
-  const request = {
+  const request: any = {
     requestType, actor, seq: state.seq,
     time: Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
@@ -160,7 +160,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
+  const state: any = {seq: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }
@@ -434,7 +434,7 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
-module.exports = {
+export default {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,

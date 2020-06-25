@@ -304,6 +304,6 @@ function cloneRootObject(root) {
   return cloneMapObject(root, ROOT_ID)
 }
 
-module.exports = {
+export default {
   interpretPatch, cloneRootObject
 }
