@@ -1,4 +1,4 @@
-# Automerge
+<img src='./img/sign.svg' width='500' alt='Automerge logo' />
 
 💬 [Join the Automerge Slack community](https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw)
 
