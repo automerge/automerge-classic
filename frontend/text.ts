@@ -171,4 +171,4 @@ function instantiateText(objectId, elems) {
   return instance
 }
 
-export default { Text, instantiateText }
+export = { Text, instantiateText }

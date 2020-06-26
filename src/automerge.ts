@@ -2,9 +2,8 @@ const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const { encodeChange, decodeChange } = require('../backend/columnar')
-const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
-
+let { isObject } = require('./common')
 ///// Automerge.* API
 
 function init(options?: any) {
@@ -133,7 +132,7 @@ function setDefaultBackend(newBackend) {
   backend = newBackend
 }
 
-export default {
+module.exports = {
   init, from, change, emptyChange, undo, redo, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,

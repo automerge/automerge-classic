@@ -260,4 +260,4 @@ function instantiateTable(objectId, entries) {
   return instance
 }
 
-export default { Table, instantiateTable }
+export = { Table, instantiateTable }

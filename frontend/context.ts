@@ -440,6 +440,6 @@ class Context {
   }
 }
 
-export default {
+export = {
   Context
 }

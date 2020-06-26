@@ -434,7 +434,7 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
-export default {
+export = {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,

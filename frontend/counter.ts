@@ -85,4 +85,4 @@ function getWriteableCounter(value, context, path, objectId, key) {
   return instance
 }
 
-export default { Counter, getWriteableCounter }
+export = { Counter, getWriteableCounter }

@@ -227,4 +227,4 @@ function rootObjectProxy(context) {
   return mapProxy(context, ROOT_ID, [])
 }
 
-export default { rootObjectProxy }
+export = { rootObjectProxy }
