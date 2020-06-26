@@ -10,7 +10,7 @@ module.exports = function(config) {
       'test/*.+(ts|js)': ['karma-typescript']
     },
     browserify: {debug: true},
-    browsers: ['Chrome', 'Firefox'],
+    browsers: ['Chrome', 'Firefox', 'Safari'],
     singleRun: true,
     karmaTypescriptConfig: {
       tsconfig: './tsconfig.json',
