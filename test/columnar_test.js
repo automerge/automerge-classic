@@ -1,6 +1,6 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { CHANGE_COLUMNS, encodeChange, decodeChange, applyChange, decodeDocumentHeader } = require('../backend/columnar')
+const { CHANGE_COLUMNS, encodeChange, decodeChange, BackendDoc } = require('../backend/columnar')
 const Automerge = require('../src/automerge')
 const { ROOT_ID } = require('../src/common')
 
@@ -8,7 +8,7 @@ function checkColumns(actualCols, expectedCols) {
   for (let actual of actualCols) {
     const [colName, colId] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === actual.columnId)
     if (expectedCols[colName]) {
-      checkEncoded(actual.buffer ? actual.buffer : actual.encoder, expectedCols[colName], `${colName} column`)
+      checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
     }
   }
 }
@@ -62,8 +62,9 @@ describe('change encoding', () => {
     assert.strictEqual(state2.text.join(''), 'abCDcde') */
 
     const [change0, change1, change2] = Automerge.getAllChanges(state1)
+    const backend = new BackendDoc(doc1)
 
-    checkColumns(decodeDocumentHeader(doc1).opsColumns, {
+    checkColumns(backend.docColumns, {
       objActor: [0,3,2,0],
       objCtr:   [0,3,2,1],
       keyActor: [0,3,2,0],
@@ -78,7 +79,8 @@ describe('change encoding', () => {
       succNum:  [5,0]
     })
 
-    checkColumns(applyChange(doc1, change2), {
+    backend.applyChange(change2)
+    checkColumns(backend.docColumns, {
       objActor: [0,3,5,0],
       objCtr:   [0,3,2,1,3,4],
       keyActor: [0,3,5,0],

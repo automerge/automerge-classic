@@ -1243,61 +1243,32 @@ function copyColumns(outCols, inCols, count, actorTable) {
   }
 }
 
-function applyOps(ops, beforeCount, allCols, docCols, changeCols, actorTable) {
-  let outCols = allCols.map(columnId => {
-    return {columnId, encoder: encoderByColumnId(columnId)}
-  })
-  copyColumns(outCols, docCols, beforeCount)
-  copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
-  copyColumns(outCols, docCols)
-  // TODO: if there are several ops with the target key, need to rewrite them to update their succ
-  // field, and insert the new op at the appropriate position
-  return outCols
-}
-
-function applyChange(docBuffer, changeBuffer) {
-  const doc = decodeDocumentHeader(docBuffer) // { changesColumns, opsColumns, actorIds, heads }
-  const docCols = makeDecoders(doc.opsColumns, CHANGE_COLUMNS)
-  const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
-  const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
-  const expectedCols = [
-    'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
-    'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr',
-    'succNum', 'succActor', 'succCtr'
-  ]
-  let allCols = {}
-  for (let cols of [docCols, changeCols]) {
-    for (let i = 0; i < expectedCols.length; i++) {
-      if (cols[i].columnName !== expectedCols[i]) {
-        throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${cols[i].columnName}`)
-      }
-    }
-    for (let col of cols) allCols[col.columnId] = true
-  }
-
-  // Final document should contain any columns in either the document or the change, except for
-  // pred, since the document encoding uses succ instead of pred
-  delete allCols[CHANGE_COLUMNS.predNum]
-  delete allCols[CHANGE_COLUMNS.predActor]
-  delete allCols[CHANGE_COLUMNS.predCtr]
-  allCols = Object.keys(allCols).map(id => parseInt(id)).sort((a, b) => a - b)
-
-  // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
-  if (doc.actorIds.indexOf(change.actorIds[0]) < 0) {
-    if (change.seq !== 1) {
-      throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
-    }
-    doc.actorIds.push(change.actorIds[0])
-  }
-  const actorTable = [] // translate from change's actor index to doc's actor index
-  for (let actorId of change.actorIds) {
-    const index = doc.actorIds.indexOf(actorId)
-    if (index < 0) {
-      throw new RangeError(`actorId ${actorId} is not known to document`)
-    }
-    actorTable.push(index)
-  }
-
+/**
+ * Given a change parsed by `decodeChangeColumns()` and its column decoders as instantiated by
+ * `makeDecoders()`, reads the operations in the change and groups together any related operations
+ * that can be applied at the same time. Returns an array of operation groups, where each group is
+ * an object with a `consecutiveOps` property indicating how many operations are in that group.
+ *
+ * In order for a set of operations to be related, they have to satisfy the following properties:
+ *   1. They must all be for the same object. (Even when several objects are created in the same
+ *      change, we don't group together operations from different objects, since those ops may not
+ *      be consecutive in the document, since objectIds from different actors can be interleaved.)
+ *   2. Operations with string keys must appear in lexicographic order. For operations with opId
+ *      keys (i.e. list/text operations), this function does not know whether the order of
+ *      operations in the change matches the document order. We optimistically group together any
+ *      such operations for the same object, on the basis that the ops are likely to be consecutive
+ *      in practice (e.g. deleting a consecutive sequence of characters from text is likely to be
+ *      represented by a sequence of deletion operations in document order).
+ *
+ * A group of operations has the `directCopy` property set to true if the operations are guaranteed
+ * to be consecutive in the encoded document, and the operations don't need to update the `succ`
+ * property of any existing operations. This is the case when at least one of the following is true:
+ *   1. The operations set properties of an object that has been created in the current change, so
+ *      these operations are sure to be the first time that those properties have been set.
+ *   2. The operations insert a consecutive sequence of list elements/text characters, where each
+ *      insertion operation references the immediate predecessor operation as its reference element.
+ */
+function groupRelatedOps(change, changeCols) {
   const currentActor = change.actorIds[0]
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = changeCols.map(col => col.decoder)
@@ -1315,7 +1286,8 @@ function applyChange(docBuffer, changeBuffer) {
       idCtr    : opIdCtr,
       insert   : insertD.readValue(),
       action   : actionD.readValue(),
-      consecutiveOps: 1
+      consecutiveOps: 1,
+      directCopy    : false
     }
     if ((thisOp.objCtr === null && thisOp.objActor !== null) ||
         (thisOp.objCtr !== null && typeof thisOp.objActor !== 'string')) {
@@ -1325,49 +1297,137 @@ function applyChange(docBuffer, changeBuffer) {
         (thisOp.keyCtr !== null && typeof thisOp.keyActor !== 'string')) {
       throw new RangeError(`Mismatched operation key: (${thisOp.keyCtr}, ${thisOp.keyActor})`)
     }
+    if (thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp &&
+        !objIdSeen[`${thisOp.objCtr}@${thisOp.objActor}`] || thisOp.insert) {
+      thisOp.directCopy = true
+    }
 
-    // Collect any operations that are guaranteed to be consecutive in the compressed document.
-    // These must all be for the same object (since objectIds of concurrently created objects may be
-    // interleaved in the compressed document). For ops that reference a string key, the object
-    // being updated must have been created in the current change, and keys must be in ascending
-    // order. For ops that reference an opId key, the opId must match the preceding operation (this
-    // is the case when a sequence of list elements/text chars are inserted consecutively).
-    // TODO also handle a sequence of consecutive list element deletions?
     if (!firstOp) {
       firstOp = thisOp
       lastOp = thisOp
-    } else {
-      if (thisOp.objActor === lastOp.objActor && thisOp.objCtr === lastOp.objCtr && (
-          (thisOp.keyStr !== null && lastOp.keyStr !== null && lastOp.keyStr <= thisOp.keyStr &&
-           thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp &&
-           !objIdSeen[`${thisOp.objCtr}@${thisOp.objActor}`]) ||
-          (thisOp.keyActor === lastOp.idActor && thisOp.keyCtr === lastOp.idCtr &&
-           lastOp.insert && thisOp.insert))) {
-        firstOp.consecutiveOps += 1
-        lastOp = thisOp
-      } else {
-        objIdSeen[`${firstOp.objCtr}@${firstOp.objActor}`] = true
-        opSequences.push(firstOp)
-        firstOp = thisOp
-        lastOp = thisOp
+    } else if (thisOp.objActor === lastOp.objActor && thisOp.objCtr === lastOp.objCtr && (
+        (thisOp.keyStr !== null && lastOp.keyStr !== null && lastOp.keyStr <= thisOp.keyStr) ||
+        (thisOp.keyStr === null && lastOp.keyStr === null))) {
+      if (firstOp.directCopy && lastOp.insert && (!thisOp.insert ||
+          thisOp.keyActor !== lastOp.idActor || thisOp.keyCtr !== lastOp.idCtr)) {
+        firstOp.directCopy = false
       }
+      firstOp.consecutiveOps += 1
+      lastOp = thisOp
+    } else {
+      objIdSeen[`${firstOp.objCtr}@${firstOp.objActor}`] = true
+      opSequences.push(firstOp)
+      firstOp = thisOp
+      lastOp = thisOp
     }
 
     opIdCtr += 1
   }
 
   if (firstOp) opSequences.push(firstOp)
-  for (let col of changeCols) col.decoder.reset()
-  for (let op of opSequences) {
-    for (let col of docCols) col.decoder.reset()
-    const skipCount = seekToOp(op, docCols, doc.actorIds)
-    for (let col of docCols) col.decoder.reset()
-    return applyOps(op, skipCount, allCols, docCols, changeCols, actorTable)
+  return opSequences
+}
+
+class BackendDoc {
+  constructor(buffer) {
+    const doc = decodeDocumentHeader(buffer)
+    this.changesColumns = doc.changesColumns
+    this.actorIds = doc.actorIds
+    this.heads = doc.heads
+    this.docColumns = makeDecoders(doc.opsColumns, CHANGE_COLUMNS)
+  }
+
+  applyOps(ops, beforeCount, allCols, changeCols, actorTable) {
+    let outCols = allCols.map(columnId => {
+      return {columnId, encoder: encoderByColumnId(columnId)}
+    })
+    copyColumns(outCols, this.docColumns, beforeCount)
+    copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
+    copyColumns(outCols, this.docColumns)
+    // TODO: if there are several ops with the target key, need to rewrite them to update their succ
+    // field, and insert the new op at the appropriate position
+    this.docColumns = outCols.map(col => {
+      const [columnName, _] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === col.columnId)
+      const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
+      return {columnId: col.columnId, columnName, decoder}
+    })
+  }
+
+  /**
+   * Takes `changeCols`, a list of `{columnId, columnName, decoder}` objects for a change, and
+   * checks that it has the expected structure. Returns an array of column IDs (integers) of the
+   * columns that occur either in the document or in the change.
+   */
+  getAllColumns(changeCols) {
+    const expectedCols = [
+      'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
+      'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr',
+      'succNum', 'succActor', 'succCtr'
+    ]
+    let allCols = {}
+    for (let cols of [this.docColumns, changeCols]) {
+      for (let i = 0; i < expectedCols.length; i++) {
+        if (cols[i].columnName !== expectedCols[i]) {
+          throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${cols[i].columnName}`)
+        }
+      }
+      for (let col of cols) allCols[col.columnId] = true
+    }
+
+    // Final document should contain any columns in either the document or the change, except for
+    // pred, since the document encoding uses succ instead of pred
+    delete allCols[CHANGE_COLUMNS.predNum]
+    delete allCols[CHANGE_COLUMNS.predActor]
+    delete allCols[CHANGE_COLUMNS.predCtr]
+    return Object.keys(allCols).map(id => parseInt(id)).sort((a, b) => a - b)
+  }
+
+  /**
+   * Takes a decoded change header, including an array of actorIds. Returns an array for translating
+   * the change's actor indexes into the document's actor indexes.
+   */
+  getActorTable(change) {
+    // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
+    if (this.actorIds.indexOf(change.actorIds[0]) < 0) {
+      if (change.seq !== 1) {
+        throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
+      }
+      this.actorIds.push(change.actorIds[0])
+    }
+    const actorTable = [] // translate from change's actor index to doc's actor index
+    for (let actorId of change.actorIds) {
+      const index = this.actorIds.indexOf(actorId)
+      if (index < 0) {
+        throw new RangeError(`actorId ${actorId} is not known to document`)
+      }
+      actorTable.push(index)
+    }
+    return actorTable
+  }
+
+  /**
+   * Parses the change given as a Uint8Array in `changeBuffer`, and applies it to the current
+   * document. TODO this should return a patch.
+   */
+  applyChange(changeBuffer) {
+    const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+    const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+    const allCols = this.getAllColumns(changeCols)
+    const actorTable = this.getActorTable(change)
+    const opSequences = groupRelatedOps(change, changeCols)
+
+    for (let col of changeCols) col.decoder.reset()
+    for (let op of opSequences) {
+      for (let col of this.docColumns) col.decoder.reset()
+      const skipCount = seekToOp(op, this.docColumns, this.actorIds)
+      for (let col of this.docColumns) col.decoder.reset()
+      this.applyOps(op, skipCount, allCols, changeCols, actorTable)
+    }
   }
 }
 
 module.exports = {
   COLUMN_TYPE, VALUE_TYPE, ACTIONS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
-  constructPatch, applyChange, decodeDocumentHeader
+  constructPatch, BackendDoc
 }
