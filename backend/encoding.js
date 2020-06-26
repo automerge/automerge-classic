@@ -1180,6 +1180,7 @@ class BooleanDecoder extends Decoder {
    * Returns the next value in the sequence.
    */
   readValue() {
+    if (this.done) return false
     while (this.count === 0) {
       this.count = this.readUint53()
       this.lastValue = !this.lastValue

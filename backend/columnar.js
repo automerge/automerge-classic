@@ -57,6 +57,9 @@ const CHANGE_COLUMNS = {
   succCtr:   8 << 3 | COLUMN_TYPE.INT_DELTA
 }
 
+const CHANGE_COLUMNS_REV = Object.entries(CHANGE_COLUMNS)
+  .reduce((acc, [k, v]) => {acc[v] = k; return acc}, [])
+
 const DOCUMENT_COLUMNS = {
   actor:     0 << 3 | COLUMN_TYPE.ACTOR_ID,
   seq:       0 << 3 | COLUMN_TYPE.INT_DELTA,
@@ -1132,9 +1135,10 @@ function seekToOp(ops, docCols, actorIds) {
 
   // Seek to the beginning of the object being updated
   if (objCtr !== null) {
-    while (!objCtrD.done && !objActorD.done) {
+    while (!objCtrD.done || !objActorD.done || !keyStrD.done) {
       nextObjCtr = objCtrD.readValue()
       nextObjActor = actorIds[objActorD.readValue()]
+      keyStrD.skipValues(1)
       if (nextObjCtr === null || !nextObjActor || nextObjCtr < objCtr ||
           (nextObjCtr === objCtr && nextObjActor < objActor)) {
         skipCount += 1
@@ -1193,6 +1197,7 @@ function seekToOp(ops, docCols, actorIds) {
 }
 
 function copyColumns(outCols, inCols, count, actorTable) {
+  if (count === 0) return
   let inIndex = 0, lastGroup = -1, lastCardinality = 0, valueColumn = -1, valueBytes = 0
   for (let outCol of outCols) {
     while (inIndex < inCols.length && inCols[inIndex].columnId < outCol.columnId) inIndex++
@@ -1239,6 +1244,96 @@ function copyColumns(outCols, inCols, count, actorTable) {
         const blankValue = (outCol.columnId % 8 === COLUMN_TYPE.BOOLEAN) ? false : null
         outCol.encoder.appendValue(blankValue, colCount)
       }
+    }
+  }
+}
+
+/**
+ * Parses one operation from a set of columns. The argument `columns` contains a list of objects
+ * with `columnId` and `decoder` properties. Returns an array in which the i'th element is the
+ * value read from the i'th column in `columns`. Does not interpret datatypes; the only
+ * interpretation of values is that if `actorTable` is given, a value `v` in a column of type
+ * ACTOR_ID is replaced with `actorTable[v]`.
+ */
+function readOperation(columns, actorTable) {
+  let operation = [], colValue, lastGroup = -1, lastCardinality = 0, valueColumn = -1, valueBytes = 0
+  for (let col of columns) {
+    if (col.columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
+      if (col.columnId !== valueColumn) throw new RangeError('unexpected VALUE_RAW column')
+      colValue = col.decoder.readRawBytes(valueBytes)
+    } else if (col.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
+      lastGroup = col.columnId >> 3
+      lastCardinality = col.decoder.readValue() || 0
+      colValue = lastCardinality
+    } else if (col.columnId >> 3 === lastGroup) {
+      colValue = []
+      if (col.columnId % 8 === COLUMN_TYPE.VALUE_LEN) {
+        valueColumn = col.columnId + 1
+        valueBytes = 0
+      }
+      for (let i = 0; i < lastCardinality; i++) {
+        let value = col.decoder.readValue()
+        if (col.columnId % 8 === COLUMN_TYPE.ACTOR_ID && actorTable && typeof value === 'number') {
+          value = actorTable[value]
+        }
+        if (col.columnId % 8 === COLUMN_TYPE.VALUE_LEN) {
+          valueBytes += colValue >>> 4
+        }
+        colValue.push(value)
+      }
+    } else {
+      colValue = col.decoder.readValue()
+      if (col.columnId % 8 === COLUMN_TYPE.ACTOR_ID && actorTable && typeof colValue === 'number') {
+        colValue = actorTable[colValue]
+      }
+      if (col.columnId % 8 === COLUMN_TYPE.VALUE_LEN) {
+        valueColumn = col.columnId + 1
+        valueBytes = colValue >>> 4
+      }
+    }
+
+    operation.push(colValue)
+  }
+  return operation
+}
+
+/**
+ * Appends `operation`, in the form returned by `readOperation()`, to the columns in `outCols`. The
+ * argument `inCols` provides metadata about the types of columns in `operation`; the value
+ * `operation[i]` comes from the column `inCols[i]`.
+ */
+function appendOperation(outCols, inCols, operation) {
+  console.log('appending:', operation.map((value, idx) => {return {columnName: inCols[idx].columnName, value} }))
+  let inIndex = 0, lastGroup = -1, lastCardinality = 0
+  for (let outCol of outCols) {
+    while (inIndex < inCols.length && inCols[inIndex].columnId < outCol.columnId) inIndex++
+
+    if (inIndex < inCols.length && inCols[inIndex].columnId === outCol.columnId) {
+      const colValue = operation[inIndex]
+      if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
+        lastGroup = outCol.columnId >> 3
+        lastCardinality = colValue
+        outCol.encoder.appendValue(colValue)
+      } else if (outCol.columnId >> 3 === lastGroup) {
+        if (!Array.isArray(colValue) || colValue.length !== lastCardinality) {
+          throw new RangeError('bad group value')
+        }
+        for (let v of colValue) outCol.appendValue(v)
+      } else if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
+        outCol.encoder.appendRawBytes(colValue)
+      } else {
+        outCol.encoder.appendValue(colValue)
+      }
+    } else if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
+      lastGroup = outCol.columnId >> 3
+      lastCardinality = 0
+      outCol.encoder.appendValue(0)
+    } else if (outCol.columnId % 8 !== COLUMN_TYPE.VALUE_RAW) {
+      const count = (outCol.columnId >> 3 === lastGroup) ? lastCardinality : 1
+      let blankValue = null
+      if (outCol.columnId % 8 === COLUMN_TYPE.BOOLEAN) blankValue = false
+      if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_LEN) blankValue = 0
+      outCol.encoder.appendValue(blankValue, count)
     }
   }
 }
@@ -1335,22 +1430,128 @@ class BackendDoc {
     this.actorIds = doc.actorIds
     this.heads = doc.heads
     this.docColumns = makeDecoders(doc.opsColumns, CHANGE_COLUMNS)
+    this.numOps = 0 // TODO count actual number of ops in the document
+  }
+
+  /**
+   * Applies a sequence of change operations to the document. `changeCols` contains the columns of
+   * the change. Assumes that the decoders of both sets of columns are at the position where we want
+   * to start merging.
+   */
+  mergeDocChangeOps(outCols, changeCols, ops, actorTable) {
+    // Check the first couple of columns are in the positions where we expect them to be
+    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7,
+      action = 8, predNum = 13, predActor = 14, predCtr = 15, succNum = 16, succActor = 17, succCtr = 18
+    if (this.docColumns[objActor ].columnId !== CHANGE_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
+        this.docColumns[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
+        this.docColumns[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
+        this.docColumns[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
+        this.docColumns[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
+        this.docColumns[idActor  ].columnId !== CHANGE_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
+        this.docColumns[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
+        this.docColumns[insert   ].columnId !== CHANGE_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
+        this.docColumns[action   ].columnId !== CHANGE_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
+        this.docColumns[succNum  ].columnId !== CHANGE_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
+        this.docColumns[succActor].columnId !== CHANGE_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
+        this.docColumns[succCtr  ].columnId !== CHANGE_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
+      throw new RangeError('unexpected columnId')
+    }
+
+    let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
+    let docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+    let changeOp = readOperation(changeCols, actorTable)
+
+    while (opCount > 0) {
+      // The change operation comes first if there is no document operation, if the next document
+      // operation is for a different object, or if the change op's string key is lexicographically
+      // first (TODO check ordering of keys beyond the basic multilingual plane). The document
+      // operation comes first if its string key is lexicographically first, or if we're using opId
+      // keys and the keys don't match (i.e. we scan the document until we find a matching key).
+      if (!docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
+          (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
+          (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
+        if (changeOp[keyStr] === null && !changeOp[insert]) {
+          // TODO note that the optimistic grouping of operations may mean that we don't find the
+          // element to update, so we have to restart the search from the beginning of the object
+          throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${changeOp[keyActor]}`)
+        }
+        appendOperation(outCols, changeCols, changeOp)
+        opsAppended++
+        opCount--
+        opIdCtr++
+        if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
+      } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
+                 (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
+                 (docOp[keyStr] === null && changeOp[keyStr] === null &&
+                  (docOp[keyActor] !== changeOp[keyActor] || docOp[keyCtr] !== changeOp[keyCtr]))) {
+        appendOperation(outCols, this.docColumns, docOp)
+        opsAppended++
+        docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+      } else {
+        if (changeOp[keyStr] !== docOp[keyStr] || docOp[keyActor] !== changeOp[keyActor] ||
+            docOp[keyCtr] !== changeOp[keyCtr]) throw new RangeError('should not happen')
+        let dropChangeOp = false
+        for (let i = 0; i < changeOp[predNum]; i++) {
+          if (changeOp[predActor][i] === docOp[idActor] && changeOp[predCtr][i] === docOp[idCtr]) {
+            let j = 0
+            while (j < docOp[succNum] && (docOp[succCtr][j] < opIdCtr ||
+                   docOp[succCtr][j] === opIdCtr && this.actorIds[docOp[succActor][j]] < ops.opActor)) j++
+            docOp[succCtr].splice(j, 0, opIdCtr)
+            docOp[succActor].splice(j, 0, this.actorIds.indexOf(ops.opActor))
+            if (changeOp[action] === ACTIONS.indexOf('del')) dropChangeOp = true
+          }
+        }
+        if (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] === ops.opActor) {
+          throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.opActor}`)
+        }
+        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] < ops.opActor)) {
+          appendOperation(outCols, this.docColumns, docOp)
+          opsAppended++
+          docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+          if (dropChangeOp) {
+            opCount--
+            opIdCtr++
+            if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
+          }
+        } else {
+          appendOperation(outCols, changeCols, changeOp)
+          opsAppended++
+          opCount--
+          opIdCtr++
+          if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
+        }
+      }
+    }
+
+    if (docOp) {
+      appendOperation(outCols, docCols, docOp)
+      opsAppended++
+    }
+    return opsAppended
   }
 
   applyOps(ops, beforeCount, allCols, changeCols, actorTable) {
-    let outCols = allCols.map(columnId => {
+    let newOpsCount = 0, outCols = allCols.map(columnId => {
       return {columnId, encoder: encoderByColumnId(columnId)}
     })
     copyColumns(outCols, this.docColumns, beforeCount)
-    copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
-    copyColumns(outCols, this.docColumns)
-    // TODO: if there are several ops with the target key, need to rewrite them to update their succ
-    // field, and insert the new op at the appropriate position
+    if (ops.directCopy) {
+      copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
+      newOpsCount = ops.consecutiveOps
+    } else {
+      newOpsCount = this.mergeDocChangeOps(outCols, changeCols, ops, actorTable)
+    }
+    // TODO use metadata on block size to set the number of ops to copy here (needed to correctly
+    // fill in nulls for missing columns). Then perform safety check: after copying, all of the
+    // docColumns decoders should be done.
+    copyColumns(outCols, this.docColumns, this.numOps - beforeCount) // FIXME this count is wrong if mergeDocChangeOps consumed ops from docColumns!
+
     this.docColumns = outCols.map(col => {
-      const [columnName, _] = Object.entries(CHANGE_COLUMNS).find(([name, id]) => id === col.columnId)
       const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
-      return {columnId: col.columnId, columnName, decoder}
+      return {columnId: col.columnId, columnName: CHANGE_COLUMNS_REV[col.columnId], decoder}
     })
+    this.numOps += newOpsCount
+    console.log('updated columns:', this.docColumns.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
   }
 
   /**

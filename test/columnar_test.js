@@ -44,6 +44,29 @@ describe('change encoding', () => {
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))
   })
 
+  it('should apply minimal changes', () => {
+    let state = Automerge.init(), doc1 = Automerge.save(state)
+    state = Automerge.change(state, doc => doc.text = new Automerge.Text('a'))
+    state = Automerge.change(state, doc => doc.text.deleteAt(0))
+    const [change1, change2] = Automerge.getAllChanges(state)
+    const backend = new BackendDoc(doc1)
+    backend.applyChange(change1)
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 0x7f, 0],
+      objCtr:   [0, 1, 0x7f, 1],
+      keyActor: [0, 1, 0x7f, 0],
+      keyCtr:   [0, 1, 0x7f, 0],
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1],
+      idActor:  [], // FIXME
+      idCtr:    [],
+      insert:   [1, 1],
+      action:   [0x7e, 4, 1],
+      valLen:   [0x7e, 0, 0x16],
+      valRaw:   [0x61],
+      succNum:  [2, 0]
+    })
+  })
+
   it('should apply a change to a document', () => {
     let state1 = Automerge.change(Automerge.init(), doc => {
       doc.authors = ['me', 'someone else']
