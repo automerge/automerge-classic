@@ -1,4 +1,4 @@
-const path = require('path');
+const path = require('path')
 
 const typescriptConfig = {
   resolve: {
@@ -10,7 +10,7 @@ const typescriptConfig = {
       { test: /\.ts$/, exclude: /node_modules/, loaders: ['babel-loader','ts-loader'], }
     ]
   }
-};
+}
 
 const commonConfig = {
   entry: './src/automerge.ts',
@@ -32,6 +32,6 @@ const commonConfig = {
     ]
   },
   resolve: typescriptConfig.resolve
-};
+}
 
 module.exports = commonConfig

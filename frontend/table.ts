@@ -23,9 +23,9 @@ function compareRows(properties, row1, row2) {
  * a map from object ID to row object.
  */
 class Table {
-  entries: any;
-  context: any;
-  path: any;
+  entries: any
+  context: any
+  path: any
   /**
    * This constructor is used by application code when creating a new Table
    * object within a change callback.

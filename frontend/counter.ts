@@ -4,7 +4,7 @@
  * the value trivially converges.
  */
 class Counter {
-  value: number;
+  value: number
   constructor(value) {
     this.value = value || 0
     Object.freeze(this)
@@ -45,9 +45,9 @@ class Counter {
  * callback.
  */
 class WriteableCounter extends Counter {
-  context: any;
-  path: any;
-  key: any;
+  context: any
+  path: any
+  key: any
   /**
    * Increases the value of the counter by `delta`. If `delta` is not given,
    * increases the value of the counter by 1.
