@@ -1196,7 +1196,18 @@ function seekToOp(ops, docCols, actorIds) {
   return skipCount
 }
 
-function copyColumns(outCols, inCols, count, actorTable) {
+/**
+ * Copies `count` rows from the set of input columns `inCols` to the set of output columns
+ * `outCols`. The input columns are given as an array of `{columnId, decoder}` objects, and the
+ * output columns are given as an array of `{columnId, encoder}` objects. Both are sorted in
+ * increasing order of columnId. If there is no matching input column for a given output column, it
+ * is filled in with `count` blank values (according to the column type).
+ *
+ * If `actorTable` is provided, then for any columns of type ACTOR_ID, every value `v` is mapped to
+ * `actorTable[v]`. If `ops` is provided, then the `idCtr` and `idActor` columns are filled in based
+ * on `ops.idCtr` and `ops.idActor`.
+ */
+function copyColumns(outCols, inCols, count, actorTable, ops) {
   if (count === 0) return
   let inIndex = 0, lastGroup = -1, lastCardinality = 0, valueColumn = -1, valueBytes = 0
   for (let outCol of outCols) {
@@ -1235,6 +1246,10 @@ function copyColumns(outCols, inCols, count, actorTable) {
       if (valueBytes > 0) {
         outCol.encoder.appendRawBytes(inCol.readRawBytes(valueBytes))
       }
+    } else if (ops && !inCol && outCol.columnId === CHANGE_COLUMNS.idActor) {
+      outCol.encoder.appendValue(ops.idActorIndex, colCount)
+    } else if (ops && !inCol && outCol.columnId === CHANGE_COLUMNS.idCtr) {
+      for (let i = 0; i < colCount; i++) outCol.encoder.appendValue(ops.idCtr + i)
     } else { // ACTOR_ID, INT_RLE, INT_DELTA, BOOLEAN, or STRING_RLE
       if (inCol) {
         const options = {count: colCount, lookupTable: null}
@@ -1381,6 +1396,7 @@ function groupRelatedOps(change, changeCols) {
       idCtr    : opIdCtr,
       insert   : insertD.readValue(),
       action   : actionD.readValue(),
+      idActorIndex  : -1, // the index of currentActor in the document's actor list, filled in later
       consecutiveOps: 1,
       directCopy    : false
     }
@@ -1460,8 +1476,15 @@ class BackendDoc {
     let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
     let docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
     let changeOp = readOperation(changeCols, actorTable)
+    changeOp[idActor] = ops.idActorIndex
+    changeOp[idCtr] = opIdCtr
 
+    // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
+    // At each iteration, we either take one op from the doc, or one op from the change, or one from
+    // both (in which case the document operation is updated with information from the change op).
     while (opCount > 0) {
+      let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
+
       // The change operation comes first if there is no document operation, if the next document
       // operation is for a different object, or if the change op's string key is lexicographically
       // first (TODO check ordering of keys beyond the basic multilingual plane). The document
@@ -1470,55 +1493,81 @@ class BackendDoc {
       if (!docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
           (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
+        // Take the operation from the change
+        takeChangeOp = true
         if (changeOp[keyStr] === null && !changeOp[insert]) {
           // TODO note that the optimistic grouping of operations may mean that we don't find the
           // element to update, so we have to restart the search from the beginning of the object
           throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${changeOp[keyActor]}`)
         }
-        appendOperation(outCols, changeCols, changeOp)
-        opsAppended++
-        opCount--
-        opIdCtr++
-        if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
+
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
                  (docOp[keyStr] === null && changeOp[keyStr] === null &&
                   (docOp[keyActor] !== changeOp[keyActor] || docOp[keyCtr] !== changeOp[keyCtr]))) {
-        appendOperation(outCols, this.docColumns, docOp)
-        opsAppended++
-        docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+        // Take the operation from the document
+        takeDocOp = true
+
       } else {
         if (changeOp[keyStr] !== docOp[keyStr] || docOp[keyActor] !== changeOp[keyActor] ||
             docOp[keyCtr] !== changeOp[keyCtr]) throw new RangeError('should not happen')
-        let dropChangeOp = false
+
+        // The two operations (from the doc and from the change) are for the same key in the same
+        // object, so we merge them. First, if the change operation's `pred` matches the opId of the
+        // document operation, we update the document operation's `succ` accordingly.
         for (let i = 0; i < changeOp[predNum]; i++) {
           if (changeOp[predActor][i] === docOp[idActor] && changeOp[predCtr][i] === docOp[idCtr]) {
+            // Insert into the doc op's succ list such that the lists remains sorted
             let j = 0
             while (j < docOp[succNum] && (docOp[succCtr][j] < opIdCtr ||
-                   docOp[succCtr][j] === opIdCtr && this.actorIds[docOp[succActor][j]] < ops.opActor)) j++
+                   docOp[succCtr][j] === opIdCtr && this.actorIds[docOp[succActor][j]] < ops.idActor)) j++
             docOp[succCtr].splice(j, 0, opIdCtr)
-            docOp[succActor].splice(j, 0, this.actorIds.indexOf(ops.opActor))
-            if (changeOp[action] === ACTIONS.indexOf('del')) dropChangeOp = true
+            docOp[succActor].splice(j, 0, ops.idActorIndex)
+            changeOp[predCtr].splice(i, 1)
+            changeOp[predActor].splice(i, 1)
+            changeOp[predNum]--
+            break
           }
         }
-        if (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] === ops.opActor) {
-          throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.opActor}`)
-        }
-        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] < ops.opActor)) {
-          appendOperation(outCols, this.docColumns, docOp)
-          opsAppended++
-          docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
-          if (dropChangeOp) {
-            opCount--
-            opIdCtr++
-            if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
-          }
+
+        // When we have several operations for the same object and the same key, we want to keep
+        // them sorted by opId.
+        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] < ops.idActor)) {
+          // The document op has the lower opId, so we output it first.
+          takeDocOp = true
+
+          // A deletion op in the change is represented in the document only by its entries in the
+          // succ list of the operations it overwrites; it has no separate row in the set of ops.
+          if (changeOp[action] === ACTIONS.indexOf('del') && changeOp[predNum] === 0) dropChangeOp = true
+
+        } else if (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] === ops.idActor) {
+          throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.idActor}`)
         } else {
-          appendOperation(outCols, changeCols, changeOp)
-          opsAppended++
-          opCount--
-          opIdCtr++
-          if (opCount > 0) changeOp = readOperation(changeCols, actorTable)
+          // The change op has the lower opId, so we output it first. Check that we've seen all ops
+          // mentioned in `pred` (they must all have lower opIds, so we must have seen them already)
+          if (changeOp[predNum] > 0) {
+            throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${this.actorIds[changeOp[predActor][0]]}`)
+          }
+          takeChangeOp = true
+        }
+      }
+
+      if (takeDocOp) {
+        appendOperation(outCols, this.docColumns, docOp)
+        opsAppended++
+        docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+      }
+      if (takeChangeOp) {
+        appendOperation(outCols, changeCols, changeOp)
+        opsAppended++
+      }
+      if (takeChangeOp || dropChangeOp) {
+        opCount--
+        opIdCtr++
+        if (opCount > 0) {
+          changeOp = readOperation(changeCols, actorTable)
+          changeOp[idActor] = ops.idActorIndex
+          changeOp[idCtr] = opIdCtr
         }
       }
     }
@@ -1536,7 +1585,7 @@ class BackendDoc {
     })
     copyColumns(outCols, this.docColumns, beforeCount)
     if (ops.directCopy) {
-      copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable)
+      copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable, ops)
       newOpsCount = ops.consecutiveOps
     } else {
       newOpsCount = this.mergeDocChangeOps(outCols, changeCols, ops, actorTable)
@@ -1616,9 +1665,11 @@ class BackendDoc {
     const allCols = this.getAllColumns(changeCols)
     const actorTable = this.getActorTable(change)
     const opSequences = groupRelatedOps(change, changeCols)
+    const actorIndex = this.actorIds.indexOf(change.actorIds[0])
 
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
+      op.idActorIndex = actorIndex
       for (let col of this.docColumns) col.decoder.reset()
       const skipCount = seekToOp(op, this.docColumns, this.actorIds)
       for (let col of this.docColumns) col.decoder.reset()
