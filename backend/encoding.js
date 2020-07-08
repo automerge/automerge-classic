@@ -1025,6 +1025,7 @@ class DeltaDecoder extends RLEDecoder {
    */
   reset() {
     this.offset = 0
+    this.lastValue = undefined
     this.count = 0
     this.state = undefined
     this.absoluteValue = 0
