@@ -81,7 +81,7 @@ Otherwise, clone this repository, and then you can use the following commands:
 
 For examples of real-life applications built upon Automerge, check out:
 
-- [PushPin](https://github.com/inkandswitch/pushpin), a mature React-based personal archiving application
+- [PushPin](https://github.com/automerge/pushpin), a mature React-based personal archiving application
 - [Farm](https://github.com/inkandswitch/farm), a programmable, collaborative computing environment
 - [Capstone](https://github.com/inkandswitch/capstone), a tablet-based note-taking and
   idea-development tool ([blog post](https://www.inkandswitch.com/capstone-manuscript.html))
