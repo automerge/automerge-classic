@@ -1228,7 +1228,7 @@ function copyColumns(outCols, inCols, count, actorTable, ops) {
     if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
       lastGroup = outCol.columnId >> 3
       if (inCol) {
-        lastCardinality = outCol.encoder.copyFrom(inCol, {count, sumValues: true})
+        lastCardinality = outCol.encoder.copyFrom(inCol, {count, sumValues: true}).sum
       } else {
         outCol.encoder.appendValue(0, count)
         lastCardinality = 0
@@ -1239,7 +1239,7 @@ function copyColumns(outCols, inCols, count, actorTable, ops) {
           throw new RangeError('VALUE_LEN column without accompanying VALUE_RAW column')
         }
         valueColumn = outCol.columnId + 1
-        valueBytes = outCol.encoder.copyFrom(inCol, {count: colCount, sumValues: true, sumShift: 4})
+        valueBytes = outCol.encoder.copyFrom(inCol, {count: colCount, sumValues: true, sumShift: 4}).sum
       } else {
         outCol.encoder.appendValue(null, colCount)
         valueColumn = outCol.columnId + 1

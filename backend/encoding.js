@@ -669,23 +669,41 @@ class RLEEncoder extends Encoder {
    *  - `sumValues`: If true, the function computes the sum of all numeric values as they are
    *    copied (null values are counted as zero), and returns that number.
    *  - `sumShift`: If set, values are shifted right by `sumShift` bits before adding to the sum.
+   *
+   * Returns an object of the form `{nonNullValues, sum}` where `nonNullValues` is the number of
+   * non-null values copied, and `sum` is the sum (only if the `sumValues` option is set).
    */
   copyFrom(decoder, options = {}) {
     const { count, lookupTable, sumValues, sumShift } = options
     if (!(decoder instanceof RLEDecoder) || (decoder.type !== this.type)) {
       throw new TypeError('incompatible type of decoder')
     }
-    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER), sum = 0
+    let remaining = (typeof count === 'number' ? count : Number.MAX_SAFE_INTEGER)
+    let nonNullValues = 0, sum = 0
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (remaining === 0 || decoder.done) return sum
+    if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
 
-    // Copy a value so that we have a well-defined starting state
-    const firstValue = decoder.readValue()
-    this.appendValue((lookupTable && firstValue !== null) ? lookupTable[firstValue] : firstValue)
+    // Copy a value so that we have a well-defined starting state. NB: when super.copyFrom() is
+    // called by the DeltaEncoder subclass, the following calls to readValue() and appendValue()
+    // refer to the overridden methods, while later readRecord(), readRawValue() and _appendValue()
+    // calls refer to the non-overridden RLEDecoder/RLEEncoder methods.
+    let firstValue = decoder.readValue()
+    if (firstValue === null) {
+      const numNulls = Math.min(decoder.count + 1, remaining)
+      remaining -= numNulls
+      this.appendValue(null, numNulls)
+      decoder.count = 0
+      if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
+      if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
+      firstValue = decoder.readValue()
+      if (firstValue === null) throw new RangeError('null run must be followed by non-null value')
+    }
+    this.appendValue(lookupTable ? lookupTable[firstValue] : firstValue)
     remaining--
+    nonNullValues++
     if (sumValues) sum += firstValue >>> (sumShift || 0)
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (remaining === 0 || decoder.done) return sum
+    if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
 
     // Copy data at the record level without expanding repetitions
     let startOffset, endOffset, skipValues = !lookupTable && !sumValues, firstRun = true
@@ -701,6 +719,7 @@ class RLEEncoder extends Encoder {
       decoder.count -= numValues
 
       if (decoder.state === 'literal') {
+        nonNullValues += numValues
         if (skipValues && !firstRun) {
           decoder.skipRawValues(numValues)
         } else {
@@ -714,7 +733,8 @@ class RLEEncoder extends Encoder {
           }
         }
       } else if (decoder.state === 'repetition') {
-        if (sumValues) sum += (numValues * decoder.lastValue) >>> (sumShift || 0)
+        nonNullValues += numValues
+        if (sumValues) sum += numValues * (decoder.lastValue >>> (sumShift || 0))
         if (!skipValues || firstRun) {
           const mappedValue = (lookupTable && decoder.lastValue !== null) ? lookupTable[decoder.lastValue] : decoder.lastValue
           this._appendValue(mappedValue)
@@ -752,7 +772,7 @@ class RLEEncoder extends Encoder {
       }
     }
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
-    if (sumValues) return sum
+    return sumValues ? {nonNullValues, sum} : {nonNullValues}
   }
 
   /**
@@ -982,8 +1002,9 @@ class DeltaEncoder extends RLEEncoder {
       throw new TypeError('incompatible type of decoder')
     }
 
-    if (options.count > 0 && decoder.done) throw new RangeError(`cannot copy ${options.count} values`)
-    if (options.count === 0 || decoder.done) return
+    let remaining = options.count
+    if (remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${remaining} values`)
+    if (remaining === 0 || decoder.done) return
 
     // Copy any null values, and the first non-null value, so that appendValue() computes the
     // difference between the encoder's last value and the decoder's first (absolute) value.
@@ -991,21 +1012,27 @@ class DeltaEncoder extends RLEEncoder {
     this.appendValue(value)
     if (value === null) {
       nulls = decoder.count + 1
-      if (options.count && options.count < nulls) nulls = options.count
+      if (remaining !== undefined && remaining < nulls) nulls = remaining
       decoder.count -= nulls - 1
       this.count += nulls - 1
-      if (options.count > nulls && decoder.done) throw new RangeError(`cannot copy ${options.count} values`)
-      if (options.count === nulls || decoder.done) return
+      if (remaining > nulls && decoder.done) throw new RangeError(`cannot copy ${remaining} values`)
+      if (remaining === nulls || decoder.done) return
 
       // The next value read is certain to be non-null because we're not at the end of the decoder,
       // and a run of nulls must be followed by a run of non-nulls.
       if (decoder.count === 0) this.appendValue(decoder.readValue())
     }
 
-    // Once we have the first value, the subsequent relative values can be
-    // copied verbatim without any further processing.
-    if (options.count) options.count -= nulls + 1
-    super.copyFrom(decoder, options)
+    // Once we have the first value, the subsequent relative values can be copied verbatim without
+    // any further processing. Note that the first value copied by super.copyFrom() is an absolute
+    // value, while subsequent values are relative. Thus, the sum of all of the (non-null) copied
+    // values must equal the absolute value of the final element copied.
+    if (remaining !== undefined) remaining -= nulls + 1
+    const { nonNullValues, sum } = super.copyFrom(decoder, {count: remaining, sumValues: true})
+    if (nonNullValues > 0) {
+      this.absoluteValue = sum
+      decoder.absoluteValue = sum
+    }
   }
 }
 

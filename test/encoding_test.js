@@ -710,8 +710,12 @@ describe('Binary encoding', () => {
       it('should compute the sum of values copied', () => {
         const encoder1 = new RLEEncoder('uint'), encoder2 = new RLEEncoder('uint')
         for (let v of [1, 2, 3, 10, 10, 10]) encoder2.appendValue(v)
-        assert.strictEqual(encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true}), 36)
-        assert.strictEqual(encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true, sumShift: 2}), 7)
+        assert.deepStrictEqual(
+          encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true}),
+          {nonNullValues: 6, sum: 36})
+        assert.deepStrictEqual(
+          encoder1.copyFrom(new RLEDecoder('uint', encoder2.buffer), {sumValues: true, sumShift: 2}),
+          {nonNullValues: 6, sum: 6})
       })
 
       it('should throw an exception if the decoder has too few values', () => {
@@ -824,6 +828,33 @@ describe('Binary encoding', () => {
         checkEncoded(doCopy([1, 2, 3], [4, 5, 6, 7], {count: 2}), [5, 1])
         checkEncoded(doCopy([1, 2, 3], [null, null, 4], {count: 1}), [3, 1, 0, 1])
         checkEncoded(doCopy([1, 2, 3], [null, null, 4], {count: 2}), [3, 1, 0, 2])
+      })
+
+      it('should be able to pause and resume copying', () => {
+        const numValues = 13 // 1, 3, 4, 2, null, 3, 4, 5, null, null, 4, 2, -1
+        const bytes = [0x7c, 1, 2, 1, 0x7e, 0, 1, 3, 1, 0, 2, 0x7d, 0x7f, 0x7e, 0x7d]
+        const decoder = new DeltaDecoder(new Uint8Array(bytes))
+        for (let i = 0; i <= numValues; i++) {
+          const encoder = new DeltaEncoder()
+          encoder.copyFrom(decoder, {count: i})
+          encoder.copyFrom(decoder, {count: numValues - i})
+          checkEncoded(encoder, bytes)
+          decoder.reset()
+        }
+      })
+
+      it('should handle copying followed by appending', () => {
+        const encoder1 = doCopy([], [1, 2, 3])
+        encoder1.appendValue(4)
+        checkEncoded(encoder1, [4, 1])
+
+        const encoder2 = doCopy([5], [6, null, null, null, 7, 8])
+        encoder2.appendValue(9)
+        checkEncoded(encoder2, [0x7e, 5, 1, 0, 3, 3, 1])
+
+        const encoder3 = doCopy([1], [2])
+        encoder3.appendValue(3)
+        checkEncoded(encoder3, [3, 1])
       })
 
       it('should throw an exception if the decoder has too few values', () => {
