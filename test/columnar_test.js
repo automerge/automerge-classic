@@ -1,8 +1,8 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
 const { DOC_OPS_COLUMNS, encodeChange, decodeChange, BackendDoc } = require('../backend/columnar')
-const Automerge = require('../src/automerge')
 const { ROOT_ID } = require('../src/common')
+const uuid = require('../src/uuid')
 
 function checkColumns(actualCols, expectedCols) {
   for (let actual of actualCols) {
@@ -11,6 +11,10 @@ function checkColumns(actualCols, expectedCols) {
       checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
     }
   }
+}
+
+function hash(change) {
+  return decodeChange(encodeChange(change)).hash
 }
 
 describe('change encoding', () => {
@@ -43,20 +47,116 @@ describe('change encoding', () => {
     const decoded = decodeChange(encodeChange(change1))
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))
   })
+})
 
-  it('should apply minimal changes', () => {
-    let state = Automerge.init(), doc1 = Automerge.save(state)
-    state = Automerge.change(state, doc => doc.text = new Automerge.Text('a'))
-    state = Automerge.change(state, doc => doc.text.deleteAt(0))
-    const [change1, change2] = Automerge.getAllChanges(state)
-    const backend = new BackendDoc(doc1)
-    backend.applyChange(change1)
+describe('BackendDoc applying changes', () => {
+  it('should overwrite root object properties (1)', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'x', value: 3, pred: []},
+      {action: 'set', obj: ROOT_ID, key: 'y', value: 4, pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'x', value: 5, pred: [`1@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
+    checkColumns(backend.docColumns, {
+      objActor: [],
+      objCtr:   [],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [2, 1, 0x78, 0x7f, 1, 0x79], // 'x', 'x', 'y'
+      idActor:  [3, 0],
+      idCtr:    [0x7d, 1, 2, 0x7f], // 1, 3, 2
+      insert:   [3],
+      action:   [3, 1],
+      valLen:   [3, 0x13],
+      valRaw:   [3, 5, 4],
+      succNum:  [0x7f, 1, 2, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 3]
+    })
+  })
+
+  it('should overwrite root object properties (2)', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'x', value: 3, pred: []},
+      {action: 'set', obj: ROOT_ID, key: 'y', value: 4, pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'y', value: 5, pred: [`2@${actor}`]},
+      {action: 'set', obj: ROOT_ID, key: 'z', value: 6, pred: []}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
+    checkColumns(backend.docColumns, {
+      objActor: [],
+      objCtr:   [],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [0x7f, 1, 0x78, 2, 1, 0x79, 0x7f, 1, 0x7a], // 'x', 'y', 'y', 'z'
+      idActor:  [4, 0],
+      idCtr:    [4, 1],
+      insert:   [4],
+      action:   [4, 1],
+      valLen:   [4, 0x13],
+      valRaw:   [3, 4, 5, 6],
+      succNum:  [0x7e, 0, 1, 2, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 3]
+    })
+  })
+
+  it('should create and update nested maps', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeMap', obj: ROOT_ID,      key: 'map',             pred: []},
+      {action: 'set',     obj: `1@${actor}`, key: 'x',   value: 'a', pred: []},
+      {action: 'set',     obj: `1@${actor}`, key: 'y',   value: 'b', pred: []},
+      {action: 'set',     obj: `1@${actor}`, key: 'z',   value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',     obj: `1@${actor}`, key: 'y',    value: 'B', pred: [`3@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [0x7e, 3, 0x6d, 0x61, 0x70, 1, 0x78, 2, 1, 0x79, 0x7f, 1, 0x7a], // 'map', 'x', 'y', 'y', 'z'
+      idActor:  [5, 0],
+      idCtr:    [3, 1, 0x7e, 2, 0x7f], // 1, 2, 3, 5, 4
+      insert:   [5],
+      action:   [0x7f, 0, 4, 1], // makeMap, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x62, 0x42, 0x63], // 'a', 'b', 'B', 'c'
+      succNum:  [2, 0, 0x7f, 1, 2, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 5]
+    })
+  })
+
+  it('should create a text object', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',  insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [0, 1, 0x7f, 0],
       keyCtr:   [0, 1, 0x7f, 0],
-      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1],
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1], // 'text', null
       idActor:  [2, 0],
       idCtr:    [2, 1],
       insert:   [1, 1],
@@ -65,13 +165,73 @@ describe('change encoding', () => {
       valRaw:   [0x61],
       succNum:  [2, 0]
     })
-    backend.applyChange(change2)
+  })
+
+  it('should insert text characters', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `3@${actor}`, insert: true,  value: 'c', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `4@${actor}`, insert: true,  value: 'd', pred: []}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [0, 1, 4, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, 2, 1], // null, 0, 2, 3, 4
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+      idActor:  [5, 0],
+      idCtr:    [5, 1],
+      insert:   [1, 4],
+      action:   [0x7f, 4, 4, 1], // makeText, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
+      succNum:  [5, 0]
+    })
+  })
+
+  it('should raise an error if the reference element of an insertion does not exist', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []},
+      {action: 'makeMap',  obj: ROOT_ID,      key: 'map',        insert: false,             pred: []},
+      {action: 'set',      obj: `4@${actor}`, key: 'foo',        insert: false, value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 6, time: 0, deps: [], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `4@${actor}`, insert: true,  value: 'd', pred: []}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /Reference element not found/)
+  })
+
+  it('should delete the first character', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',  insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'del',      obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [0, 1, 0x7f, 0],
       keyCtr:   [0, 1, 0x7f, 0],
-      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1],
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1], // 'text', null
       idActor:  [2, 0],
       idCtr:    [2, 1],
       insert:   [1, 1],
@@ -84,55 +244,117 @@ describe('change encoding', () => {
     })
   })
 
-  it('should apply a change to a document', () => {
-    let state1 = Automerge.change(Automerge.init(), doc => {
-      doc.authors = ['me', 'someone else']
-      doc.text = new Automerge.Text()
-      doc.title = 'Hello'
-    })
-    const doc1 = Automerge.save(state1)
-    state1 = Automerge.emptyChange(state1)
-    state1 = Automerge.change(state1, doc => doc.text.insertAt(0, 'a', 'b', 'e'))
-    /*const doc2 = Automerge.save(state1)
-    let state2 = Automerge.merge(Automerge.init(), state1)
-    state2 = Automerge.change(state2, doc => { doc.foo = 'bar'; doc.text.insertAt(2, 'C', 'D') })
-    const doc3 = Automerge.save(state2)
-    state1 = Automerge.change(state1, doc => doc.text.insertAt(2, 'c', 'd'))
-    state2 = Automerge.merge(state2, state1)
-    assert.strictEqual(state2.text.join(''), 'abCDcde') */
-
-    const [change0, change1, change2] = Automerge.getAllChanges(state1)
-    const backend = new BackendDoc(doc1)
-
+  it('should delete a character in the middle', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `3@${actor}`, insert: true,  value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+      {action: 'del',      obj: `1@${actor}`, key: `3@${actor}`, insert: false, pred: [`3@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    backend.applyChange(encodeChange(change2))
     checkColumns(backend.docColumns, {
-      objActor: [0,3,2,0],
-      objCtr:   [0,3,2,1],
-      keyActor: [0,3,2,0],
-      keyCtr:   [0,3,126,0,2],
-      keyStr:   [125,7,97,117,116,104,111,114,115,4,116,101,120,116,5,116,105,116,108,101,0,2],
-      idActor:  [5,0],
-      idCtr:    [123,1,3,1,125,1],
-      insert:   [3,2],
-      action:   [126,2,4,3,1],
-      valLen:   [2,0,125,86,38,198,1],
-      valRaw:   [72,101,108,108,111,109,101,115,111,109,101,111,110,101,32,101,108,115,101],
-      succNum:  [5,0]
+      objActor: [0, 1, 3, 0],
+      objCtr:   [0, 1, 3, 1],
+      keyActor: [0, 1, 3, 0],
+      keyCtr:   [0, 1, 0x7d, 0, 2, 1], // null, 0, 2, 3
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 3], // 'text', 3x null
+      idActor:  [4, 0],
+      idCtr:    [4, 1],
+      insert:   [1, 3],
+      action:   [0x7f, 4, 3, 1], // makeText, set, set, set
+      valLen:   [0x7f, 0, 3, 0x16], // null, 3x 1-byte string
+      valRaw:   [0x61, 0x62, 0x63], // 'a', 'b', 'c'
+      succNum:  [2, 0, 0x7e, 1, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 5]
     })
+  })
 
-    backend.applyChange(change2)
-    checkColumns(backend.docColumns, {
-      objActor: [0,3,5,0],
-      objCtr:   [0,3,2,1,3,4],
-      keyActor: [0,3,5,0],
-      keyCtr:   [0,3,123,0,2,126,6,1],
-      keyStr:   [125,7,97,117,116,104,111,114,115,4,116,101,120,116,5,116,105,116,108,101,0,5],
-      idActor:  [8,0],
-      idCtr:    [122,1,3,1,125,1,2,2,1],
-      insert:   [3,5],
-      action:   [126,2,4,6,1],
-      valLen:   [2,0,125,86,38,198,1,3,22],
-      valRaw:   [72,101,108,108,111,109,101,115,111,109,101,111,110,101,32,101,108,115,101,97,98,101],
-      succNum:  [8,0]
-    })
+  it('should raise an error if a deleted element does not exist', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [], ops: [
+      {action: 'del',      obj: `1@${actor}`, key: `1@${actor}`, insert: false, pred: [`1@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /Element not found for update/)
+  })
+
+  it('should apply concurrent insertions at the same position', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,       key: 'text',        insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor1}`, key: '_head',       insert: true,  value: 'a', pred: []}
+    ]}
+    const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: `2@${actor1}`, insert: true,  value: 'c', pred: []}
+    ]}
+    const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: `2@${actor1}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const backend1 = new BackendDoc(), backend2 = new BackendDoc()
+    for (let change of [change1, change2, change3]) backend1.applyChange(encodeChange(change))
+    for (let change of [change1, change3, change2]) backend2.applyChange(encodeChange(change))
+    for (let backend of [backend1, backend2]) {
+      checkColumns(backend.docColumns, {
+        objActor: [0, 1, 3, 0],
+        objCtr:   [0, 1, 3, 1],
+        keyActor: [0, 1, 3, 0],
+        keyCtr:   [0, 1, 0x7d, 0, 2, 0], // null, 0, 2, 2
+        keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 3], // 'text', 3x null
+        idActor:  [2, 0, 0x7e, 1, 0], // 0, 0, 1, 0
+        idCtr:    [3, 1, 0x7f, 0], // 1, 2, 3, 3
+        insert:   [1, 3], // false, true, true, true
+        action:   [0x7f, 4, 3, 1], // makeText, set, set, set
+        valLen:   [0x7f, 0, 3, 0x16], // null, 3x 1-byte string
+        valRaw:   [0x61, 0x62, 0x63], // 'a', 'b', 'c'
+        succNum:  [4, 0]
+      })
+    }
+  })
+
+  it('should apply concurrent insertions at the head', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,       key: 'text',        insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor1}`, key: '_head',       insert: true,  value: 'd', pred: []}
+    ]}
+    const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: '_head',       insert: true,  value: 'c', pred: []}
+    ]}
+    const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: '_head',       insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor1}`, key: `3@${actor2}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const backend1 = new BackendDoc(), backend2 = new BackendDoc()
+    for (let change of [change1, change2, change3]) backend1.applyChange(encodeChange(change))
+    for (let change of [change1, change3, change2]) backend2.applyChange(encodeChange(change))
+    for (let backend of [backend1, backend2]) {
+      checkColumns(backend.docColumns, {
+        objActor: [0, 1, 4, 0],
+        objCtr:   [0, 1, 4, 1],
+        keyActor: [0, 1, 2, 1, 2, 0], // null, 1, 1, 0, 0 -- TODO: use null for _head
+        keyCtr:   [0, 1, 0x7c, 0, 3, 0x7d, 0], // null, 0, 3, 0, 0
+        keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+        idActor:  [0x7f, 0, 2, 1, 2, 0], // 0, 1, 1, 0, 0
+        idCtr:    [0x7d, 1, 2, 1, 2, 0x7f], // 1, 3, 4, 3, 2
+        insert:   [1, 4], // false, true, true, true, true
+        action:   [0x7f, 4, 4, 1], // makeText, set, set, set, set
+        valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+        valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
+        succNum:  [5, 0]
+      })
+    }
   })
 })

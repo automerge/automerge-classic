@@ -1137,14 +1137,14 @@ function seekToOp(ops, docCols, actorIds) {
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = docCols.map(col => col.decoder)
   let skipCount = 0, nextObjActor = null, nextObjCtr = null
-  let nextIdActor = null, nextIdCtr = null, nextKeyStr = null
+  let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null
 
   // Seek to the beginning of the object being updated
   if (objCtr !== null) {
-    while (!objCtrD.done || !objActorD.done || !keyStrD.done) {
+    while (!objCtrD.done || !objActorD.done || !actionD.done) {
       nextObjCtr = objCtrD.readValue()
       nextObjActor = actorIds[objActorD.readValue()]
-      keyStrD.skipValues(1)
+      actionD.skipValues(1)
       if (nextObjCtr === null || !nextObjActor || nextObjCtr < objCtr ||
           (nextObjCtr === objCtr && nextObjActor < objActor)) {
         skipCount += 1
@@ -1153,14 +1153,16 @@ function seekToOp(ops, docCols, actorIds) {
       }
     }
   }
+  if (nextObjCtr !== objCtr || nextObjActor !== objActor) return skipCount
 
   // Seek to the appropriate key (if string key is used)
-  if (keyStr !== null && nextObjCtr === objCtr && nextObjActor === objActor) {
+  if (keyStr !== null) {
     keyStrD.skipValues(skipCount)
     while (!keyStrD.done) {
-      nextKeyStr = keyStrD.readValue()
+      const objActorIndex = objActorD.readValue()
+      nextObjActor = objActorIndex === null ? null : actorIds[objActorIndex]
       nextObjCtr = objCtrD.readValue()
-      nextObjActor = actorIds[objActorD.readValue()]
+      nextKeyStr = keyStrD.readValue()
       if (nextKeyStr !== null && nextKeyStr < keyStr &&
           nextObjCtr === objCtr && nextObjActor === objActor) {
         skipCount += 1
@@ -1168,35 +1170,78 @@ function seekToOp(ops, docCols, actorIds) {
         break
       }
     }
+    return skipCount
   }
 
-  // Seek to the appropriate list element (if opId key is used)
-  if (keyCtr !== null && keyActor !== null && keyCtr > 0 && nextObjCtr === objCtr && nextObjActor === objActor) {
-    idCtrD.skipValues(skipCount)
-    idActorD.skipValues(skipCount)
-    while (!idCtrD.done && !idActorD.done && (nextIdCtr !== keyCtr || nextIdActor !== keyActor)) {
+  idCtrD.skipValues(skipCount)
+  idActorD.skipValues(skipCount)
+  insertD.skipValues(skipCount)
+  nextIdCtr = idCtrD.readValue()
+  nextIdActor = actorIds[idActorD.readValue()]
+  nextInsert = insertD.readValue()
+
+  // If we are inserting into a list, an opId key is used, and we need to seek to a position *after*
+  // the referenced operation. Moreover, we need to skip over any existing operations with a greater
+  // opId than the new insertion, for CRDT convergence on concurrent insertions in the same place.
+  if (insert) {
+    // If insertion is not at the head, search for the reference element
+    if (keyCtr !== null && keyCtr > 0 && keyActor !== null) {
+      skipCount += 1
+      while (!idCtrD.done && !idActorD.done && (nextIdCtr !== keyCtr || nextIdActor !== keyActor)) {
+        nextIdCtr = idCtrD.readValue()
+        nextIdActor = actorIds[idActorD.readValue()]
+        nextObjCtr = objCtrD.readValue()
+        nextObjActor = actorIds[objActorD.readValue()]
+        nextInsert = insertD.readValue()
+        if (nextObjCtr === objCtr && nextObjActor === objActor) skipCount += 1; else break
+      }
+      if (nextObjCtr !== objCtr || nextObjActor !== objActor || nextIdCtr !== keyCtr ||
+          nextIdActor !== keyActor || !nextInsert) {
+        throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
+      }
+
+      // Set up the next* variables to the operation following the reference element
+      if (idCtrD.done || idActorD.done) return skipCount
       nextIdCtr = idCtrD.readValue()
       nextIdActor = actorIds[idActorD.readValue()]
       nextObjCtr = objCtrD.readValue()
       nextObjActor = actorIds[objActorD.readValue()]
-      if (nextObjCtr === objCtr && nextObjActor === objActor) skipCount += 1; else break
-    }
-    if (nextIdCtr !== keyCtr || nextIdActor !== keyActor) {
-      throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
+      nextInsert = insertD.readValue()
     }
 
-    // Skip over any list elements with greater ID than the new one
-    while (!idCtrD.done && !idActorD.done) {
-      nextIdCtr = idCtrD.readValue()
-      nextIdActor = actorIds[idActorD.readValue()]
-      nextObjCtr = objCtrD.readValue()
-      nextObjActor = actorIds[objActorD.readValue()]
-      if ((nextIdCtr > idCtr || (nextIdCtr === idCtr && nextIdActor > idActor)) &&
-          nextObjCtr === objCtr && nextObjActor === objActor) {
-        skipCount += 1
+    // Skip over any list elements with greater ID than the new one, and any non-insertions
+    while ((!nextInsert || nextIdCtr > idCtr || (nextIdCtr === idCtr && nextIdActor > idActor)) &&
+           nextObjCtr === objCtr && nextObjActor === objActor) {
+      skipCount += 1
+      if (!idCtrD.done && !idActorD.done) {
+        nextIdCtr = idCtrD.readValue()
+        nextIdActor = actorIds[idActorD.readValue()]
+        nextObjCtr = objCtrD.readValue()
+        nextObjActor = actorIds[objActorD.readValue()]
+        nextInsert = insertD.readValue()
       } else {
         break
       }
+    }
+
+  } else if (keyCtr !== null && keyCtr > 0 && keyActor !== null) {
+    // If we are updating an existing list element, seek to just before the referenced ID
+    while ((!nextInsert || nextIdCtr !== keyCtr || nextIdActor !== keyActor) &&
+           nextObjCtr === objCtr && nextObjActor === objActor) {
+      skipCount += 1
+      if (!idCtrD.done && !idActorD.done) {
+        nextIdCtr = idCtrD.readValue()
+        nextIdActor = actorIds[idActorD.readValue()]
+        nextObjCtr = objCtrD.readValue()
+        nextObjActor = actorIds[objActorD.readValue()]
+        nextInsert = insertD.readValue()
+      } else {
+        break
+      }
+    }
+    if (nextObjCtr !== objCtr || nextObjActor !== objActor || nextIdCtr !== keyCtr ||
+        nextIdActor !== keyActor || !nextInsert) {
+      throw new RangeError(`Element not found for update: ${keyCtr}@${keyActor}`)
     }
   }
   return skipCount
@@ -1324,7 +1369,7 @@ function readOperation(columns, actorTable) {
  * `operation[i]` comes from the column `inCols[i]`.
  */
 function appendOperation(outCols, inCols, operation) {
-  console.log('appending:', operation.map((value, idx) => {return {columnName: inCols[idx].columnName, value} }))
+  //console.log('appending:', operation.map((value, idx) => {return {columnName: inCols[idx].columnName, value} }))
   let inIndex = 0, lastGroup = -1, lastCardinality = 0
   for (let outCol of outCols) {
     while (inIndex < inCols.length && inCols[inIndex].columnId < outCol.columnId) inIndex++
@@ -1445,12 +1490,19 @@ function groupRelatedOps(change, changeCols) {
 
 class BackendDoc {
   constructor(buffer) {
-    const doc = decodeDocumentHeader(buffer)
-    this.changesColumns = doc.changesColumns
-    this.actorIds = doc.actorIds
-    this.heads = doc.heads
-    this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
-    this.numOps = 0 // TODO count actual number of ops in the document
+    if (buffer) {
+      const doc = decodeDocumentHeader(buffer)
+      this.changesColumns = doc.changesColumns
+      this.actorIds = doc.actorIds
+      this.heads = doc.heads
+      this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
+      this.numOps = 0 // TODO count actual number of ops in the document
+    } else {
+      this.actorIds = []
+      this.heads = []
+      this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
+      this.numOps = 0
+    }
   }
 
   /**
@@ -1581,7 +1633,7 @@ class BackendDoc {
     }
 
     if (docOp) {
-      appendOperation(outCols, docCols, docOp)
+      appendOperation(outCols, this.docColumns, docOp)
       opsAppended++
     }
     return {opsAppended, docOpsConsumed}
@@ -1614,7 +1666,7 @@ class BackendDoc {
       return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
     })
     this.numOps += newOpsCount
-    console.log('updated columns:', this.docColumns.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
+    //console.log('updated columns:', this.docColumns.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
   }
 
   /**
