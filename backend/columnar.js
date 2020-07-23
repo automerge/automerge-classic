@@ -1,6 +1,6 @@
 const { ROOT_ID, copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
-  hexStringToBytes, bytesToHexString,
+  utf8ToString, hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
 } = require('./encoding')
 
@@ -270,12 +270,12 @@ function encodeValue(op, columns) {
 }
 
 /**
- * Given decoders for two columns with type tags VALUE_LEN and VALUE_RAW respectively,
- * reads one value from those columns. Returns an object of the form
- * `{value: value, datatype: datatypeTag}`.
+ * Given `sizeTag` (an unsigned integer read from a VALUE_LEN column) and `bytes` (a Uint8Array
+ * read from a VALUE_RAW column, with length `sizeTag >> 4`), this function returns an object of the
+ * form `{value: value, datatype: datatypeTag}` where `value` is a JavaScript primitive datatype
+ * corresponding to the value, and `datatypeTag` is a datatype annotation such as 'counter'.
  */
-function decodeValue(lenColumn, rawColumn) {
-  const sizeTag = lenColumn.readValue()
+function decodeValue(sizeTag, bytes) {
   if (sizeTag === VALUE_TYPE.NULL) {
     return {value: null}
   } else if (sizeTag === VALUE_TYPE.FALSE) {
@@ -283,13 +283,12 @@ function decodeValue(lenColumn, rawColumn) {
   } else if (sizeTag === VALUE_TYPE.TRUE) {
     return {value: true}
   } else if (sizeTag % 16 === VALUE_TYPE.UTF8) {
-    return {value: rawColumn.readRawString(sizeTag >> 4)}
+    return {value: utf8ToString(bytes)}
   } else {
-    const bytes = rawColumn.readRawBytes(sizeTag >> 4), valDecoder = new Decoder(bytes)
     if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
-      return {value: valDecoder.readUint53()}
+      return {value: new Decoder(bytes).readUint53()}
     } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
-      return {value: valDecoder.readInt53()}
+      return {value: new Decoder(bytes).readInt53()}
     } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
       if (bytes.byteLength === 4) {
@@ -300,9 +299,9 @@ function decodeValue(lenColumn, rawColumn) {
         throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
       }
     } else if (sizeTag % 16 === VALUE_TYPE.COUNTER) {
-      return {value: valDecoder.readInt53(), datatype: 'counter'}
+      return {value: new Decoder(bytes).readInt53(), datatype: 'counter'}
     } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
-      return {value: valDecoder.readInt53(), datatype: 'timestamp'}
+      return {value: new Decoder(bytes).readInt53(), datatype: 'timestamp'}
     } else {
       return {value: bytes, datatype: sizeTag % 16}
     }
@@ -321,7 +320,9 @@ function decodeValueColumns(columns, colIndex, actorIds, result) {
   const { columnId, columnName, decoder } = columns[colIndex]
   if (columnId % 8 === COLUMN_TYPE.VALUE_LEN && colIndex + 1 < columns.length &&
       columns[colIndex + 1].columnId === columnId + 1) {
-    const { value, datatype } = decodeValue(decoder, columns[colIndex + 1].decoder)
+    const sizeTag = decoder.readValue()
+    const rawValue = columns[colIndex + 1].decoder.readRawBytes(sizeTag >> 4)
+    const { value, datatype } = decodeValue(sizeTag, rawValue)
     result[columnName] = value
     if (datatype) result[columnName + '_datatype'] = datatype
     return 2
@@ -1095,7 +1096,10 @@ function constructPatch(documentBuffer) {
     const keyStr = col.keyStr.readValue(), insert = !!col.insert.readValue()
     const chldActor = col.chldActor.readValue(), chldCtr = col.chldCtr.readValue()
     const childId = chldActor === null ? null : `${chldCtr}@${actorIds[chldActor]}`
-    const value = decodeValue(col.valLen, col.valRaw), succNum = col.succNum.readValue()
+    const sizeTag = col.valLen.readValue()
+    const rawValue = col.valRaw.readRawBytes(sizeTag >> 4)
+    const value = decodeValue(sizeTag, rawValue)
+    const succNum = col.succNum.readValue()
     let succ = []
     for (let i = 0; i < succNum; i++) {
       succ.push(`${col.succCtr.readValue()}@${actorIds[col.succActor.readValue()]}`)
@@ -1407,8 +1411,12 @@ function appendOperation(outCols, inCols, operation) {
 /**
  * Given a change parsed by `decodeChangeColumns()` and its column decoders as instantiated by
  * `makeDecoders()`, reads the operations in the change and groups together any related operations
- * that can be applied at the same time. Returns an array of operation groups, where each group is
- * an object with a `consecutiveOps` property indicating how many operations are in that group.
+ * that can be applied at the same time. Returns an object of the form `{opSequences, objects}`:
+ *    - `opSequences` is an array of operation groups, where each group is an object with a
+ *      `consecutiveOps` property indicating how many operations are in that group.
+ *    - `objects` is an object where keys are the IDs of newly created objects, and the values
+ *      are metadata about that object, such as the object type, and that object's parent and the
+ *      key within the parent object where it is located.
  *
  * In order for a set of operations to be related, they have to satisfy the following properties:
  *   1. They must all be for the same object. (Even when several objects are created in the same
@@ -1433,7 +1441,8 @@ function groupRelatedOps(change, changeCols) {
   const currentActor = change.actorIds[0]
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = changeCols.map(col => col.decoder)
-  let objIdSeen = {}, firstOp = null, lastOp = null, opSequences = [], opIdCtr = change.startOp
+  let objIdSeen = {}, firstOp = null, lastOp = null, opIdCtr = change.startOp
+  let opSequences = [], objects = {}
 
   while (!actionD.done) {
     const objActor = objActorD.readValue(), keyActor = keyActorD.readValue()
@@ -1460,9 +1469,28 @@ function groupRelatedOps(change, changeCols) {
         (thisOp.keyCtr >   0    && typeof thisOp.keyActor !== 'string')) {
       throw new RangeError(`Mismatched operation key: (${thisOp.keyCtr}, ${thisOp.keyActor})`)
     }
-    if (thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp &&
-        !objIdSeen[`${thisOp.objCtr}@${thisOp.objActor}`] || thisOp.insert) {
+
+    thisOp.opId = `${thisOp.idCtr}@${thisOp.idActor}`
+    thisOp.objId = thisOp.objCtr === null ? ROOT_ID : `${thisOp.objCtr}@${thisOp.objActor}`
+    if (thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp && !objIdSeen[thisOp.objId] ||
+        thisOp.insert) {
       thisOp.directCopy = true
+    }
+
+    // An even-numbered action indicates a make* operation that creates a new object.
+    // TODO: also handle link/move operations.
+    if (thisOp.action % 2 === 0) {
+      let parentKey
+      if (thisOp.keyStr !== null) {
+        parentKey = thisOp.keyStr
+      } else if (thisOp.insert) {
+        parentKey = thisOp.opId
+      } else {
+        parentKey = `${thisOp.keyCtr}@${thisOp.keyActor}`
+      }
+      const objType = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
+      const type = thisOp.action < ACTIONS.length ? objType[ACTIONS[thisOp.action]] : null
+      objects[thisOp.opId] = {parentObj: thisOp.objId, parentKey, opId: thisOp.opId, type}
     }
 
     if (!firstOp) {
@@ -1476,7 +1504,7 @@ function groupRelatedOps(change, changeCols) {
       firstOp.consecutiveOps += 1
       lastOp = thisOp
     } else {
-      objIdSeen[`${firstOp.objCtr}@${firstOp.objActor}`] = true
+      objIdSeen[thisOp.objId] = true
       opSequences.push(firstOp)
       firstOp = thisOp
       lastOp = thisOp
@@ -1486,7 +1514,7 @@ function groupRelatedOps(change, changeCols) {
   }
 
   if (firstOp) opSequences.push(firstOp)
-  return opSequences
+  return {opSequences, objects}
 }
 
 class BackendDoc {
@@ -1498,23 +1526,38 @@ class BackendDoc {
       this.heads = doc.heads
       this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
       this.numOps = 0 // TODO count actual number of ops in the document
+      this.objectMeta = {} // TODO fill this in
     } else {
       this.actorIds = []
       this.heads = []
       this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
       this.numOps = 0
+      this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map'}}
+    }
+  }
+
+  updatePatchProperty(op, patch) {
+    // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
+    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
+      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
+
+    const key = op[keyStr] !== null ? op[keyStr] : `${op[keyCtr]}@${this.actorIds[op[keyActor]]}`
+    if (!patch.props[key]) patch.props[key] = {}
+    if (ACTIONS[op[action]] === 'set' && op[succNum] === 0) {
+      const opId = `${op[idCtr]}@${this.actorIds[op[idActor]]}`
+      patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
     }
   }
 
   /**
    * Applies a sequence of change operations to the document. `changeCols` contains the columns of
    * the change. Assumes that the decoders of both sets of columns are at the position where we want
-   * to start merging.
+   * to start merging. `patch` is mutated to reflect the change made by the operations.
    */
-  mergeDocChangeOps(outCols, changeCols, ops, actorTable) {
+  mergeDocChangeOps(outCols, changeCols, ops, actorTable, patch) {
     // Check the first couple of columns are in the positions where we expect them to be
-    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7,
-      action = 8, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
+    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
+      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
     if (this.docColumns[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
         this.docColumns[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
         this.docColumns[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
@@ -1524,6 +1567,8 @@ class BackendDoc {
         this.docColumns[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
         this.docColumns[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
         this.docColumns[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
+        this.docColumns[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
+        this.docColumns[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
         this.docColumns[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
         this.docColumns[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
         this.docColumns[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
@@ -1542,15 +1587,13 @@ class BackendDoc {
     // both (in which case the document operation is updated with information from the change op).
     while (opCount > 0) {
       let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
-      // Insertion operations are copied directly and don't reach this code path
-      if (changeOp[insert]) throw new RangeError('unexpected insert operation')
 
       // The change operation comes first if there is no document operation, if the next document
       // operation is for a different object, or if the change op's string key is lexicographically
       // first (TODO check ordering of keys beyond the basic multilingual plane). The document
       // operation comes first if its string key is lexicographically first, or if we're using opId
       // keys and the keys don't match (i.e. we scan the document until we find a matching key).
-      if (!docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
+      if (ops.directCopy || !docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
           (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
         // Take the operation from the change
@@ -1560,6 +1603,7 @@ class BackendDoc {
           // element to update, so we have to restart the search from the beginning of the object
           throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${this.actorIds[changeOp[keyActor]]}`)
         }
+        this.updatePatchProperty(changeOp, patch)
 
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
@@ -1591,10 +1635,11 @@ class BackendDoc {
         }
 
         // When we have several operations for the same object and the same key, we want to keep
-        // them sorted by opId.
+        // them sorted in ascending order by opId.
         if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] < ops.idActor)) {
           // The document op has the lower opId, so we output it first.
           takeDocOp = true
+          this.updatePatchProperty(docOp, patch)
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
@@ -1609,6 +1654,7 @@ class BackendDoc {
             throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${this.actorIds[changeOp[predActor][0]]}`)
           }
           takeChangeOp = true
+          this.updatePatchProperty(changeOp, patch)
         }
       }
 
@@ -1640,33 +1686,39 @@ class BackendDoc {
     return {opsAppended, docOpsConsumed}
   }
 
-  applyOps(ops, beforeCount, allCols, changeCols, actorTable) {
-    let newOpsCount = 0, outCols = allCols.map(columnId => {
+  /**
+   * Applies the operation sequence in `ops` (as produced by `groupRelatedOps()`) from the change
+   * with columns `changeCols` to the current document. `allCols` is an array of all the columnIds
+   * in either the document or the change. `actorTable` is an array of integers where
+   * `actorTable[i]` contains the document's actor index for the actor that has index `i` in the
+   * change (`i == 0` is the author of the change). `patch` is a patch object that is mutated to
+   * reflect the operations applied by this function.
+   */
+  applyOps(ops, allCols, changeCols, actorTable, patch) {
+    for (let col of this.docColumns) col.decoder.reset()
+    const beforeCount = seekToOp(ops, this.docColumns, this.actorIds)
+    for (let col of this.docColumns) col.decoder.reset()
+
+    let outCols = allCols.map(columnId => {
       return {columnId, encoder: encoderByColumnId(columnId)}
     })
-    let remainingOps = this.numOps - beforeCount
     copyColumns(outCols, this.docColumns, beforeCount)
-    if (ops.directCopy) {
-      copyColumns(outCols, changeCols, ops.consecutiveOps, actorTable, ops)
-      newOpsCount = ops.consecutiveOps
-    } else {
-      const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(outCols, changeCols, ops, actorTable)
-      remainingOps -= docOpsConsumed
-      newOpsCount = opsAppended - docOpsConsumed
-    }
+    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(outCols, changeCols, ops, actorTable, patch)
     // TODO use metadata on block size to set the number of ops to copy here (needed to correctly
     // fill in nulls for missing columns). Then perform safety check: after copying, all of the
     // docColumns decoders should be done.
-    copyColumns(outCols, this.docColumns, remainingOps)
+    copyColumns(outCols, this.docColumns, this.numOps - beforeCount - docOpsConsumed)
     for (let col of this.docColumns) {
       if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
     }
 
+    // TODO to make change application atomic, side-effects should take effect after we have
+    // finished executing any code that might throw an exception
     this.docColumns = outCols.map(col => {
       const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
       return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
     })
-    this.numOps += newOpsCount
+    this.numOps += opsAppended - docOpsConsumed
     //console.log('updated columns:', this.docColumns.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
   }
 
@@ -1707,6 +1759,7 @@ class BackendDoc {
       if (change.seq !== 1) {
         throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
       }
+      // TODO to make change application atomic, this side-effect should not happen till later
       this.actorIds.push(change.actorIds[0])
     }
     const actorTable = [] // translate from change's actor index to doc's actor index
@@ -1722,24 +1775,54 @@ class BackendDoc {
 
   /**
    * Parses the change given as a Uint8Array in `changeBuffer`, and applies it to the current
-   * document. TODO this should return a patch.
+   * document. Returns a patch to apply to the frontend.
    */
   applyChange(changeBuffer) {
     const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
     const allCols = this.getAllColumns(changeCols)
     const actorTable = this.getActorTable(change)
-    const opSequences = groupRelatedOps(change, changeCols)
+    const {opSequences, objects} = groupRelatedOps(change, changeCols)
+    const objectMeta = Object.assign({}, this.objectMeta, objects)
     const actorIndex = this.actorIds.indexOf(change.actorIds[0])
+
+    // Set up the patch to include any objects that are created or updated
+    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
+    let affectedObjects = Object.assign({}, objects)
+    for (let op of opSequences) affectedObjects[op.objId] = objectMeta[op.objId]
+    for (let [objectId, meta] of Object.entries(affectedObjects)) {
+      let childMeta = null, childPatch = null
+      while (true) {
+        const patchExists = !!patches[objectId]
+        if (!patchExists) {
+          patches[objectId] = {objectId, type: meta.type, props: {}}
+        }
+        if (childMeta) {
+          let props = patches[objectId].props
+          if (!props[childMeta.parentKey]) props[childMeta.parentKey] = {}
+          props[childMeta.parentKey][childMeta.opId] = childPatch
+        }
+        if (patchExists || !meta.parentObj) break
+        childPatch = patches[objectId]
+        childMeta = meta
+        objectId = meta.parentObj
+        meta = objectMeta[objectId]
+      }
+    }
 
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
       op.idActorIndex = actorIndex
-      for (let col of this.docColumns) col.decoder.reset()
-      const skipCount = seekToOp(op, this.docColumns, this.actorIds)
-      for (let col of this.docColumns) col.decoder.reset()
-      this.applyOps(op, skipCount, allCols, changeCols, actorTable)
+      this.applyOps(op, allCols, changeCols, actorTable, patches[op.objId])
     }
+
+    // Do the metadata update at the end, so that if any of the earlier code throws an exception,
+    // the document metadata is not modified
+    this.objectMeta = objectMeta
+    // TODO rewrite the patch, turning any list element IDs into indexes (must happen after all ops
+    // have been applied, since we use the final indexes) and adding any conflicts for properties on
+    // the path from the root to the updated objects
+    return patches[ROOT_ID]
   }
 }
 

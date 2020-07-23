@@ -1243,6 +1243,6 @@ class BooleanDecoder extends Decoder {
 }
 
 module.exports = {
-  hexStringToBytes, bytesToHexString,
+  stringToUtf8, utf8ToString, hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
 }

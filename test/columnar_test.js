@@ -143,6 +143,54 @@ describe('BackendDoc applying changes', () => {
     })
   })
 
+  it('should create nested maps several levels deep', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeMap', obj: ROOT_ID,      key: 'a',           pred: []},
+      {action: 'makeMap', obj: `1@${actor}`, key: 'b',           pred: []},
+      {action: 'makeMap', obj: `2@${actor}`, key: 'c',           pred: []},
+      {action: 'set',     obj: `3@${actor}`, key: 'd', value: 1, pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [], ops: [
+      {action: 'set',     obj: `3@${actor}`, key: 'd', value: 2, pred: [`4@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {a: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'map', props: {b: {[`2@${actor}`]: {
+          objectId: `2@${actor}`, type: 'map', props: {c: {[`3@${actor}`]: {
+            objectId: `3@${actor}`, type: 'map', props: {d: {[`4@${actor}`]: {value: 1}}}
+          }}}
+        }}}
+      }}}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {a: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'map', props: {b: {[`2@${actor}`]: {
+          objectId: `2@${actor}`, type: 'map', props: {c: {[`3@${actor}`]: {
+            objectId: `3@${actor}`, type: 'map', props: {d: {[`5@${actor}`]: {value: 2}}}
+          }}}
+        }}}
+      }}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 0x7e, 1, 2, 2, 3], // null, 1, 2, 3, 3
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [0x7d, 1, 0x61, 1, 0x62, 1, 0x63, 2, 1, 0x64], // 'a', 'b', 'c', 'd', 'd'
+      idActor:  [5, 0],
+      idCtr:    [5, 1], // 1, 2, 3, 4, 5
+      insert:   [5],
+      action:   [3, 0, 2, 1], // 3x makeMap, 2x set
+      valLen:   [3, 0, 2, 0x13], // 3x null, 2x uint
+      valRaw:   [1, 2],
+      succNum:  [3, 0, 0x7e, 1, 0], // 0, 0, 0, 1, 0
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 5]
+    })
+  })
+
   it('should create a text object', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
