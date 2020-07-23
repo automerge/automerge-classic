@@ -172,7 +172,7 @@ function encodeObjectId(op, columns) {
  */
 function encodeOperationKey(op, columns) {
   if (op.key.value === '_head' && op.insert) {
-    columns.keyActor.appendValue(0)
+    columns.keyActor.appendValue(null)
     columns.keyCtr.appendValue(0)
     columns.keyStr.appendValue(null)
   } else if (op.key.value) {
@@ -1105,7 +1105,7 @@ function constructPatch(documentBuffer) {
 
     let key
     if (obj.type === 'list' || obj.type === 'text') {
-      if (keyActor === null || keyCtr === null || (keyCtr === 0 && !insert)) {
+      if (keyCtr === null || (keyCtr === 0 && !insert)) {
         throw new RangeError(`Operation ${opId} on ${obj.type} object has no key`)
       }
       key = insert ? opId : `${keyCtr}@${actorIds[keyActor]}`
@@ -1456,7 +1456,8 @@ function groupRelatedOps(change, changeCols) {
       throw new RangeError(`Mismatched object reference: (${thisOp.objCtr}, ${thisOp.objActor})`)
     }
     if ((thisOp.keyCtr === null && thisOp.keyActor !== null) ||
-        (thisOp.keyCtr !== null && typeof thisOp.keyActor !== 'string')) {
+        (thisOp.keyCtr === 0    && thisOp.keyActor !== null) ||
+        (thisOp.keyCtr >   0    && typeof thisOp.keyActor !== 'string')) {
       throw new RangeError(`Mismatched operation key: (${thisOp.keyCtr}, ${thisOp.keyActor})`)
     }
     if (thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp &&

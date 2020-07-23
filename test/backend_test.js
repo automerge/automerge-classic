@@ -393,19 +393,19 @@ describe('Automerge.Backend', () => {
       const [s5, patch5] = Backend.applyLocalChange(s4, local3)
       const changes45 = Backend.getChanges(s5, [hash(remote2), changes34[0].hash]).map(decodeChange)
       assert.deepStrictEqual(changes12, [{
-        hash: '5c783f0af83181f403da6c66b26d0c2612cbab60edd7d9c5b69713b2741ca4fa',
+        hash: '9e4bfa0cfa532c4b0c0d4a98edb2b833753d23978122f632da42d4cad81062ea',
         actor: '111111', seq: 1, startOp: 2, time: 0, message: '', deps: [hash(remote1)], ops: [
           {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes34, [{
-        hash: '7924441f981d33ce30a35a3f31cc79a0b88098a5613c8894dde6179178b1c82e',
+        hash: '989560a58e050781303f27751fca5db6b68e3435eaeb628468d87bb18368384f',
         actor: '111111', seq: 2, startOp: 3, time: 0, message: '', deps: [changes12[0].hash], ops: [
           {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes45, [{
-        hash: 'ad2a65612c4a34ba381717e95460d170e03c2be7936679cca24e1c4c3ed2b096',
+        hash: 'dd37ad188ecda7986467e8ff382667d3417cf5962bbbba9ddc7eb6fc049f718c',
         actor: '111111', seq: 3, startOp: 4, time: 0, message: '',
         deps: [hash(remote2), changes34[0].hash].sort(), ops: [
           {obj: '1@222222', action: 'set', key: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
@@ -441,7 +441,7 @@ describe('Automerge.Backend', () => {
           {obj: ROOT_ID, action: 'makeList', key: 'birds', insert: false, pred: []}
         ]
       }, {
-        hash: '85813011f02eabc4fa6965d27511ccade76013c16f48789bcfaa8475847bdb93',
+        hash: 'e4ac64e701a14d92b3096cfa9763178f9b778039b596189e3e7efbdd1b2f0b35',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {obj: '1@111111', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
           {obj: '1@111111', action: 'del', key: '2@111111', insert: false, pred: ['2@111111']}

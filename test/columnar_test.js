@@ -28,12 +28,12 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0x43, 0x18, 0xa5, 0xde, // checksum
-      1, 89, 2, 0xaa, 0xaa, // chunkType: change, length, actor 'aaaa'
+      0x4f, 0x5f, 0x3a, 0xa5, // checksum
+      1, 93, 2, 0xaa, 0xaa, // chunkType: change, length, actor 'aaaa'
       1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
       1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
       2, 4, 0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
-      9, 4, 0, 1, 4, 0, // keyActor column: null, 0, 0, 0, 0
+      9, 8, 0, 2, 0x7f, 0, 0, 1, 0x7f, 0, // keyActor column: null, null, 0, null, 0
       11, 7, 0, 1, 0x7c, 0, 2, 0x7e, 4, // keyCtr column: null, 0, 2, 0, 4
       13, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // keyStr column: 'text', null, null, null, null
       28, 4, 1, 1, 1, 2, // insert column: false, true, false, true, true
@@ -154,7 +154,7 @@ describe('BackendDoc applying changes', () => {
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
-      keyActor: [0, 1, 0x7f, 0],
+      keyActor: [],
       keyCtr:   [0, 1, 0x7f, 0],
       keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1], // 'text', null
       idActor:  [2, 0],
@@ -184,7 +184,7 @@ describe('BackendDoc applying changes', () => {
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
-      keyActor: [0, 1, 4, 0],
+      keyActor: [0, 2, 3, 0],
       keyCtr:   [0, 1, 0x7e, 0, 2, 2, 1], // null, 0, 2, 3, 4
       keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
       idActor:  [5, 0],
@@ -229,7 +229,7 @@ describe('BackendDoc applying changes', () => {
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
-      keyActor: [0, 1, 0x7f, 0],
+      keyActor: [],
       keyCtr:   [0, 1, 0x7f, 0],
       keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 1], // 'text', null
       idActor:  [2, 0],
@@ -261,7 +261,7 @@ describe('BackendDoc applying changes', () => {
     checkColumns(backend.docColumns, {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 3, 1],
-      keyActor: [0, 1, 3, 0],
+      keyActor: [0, 2, 2, 0],
       keyCtr:   [0, 1, 0x7d, 0, 2, 1], // null, 0, 2, 3
       keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 3], // 'text', 3x null
       idActor:  [4, 0],
@@ -310,7 +310,7 @@ describe('BackendDoc applying changes', () => {
       checkColumns(backend.docColumns, {
         objActor: [0, 1, 3, 0],
         objCtr:   [0, 1, 3, 1],
-        keyActor: [0, 1, 3, 0],
+        keyActor: [0, 2, 2, 0],
         keyCtr:   [0, 1, 0x7d, 0, 2, 0], // null, 0, 2, 2
         keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 3], // 'text', 3x null
         idActor:  [2, 0, 0x7e, 1, 0], // 0, 0, 1, 0
@@ -344,7 +344,7 @@ describe('BackendDoc applying changes', () => {
       checkColumns(backend.docColumns, {
         objActor: [0, 1, 4, 0],
         objCtr:   [0, 1, 4, 1],
-        keyActor: [0, 1, 2, 1, 2, 0], // null, 1, 1, 0, 0 -- TODO: use null for _head
+        keyActor: [0, 2, 0x7f, 1, 0, 2], // null, null, 1, null, null
         keyCtr:   [0, 1, 0x7c, 0, 3, 0x7d, 0], // null, 0, 3, 0, 0
         keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
         idActor:  [0x7f, 0, 2, 1, 2, 0], // 0, 1, 1, 0, 0
