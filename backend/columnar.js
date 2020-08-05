@@ -1536,15 +1536,15 @@ class BackendDoc {
     }
   }
 
-  updatePatchProperty(op, patch) {
+  updatePatchProperty(docState, op, patch) {
     // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
 
-    const key = op[keyStr] !== null ? op[keyStr] : `${op[keyCtr]}@${this.actorIds[op[keyActor]]}`
+    const key = op[keyStr] !== null ? op[keyStr] : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
     if (!patch.props[key]) patch.props[key] = {}
     if (ACTIONS[op[action]] === 'set' && op[succNum] === 0) {
-      const opId = `${op[idCtr]}@${this.actorIds[op[idActor]]}`
+      const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
       patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
     }
   }
@@ -1554,29 +1554,29 @@ class BackendDoc {
    * the change. Assumes that the decoders of both sets of columns are at the position where we want
    * to start merging. `patch` is mutated to reflect the change made by the operations.
    */
-  mergeDocChangeOps(outCols, changeCols, ops, actorTable, patch) {
+  mergeDocChangeOps(outCols, docState, changeCols, ops, actorTable, patch) {
     // Check the first couple of columns are in the positions where we expect them to be
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
-    if (this.docColumns[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
-        this.docColumns[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
-        this.docColumns[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
-        this.docColumns[keyCtr   ].columnId !== DOC_OPS_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
-        this.docColumns[keyStr   ].columnId !== DOC_OPS_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
-        this.docColumns[idActor  ].columnId !== DOC_OPS_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
-        this.docColumns[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
-        this.docColumns[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
-        this.docColumns[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
-        this.docColumns[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
-        this.docColumns[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
-        this.docColumns[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
-        this.docColumns[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
-        this.docColumns[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
+    if (docState.opsCols[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
+        docState.opsCols[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
+        docState.opsCols[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
+        docState.opsCols[keyCtr   ].columnId !== DOC_OPS_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
+        docState.opsCols[keyStr   ].columnId !== DOC_OPS_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
+        docState.opsCols[idActor  ].columnId !== DOC_OPS_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
+        docState.opsCols[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
+        docState.opsCols[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
+        docState.opsCols[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
+        docState.opsCols[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
+        docState.opsCols[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
+        docState.opsCols[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
+        docState.opsCols[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
+        docState.opsCols[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
       throw new RangeError('unexpected columnId')
     }
 
     let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
-    let docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+    let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let changeOp = readOperation(changeCols, actorTable)
     changeOp[idActor] = ops.idActorIndex
@@ -1601,9 +1601,9 @@ class BackendDoc {
         if (changeOp[keyStr] === null && !changeOp[insert]) {
           // TODO note that the optimistic grouping of operations may mean that we don't find the
           // element to update, so we have to restart the search from the beginning of the object
-          throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${this.actorIds[changeOp[keyActor]]}`)
+          throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
         }
-        this.updatePatchProperty(changeOp, patch)
+        this.updatePatchProperty(docState, changeOp, patch)
 
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
@@ -1623,7 +1623,7 @@ class BackendDoc {
             // Insert into the doc op's succ list such that the lists remains sorted
             let j = 0
             while (j < docOp[succNum] && (docOp[succCtr][j] < opIdCtr ||
-                   docOp[succCtr][j] === opIdCtr && this.actorIds[docOp[succActor][j]] < ops.idActor)) j++
+                   docOp[succCtr][j] === opIdCtr && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
             docOp[succCtr].splice(j, 0, opIdCtr)
             docOp[succActor].splice(j, 0, ops.idActorIndex)
             docOp[succNum]++
@@ -1636,32 +1636,32 @@ class BackendDoc {
 
         // When we have several operations for the same object and the same key, we want to keep
         // them sorted in ascending order by opId.
-        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] < ops.idActor)) {
+        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
           // The document op has the lower opId, so we output it first.
           takeDocOp = true
-          this.updatePatchProperty(docOp, patch)
+          this.updatePatchProperty(docState, docOp, patch)
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
           if (changeOp[action] === ACTIONS.indexOf('del') && changeOp[predNum] === 0) dropChangeOp = true
 
-        } else if (docOp[idCtr] === opIdCtr && this.actorIds[docOp[idActor]] === ops.idActor) {
+        } else if (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] === ops.idActor) {
           throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.idActor}`)
         } else {
           // The change op has the lower opId, so we output it first. Check that we've seen all ops
           // mentioned in `pred` (they must all have lower opIds, so we must have seen them already)
           if (changeOp[predNum] > 0) {
-            throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${this.actorIds[changeOp[predActor][0]]}`)
+            throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
           }
           takeChangeOp = true
-          this.updatePatchProperty(changeOp, patch)
+          this.updatePatchProperty(docState, changeOp, patch)
         }
       }
 
       if (takeDocOp) {
-        appendOperation(outCols, this.docColumns, docOp)
+        appendOperation(outCols, docState.opsCols, docOp)
         opsAppended++
-        docOp = this.docColumns[action].decoder.done ? null : readOperation(this.docColumns)
+        docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
         if (docOp !== null) docOpsConsumed++
       }
       if (takeChangeOp) {
@@ -1680,7 +1680,7 @@ class BackendDoc {
     }
 
     if (docOp) {
-      appendOperation(outCols, this.docColumns, docOp)
+      appendOperation(outCols, docState.opsCols, docOp)
       opsAppended++
     }
     return {opsAppended, docOpsConsumed}
@@ -1688,38 +1688,41 @@ class BackendDoc {
 
   /**
    * Applies the operation sequence in `ops` (as produced by `groupRelatedOps()`) from the change
-   * with columns `changeCols` to the current document. `allCols` is an array of all the columnIds
-   * in either the document or the change. `actorTable` is an array of integers where
-   * `actorTable[i]` contains the document's actor index for the actor that has index `i` in the
-   * change (`i == 0` is the author of the change). `patch` is a patch object that is mutated to
-   * reflect the operations applied by this function.
+   * with columns `changeCols` to the document `docState`. `docState` is an object with keys:
+   *   - `opsCols` is an array of columns containing the operations in the document
+   *   - `numOps` is an integer, the number of operations in the document
+   *
+   * `allCols` is an array of all the columnIds in either the document or the change.
+   * `actorTable` is an array of integers where `actorTable[i]` contains the document's actor index
+   * for the actor that has index `i` in the change (`i == 0` is the author of the change).
+   * `patch` is a patch object that is mutated to reflect the operations applied by this function.
+   *
+   * Returns an object of the same form as `docState`, containing the updated document state.
    */
-  applyOps(ops, allCols, changeCols, actorTable, patch) {
-    for (let col of this.docColumns) col.decoder.reset()
-    const beforeCount = seekToOp(ops, this.docColumns, this.actorIds)
-    for (let col of this.docColumns) col.decoder.reset()
+  applyOps(ops, docState, allCols, changeCols, actorTable, patch) {
+    for (let col of docState.opsCols) col.decoder.reset()
+    // TODO if there are several ops sequences for the same list object, check that they appear in
+    // ascending order in the change
+    const beforeCount = seekToOp(ops, docState.opsCols, docState.actorIds)
+    for (let col of docState.opsCols) col.decoder.reset()
 
     let outCols = allCols.map(columnId => {
       return {columnId, encoder: encoderByColumnId(columnId)}
     })
-    copyColumns(outCols, this.docColumns, beforeCount)
-    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(outCols, changeCols, ops, actorTable, patch)
-    // TODO use metadata on block size to set the number of ops to copy here (needed to correctly
-    // fill in nulls for missing columns). Then perform safety check: after copying, all of the
-    // docColumns decoders should be done.
-    copyColumns(outCols, this.docColumns, this.numOps - beforeCount - docOpsConsumed)
-    for (let col of this.docColumns) {
+    copyColumns(outCols, docState.opsCols, beforeCount)
+    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(outCols, docState, changeCols, ops, actorTable, patch)
+    copyColumns(outCols, docState.opsCols, docState.numOps - beforeCount - docOpsConsumed)
+    for (let col of docState.opsCols) {
       if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
     }
 
-    // TODO to make change application atomic, side-effects should take effect after we have
-    // finished executing any code that might throw an exception
-    this.docColumns = outCols.map(col => {
+    const opsCols = outCols.map(col => {
       const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
       return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
     })
-    this.numOps += opsAppended - docOpsConsumed
-    //console.log('updated columns:', this.docColumns.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
+    //console.log('updated columns:', opsCols.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
+    const numOps = docState.numOps + opsAppended - docOpsConsumed
+    return {actorIds: docState.actorIds, opsCols, numOps}
   }
 
   /**
@@ -1750,27 +1753,30 @@ class BackendDoc {
   }
 
   /**
-   * Takes a decoded change header, including an array of actorIds. Returns an array for translating
+   * Takes a decoded change header, including an array of actorIds. Returns an object of the form
+   * `{actorIds, actorTable}`, where `actorIds` is an updated array of actorIds appearing in the
+   * document (including the new change's actorId), and `actorTable` is an array for translating
    * the change's actor indexes into the document's actor indexes.
    */
   getActorTable(change) {
     // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
-    if (this.actorIds.indexOf(change.actorIds[0]) < 0) {
+    let actorIds = this.actorIds
+    if (actorIds.indexOf(change.actorIds[0]) < 0) {
       if (change.seq !== 1) {
         throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
       }
-      // TODO to make change application atomic, this side-effect should not happen till later
-      this.actorIds.push(change.actorIds[0])
+      // Use concat, not push, so that the original array is not mutated
+      actorIds = actorIds.concat([change.actorIds[0]])
     }
     const actorTable = [] // translate from change's actor index to doc's actor index
     for (let actorId of change.actorIds) {
-      const index = this.actorIds.indexOf(actorId)
+      const index = actorIds.indexOf(actorId)
       if (index < 0) {
         throw new RangeError(`actorId ${actorId} is not known to document`)
       }
       actorTable.push(index)
     }
-    return actorTable
+    return {actorIds, actorTable}
   }
 
   /**
@@ -1781,10 +1787,10 @@ class BackendDoc {
     const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
     const allCols = this.getAllColumns(changeCols)
-    const actorTable = this.getActorTable(change)
+    const {actorIds, actorTable} = this.getActorTable(change)
     const {opSequences, objects} = groupRelatedOps(change, changeCols)
     const objectMeta = Object.assign({}, this.objectMeta, objects)
-    const actorIndex = this.actorIds.indexOf(change.actorIds[0])
+    const actorIndex = actorIds.indexOf(change.actorIds[0])
 
     // Set up the patch to include any objects that are created or updated
     let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
@@ -1810,14 +1816,18 @@ class BackendDoc {
       }
     }
 
+    let docState = {actorIds, opsCols: this.docColumns, numOps: this.numOps}
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
       op.idActorIndex = actorIndex
-      this.applyOps(op, allCols, changeCols, actorTable, patches[op.objId])
+      docState = this.applyOps(op, docState, allCols, changeCols, actorTable, patches[op.objId])
     }
 
-    // Do the metadata update at the end, so that if any of the earlier code throws an exception,
-    // the document metadata is not modified
+    // Update the document state at the end, so that if any of the earlier code throws an exception,
+    // the document is not modified (making `applyChange` atomic in the ACID sense).
+    this.actorIds   = docState.actorIds
+    this.docColumns = docState.opsCols
+    this.numOps     = docState.numOps
     this.objectMeta = objectMeta
     // TODO rewrite the patch, turning any list element IDs into indexes (must happen after all ops
     // have been applied, since we use the final indexes) and adding any conflicts for properties on
