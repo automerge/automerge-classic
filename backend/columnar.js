@@ -1133,15 +1133,18 @@ function constructPatch(documentBuffer) {
 
 /**
  * Scans a chunk of document operations, encoded as columns `docCols`, to find the position at which
- * an operation (or sequence of operations) `ops` should be inserted. Returns the number of
- * operations, counted from the start of the chunk, after which the insertion should be made.
+ * an operation (or sequence of operations) `ops` should be applied. Returns an object with keys:
+ *   - `skipCount`: the number of operations, counted from the start of the chunk, after which the
+ *     new operations should be inserted or applied.
+ *   - `visibleCount`: if modifying a list object, the number of visible (i.e. non-deleted) list
+ *     elements that precede the position where the new operations should be applied.
  */
 function seekToOp(ops, docCols, actorIds) {
   const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action, consecutiveOps } = ops
-  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
-    = docCols.map(col => col.decoder)
-  let skipCount = 0, nextObjActor = null, nextObjCtr = null
-  let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD,
+    valLenD, valRawD, chldActorD, chldCtrD, succNumD] = docCols.map(col => col.decoder)
+  let skipCount = 0, visibleCount = 0, elemVisible = false, nextObjActor = null, nextObjCtr = null
+  let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null, nextSuccNum = 0
 
   // Seek to the beginning of the object being updated
   if (objCtr !== null) {
@@ -1157,7 +1160,7 @@ function seekToOp(ops, docCols, actorIds) {
       }
     }
   }
-  if (nextObjCtr !== objCtr || nextObjActor !== objActor) return skipCount
+  if (nextObjCtr !== objCtr || nextObjActor !== objActor) return {skipCount, visibleCount}
 
   // Seek to the appropriate key (if string key is used)
   if (keyStr !== null) {
@@ -1174,15 +1177,17 @@ function seekToOp(ops, docCols, actorIds) {
         break
       }
     }
-    return skipCount
+    return {skipCount, visibleCount}
   }
 
   idCtrD.skipValues(skipCount)
   idActorD.skipValues(skipCount)
   insertD.skipValues(skipCount)
+  succNumD.skipValues(skipCount)
   nextIdCtr = idCtrD.readValue()
   nextIdActor = actorIds[idActorD.readValue()]
   nextInsert = insertD.readValue()
+  nextSuccNum = succNumD.readValue()
 
   // If we are inserting into a list, an opId key is used, and we need to seek to a position *after*
   // the referenced operation. Moreover, we need to skip over any existing operations with a greater
@@ -1192,37 +1197,55 @@ function seekToOp(ops, docCols, actorIds) {
     if (keyCtr !== null && keyCtr > 0 && keyActor !== null) {
       skipCount += 1
       while (!idCtrD.done && !idActorD.done && (nextIdCtr !== keyCtr || nextIdActor !== keyActor)) {
+        if (nextInsert) elemVisible = false
+        if (nextSuccNum === 0 && !elemVisible) {
+          visibleCount += 1
+          elemVisible = true
+        }
         nextIdCtr = idCtrD.readValue()
         nextIdActor = actorIds[idActorD.readValue()]
         nextObjCtr = objCtrD.readValue()
         nextObjActor = actorIds[objActorD.readValue()]
         nextInsert = insertD.readValue()
+        nextSuccNum = succNumD.readValue()
         if (nextObjCtr === objCtr && nextObjActor === objActor) skipCount += 1; else break
       }
       if (nextObjCtr !== objCtr || nextObjActor !== objActor || nextIdCtr !== keyCtr ||
           nextIdActor !== keyActor || !nextInsert) {
         throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
       }
+      if (nextInsert) elemVisible = false
+      if (nextSuccNum === 0 && !elemVisible) {
+        visibleCount += 1
+        elemVisible = true
+      }
 
       // Set up the next* variables to the operation following the reference element
-      if (idCtrD.done || idActorD.done) return skipCount
+      if (idCtrD.done || idActorD.done) return {skipCount, visibleCount}
       nextIdCtr = idCtrD.readValue()
       nextIdActor = actorIds[idActorD.readValue()]
       nextObjCtr = objCtrD.readValue()
       nextObjActor = actorIds[objActorD.readValue()]
       nextInsert = insertD.readValue()
+      nextSuccNum = succNumD.readValue()
     }
 
     // Skip over any list elements with greater ID than the new one, and any non-insertions
     while ((!nextInsert || nextIdCtr > idCtr || (nextIdCtr === idCtr && nextIdActor > idActor)) &&
            nextObjCtr === objCtr && nextObjActor === objActor) {
       skipCount += 1
+      if (nextInsert) elemVisible = false
+      if (nextSuccNum === 0 && !elemVisible) {
+        visibleCount += 1
+        elemVisible = true
+      }
       if (!idCtrD.done && !idActorD.done) {
         nextIdCtr = idCtrD.readValue()
         nextIdActor = actorIds[idActorD.readValue()]
         nextObjCtr = objCtrD.readValue()
         nextObjActor = actorIds[objActorD.readValue()]
         nextInsert = insertD.readValue()
+        nextSuccNum = succNumD.readValue()
       } else {
         break
       }
@@ -1233,12 +1256,18 @@ function seekToOp(ops, docCols, actorIds) {
     while ((!nextInsert || nextIdCtr !== keyCtr || nextIdActor !== keyActor) &&
            nextObjCtr === objCtr && nextObjActor === objActor) {
       skipCount += 1
+      if (nextInsert) elemVisible = false
+      if (nextSuccNum === 0 && !elemVisible) {
+        visibleCount += 1
+        elemVisible = true
+      }
       if (!idCtrD.done && !idActorD.done) {
         nextIdCtr = idCtrD.readValue()
         nextIdActor = actorIds[idActorD.readValue()]
         nextObjCtr = objCtrD.readValue()
         nextObjActor = actorIds[objActorD.readValue()]
         nextInsert = insertD.readValue()
+        nextSuccNum = succNumD.readValue()
       } else {
         break
       }
@@ -1248,7 +1277,7 @@ function seekToOp(ops, docCols, actorIds) {
       throw new RangeError(`Element not found for update: ${keyCtr}@${keyActor}`)
     }
   }
-  return skipCount
+  return {skipCount, visibleCount}
 }
 
 /**
@@ -1428,14 +1457,10 @@ function appendOperation(outCols, inCols, operation) {
  *      such operations for the same object, on the basis that the ops are likely to be consecutive
  *      in practice (e.g. deleting a consecutive sequence of characters from text is likely to be
  *      represented by a sequence of deletion operations in document order).
- *
- * A group of operations has the `directCopy` property set to true if the operations are guaranteed
- * to be consecutive in the encoded document, and the operations don't need to update the `succ`
- * property of any existing operations. This is the case when at least one of the following is true:
- *   1. The operations set properties of an object that has been created in the current change, so
- *      these operations are sure to be the first time that those properties have been set.
- *   2. The operations insert a consecutive sequence of list elements/text characters, where each
- *      insertion operation references the immediate predecessor operation as its reference element.
+ *   3. On a list, the operations must either all be non-insertions (i.e. updates/deletions of
+ *      existing list items), or they must be consecutive insertions (where each operation inserts
+ *      immediately after the preceding operations). Non-consecutive insertions are returned as
+ *      separate groups.
  */
 function groupRelatedOps(change, changeCols) {
   const currentActor = change.actorIds[0]
@@ -1457,8 +1482,7 @@ function groupRelatedOps(change, changeCols) {
       insert   : insertD.readValue(),
       action   : actionD.readValue(),
       idActorIndex  : -1, // the index of currentActor in the document's actor list, filled in later
-      consecutiveOps: 1,
-      directCopy    : false
+      consecutiveOps: 1
     }
     if ((thisOp.objCtr === null && thisOp.objActor !== null) ||
         (thisOp.objCtr !== null && typeof thisOp.objActor !== 'string')) {
@@ -1472,10 +1496,6 @@ function groupRelatedOps(change, changeCols) {
 
     thisOp.opId = `${thisOp.idCtr}@${thisOp.idActor}`
     thisOp.objId = thisOp.objCtr === null ? ROOT_ID : `${thisOp.objCtr}@${thisOp.objActor}`
-    if (thisOp.objActor === currentActor && thisOp.objCtr >= change.startOp && !objIdSeen[thisOp.objId] ||
-        thisOp.insert) {
-      thisOp.directCopy = true
-    }
 
     // An even-numbered action indicates a make* operation that creates a new object.
     // TODO: also handle link/move operations.
@@ -1536,14 +1556,57 @@ class BackendDoc {
     }
   }
 
-  updatePatchProperty(docState, op, patch) {
+  /**
+   * Updates `patch` to reflect the operation `op` within the document with state `docState`.
+   * Can be called multiple times if there are multiple operations for the same property (e.g. due
+   * to a conflict). `elemState` is an object that carries over state between such successive
+   * invocations for the same property. If the current object is a list, `listIndex` is the index
+   * into that list (counting only visible elements). If the operation `op` was already previously
+   * in the document, `oldSuccNum` is the value of `op[succNum]` before the current change was
+   * applied (allowing us to determine whether this operation was overwritten or deleted in the
+   * current change). `oldSuccNum` must be undefined if the operation came from the current change.
+   */
+  updatePatchProperty(patch, op, docState, elemState, listIndex, oldSuccNum) {
     // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
 
-    const key = op[keyStr] !== null ? op[keyStr] : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
-    if (!patch.props[key]) patch.props[key] = {}
-    if (ACTIONS[op[action]] === 'set' && op[succNum] === 0) {
+    if (op[keyStr] === null) {
+      // Updating a list or text object (with opId key)
+      if (!patch.edits) patch.edits = []
+
+      // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
+      if (op[succNum] === 0) {
+        if (!elemState[listIndex]) {
+          patch.edits.push({action: 'insert', index: listIndex})
+          elemState[listIndex] = 'insert'
+        } else if (elemState[listIndex] === 'remove') {
+          patch.edits.pop()
+          elemState[listIndex] = 'update'
+        }
+      }
+
+      // If the property formerly had a non-overwritten value, it's either a remove or an update
+      if (oldSuccNum === 0) {
+        if (!elemState[listIndex]) {
+          patch.edits.push({action: 'remove', index: listIndex})
+          elemState[listIndex] = 'remove'
+        } else if (elemState[listIndex] === 'insert') {
+          patch.edits.pop()
+          elemState[listIndex] = 'update'
+        }
+      }
+
+      if (elemState[listIndex] === 'insert' || elemState[listIndex] === 'update') {
+        if (!patch.props[listIndex]) patch.props[listIndex] = {}
+      }
+    } else {
+      // Updating a map or table (with string key)
+      if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
+    }
+
+    const key = op[keyStr] !== null ? op[keyStr] : listIndex
+    if (ACTIONS[op[action]] === 'set' && op[succNum] === 0 && patch.props[key]) {
       const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
       patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
     }
@@ -1554,7 +1617,7 @@ class BackendDoc {
    * the change. Assumes that the decoders of both sets of columns are at the position where we want
    * to start merging. `patch` is mutated to reflect the change made by the operations.
    */
-  mergeDocChangeOps(outCols, docState, changeCols, ops, actorTable, patch) {
+  mergeDocChangeOps(patch, outCols, ops, changeCols, docState, listIndex) {
     // Check the first couple of columns are in the positions where we expect them to be
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
@@ -1576,9 +1639,11 @@ class BackendDoc {
     }
 
     let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
+    let elemVisible = false, elemState = {}
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
-    let changeOp = readOperation(changeCols, actorTable)
+    let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
+    let changeOp = readOperation(changeCols, docState.actorTable)
     changeOp[idActor] = ops.idActorIndex
     changeOp[idCtr] = opIdCtr
 
@@ -1588,22 +1653,25 @@ class BackendDoc {
     while (opCount > 0) {
       let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
 
-      // The change operation comes first if there is no document operation, if the next document
-      // operation is for a different object, or if the change op's string key is lexicographically
-      // first (TODO check ordering of keys beyond the basic multilingual plane). The document
-      // operation comes first if its string key is lexicographically first, or if we're using opId
-      // keys and the keys don't match (i.e. we scan the document until we find a matching key).
-      if (ops.directCopy || !docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
+      // The change operation comes first if we are inserting list elements (seekToOp already
+      // determines the correct insertion position), if there is no document operation, if the next
+      // document operation is for a different object, or if the change op's string key is
+      // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
+      // The document operation comes first if its string key is lexicographically first, or if
+      // we're using opId keys and the keys don't match (i.e. we scan the document until we find a
+      // matching key).
+      if (ops.insert || !docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
           (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
         // Take the operation from the change
         takeChangeOp = true
         if (changeOp[keyStr] === null && !changeOp[insert]) {
-          // TODO note that the optimistic grouping of operations may mean that we don't find the
-          // element to update, so we have to restart the search from the beginning of the object
-          throw new RangeError(`could not find the list element we're looking for: ${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
+          // This can happen if we first update one list element, then another one earlier in the
+          // list. That is not allowed: list element updates must occur in ascending order.
+          throw new RangeError("could not find list element with ID: " +
+                               `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
         }
-        this.updatePatchProperty(docState, changeOp, patch)
+        this.updatePatchProperty(patch, changeOp, docState, elemState, listIndex)
 
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
@@ -1639,7 +1707,7 @@ class BackendDoc {
         if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
           // The document op has the lower opId, so we output it first.
           takeDocOp = true
-          this.updatePatchProperty(docState, docOp, patch)
+          this.updatePatchProperty(patch, docOp, docState, elemState, listIndex, docOpOldSuccNum)
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
@@ -1654,25 +1722,40 @@ class BackendDoc {
             throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
           }
           takeChangeOp = true
-          this.updatePatchProperty(docState, changeOp, patch)
+          this.updatePatchProperty(patch, changeOp, docState, elemState, listIndex)
         }
       }
 
       if (takeDocOp) {
         appendOperation(outCols, docState.opsCols, docOp)
+        if (docOp[insert]) elemVisible = false
+        if (docOp[succNum] === 0 && !elemVisible) {
+          listIndex++
+          elemVisible = true
+        }
         opsAppended++
         docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
-        if (docOp !== null) docOpsConsumed++
+        if (docOp !== null) {
+          docOpsConsumed++
+          docOpOldSuccNum = docOp[succNum]
+        }
       }
+
       if (takeChangeOp) {
         appendOperation(outCols, changeCols, changeOp)
+        if (changeOp[insert]) elemVisible = false
+        if (changeOp[succNum] === 0 && !elemVisible) {
+          listIndex++
+          elemVisible = true
+        }
         opsAppended++
       }
+
       if (takeChangeOp || dropChangeOp) {
         opCount--
         opIdCtr++
         if (opCount > 0) {
-          changeOp = readOperation(changeCols, actorTable)
+          changeOp = readOperation(changeCols, docState.actorTable)
           changeOp[idActor] = ops.idActorIndex
           changeOp[idCtr] = opIdCtr
         }
@@ -1689,40 +1772,45 @@ class BackendDoc {
   /**
    * Applies the operation sequence in `ops` (as produced by `groupRelatedOps()`) from the change
    * with columns `changeCols` to the document `docState`. `docState` is an object with keys:
-   *   - `opsCols` is an array of columns containing the operations in the document
-   *   - `numOps` is an integer, the number of operations in the document
+   *   - `actorIds` is an array of actorIds (as hex strings) occurring in the document (values in
+   *     the document's objActor/keyActor/idActor/... columns are indexes into this array).
+   *   - `actorTable` is an array of integers where `actorTable[i]` contains the document's actor
+   *     index for the actor that has index `i` in the change (`i == 0` is the author of the change).
+   *   - `allCols` is an array of all the columnIds in either the document or the change.
+   *   - `opsCols` is an array of columns containing the operations in the document.
+   *   - `numOps` is an integer, the number of operations in the document.
+   *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
+   *     accessed in that object. This is used to check that accesses occur in ascending order
+   *     (which makes it easier to generate patches for lists).
    *
-   * `allCols` is an array of all the columnIds in either the document or the change.
-   * `actorTable` is an array of integers where `actorTable[i]` contains the document's actor index
-   * for the actor that has index `i` in the change (`i == 0` is the author of the change).
+   * `docState` is mutated to contain the updated document state.
    * `patch` is a patch object that is mutated to reflect the operations applied by this function.
-   *
-   * Returns an object of the same form as `docState`, containing the updated document state.
    */
-  applyOps(ops, docState, allCols, changeCols, actorTable, patch) {
+  applyOps(patch, ops, changeCols, docState) {
     for (let col of docState.opsCols) col.decoder.reset()
-    // TODO if there are several ops sequences for the same list object, check that they appear in
-    // ascending order in the change
-    const beforeCount = seekToOp(ops, docState.opsCols, docState.actorIds)
+    const {skipCount, visibleCount} = seekToOp(ops, docState.opsCols, docState.actorIds)
+    if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
+      throw new RangeError('list element accesses must occur in ascending order')
+    }
+    docState.lastIndex[ops.objId] = visibleCount
     for (let col of docState.opsCols) col.decoder.reset()
 
-    let outCols = allCols.map(columnId => {
+    let outCols = docState.allCols.map(columnId => {
       return {columnId, encoder: encoderByColumnId(columnId)}
     })
-    copyColumns(outCols, docState.opsCols, beforeCount)
-    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(outCols, docState, changeCols, ops, actorTable, patch)
-    copyColumns(outCols, docState.opsCols, docState.numOps - beforeCount - docOpsConsumed)
+    copyColumns(outCols, docState.opsCols, skipCount)
+    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(patch, outCols, ops, changeCols, docState, visibleCount)
+    copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)
     for (let col of docState.opsCols) {
       if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
     }
 
-    const opsCols = outCols.map(col => {
+    docState.opsCols = outCols.map(col => {
       const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
       return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
     })
     //console.log('updated columns:', opsCols.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
-    const numOps = docState.numOps + opsAppended - docOpsConsumed
-    return {actorIds: docState.actorIds, opsCols, numOps}
+    docState.numOps = docState.numOps + opsAppended - docOpsConsumed
   }
 
   /**
@@ -1804,6 +1892,8 @@ class BackendDoc {
           patches[objectId] = {objectId, type: meta.type, props: {}}
         }
         if (childMeta) {
+          // TODO also store any conflict values for parentKey in the metadata and apply them here
+          // TODO make this work for lists, where parentKey should be an index
           let props = patches[objectId].props
           if (!props[childMeta.parentKey]) props[childMeta.parentKey] = {}
           props[childMeta.parentKey][childMeta.opId] = childPatch
@@ -1816,11 +1906,14 @@ class BackendDoc {
       }
     }
 
-    let docState = {actorIds, opsCols: this.docColumns, numOps: this.numOps}
+    let docState = {
+      actorIds, actorTable, allCols, opsCols: this.docColumns, numOps: this.numOps,
+      lastIndex: {}
+    }
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
       op.idActorIndex = actorIndex
-      docState = this.applyOps(op, docState, allCols, changeCols, actorTable, patches[op.objId])
+      this.applyOps(patches[op.objId], op, changeCols, docState)
     }
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
@@ -1829,9 +1922,6 @@ class BackendDoc {
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
     this.objectMeta = objectMeta
-    // TODO rewrite the patch, turning any list element IDs into indexes (must happen after all ops
-    // have been applied, since we use the final indexes) and adding any conflicts for properties on
-    // the path from the root to the updated objects
     return patches[ROOT_ID]
   }
 }
