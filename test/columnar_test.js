@@ -560,4 +560,53 @@ describe('BackendDoc applying changes', () => {
       })
     }
   })
+
+  it('should handle updates inside conflicted properties', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeMap', obj: ROOT_ID,       key: 'map',         pred: []},
+      {action: 'set',     obj: `1@${actor1}`, key: 'x', value: 1, pred: []}
+    ]}
+    const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeMap', obj: ROOT_ID,       key: 'map',         pred: []},
+      {action: 'set',     obj: `1@${actor2}`, key: 'y', value: 2, pred: []}
+    ]}
+    const change3 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1), hash(change2)], ops: [
+      {action: 'set',     obj: `1@${actor1}`, key: 'x', value: 3, pred: [`2@${actor1}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {map: {
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`2@${actor1}`]: {value: 1}}}}
+      }}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {map: {
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {}},
+        [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {y: {[`2@${actor2}`]: {value: 2}}}}
+      }}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change3)), {
+      objectId: ROOT_ID, type: 'map', props: {map: {
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`3@${actor1}`]: {value: 3}}}},
+        [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {}}
+      }}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 2, 2, 0, 0x7f, 1],
+      objCtr:   [0, 2, 3, 1],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [2, 3, 0x6d, 0x61, 0x70, 2, 1, 0x78, 0x7f, 1, 0x79], // 'map', 'map', 'x', 'x', 'y'
+      idActor:  [0x7e, 0, 1, 2, 0, 0x7f, 1], // 0, 1, 0, 0, 1
+      idCtr:    [0x7e, 1, 0, 2, 1, 0x7f, 0x7f], // 1, 1, 2, 3, 2
+      insert:   [5],
+      action:   [2, 0, 3, 1], // 2x makeMap, 3x set
+      valLen:   [2, 0, 3, 0x13], // 2x null, 3x uint
+      valRaw:   [1, 3, 2],
+      succNum:  [2, 0, 0x7f, 1, 2, 0], // 0, 0, 1, 0, 0
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 3]
+    })
+  })
 })

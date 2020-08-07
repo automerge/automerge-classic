@@ -35,6 +35,8 @@ const VALUE_TYPE = {
 // make* actions must be at even-numbered indexes in this list
 const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable', 'link']
 
+const OBJECT_TYPE = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
+
 const COMMON_COLUMNS = {
   objActor:  0 << 3 | COLUMN_TYPE.ACTOR_ID,
   objCtr:    0 << 3 | COLUMN_TYPE.INT_RLE,
@@ -74,6 +76,22 @@ const DOCUMENT_COLUMNS = {
   message:   3 << 3 | COLUMN_TYPE.STRING_RLE,
   depsNum:   4 << 3 | COLUMN_TYPE.GROUP_CARD,
   depsIndex: 4 << 3 | COLUMN_TYPE.INT_DELTA
+}
+
+/**
+ * Updates `objectTree`, which is a tree of nested objects, so that afterwards
+ * `objectTree[path[0]][path[1]][...] === value`. Only the root object is mutated, whereas any
+ * nested objects are copied before updating. This means that once the root object has been
+ * shallow-copied, this function can be used to update it without mutating the previous version.
+ */
+function deepCopyUpdate(objectTree, path, value) {
+  if (path.length === 1) {
+    objectTree[path[0]] = value
+  } else {
+    let child = Object.assign({}, objectTree[path[0]])
+    deepCopyUpdate(child, path.slice(1), value)
+    objectTree[path[0]] = child
+  }
 }
 
 /**
@@ -1076,7 +1094,6 @@ function constructPatch(documentBuffer) {
   const col = makeDecoders(opsColumns, DOC_OPS_COLUMNS).reduce(
     (acc, col) => Object.assign(acc, {[col.columnName]: col.decoder}), {})
 
-  const objType = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
   let objects = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map'}}
   let property = null
 
@@ -1084,7 +1101,7 @@ function constructPatch(documentBuffer) {
     const opId = `${col.idCtr.readValue()}@${actorIds[col.idActor.readValue()]}`
     const action = col.action.readValue(), actionName = ACTIONS[action]
     if (action % 2 === 0) { // even-numbered actions are object creation
-      objects[opId] = {objectId: opId, type: objType[actionName] || 'unknown'}
+      objects[opId] = {objectId: opId, type: OBJECT_TYPE[actionName] || 'unknown'}
     }
 
     const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
@@ -1440,12 +1457,10 @@ function appendOperation(outCols, inCols, operation) {
 /**
  * Given a change parsed by `decodeChangeColumns()` and its column decoders as instantiated by
  * `makeDecoders()`, reads the operations in the change and groups together any related operations
- * that can be applied at the same time. Returns an object of the form `{opSequences, objects}`:
+ * that can be applied at the same time. Returns an object of the form `{opSequences, objectIds}`:
  *    - `opSequences` is an array of operation groups, where each group is an object with a
  *      `consecutiveOps` property indicating how many operations are in that group.
- *    - `objects` is an object where keys are the IDs of newly created objects, and the values
- *      are metadata about that object, such as the object type, and that object's parent and the
- *      key within the parent object where it is located.
+ *    - `objectIds` is an array of objectIds that are created or modified in this change.
  *
  * In order for a set of operations to be related, they have to satisfy the following properties:
  *   1. They must all be for the same object. (Even when several objects are created in the same
@@ -1461,13 +1476,17 @@ function appendOperation(outCols, inCols, operation) {
  *      existing list items), or they must be consecutive insertions (where each operation inserts
  *      immediately after the preceding operations). Non-consecutive insertions are returned as
  *      separate groups.
+ *
+ * The `objectMeta` argument is a map from objectId to metadata about that object (such as the
+ * object type, that object's parent, and the key within the parent object where it is located).
+ * This function mutates `objectMeta` to include objects created in this change.
  */
-function groupRelatedOps(change, changeCols) {
+function groupRelatedOps(change, changeCols, objectMeta) {
   const currentActor = change.actorIds[0]
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
     = changeCols.map(col => col.decoder)
   let objIdSeen = {}, firstOp = null, lastOp = null, opIdCtr = change.startOp
-  let opSequences = [], objects = {}
+  let opSequences = [], objectIds = {}
 
   while (!actionD.done) {
     const objActor = objActorD.readValue(), keyActor = keyActorD.readValue()
@@ -1496,6 +1515,7 @@ function groupRelatedOps(change, changeCols) {
 
     thisOp.opId = `${thisOp.idCtr}@${thisOp.idActor}`
     thisOp.objId = thisOp.objCtr === null ? ROOT_ID : `${thisOp.objCtr}@${thisOp.objActor}`
+    objectIds[thisOp.objId] = true
 
     // An even-numbered action indicates a make* operation that creates a new object.
     // TODO: also handle link/move operations.
@@ -1508,9 +1528,11 @@ function groupRelatedOps(change, changeCols) {
       } else {
         parentKey = `${thisOp.keyCtr}@${thisOp.keyActor}`
       }
-      const objType = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
-      const type = thisOp.action < ACTIONS.length ? objType[ACTIONS[thisOp.action]] : null
-      objects[thisOp.opId] = {parentObj: thisOp.objId, parentKey, opId: thisOp.opId, type}
+      const type = thisOp.action < ACTIONS.length ? OBJECT_TYPE[ACTIONS[thisOp.action]] : null
+      objectMeta[thisOp.opId] = {parentObj: thisOp.objId, parentKey, opId: thisOp.opId, type, children: {}}
+      objectIds[thisOp.opId] = true
+      deepCopyUpdate(objectMeta, [thisOp.objId, 'children', parentKey, thisOp.opId],
+                     {objectId: thisOp.opId, type, props: {}})
     }
 
     if (!firstOp) {
@@ -1534,7 +1556,7 @@ function groupRelatedOps(change, changeCols) {
   }
 
   if (firstOp) opSequences.push(firstOp)
-  return {opSequences, objects}
+  return {opSequences, objectIds: Object.keys(objectIds)}
 }
 
 class BackendDoc {
@@ -1552,24 +1574,28 @@ class BackendDoc {
       this.heads = []
       this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
       this.numOps = 0
-      this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map'}}
+      this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
   }
 
   /**
    * Updates `patch` to reflect the operation `op` within the document with state `docState`.
    * Can be called multiple times if there are multiple operations for the same property (e.g. due
-   * to a conflict). `elemState` is an object that carries over state between such successive
+   * to a conflict). `propState` is an object that carries over state between such successive
    * invocations for the same property. If the current object is a list, `listIndex` is the index
    * into that list (counting only visible elements). If the operation `op` was already previously
    * in the document, `oldSuccNum` is the value of `op[succNum]` before the current change was
    * applied (allowing us to determine whether this operation was overwritten or deleted in the
    * current change). `oldSuccNum` must be undefined if the operation came from the current change.
    */
-  updatePatchProperty(patch, op, docState, elemState, listIndex, oldSuccNum) {
+  updatePatchProperty(patch, op, docState, propState, listIndex, oldSuccNum) {
     // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
+
+    const elemId = op[keyStr] ? op[keyStr] :
+                   op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+                              : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
     if (op[keyStr] === null) {
       // Updating a list or text object (with opId key)
@@ -1577,32 +1603,55 @@ class BackendDoc {
 
       // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
       if (op[succNum] === 0) {
-        if (!elemState[listIndex]) {
+        if (!propState[elemId]) {
           patch.edits.push({action: 'insert', index: listIndex})
-          elemState[listIndex] = 'insert'
-        } else if (elemState[listIndex] === 'remove') {
+          propState[elemId] = {action: 'insert', visibleOps: [], hasChild: false}
+        } else if (propState[elemId].action === 'remove') {
           patch.edits.pop()
-          elemState[listIndex] = 'update'
+          propState[elemId].action = 'update'
         }
       }
 
       // If the property formerly had a non-overwritten value, it's either a remove or an update
       if (oldSuccNum === 0) {
-        if (!elemState[listIndex]) {
+        if (!propState[elemId]) {
           patch.edits.push({action: 'remove', index: listIndex})
-          elemState[listIndex] = 'remove'
-        } else if (elemState[listIndex] === 'insert') {
+          propState[elemId] = {action: 'remove', visibleOps: [], hasChild: false}
+        } else if (propState[elemId].action === 'insert') {
           patch.edits.pop()
-          elemState[listIndex] = 'update'
+          propState[elemId].action = 'update'
         }
       }
 
-      if (elemState[listIndex] === 'insert' || elemState[listIndex] === 'update') {
-        if (!patch.props[listIndex]) patch.props[listIndex] = {}
+      if (!patch.props[listIndex] && propState[elemId] && ['insert', 'update'].includes(propState[elemId].action)) {
+        patch.props[listIndex] = {}
       }
     } else {
       // Updating a map or table (with string key)
       if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
+    }
+
+    if (op[succNum] === 0) {
+      if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+      propState[elemId].visibleOps.push(op)
+      propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
+
+      if (propState[elemId].hasChild) {
+        let values = {}
+        for (let visible of propState[elemId].visibleOps) {
+          const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
+          if (ACTIONS[visible[action]] === 'set') {
+            values[opId] = decodeValue(visible[valLen], visible[valRaw])
+          } else if (visible[action] % 2 === 0) {
+            const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
+            values[opId] = {objectId: opId, type, props: {}}
+          }
+        }
+
+        // Copy so that objectMeta is not modified if an exception is thrown while applying change
+        const objId = op[objCtr] === null ? ROOT_ID : `${op[objCtr]}@${docState.actorIds[op[objActor]]}`
+        deepCopyUpdate(docState.objectMeta, [objId, 'children', elemId], values)
+      }
     }
 
     const key = op[keyStr] !== null ? op[keyStr] : listIndex
@@ -1639,7 +1688,7 @@ class BackendDoc {
     }
 
     let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
-    let elemVisible = false, elemState = {}
+    let elemVisible = false, propState = {}
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
@@ -1671,7 +1720,7 @@ class BackendDoc {
           throw new RangeError("could not find list element with ID: " +
                                `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
         }
-        this.updatePatchProperty(patch, changeOp, docState, elemState, listIndex)
+        this.updatePatchProperty(patch, changeOp, docState, propState, listIndex)
 
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
@@ -1707,7 +1756,7 @@ class BackendDoc {
         if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
           // The document op has the lower opId, so we output it first.
           takeDocOp = true
-          this.updatePatchProperty(patch, docOp, docState, elemState, listIndex, docOpOldSuccNum)
+          this.updatePatchProperty(patch, docOp, docState, propState, listIndex, docOpOldSuccNum)
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
@@ -1722,7 +1771,7 @@ class BackendDoc {
             throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
           }
           takeChangeOp = true
-          this.updatePatchProperty(patch, changeOp, docState, elemState, listIndex)
+          this.updatePatchProperty(patch, changeOp, docState, propState, listIndex)
         }
       }
 
@@ -1779,6 +1828,7 @@ class BackendDoc {
    *   - `allCols` is an array of all the columnIds in either the document or the change.
    *   - `opsCols` is an array of columns containing the operations in the document.
    *   - `numOps` is an integer, the number of operations in the document.
+   *   - `objectMeta` is a map from objectId to metadata about that object.
    *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
    *     accessed in that object. This is used to check that accesses occur in ascending order
    *     (which makes it easier to generate patches for lists).
@@ -1868,47 +1918,63 @@ class BackendDoc {
   }
 
   /**
+   * Sets up the patch for a change. `objectIds` is the array of IDs of objects that are created or
+   * updated in the change, and `objectMeta` is a map from objectIds to metadata about that object
+   * (such as its parent in the document tree). Returns a map from objectIds to patch for that
+   * particular object, where child objects have been linked into their parent object, all the way
+   * to the root object.
+   */
+  initPatches(objectIds, objectMeta) {
+    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
+    for (let objectId of objectIds) {
+      let meta = objectMeta[objectId], childMeta = null
+      while (true) {
+        const patchExists = !!patches[objectId]
+        if (!patchExists) patches[objectId] = {objectId, type: meta.type, props: {}}
+
+        if (childMeta) {
+          // TODO make this work for lists, where elemIds need to be transformed into indexes
+          let props = patches[objectId].props
+          if (!props[childMeta.parentKey]) props[childMeta.parentKey] = {}
+          for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
+            if (value.objectId) {
+              if (!patches[value.objectId]) patches[value.objectId] = Object.assign({}, value, {props: {}})
+              props[childMeta.parentKey][opId] = patches[value.objectId]
+            } else {
+              props[childMeta.parentKey][opId] = value
+            }
+          }
+          if (!props[childMeta.parentKey][childMeta.opId]) {
+            throw new RangeError(`object metadata did not contain child entry for ${childMeta.opId}`)
+          }
+        }
+        if (patchExists || !meta.parentObj) break
+        childMeta = meta
+        objectId = meta.parentObj
+        meta = objectMeta[objectId]
+      }
+    }
+    return patches
+  }
+
+  /**
    * Parses the change given as a Uint8Array in `changeBuffer`, and applies it to the current
-   * document. Returns a patch to apply to the frontend.
+   * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
+   * object is not modified.
    */
   applyChange(changeBuffer) {
     const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
     const allCols = this.getAllColumns(changeCols)
     const {actorIds, actorTable} = this.getActorTable(change)
-    const {opSequences, objects} = groupRelatedOps(change, changeCols)
-    const objectMeta = Object.assign({}, this.objectMeta, objects)
     const actorIndex = actorIds.indexOf(change.actorIds[0])
-
-    // Set up the patch to include any objects that are created or updated
-    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
-    let affectedObjects = Object.assign({}, objects)
-    for (let op of opSequences) affectedObjects[op.objId] = objectMeta[op.objId]
-    for (let [objectId, meta] of Object.entries(affectedObjects)) {
-      let childMeta = null, childPatch = null
-      while (true) {
-        const patchExists = !!patches[objectId]
-        if (!patchExists) {
-          patches[objectId] = {objectId, type: meta.type, props: {}}
-        }
-        if (childMeta) {
-          // TODO also store any conflict values for parentKey in the metadata and apply them here
-          // TODO make this work for lists, where parentKey should be an index
-          let props = patches[objectId].props
-          if (!props[childMeta.parentKey]) props[childMeta.parentKey] = {}
-          props[childMeta.parentKey][childMeta.opId] = childPatch
-        }
-        if (patchExists || !meta.parentObj) break
-        childPatch = patches[objectId]
-        childMeta = meta
-        objectId = meta.parentObj
-        meta = objectMeta[objectId]
-      }
-    }
+    const objectMeta = Object.assign({}, this.objectMeta)
+    const {opSequences, objectIds} = groupRelatedOps(change, changeCols, objectMeta)
+    let patches = this.initPatches(objectIds, objectMeta)
 
     let docState = {
       actorIds, actorTable, allCols, opsCols: this.docColumns, numOps: this.numOps,
-      lastIndex: {}
+      objectMeta, lastIndex: {}
     }
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
@@ -1921,7 +1987,7 @@ class BackendDoc {
     this.actorIds   = docState.actorIds
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
-    this.objectMeta = objectMeta
+    this.objectMeta = docState.objectMeta
     return patches[ROOT_ID]
   }
 }
