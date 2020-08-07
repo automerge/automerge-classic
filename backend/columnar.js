@@ -1579,7 +1579,8 @@ class BackendDoc {
   }
 
   /**
-   * Updates `patch` to reflect the operation `op` within the document with state `docState`.
+   * Updates `patches` to reflect the operation `op` within the document with state `docState`.
+   * `ops` is the operation sequence (as per `groupRelatedOps`) that we're currently processing.
    * Can be called multiple times if there are multiple operations for the same property (e.g. due
    * to a conflict). `propState` is an object that carries over state between such successive
    * invocations for the same property. If the current object is a list, `listIndex` is the index
@@ -1588,7 +1589,7 @@ class BackendDoc {
    * applied (allowing us to determine whether this operation was overwritten or deleted in the
    * current change). `oldSuccNum` must be undefined if the operation came from the current change.
    */
-  updatePatchProperty(patch, op, docState, propState, listIndex, oldSuccNum) {
+  updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
     // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
@@ -1596,6 +1597,7 @@ class BackendDoc {
     const elemId = op[keyStr] ? op[keyStr] :
                    op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                               : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
+    let patch = patches[ops.objId]
 
     if (op[keyStr] === null) {
       // Updating a list or text object (with opId key)
@@ -1631,6 +1633,10 @@ class BackendDoc {
       if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
     }
 
+    // If one or more of the values of the property is a child object, we update objectMeta to store
+    // all of the visible values of the property (even the non-child-object values). Then, when we
+    // subsequently process an update within that child object, we can construct the patch to
+    // contain the conflicting values.
     if (op[succNum] === 0) {
       if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
       propState[elemId].visibleOps.push(op)
@@ -1649,24 +1655,31 @@ class BackendDoc {
         }
 
         // Copy so that objectMeta is not modified if an exception is thrown while applying change
-        const objId = op[objCtr] === null ? ROOT_ID : `${op[objCtr]}@${docState.actorIds[op[objActor]]}`
-        deepCopyUpdate(docState.objectMeta, [objId, 'children', elemId], values)
+        deepCopyUpdate(docState.objectMeta, [ops.objId, 'children', elemId], values)
       }
     }
 
     const key = op[keyStr] !== null ? op[keyStr] : listIndex
-    if (ACTIONS[op[action]] === 'set' && op[succNum] === 0 && patch.props[key]) {
+    if (op[succNum] === 0 && patch.props[key]) {
       const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-      patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
+      if (ACTIONS[op[action]] === 'set') {
+        patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
+      } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
+        if (!patches[opId]) {
+          const type = op[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[action]]] : null
+          patches[opId] = {objectId: opId, type, props: {}}
+        }
+        patch.props[key][opId] = patches[opId]
+      }
     }
   }
 
   /**
    * Applies a sequence of change operations to the document. `changeCols` contains the columns of
    * the change. Assumes that the decoders of both sets of columns are at the position where we want
-   * to start merging. `patch` is mutated to reflect the change made by the operations.
+   * to start merging. `patches` is mutated to reflect the change made by the operations.
    */
-  mergeDocChangeOps(patch, outCols, ops, changeCols, docState, listIndex) {
+  mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
     // Check the first couple of columns are in the positions where we expect them to be
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
@@ -1699,7 +1712,14 @@ class BackendDoc {
     // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
     // At each iteration, we either take one op from the doc, or one op from the change, or one from
     // both (in which case the document operation is updated with information from the change op).
-    while (opCount > 0) {
+    // We keep going until we run out of ops in the change (opCount === 0), except that even when we
+    // run out, we keep going until we have processed all doc ops for the current key/list element.
+    while (opCount > 0 ||
+           (docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]) ||
+           (docOp && docOp[keyStr] === null && changeOp[keyStr] === null && !docOp[insert] &&
+            docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
+           (docOp && docOp[keyStr] === null && changeOp[keyStr] === null && docOp[insert] &&
+            docOp[idActor] === changeOp[keyActor] && docOp[idCtr] === changeOp[keyCtr])) {
       let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
 
       // The change operation comes first if we are inserting list elements (seekToOp already
@@ -1714,13 +1734,16 @@ class BackendDoc {
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
         // Take the operation from the change
         takeChangeOp = true
+        if (changeOp[predNum] > 0) {
+          throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
+        }
         if (changeOp[keyStr] === null && !changeOp[insert]) {
           // This can happen if we first update one list element, then another one earlier in the
           // list. That is not allowed: list element updates must occur in ascending order.
           throw new RangeError("could not find list element with ID: " +
                                `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
         }
-        this.updatePatchProperty(patch, changeOp, docState, propState, listIndex)
+        this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
 
       } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
                  (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
@@ -1753,14 +1776,17 @@ class BackendDoc {
 
         // When we have several operations for the same object and the same key, we want to keep
         // them sorted in ascending order by opId.
-        if (docOp[idCtr] < opIdCtr || (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
+        if (opCount === 0 || docOp[idCtr] < opIdCtr ||
+            (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
           // The document op has the lower opId, so we output it first.
           takeDocOp = true
-          this.updatePatchProperty(patch, docOp, docState, propState, listIndex, docOpOldSuccNum)
+          this.updatePatchProperty(patches, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
-          if (changeOp[action] === ACTIONS.indexOf('del') && changeOp[predNum] === 0) dropChangeOp = true
+          if (changeOp[action] === ACTIONS.indexOf('del') && changeOp[predNum] === 0 && opCount > 0) {
+            dropChangeOp = true
+          }
 
         } else if (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] === ops.idActor) {
           throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.idActor}`)
@@ -1771,7 +1797,7 @@ class BackendDoc {
             throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
           }
           takeChangeOp = true
-          this.updatePatchProperty(patch, changeOp, docState, propState, listIndex)
+          this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
         }
       }
 
@@ -1834,9 +1860,9 @@ class BackendDoc {
    *     (which makes it easier to generate patches for lists).
    *
    * `docState` is mutated to contain the updated document state.
-   * `patch` is a patch object that is mutated to reflect the operations applied by this function.
+   * `patches` is a patch object that is mutated to reflect the operations applied by this function.
    */
-  applyOps(patch, ops, changeCols, docState) {
+  applyOps(patches, ops, changeCols, docState) {
     for (let col of docState.opsCols) col.decoder.reset()
     const {skipCount, visibleCount} = seekToOp(ops, docState.opsCols, docState.actorIds)
     if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
@@ -1849,7 +1875,7 @@ class BackendDoc {
       return {columnId, encoder: encoderByColumnId(columnId)}
     })
     copyColumns(outCols, docState.opsCols, skipCount)
-    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(patch, outCols, ops, changeCols, docState, visibleCount)
+    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount)
     copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)
     for (let col of docState.opsCols) {
       if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
@@ -1979,7 +2005,7 @@ class BackendDoc {
     for (let col of changeCols) col.decoder.reset()
     for (let op of opSequences) {
       op.idActorIndex = actorIndex
-      this.applyOps(patches[op.objId], op, changeCols, docState)
+      this.applyOps(patches, op, changeCols, docState)
     }
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
