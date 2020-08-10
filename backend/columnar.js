@@ -1667,7 +1667,10 @@ class BackendDoc {
   /**
    * Applies a sequence of change operations to the document. `changeCols` contains the columns of
    * the change. Assumes that the decoders of both sets of columns are at the position where we want
-   * to start merging. `patches` is mutated to reflect the change made by the operations.
+   * to start merging. `patches` is mutated to reflect the effect of the change operations. `ops` is
+   * the operation sequence to apply (as decoded by `groupRelatedOps()`). `docState` is as
+   * documented in `applyOps()`. If the operations are updating a list or text object, `listIndex`
+   * is the number of visible elements that precede the position at which we start merging.
    */
   mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
     // Check the first couple of columns are in the positions where we expect them to be
@@ -1691,7 +1694,7 @@ class BackendDoc {
     }
 
     let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
-    let elemVisible = false, propState = {}
+    let foundListElem = false, elemVisible = false, propState = {}
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
@@ -1702,49 +1705,36 @@ class BackendDoc {
     // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
     // At each iteration, we either take one op from the doc, or one op from the change, or one from
     // both (in which case the document operation is updated with information from the change op).
-    // We keep going until we run out of ops in the change (opCount === 0), except that even when we
-    // run out, we keep going until we have processed all doc ops for the current key/list element.
-    while (opCount > 0 ||
-           (docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]) ||
-           (docOp && docOp[keyStr] === null && changeOp[keyStr] === null && !docOp[insert] &&
-            docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
-           (docOp && docOp[keyStr] === null && changeOp[keyStr] === null && docOp[insert] &&
-            docOp[idActor] === changeOp[keyActor] && docOp[idCtr] === changeOp[keyCtr])) {
+    while (true) {
+      const inCorrectObject = docOp && docOp[objActor] === changeOp[objActor] && docOp[objCtr] === changeOp[objCtr]
+      const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
+      const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
+        ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
+         ( docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
+
+      // We keep going until we run out of ops in the change (opCount === 0), except that even when we
+      // run out, we keep going until we have processed all doc ops for the current key/list element.
+      if (opCount === 0 && !(inCorrectObject && (keyMatches || listElemMatches))) break
+
       let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
 
       // The change operation comes first if we are inserting list elements (seekToOp already
       // determines the correct insertion position), if there is no document operation, if the next
       // document operation is for a different object, or if the change op's string key is
       // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
-      // The document operation comes first if its string key is lexicographically first, or if
-      // we're using opId keys and the keys don't match (i.e. we scan the document until we find a
-      // matching key).
-      if (ops.insert || !docOp || docOp[objActor] !== changeOp[objActor] || docOp[objCtr] !== changeOp[objCtr] ||
+      if (ops.insert || !inCorrectObject ||
           (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
         // Take the operation from the change
         takeChangeOp = true
-        if (changeOp[predNum] > 0) {
-          throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
-        }
-        if (changeOp[keyStr] === null && !changeOp[insert]) {
+        if (!inCorrectObject && !foundListElem && changeOp[keyStr] === null && !changeOp[insert]) {
           // This can happen if we first update one list element, then another one earlier in the
           // list. That is not allowed: list element updates must occur in ascending order.
           throw new RangeError("could not find list element with ID: " +
                                `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
         }
-        this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
 
-      } else if ((docOp[keyStr] !== null && changeOp[keyStr] === null) ||
-                 (docOp[keyStr] !== null && changeOp[keyStr] !== null && docOp[keyStr] < changeOp[keyStr]) ||
-                 (docOp[keyStr] === null && changeOp[keyStr] === null && !docOp[insert] &&
-                  (docOp[keyActor] !== changeOp[keyActor] || docOp[keyCtr] !== changeOp[keyCtr]) ||
-                 (docOp[keyStr] === null && changeOp[keyStr] === null && docOp[insert] &&
-                  (docOp[idActor] !== changeOp[keyActor] || docOp[idCtr] !== changeOp[keyCtr])))) {
-        // Take the operation from the document
-        takeDocOp = true
-
-      } else {
+      } else if (keyMatches || listElemMatches || foundListElem) {
         // The two operations (from the doc and from the change) are for the same key in the same
         // object, so we merge them. First, if the change operation's `pred` matches the opId of the
         // document operation, we update the document operation's `succ` accordingly.
@@ -1764,11 +1754,18 @@ class BackendDoc {
           }
         }
 
-        // When we have several operations for the same object and the same key, we want to keep
-        // them sorted in ascending order by opId.
-        if (opCount === 0 || docOp[idCtr] < opIdCtr ||
+        if (listElemMatches) foundListElem = true
+
+        if (foundListElem && !listElemMatches) {
+          // If the previous docOp was for the correct list element, and the current docOp is for
+          // the wrong list element, then place the current changeOp before the docOp.
+          takeChangeOp = true
+
+        } else if (opCount === 0 || docOp[idCtr] < opIdCtr ||
             (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
-          // The document op has the lower opId, so we output it first.
+          // When we have several operations for the same object and the same key, we want to keep
+          // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
+          // output it first.
           takeDocOp = true
           this.updatePatchProperty(patches, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
 
@@ -1781,14 +1778,14 @@ class BackendDoc {
         } else if (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] === ops.idActor) {
           throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.idActor}`)
         } else {
-          // The change op has the lower opId, so we output it first. Check that we've seen all ops
-          // mentioned in `pred` (they must all have lower opIds, so we must have seen them already)
-          if (changeOp[predNum] > 0) {
-            throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
-          }
+          // The changeOp has the lower opId, so we output it first.
           takeChangeOp = true
-          this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
         }
+      } else {
+        // The document operation comes first if its string key is lexicographically first, or if
+        // we're using opId keys and the keys don't match (i.e. we scan the document until we find a
+        // matching key).
+        takeDocOp = true
       }
 
       if (takeDocOp) {
@@ -1807,6 +1804,12 @@ class BackendDoc {
       }
 
       if (takeChangeOp) {
+        // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
+        // the changeOp's own opId, so we must have seen them already)
+        if (changeOp[predNum] > 0) {
+          throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
+        }
+        this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
         appendOperation(outCols, changeCols, changeOp)
         if (changeOp[insert]) elemVisible = false
         if (changeOp[succNum] === 0 && !elemVisible) {
@@ -1823,6 +1826,7 @@ class BackendDoc {
           changeOp = readOperation(changeCols, docState.actorTable)
           changeOp[idActor] = ops.idActorIndex
           changeOp[idCtr] = opIdCtr
+          foundListElem = false // TODO the change may contain multiple operations for the same list element, handle this
         }
       }
     }

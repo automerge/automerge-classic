@@ -718,6 +718,51 @@ describe('BackendDoc applying changes', () => {
     }
   })
 
+  it('should perform multiple list element updates', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `3@${actor}`, insert: true,  value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: false, value: 'A', pred: [`2@${actor}`]},
+      {action: 'set',      obj: `1@${actor}`, key: `4@${actor}`, insert: false, value: 'C', pred: [`4@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text',
+        edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}, {action: 'insert', index: 2}],
+        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}, 2: {[`4@${actor}`]: {value: 'c'}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text', edits: [],
+        props: {0: {[`5@${actor}`]: {value: 'A'}}, 2: {[`6@${actor}`]: {value: 'C'}}}
+      }}}
+    })
+  })
+
+  it('should require list element updates to be in ascending order', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `3@${actor}`, insert: true,  value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `4@${actor}`, insert: false, value: 'C', pred: [`4@${actor}`]},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: false, value: 'A', pred: [`2@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChange(encodeChange(change1))
+    assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /could not find list element with ID/)
+  })
+
   it('should handle updates inside conflicted properties', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
