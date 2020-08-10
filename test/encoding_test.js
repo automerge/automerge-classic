@@ -698,15 +698,6 @@ describe('Binary encoding', () => {
         checkEncoded(encoder, [0x7d, 0, 1, 2, 4, 3, 0x7d, 4, 5, 6])
       })
 
-      it('should copy values with a lookup table', () => {
-        const options = {lookupTable: [3, 2, 1, 0]}
-        checkEncoded(doCopy([0, 1, 2], [0, 1, 2], options), [0x7a, 0, 1, 2, 3, 2, 1])
-        checkEncoded(doCopy([0, 1, 2], [1, 1, 2, 2], options), [0x7e, 0, 1, 3, 2, 2, 1])
-        checkEncoded(doCopy([0, 0], [3, 3, 2, 1, 0], options), [4, 0, 0x7d, 1, 2, 3])
-        checkEncoded(doCopy([0, 0], [2, 2, 3], options), [2, 0, 2, 1, 0x7f, 0])
-        checkEncoded(doCopy([null, 0], [0, 1, null, null], options), [0, 1, 0x7d, 0, 3, 2, 0, 2])
-      })
-
       it('should compute the sum of values copied', () => {
         const encoder1 = new RLEEncoder('uint'), encoder2 = new RLEEncoder('uint')
         for (let v of [1, 2, 3, 10, 10, 10]) encoder2.appendValue(v)
@@ -866,7 +857,6 @@ describe('Binary encoding', () => {
       it('should check the arguments are valid', () => {
         const encoder1 = new DeltaEncoder('uint')
         assert.throws(() => { encoder1.copyFrom(new Decoder(new Uint8Array(0))) }, /incompatible type of decoder/)
-        assert.throws(() => { encoder1.copyFrom(new DeltaDecoder(new Uint8Array(0)), {lookupTable: []}) }, /unsupported options/)
         assert.throws(() => { encoder1.copyFrom(new DeltaDecoder(new Uint8Array(0)), {sumValues: true}) }, /unsupported options/)
       })
     })

@@ -665,7 +665,6 @@ class RLEEncoder extends Encoder {
    * Copies values from the RLEDecoder `decoder` into this encoder. The `options` object may
    * contain the following keys:
    *  - `count`: The number of values to copy. If not specified, copies all remaining values.
-   *  - `lookupTable`: If specified, every value `v` is translated into value `lookupTable[v]`.
    *  - `sumValues`: If true, the function computes the sum of all numeric values as they are
    *    copied (null values are counted as zero), and returns that number.
    *  - `sumShift`: If set, values are shifted right by `sumShift` bits before adding to the sum.
@@ -674,7 +673,7 @@ class RLEEncoder extends Encoder {
    * non-null values copied, and `sum` is the sum (only if the `sumValues` option is set).
    */
   copyFrom(decoder, options = {}) {
-    const { count, lookupTable, sumValues, sumShift } = options
+    const { count, sumValues, sumShift } = options
     if (!(decoder instanceof RLEDecoder) || (decoder.type !== this.type)) {
       throw new TypeError('incompatible type of decoder')
     }
@@ -698,7 +697,7 @@ class RLEEncoder extends Encoder {
       firstValue = decoder.readValue()
       if (firstValue === null) throw new RangeError('null run must be followed by non-null value')
     }
-    this.appendValue(lookupTable ? lookupTable[firstValue] : firstValue)
+    this.appendValue(firstValue)
     remaining--
     nonNullValues++
     if (sumValues) sum += firstValue >>> (sumShift || 0)
@@ -706,7 +705,7 @@ class RLEEncoder extends Encoder {
     if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
 
     // Copy data at the record level without expanding repetitions
-    let startOffset, endOffset, skipValues = !lookupTable && !sumValues, firstRun = true
+    let startOffset, endOffset, skipValues = !sumValues, firstRun = true
     while (remaining > 0 && !decoder.done) {
       endOffset = decoder.offset
       if (firstRun && decoder.count === 0) {
@@ -728,7 +727,7 @@ class RLEEncoder extends Encoder {
             const value = decoder.readRawValue()
             if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
             decoder.lastValue = value
-            this._appendValue((lookupTable && value !== null) ? lookupTable[value] : value)
+            this._appendValue(value)
             if (sumValues) sum += value >>> (sumShift || 0)
           }
         }
@@ -736,10 +735,10 @@ class RLEEncoder extends Encoder {
         nonNullValues += numValues
         if (sumValues) sum += numValues * (decoder.lastValue >>> (sumShift || 0))
         if (!skipValues || firstRun) {
-          const mappedValue = (lookupTable && decoder.lastValue !== null) ? lookupTable[decoder.lastValue] : decoder.lastValue
-          this._appendValue(mappedValue)
+          const value = decoder.lastValue
+          this._appendValue(value)
           if (numValues > 1) {
-            this._appendValue(mappedValue)
+            this._appendValue(value)
             if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
             this.count += numValues - 2
           }
@@ -995,7 +994,7 @@ class DeltaEncoder extends RLEEncoder {
    * all remaining values in the decoder.
    */
   copyFrom(decoder, options = {}) {
-    if (options.lookupTable || options.sumValues) {
+    if (options.sumValues) {
       throw new RangeError('unsupported options for DeltaEncoder.copyFrom()')
     }
     if (!(decoder instanceof DeltaDecoder)) {

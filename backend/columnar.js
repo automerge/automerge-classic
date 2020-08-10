@@ -1303,12 +1303,8 @@ function seekToOp(ops, docCols, actorIds) {
  * output columns are given as an array of `{columnId, encoder}` objects. Both are sorted in
  * increasing order of columnId. If there is no matching input column for a given output column, it
  * is filled in with `count` blank values (according to the column type).
- *
- * If `actorTable` is provided, then for any columns of type ACTOR_ID, every value `v` is mapped to
- * `actorTable[v]`. If `ops` is provided, then the `idCtr` and `idActor` columns are filled in based
- * on `ops.idCtr` and `ops.idActor`.
  */
-function copyColumns(outCols, inCols, count, actorTable, ops) {
+function copyColumns(outCols, inCols, count) {
   if (count === 0) return
   let inIndex = 0, lastGroup = -1, lastCardinality = 0, valueColumn = -1, valueBytes = 0
   for (let outCol of outCols) {
@@ -1347,15 +1343,9 @@ function copyColumns(outCols, inCols, count, actorTable, ops) {
       if (valueBytes > 0) {
         outCol.encoder.appendRawBytes(inCol.readRawBytes(valueBytes))
       }
-    } else if (ops && !inCol && outCol.columnId === DOC_OPS_COLUMNS.idActor) {
-      outCol.encoder.appendValue(ops.idActorIndex, colCount)
-    } else if (ops && !inCol && outCol.columnId === DOC_OPS_COLUMNS.idCtr) {
-      for (let i = 0; i < colCount; i++) outCol.encoder.appendValue(ops.idCtr + i)
     } else { // ACTOR_ID, INT_RLE, INT_DELTA, BOOLEAN, or STRING_RLE
       if (inCol) {
-        const options = {count: colCount, lookupTable: null}
-        if (outCol.columnId % 8 === COLUMN_TYPE.ACTOR_ID) options.lookupTable = actorTable
-        outCol.encoder.copyFrom(inCol, options)
+        outCol.encoder.copyFrom(inCol, {count: colCount})
       } else {
         const blankValue = (outCol.columnId % 8 === COLUMN_TYPE.BOOLEAN) ? false : null
         outCol.encoder.appendValue(blankValue, colCount)
