@@ -698,6 +698,16 @@ describe('Binary encoding', () => {
         checkEncoded(encoder, [0x7d, 0, 1, 2, 4, 3, 0x7d, 4, 5, 6])
       })
 
+      it('should allow copying from a decoder starting with nulls', () => {
+        const decoder = new RLEDecoder('uint', new Uint8Array([0, 2, 0x7f, 0])) // null, null, 0
+        new RLEEncoder('uint').copyFrom(decoder, {count: 1})
+        assert.strictEqual(decoder.readValue(), null)
+        assert.strictEqual(decoder.readValue(), 0)
+        decoder.reset()
+        new RLEEncoder('uint').copyFrom(decoder, {count: 2})
+        assert.strictEqual(decoder.readValue(), 0)
+      })
+
       it('should compute the sum of values copied', () => {
         const encoder1 = new RLEEncoder('uint'), encoder2 = new RLEEncoder('uint')
         for (let v of [1, 2, 3, 10, 10, 10]) encoder2.appendValue(v)

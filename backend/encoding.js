@@ -690,8 +690,8 @@ class RLEEncoder extends Encoder {
     if (firstValue === null) {
       const numNulls = Math.min(decoder.count + 1, remaining)
       remaining -= numNulls
+      decoder.count -= numNulls - 1
       this.appendValue(null, numNulls)
-      decoder.count = 0
       if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
       if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
       firstValue = decoder.readValue()
