@@ -763,6 +763,71 @@ describe('BackendDoc applying changes', () => {
     assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /could not find list element with ID/)
   })
 
+  it('should handle conflicts inside list elements', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeList', obj: ROOT_ID,       key: 'list',        insert: false,           pred: []},
+      {action: 'set',      obj: `1@${actor1}`, key: '_head',       insert: true,  value: 1, pred: []}
+    ]}
+    const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: `2@${actor1}`, insert: false, value: 2, pred: [`2@${actor1}`]}
+    ]}
+    const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, key: `2@${actor1}`, insert: false, value: 3, pred: [`2@${actor1}`]}
+    ]}
+    const backend1 = new BackendDoc(), backend2 = new BackendDoc()
+    assert.deepStrictEqual(backend1.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'list',
+        edits: [{action: 'insert', index: 0}],
+        props: {0: {[`2@${actor1}`]: {value: 1}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend1.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'list', edits: [],
+        props: {0: {[`3@${actor1}`]: {value: 2}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend1.applyChange(encodeChange(change3)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'list', edits: [],
+        props: {0: {[`3@${actor1}`]: {value: 2}, [`3@${actor2}`]: {value: 3}}}
+      }}}
+    })
+    backend2.applyChange(encodeChange(change1))
+    assert.deepStrictEqual(backend2.applyChange(encodeChange(change3)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'list', edits: [],
+        props: {0: {[`3@${actor2}`]: {value: 3}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend2.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'list', edits: [],
+        props: {0: {[`3@${actor1}`]: {value: 2}, [`3@${actor2}`]: {value: 3}}}
+      }}}
+    })
+    for (let backend of [backend1, backend2]) {
+      checkColumns(backend.docColumns, {
+        objActor: [0, 1, 3, 0],
+        objCtr:   [0, 1, 3, 1],
+        keyActor: [0, 2, 2, 0],
+        keyCtr:   [0, 1, 0x7d, 0, 2, 0], // null, 0, 2, 2
+        keyStr:   [0x7f, 4, 0x6c, 0x69, 0x73, 0x74, 0, 3], // 'list', 3x null
+        idActor:  [3, 0, 0x7f, 1],
+        idCtr:    [3, 1, 0x7f, 0], // 1, 2, 3, 3
+        insert:   [1, 1, 2], // false, true, false, false
+        action:   [0x7f, 2, 3, 1], // makeList, 3x set
+        valLen:   [0x7f, 0, 3, 0x13], // null, 3x uint
+        valRaw:   [1, 2, 3],
+        succNum:  [0x7e, 0, 2, 2, 0], // 0, 1, 0, 0
+        succActor: [0x7e, 0, 1],
+        succCtr:   [0x7e, 3, 0] // 3, 3
+      })
+    }
+  })
+
   it('should handle updates inside conflicted properties', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [

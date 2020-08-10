@@ -1790,11 +1790,11 @@ class BackendDoc {
 
       if (takeDocOp) {
         appendOperation(outCols, docState.opsCols, docOp)
-        if (docOp[insert]) elemVisible = false
-        if (docOp[succNum] === 0 && !elemVisible) {
+        if (docOp[insert] && elemVisible) {
+          elemVisible = false
           listIndex++
-          elemVisible = true
         }
+        if (docOp[succNum] === 0) elemVisible = true
         opsAppended++
         docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
         if (docOp !== null) {
@@ -1811,11 +1811,11 @@ class BackendDoc {
         }
         this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
         appendOperation(outCols, changeCols, changeOp)
-        if (changeOp[insert]) elemVisible = false
-        if (changeOp[succNum] === 0 && !elemVisible) {
+        if (changeOp[insert]) {
+          elemVisible = false
           listIndex++
-          elemVisible = true
         }
+        if (changeOp[succNum] === 0) elemVisible = true
         opsAppended++
       }
 
