@@ -593,7 +593,6 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   for (let column of columns) {
     const buffer = column.encoder.buffer
     if (buffer.byteLength > 0) {
-      //if (chunkType === 'document') console.log(`${column.name} column: ${buffer.byteLength} bytes`)
       body.appendUint53(column.id)
       body.appendPrefixedBytes(buffer)
     }
@@ -621,7 +620,6 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   bodyBuf.set(MAGIC_BYTES, HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
   bodyBuf.set(checksum,    HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE)
   bodyBuf.set(headerBuf,   HEADER_SPACE - headerBuf.byteLength)
-  //console.log('checksum: ', [...checksum].map(x => `0x${('0' + x.toString(16)).slice(-2)}`).join(', '))
   return {hash, bytes: bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)}
 }
 
@@ -1409,7 +1407,6 @@ function readOperation(columns, actorTable) {
  * `operation[i]` comes from the column `inCols[i]`.
  */
 function appendOperation(outCols, inCols, operation) {
-  //console.log('appending:', operation.map((value, idx) => {return {columnName: inCols[idx].columnName, value} }))
   let inIndex = 0, lastGroup = -1, lastCardinality = 0
   for (let outCol of outCols) {
     while (inIndex < inCols.length && inCols[inIndex].columnId < outCol.columnId) inIndex++
@@ -1698,35 +1695,59 @@ class BackendDoc {
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
-    let changeOp = readOperation(changeCols, docState.actorTable)
-    changeOp[idActor] = ops.idActorIndex
-    changeOp[idCtr] = opIdCtr
+    let changeOp = null, nextChangeOp = null, changeOps = []
 
     // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
-    // At each iteration, we either take one op from the doc, or one op from the change, or one from
-    // both (in which case the document operation is updated with information from the change op).
+    // At each iteration, we either output the doc's op (possibly updated based on the change's ops)
+    // or output an op from the change.
     while (true) {
+      // Read operations from the change, and fill the array `changeOps` with all the operations
+      // that pertain to the same property (the same key or list element). If the operation
+      // sequence consists of consecutive list insertions, `changeOps` contains all of the ops.
+      if (changeOps.length === 0) {
+        foundListElem = false
+        while (changeOps.length === 0 || ops.insert ||
+               (nextChangeOp[keyStr] !== null && nextChangeOp[keyStr] === changeOps[0][keyStr]) ||
+               (nextChangeOp[keyStr] === null && nextChangeOp[keyActor] === changeOps[0][keyActor] &&
+                nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
+          if (nextChangeOp !== null) {
+            changeOps.push(nextChangeOp)
+          }
+          if (opCount === 0) {
+            nextChangeOp = null
+            break
+          }
+
+          nextChangeOp = readOperation(changeCols, docState.actorTable)
+          nextChangeOp[idActor] = ops.idActorIndex
+          nextChangeOp[idCtr] = opIdCtr
+          opCount--
+          opIdCtr++
+        }
+      }
+
+      if (changeOps.length > 0) changeOp = changeOps[0]
       const inCorrectObject = docOp && docOp[objActor] === changeOp[objActor] && docOp[objCtr] === changeOp[objCtr]
       const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
       const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
         ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
          ( docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
 
-      // We keep going until we run out of ops in the change (opCount === 0), except that even when we
-      // run out, we keep going until we have processed all doc ops for the current key/list element.
-      if (opCount === 0 && !(inCorrectObject && (keyMatches || listElemMatches))) break
+      // We keep going until we run out of ops in the change, except that even when we run out, we
+      // keep going until we have processed all doc ops for the current key/list element.
+      if (changeOps.length === 0 && !(inCorrectObject && (keyMatches || listElemMatches))) break
 
-      let takeDocOp = false, takeChangeOp = false, dropChangeOp = false
+      let takeDocOp = false, takeChangeOps = 0
 
-      // The change operation comes first if we are inserting list elements (seekToOp already
+      // The change operations come first if we are inserting list elements (seekToOp already
       // determines the correct insertion position), if there is no document operation, if the next
       // document operation is for a different object, or if the change op's string key is
       // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
       if (ops.insert || !inCorrectObject ||
           (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
           (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
-        // Take the operation from the change
-        takeChangeOp = true
+        // Take the operations from the change
+        takeChangeOps = changeOps.length
         if (!inCorrectObject && !foundListElem && changeOp[keyStr] === null && !changeOp[insert]) {
           // This can happen if we first update one list element, then another one earlier in the
           // list. That is not allowed: list element updates must occur in ascending order.
@@ -1735,22 +1756,24 @@ class BackendDoc {
         }
 
       } else if (keyMatches || listElemMatches || foundListElem) {
-        // The two operations (from the doc and from the change) are for the same key in the same
-        // object, so we merge them. First, if the change operation's `pred` matches the opId of the
+        // The doc operation is for the same key or list element in the same object as the change
+        // ops, so we merge them. First, if any of the change ops' `pred` matches the opId of the
         // document operation, we update the document operation's `succ` accordingly.
-        for (let i = 0; i < changeOp[predNum]; i++) {
-          if (changeOp[predActor][i] === docOp[idActor] && changeOp[predCtr][i] === docOp[idCtr]) {
-            // Insert into the doc op's succ list such that the lists remains sorted
-            let j = 0
-            while (j < docOp[succNum] && (docOp[succCtr][j] < opIdCtr ||
-                   docOp[succCtr][j] === opIdCtr && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
-            docOp[succCtr].splice(j, 0, opIdCtr)
-            docOp[succActor].splice(j, 0, ops.idActorIndex)
-            docOp[succNum]++
-            changeOp[predCtr].splice(i, 1)
-            changeOp[predActor].splice(i, 1)
-            changeOp[predNum]--
-            break
+        for (let op of changeOps) {
+          for (let i = 0; i < op[predNum]; i++) {
+            if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
+              // Insert into the doc op's succ list such that the lists remains sorted
+              let j = 0
+              while (j < docOp[succNum] && (docOp[succCtr][j] < op[idCtr] ||
+                     docOp[succCtr][j] === op[idCtr] && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
+              docOp[succCtr].splice(j, 0, op[idCtr])
+              docOp[succActor].splice(j, 0, ops.idActorIndex)
+              docOp[succNum]++
+              op[predCtr].splice(i, 1)
+              op[predActor].splice(i, 1)
+              op[predNum]--
+              break
+            }
           }
         }
 
@@ -1759,10 +1782,10 @@ class BackendDoc {
         if (foundListElem && !listElemMatches) {
           // If the previous docOp was for the correct list element, and the current docOp is for
           // the wrong list element, then place the current changeOp before the docOp.
-          takeChangeOp = true
+          takeChangeOps = changeOps.length
 
-        } else if (opCount === 0 || docOp[idCtr] < opIdCtr ||
-            (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] < ops.idActor)) {
+        } else if (changeOps.length === 0 || docOp[idCtr] < changeOp[idCtr] ||
+            (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] < ops.idActor)) {
           // When we have several operations for the same object and the same key, we want to keep
           // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
           // output it first.
@@ -1771,15 +1794,17 @@ class BackendDoc {
 
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
-          if (changeOp[action] === ACTIONS.indexOf('del') && changeOp[predNum] === 0 && opCount > 0) {
-            dropChangeOp = true
+          for (let i = changeOps.length - 1; i >= 0; i--) {
+            if (ACTIONS[changeOps[i][action]] === 'del' && changeOps[i][predNum] === 0) {
+              changeOps.splice(i, 1)
+            }
           }
 
-        } else if (docOp[idCtr] === opIdCtr && docState.actorIds[docOp[idActor]] === ops.idActor) {
-          throw new RangeError(`duplicate operation ID: ${opIdCtr}@${ops.idActor}`)
+        } else if (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] === ops.idActor) {
+          throw new RangeError(`duplicate operation ID: ${changeOp[idCtr]}@${ops.idActor}`)
         } else {
           // The changeOp has the lower opId, so we output it first.
-          takeChangeOp = true
+          takeChangeOps = 1
         }
       } else {
         // The document operation comes first if its string key is lexicographically first, or if
@@ -1803,31 +1828,29 @@ class BackendDoc {
         }
       }
 
-      if (takeChangeOp) {
-        // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
-        // the changeOp's own opId, so we must have seen them already)
-        if (changeOp[predNum] > 0) {
-          throw new RangeError(`no matching operation for pred: ${changeOp[predCtr][0]}@${docState.actorIds[changeOp[predActor][0]]}`)
+      if (takeChangeOps > 0) {
+        for (let i = 0; i < takeChangeOps; i++) {
+          const op = changeOps[i]
+          // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
+          // the change op's own opId, so we must have seen them already)
+          if (op[predNum] > 0) {
+            throw new RangeError(`no matching operation for pred: ${op[predCtr][0]}@${docState.actorIds[op[predActor][0]]}`)
+          }
+          this.updatePatchProperty(patches, ops, op, docState, propState, listIndex)
+          appendOperation(outCols, changeCols, op)
+          if (op[insert]) {
+            elemVisible = false
+            listIndex++
+          }
+          if (op[succNum] === 0) elemVisible = true
         }
-        this.updatePatchProperty(patches, ops, changeOp, docState, propState, listIndex)
-        appendOperation(outCols, changeCols, changeOp)
-        if (changeOp[insert]) {
-          elemVisible = false
-          listIndex++
-        }
-        if (changeOp[succNum] === 0) elemVisible = true
-        opsAppended++
-      }
 
-      if (takeChangeOp || dropChangeOp) {
-        opCount--
-        opIdCtr++
-        if (opCount > 0) {
-          changeOp = readOperation(changeCols, docState.actorTable)
-          changeOp[idActor] = ops.idActorIndex
-          changeOp[idCtr] = opIdCtr
-          foundListElem = false // TODO the change may contain multiple operations for the same list element, handle this
+        if (takeChangeOps === changeOps.length) {
+          changeOps.length = 0
+        } else {
+          changeOps.splice(0, takeChangeOps)
         }
+        opsAppended += takeChangeOps
       }
     }
 
@@ -1879,7 +1902,6 @@ class BackendDoc {
       const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
       return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
     })
-    //console.log('updated columns:', opsCols.map(col => { return {columnName: col.columnName, buffer: col.decoder.buf}}))
     docState.numOps = docState.numOps + opsAppended - docOpsConsumed
   }
 

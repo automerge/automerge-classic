@@ -454,6 +454,48 @@ describe('BackendDoc applying changes', () => {
     assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /Reference element not found/)
   })
 
+  it('should handle non-consecutive insertions', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'c', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `3@${actor}`, insert: true,  value: 'd', pred: []}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text',
+        edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'c'}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text',
+        edits: [{action: 'insert', index: 1}, {action: 'insert', index: 3}],
+        props: {1: {[`4@${actor}`]: {value: 'b'}}, 3: {[`5@${actor}`]: {value: 'd'}}}
+      }}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [0, 2, 3, 0],
+      keyCtr:   [0, 1, 0x7c, 0, 2, 0, 1], // null, 0, 2, 2, 3
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+      idActor:  [5, 0],
+      idCtr:    [2, 1, 0x7d, 2, 0x7f, 2], // 1, 2, 4, 3, 5
+      insert:   [1, 4],
+      action:   [0x7f, 4, 4, 1], // makeText, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
+      succNum:  [5, 0]
+    })
+  })
+
   it('should throw an error if insertions are not in ascending order', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
@@ -744,6 +786,22 @@ describe('BackendDoc applying changes', () => {
         props: {0: {[`5@${actor}`]: {value: 'A'}}, 2: {[`6@${actor}`]: {value: 'C'}}}
       }}}
     })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 5, 0],
+      objCtr:   [0, 1, 5, 1],
+      keyActor: [0, 2, 4, 0],
+      keyCtr:   [0, 1, 0x7d, 0, 2, 0, 2, 1], // null, 0, 2, 2, 3, 4
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 5], // 'text', 5x null
+      idActor:  [6, 0],
+      idCtr:    [2, 1, 0x7c, 3, 0x7e, 1, 2], // 1, 2, 5, 3, 4, 6
+      insert:   [1, 1, 1, 2, 1], // false, true, false, true, true, false
+      action:   [0x7f, 4, 5, 1], // makeText, 5x set
+      valLen:   [0x7f, 0, 5, 0x16], // null, 5x 1-byte string
+      valRaw:   [0x61, 0x41, 0x62, 0x63, 0x43], // 'a', 'A', 'b', 'c', 'C'
+      succNum:  [0x7e, 0, 1, 2, 0, 0x7e, 1, 0], // 0, 1, 0, 0, 1, 0
+      succActor: [2, 0],
+      succCtr:   [0x7e, 5, 1] // 5, 6
+    })
   })
 
   it('should require list element updates to be in ascending order', () => {
@@ -826,6 +884,49 @@ describe('BackendDoc applying changes', () => {
         succCtr:   [0x7e, 3, 0] // 3, 3
       })
     }
+  })
+
+  it('should allow conflicts to be introduced by a single change', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: ROOT_ID,      key: 'text',       insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: false, value: 'x', pred: [`2@${actor}`]},
+      {action: 'set',      obj: `1@${actor}`, key: `2@${actor}`, insert: false, value: 'y', pred: [`2@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text',
+        edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}}
+      }}}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text', edits: [],
+        props: {0: {[`4@${actor}`]: {value: 'x'}, [`5@${actor}`]: {value: 'y'}}}
+      }}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [0, 2, 3, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, 2, 0], // null, 0, 2, 2, 2
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+      idActor:  [5, 0],
+      idCtr:    [2, 1, 0x7d, 2, 1, 0x7e], // 1, 2, 4, 5, 3
+      insert:   [1, 1, 2, 1], // false, true, false, false, true
+      action:   [0x7f, 4, 4, 1], // makeText, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x78, 0x79, 0x62], // 'a', 'x', 'y', 'b'
+      succNum:  [0x7e, 0, 2, 3, 0], // 0, 2, 0, 0, 0
+      succActor: [2, 0],
+      succCtr:   [0x7e, 4, 1] // 4, 5
+    })
   })
 
   it('should handle updates inside conflicted properties', () => {
