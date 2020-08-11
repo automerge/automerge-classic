@@ -700,7 +700,7 @@ class RLEEncoder extends Encoder {
     this.appendValue(firstValue)
     remaining--
     nonNullValues++
-    if (sumValues) sum += firstValue >>> (sumShift || 0)
+    if (sumValues) sum += (sumShift ? (firstValue >>> sumShift) : firstValue)
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
     if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
 
@@ -728,12 +728,12 @@ class RLEEncoder extends Encoder {
             if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
             decoder.lastValue = value
             this._appendValue(value)
-            if (sumValues) sum += value >>> (sumShift || 0)
+            if (sumValues) sum += (sumShift ? (value >>> sumShift) : value)
           }
         }
       } else if (decoder.state === 'repetition') {
         nonNullValues += numValues
-        if (sumValues) sum += numValues * (decoder.lastValue >>> (sumShift || 0))
+        if (sumValues) sum += numValues * (sumShift ? (decoder.lastValue >>> sumShift) : decoder.lastValue)
         if (!skipValues || firstRun) {
           const value = decoder.lastValue
           this._appendValue(value)

@@ -816,6 +816,7 @@ describe('Binary encoding', () => {
         checkEncoded(doCopy([0, 1, 3], [5, 9, 14]), [0x7e, 0, 1, 2, 2, 0x7e, 4, 5])
         checkEncoded(doCopy([1, 2, 4], [5, 6, 8, 9, 10, 12]), [2, 1, 0x7f, 2, 2, 1, 0x7f, 2, 2, 1, 0x7f, 2])
         checkEncoded(doCopy([4, 4, 4], [4, 4, 4, 5, 6, 7]), [0x7f, 4, 5, 0, 3, 1])
+        checkEncoded(doCopy([0, 1, 4], [9, 6, 2, 5, 3]), [0x78, 0, 1, 3, 5, 0x7d, 0x7c, 3, 0x7e])
         checkEncoded(doCopy([1, 2, 3], [null, 4, 5, 6]), [3, 1, 0, 1, 3, 1])
         checkEncoded(doCopy([1, 2, 3], [null, 6, 6, 6]), [3, 1, 0, 1, 0x7f, 3, 2, 0])
         checkEncoded(doCopy([1, 2, 3], [null, null, 4, 5, 7, 9]), [3, 1, 0, 2, 2, 1, 2, 2])
@@ -829,6 +830,14 @@ describe('Binary encoding', () => {
         checkEncoded(doCopy([1, 2, 3], [4, 5, 6, 7], {count: 2}), [5, 1])
         checkEncoded(doCopy([1, 2, 3], [null, null, 4], {count: 1}), [3, 1, 0, 1])
         checkEncoded(doCopy([1, 2, 3], [null, null, 4], {count: 2}), [3, 1, 0, 2])
+      })
+
+      it('should copy non-ascending sequences', () => {
+        const decoder = new DeltaDecoder(new Uint8Array([2, 1, 0x7e, 2, 0x7f])) // 1, 2, 4, 3
+        const encoder = new DeltaEncoder()
+        encoder.copyFrom(decoder, {count: 4})
+        encoder.appendValue(5)
+        checkEncoded(encoder, [2, 1, 0x7d, 2, 0x7f, 2]) // 1, 2, 4, 3, 5
       })
 
       it('should be able to pause and resume copying', () => {
