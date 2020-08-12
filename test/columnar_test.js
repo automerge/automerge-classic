@@ -821,6 +821,51 @@ describe('BackendDoc applying changes', () => {
     assert.throws(() => { backend.applyChange(encodeChange(change2)) }, /could not find list element with ID/)
   })
 
+  it('should handle nested objects inside list elements', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeList', obj: ROOT_ID,      key: 'list',       insert: false,           pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  value: 1, pred: []},
+      {action: 'makeMap',  obj: `1@${actor}`, key: `2@${actor}`, insert: true,            pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `3@${actor}`, key: 'x',          insert: false, value: 2, pred: []}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change1)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list',
+        edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+        props: {0: {[`2@${actor}`]: {value: 1}}, 1: {[`3@${actor}`]: {
+          objectId: `3@${actor}`, type: 'map', props: {}
+        }}}
+      }}}
+    })
+    assert.deepStrictEqual(backend.applyChange(encodeChange(change2)), {
+      objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list', props: {1: {[`3@${actor}`]: {
+          objectId: `3@${actor}`, type: 'map', props: {x: {[`4@${actor}`]: {value: 2}}}
+        }}}
+      }}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 3, 0],
+      objCtr:   [0, 1, 2, 1, 0x7f, 3], // null, 1, 1, 3
+      keyActor: [0, 2, 0x7f, 0, 0, 1], // null, null, 0, null
+      keyCtr:   [0, 1, 0x7e, 0, 2, 0, 1], // null, 0, 2, null
+      keyStr:   [0x7f, 4, 0x6c, 0x69, 0x73, 0x74, 0, 2, 0x7f, 1, 0x78], // 'list', null, null, 'x'
+      idActor:  [4, 0],
+      idCtr:    [4, 1],
+      insert:   [1, 2, 1], // false, true, true, false
+      action:   [0x7c, 2, 1, 0, 1], // makeList, set, makeMap, set
+      valLen:   [0x7c, 0, 0x13, 0, 0x13], // null, uint, null, uint
+      valRaw:   [1, 2],
+      succNum:  [4, 0],
+      succActor: [],
+      succCtr:   []
+    })
+  })
+
   it('should handle conflicts inside list elements', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [

@@ -1581,10 +1581,13 @@ class BackendDoc {
     const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
 
+    const objectId = ops.objId
     const elemId = op[keyStr] ? op[keyStr] :
                    op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                               : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
-    let patch = patches[ops.objId]
+
+    if (!patches[objectId]) patches[objectId] = {objectId, type: docState.objectMeta[objectId].type, props: {}}
+    let patch = patches[objectId]
 
     if (op[keyStr] === null) {
       // Updating a list or text object (with opId key)
@@ -1642,7 +1645,7 @@ class BackendDoc {
         }
 
         // Copy so that objectMeta is not modified if an exception is thrown while applying change
-        deepCopyUpdate(docState.objectMeta, [ops.objId, 'children', elemId], values)
+        deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
       }
     }
 
@@ -1960,40 +1963,54 @@ class BackendDoc {
   }
 
   /**
-   * Sets up the patch for a change. `objectIds` is the array of IDs of objects that are created or
-   * updated in the change, and `objectMeta` is a map from objectIds to metadata about that object
-   * (such as its parent in the document tree). Returns a map from objectIds to patch for that
-   * particular object, where child objects have been linked into their parent object, all the way
-   * to the root object.
+   * Finalises the patch for a change. `patches` is a map from objectIds to patch for that
+   * particular object, `objectIds` is the array of IDs of objects that are created or updated in the
+   * change, and `docState` is an object containing various bits of document state, including
+   * `objectMeta`, a  map from objectIds to metadata about that object (such as its parent in the
+   * document tree). Mutates `patches` such that child objects are linked into their parent object,
+   * all the way to the root object.
    */
-  initPatches(objectIds, objectMeta) {
-    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
+  setupPatches(patches, objectIds, docState) {
     for (let objectId of objectIds) {
-      let meta = objectMeta[objectId], childMeta = null
+      let meta = docState.objectMeta[objectId], childMeta = null, patchExists = false
       while (true) {
-        const patchExists = !!patches[objectId]
-        if (!patchExists) patches[objectId] = {objectId, type: meta.type, props: {}}
+        if (!patches[objectId]) patches[objectId] = {objectId, type: meta.type, props: {}}
 
         if (childMeta) {
-          // TODO make this work for lists, where elemIds need to be transformed into indexes
-          let props = patches[objectId].props
-          if (!props[childMeta.parentKey]) props[childMeta.parentKey] = {}
+          // key is the property name being updated. In maps and table objects, this is just q
+          // string, while in list and text objects, we need to translate the elemID into an index
+          let key = childMeta.parentKey
+          if (meta.type === 'list' || meta.type === 'text') {
+            const obj = parseOpId(objectId), elem = parseOpId(key)
+            const seekPos = {
+              objActor: obj.actorId,  objCtr: obj.counter,
+              keyActor: elem.actorId, keyCtr: elem.counter,
+              keyStr:   null,         insert: false
+            }
+            const {skipCount, visibleCount} = seekToOp(seekPos, docState.opsCols, docState.actorIds)
+            key = visibleCount
+          }
+          if (!patches[objectId].props[key]) patches[objectId].props[key] = {}
+
+          let values = patches[objectId].props[key]
           for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
-            if (value.objectId) {
+            if (values[opId]) {
+              patchExists = true
+            } else if (value.objectId) {
               if (!patches[value.objectId]) patches[value.objectId] = Object.assign({}, value, {props: {}})
-              props[childMeta.parentKey][opId] = patches[value.objectId]
+              values[opId] = patches[value.objectId]
             } else {
-              props[childMeta.parentKey][opId] = value
+              values[opId] = value
             }
           }
-          if (!props[childMeta.parentKey][childMeta.opId]) {
+          if (!values[childMeta.opId]) {
             throw new RangeError(`object metadata did not contain child entry for ${childMeta.opId}`)
           }
         }
         if (patchExists || !meta.parentObj) break
         childMeta = meta
         objectId = meta.parentObj
-        meta = objectMeta[objectId]
+        meta = docState.objectMeta[objectId]
       }
     }
     return patches
@@ -2012,8 +2029,8 @@ class BackendDoc {
     const actorIndex = actorIds.indexOf(change.actorIds[0])
     const objectMeta = Object.assign({}, this.objectMeta)
     const {opSequences, objectIds} = groupRelatedOps(change, changeCols, objectMeta)
-    let patches = this.initPatches(objectIds, objectMeta)
 
+    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
     let docState = {
       actorIds, actorTable, allCols, opsCols: this.docColumns, numOps: this.numOps,
       objectMeta, lastIndex: {}
@@ -2023,6 +2040,7 @@ class BackendDoc {
       op.idActorIndex = actorIndex
       this.applyOps(patches, op, changeCols, docState)
     }
+    this.setupPatches(patches, objectIds, docState)
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
     // the document is not modified (making `applyChange` atomic in the ACID sense).
