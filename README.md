@@ -43,6 +43,8 @@ and merging**:
 
 ## Features and design principles
 
+Automerge is spawn from the [academic essay "Local-first software"](https://www.inkandswitch.com/local-first.html) that compares various approaches to automatic conflict-resolution and details the reasoning behind how automerge came to be.
+
 - **Network-agnostic**. Automerge is a pure data structure library that does not care about what
   kind of network you use: client/server, peer-to-peer, Bluetooth, USB drive in the mail, whatever,
   anything goes. Bindings to particular networking technologies are handled by separate libraries;
