@@ -63,6 +63,17 @@ and merging**:
   [type definitions](https://github.com/automerge/automerge/blob/main/@types/automerge/index.d.ts)
   that allow you to use Automerge in a type-safe way.
 
+Automerge is designed for creating [local-first software](https://www.inkandswitch.com/local-first.html),
+i.e. software that treats a user's local copy of their data (on their own device) as primary, rather
+than centralising data in a cloud service. The local-first approach enables offline working while
+still allowing several users to collaborate in real-time and sync their data across multiple
+devices. By reducing the dependency on cloud services (which may disappear if someone stops paying
+for the servers), local-first software can have greater longevity, stronger privacy, and better
+performance, and it gives users more control over their data.
+The [essay on local-first software](https://www.inkandswitch.com/local-first.html) goes into more
+detail on the philosophy behind Automerge, and the pros and cons of this approach.
+
+
 ## Setup
 
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
