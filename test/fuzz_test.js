@@ -131,9 +131,9 @@ class Micromerge {
    * lexicographically before the actorId of `id2`.
    */
   compareOpIds(id1, id2) {
-    const regex = /^([0-9.]+)@(.*)$/
+    const regex = /^([0-9]+)@(.*)$/
     const match1 = regex.exec(id1), match2 = regex.exec(id2)
-    const counter1 = parseFloat(match1[1]), counter2 = parseFloat(match2[1])
+    const counter1 = parseInt(match1[1]), counter2 = parseInt(match2[1])
     return (counter1 < counter2) || (counter1 === counter2 && match1[2] < match2[2])
   }
 }
