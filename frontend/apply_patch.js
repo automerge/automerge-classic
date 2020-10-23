@@ -261,6 +261,7 @@ function updateTextObject(patch, obj, updated) {
     if (!opId) throw new RangeError(`No default value at index ${key}`)
 
     // TODO Text object does not support conflicts. Should it?
+    // For moves that would be useful
     const oldValue = (elems[key].opId === opId) ? elems[key].value : undefined
     elems[key].value = getValue(patch.props[key][opId], oldValue, updated)
     elems[key].opId = opId

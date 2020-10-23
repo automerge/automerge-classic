@@ -77,8 +77,32 @@ function processChangeRequest(state, opSet, request, startOp) {
       if (typeof op.key !== 'number') {
         throw new TypeError(`Unexpected operation key: ${op.key}`)
       }
+      if (op.action === 'mov') {
+        if (typeof op.child !== 'number') {
+          throw new TypeError(`Unexpected operation child: ${op.child}`)
+        }
 
-      if (op.insert) {
+        // move from child to key
+        let idxChild = op.child
+        let idxKey = op.key
+
+        op.child = elemIds[op.obj].keyOf(op.child)
+        const value = elemIds[op.obj].valueOf(op.child)
+        elemIds[op.obj] = elemIds[op.obj].removeKey(op.child)
+
+        // key is after child, but child is removed first, so idxKey is decreased by 1
+        // if (idxKey > idxChild) {
+        //   idxKey--
+        // }
+
+        if (idxKey === 0) {
+          op.key = '_head'
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(null, opId)
+        } else {
+          op.key = elemIds[op.obj].keyOf(idxKey - 1)
+          elemIds[op.obj] = elemIds[op.obj].insertAfter(op.key, opId)
+        }
+      } else if (op.insert) {
         if (op.key === 0) {
           op.key = '_head'
           elemIds[op.obj] = elemIds[op.obj].insertAfter(null, opId)

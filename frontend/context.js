@@ -378,6 +378,26 @@ class Context {
     this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
   }
 
+  moveTo(path, idxSource, idxDest) {
+    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    let list = this.getObject(objectId)
+    if (idxSource < 0 || idxDest < 0 || idxSource > list.length || idxDest > list.length) {
+      throw new RangeError(`moving from index ${idxSource} to index ${idxDest} is out of bounds for list of length ${list.length}`)
+    }
+    if (idxSource === idxDest) return
+
+    let patch = {diffs: {objectId: ROOT_ID, type: 'map'}}
+    let subpatch = this.getSubpatch(patch, path)
+    if (!subpatch.edits) subpatch.edits = []
+
+    this.addOp({action: 'mov', obj: objectId, key: idxDest, child: idxSource})
+    subpatch.edits.push({action: 'remove', index: idxSource})
+    subpatch.edits.push({action: 'insert', index: idxDest})
+    subpatch.props[idxDest] = {[this.actorId]: {value: 'magpie'}}
+
+    this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+  }
+
   /**
    * Updates the table object at path `path`, adding a new entry `row`.
    * Returns the objectId of the new row.

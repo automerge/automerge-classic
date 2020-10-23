@@ -290,6 +290,28 @@ describe('Proxying context', () => {
       ])
     })
 
+    it('should support moving list elements', () => {
+      context.moveTo([{key: 'birds', objectId: listId}], 1, 0)
+      assert(applyPatch.calledOnce)
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {
+        objectId: ROOT_ID, type: 'map', props: {
+          birds: {
+            actor1: {
+              objectId: listId, type: 'list', props: {
+                0: {[context.actorId]: {value: 'magpie'}}
+              }, edits: [
+                {action: 'remove', index: 1}, {action: 'insert', index: 0}
+              ]
+            }
+          }
+        }
+      })
+      assert.deepStrictEqual(context.ops, [
+        // move from child to key
+        {obj: listId, action: 'mov', child: 1, key: 0}
+      ])
+    })
+
     it('should support list splicing', () => {
       context.splice([{key: 'birds', objectId: listId}], 0, 1, ['starling', 'goldfinch'])
       assert(applyPatch.calledOnce)

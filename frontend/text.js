@@ -149,6 +149,18 @@ class Text {
     }
     return this
   }
+
+  moveTo(idxSource, idxDest) {
+    if (this.context) {
+      this.context.moveTo(this.path, idxSource, idxDest)
+    } else if (!this[OBJECT_ID]) {
+      throw new TypeError('TODO')
+      this.elems.splice(index, numDelete)
+    } else {
+      throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
+    }
+    return this
+  }
 }
 
 // Read-only methods that can delegate to the JavaScript built-in array

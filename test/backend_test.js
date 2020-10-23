@@ -198,6 +198,30 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should handle list element moving', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: ROOT_ID, key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'a', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, insert: true, value: 'b', pred: []},
+      ]}
+      const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+          // move from child to key
+        {action: 'mov', obj: `1@${actor}`, key: '_head', child: `3@${actor}`, pred: [`3@${actor}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
+      assert.deepStrictEqual(patch2, {
+        version: 2, clock: {[actor]: 2}, deps: [hash(change2)], canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'remove', index: 1}, {action: 'insert', index: 0}
+          ], props: {0: {[`4@${actor}`]: {value: 'b'}}}
+        }}}}
+      })
+    })
+
     it('should handle changes within conflicted objects', () => {
       const actor1 = uuid(), actor2 = uuid()
       const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [

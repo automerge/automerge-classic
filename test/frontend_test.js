@@ -626,6 +626,32 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['goldfinch']})
     })
 
+    it('should move list elements', () => {
+      const birds = uuid(), actor = uuid()
+      const patch1 = {
+        version: 1, clock: {[actor]: 1}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+                objectId: birds, type: 'list',
+                edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+                props: {
+                  0: {[actor]: {value: 'chaffinch'}},
+                  1: {[actor]: {value: 'goldfinch'}}
+                }
+              }}}}
+      }
+      const patch2 = {
+        version: 2, clock: {[actor]: 2}, canUndo: false, canRedo: false,
+        diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[actor]: {
+                objectId: birds, type: 'list', props: {},
+                edits: [{action: 'remove', index: 0}]
+              }}}}
+      }
+      const doc1 = Frontend.applyPatch(Frontend.init(), patch1)
+      const doc2 = Frontend.applyPatch(doc1, patch2)
+      assert.deepStrictEqual(doc1, {birds: ['chaffinch', 'goldfinch']})
+      assert.deepStrictEqual(doc2, {birds: ['goldfinch']})
+    })
+
     it('should apply updates at different levels of the object tree', () => {
       const counts = uuid(), details = uuid(), detail1 = uuid(), actor = uuid()
       const patch1 = {

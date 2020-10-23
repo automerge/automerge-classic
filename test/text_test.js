@@ -219,6 +219,46 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.toString(), 'ac')
   })
 
+  it('should support moving back to head', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    s1 = Automerge.change(s1, doc => doc.text.moveTo(1, 0))
+    assert.strictEqual(s1.text.length, 3)
+    assert.strictEqual(s1.text.get(0), 'b')
+    assert.strictEqual(s1.text.get(1), 'a')
+    assert.strictEqual(s1.text.get(2), 'c')
+    assert.strictEqual(s1.text.toString(), 'bac')
+  })
+
+  it('should support moving back to middle', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    s1 = Automerge.change(s1, doc => doc.text.moveTo(2, 1))
+    assert.strictEqual(s1.text.length, 3)
+    assert.strictEqual(s1.text.toString(), 'acb')
+    assert.strictEqual(s1.text.get(0), 'a')
+    assert.strictEqual(s1.text.get(1), 'c')
+    assert.strictEqual(s1.text.get(2), 'b')
+  })
+
+  it('should support moving forward from head', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    s1 = Automerge.change(s1, doc => doc.text.moveTo(0, 1))
+    assert.strictEqual(s1.text.length, 3)
+    assert.strictEqual(s1.text.toString(), 'bac')
+    assert.strictEqual(s1.text.get(0), 'b')
+    assert.strictEqual(s1.text.get(1), 'a')
+    assert.strictEqual(s1.text.get(2), 'c')
+  })
+
+  it('should support moving forward to end', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    s1 = Automerge.change(s1, doc => doc.text.moveTo(1, 2))
+    assert.strictEqual(s1.text.length, 3)
+    assert.strictEqual(s1.text.toString(), 'acb')
+    assert.strictEqual(s1.text.get(0), 'a')
+    assert.strictEqual(s1.text.get(1), 'c')
+    assert.strictEqual(s1.text.get(2), 'b')
+  })
+
   it("should support implicit and explicit deletion", () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, "a", "b", "c"))
     s1 = Automerge.change(s1, doc => doc.text.deleteAt(1))

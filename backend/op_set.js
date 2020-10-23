@@ -70,6 +70,42 @@ function applyInsert(opSet, op) {
     .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
+function applyMove(opSet, op, patch) {
+  const objectId = op.get('obj'), opId = op.get('opId'), key = op.get('key'), child = op.get('child')
+  if (!opSet.get('byObject').has(objectId)) throw new Error(`Modification of unknown object ${objectId}`)
+  if (opSet.hasIn(['byObject', objectId, '_insertion', opId])) throw new Error(`Duplicate list element ID ${opId}`)
+
+  if (patch && patch.edits === undefined) {
+    patch.edits = []
+  }
+  if (patch && patch.props === undefined) {
+    patch.props = {}
+  }
+
+  let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+
+  let idxKey = key === '_head' ? -1 : elemIds.indexOf(key)
+
+  let idxChild = elemIds.indexOf(child)
+  let valChild = elemIds.getValue(child)
+  elemIds = elemIds.removeIndex(idxChild)
+  if (patch) patch.edits.push({action: 'remove', index: idxChild})
+  if (idxKey < idxChild) {
+    idxKey++
+  }
+  elemIds = elemIds.insertIndex(idxKey, child, valChild)
+  if (patch) patch.edits.push({action: 'insert', index: idxKey})
+
+  patch.props[idxKey] = {}
+  patch.props[idxKey][opId] = {value: valChild}
+
+  return opSet
+      .setIn(['byObject', objectId, '_elemIds'], elemIds)
+      // TODO needed?
+      .updateIn(['byObject', objectId, '_movedAfter', op.get('key')], List(), list => list.push(op))
+      .setIn(['byObject', objectId, '_move', opId], op)
+}
+
 function updateListElement(opSet, objectId, elemId, patch) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -346,7 +382,7 @@ function applyOps(opSet, change, patch) {
   let newObjects = Set()
   change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
-    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
+    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable', 'mov'].includes(action)) {
       throw new RangeError(`Unknown operation action: ${action}`)
     }
     if (!op.get('pred')) {
@@ -364,13 +400,19 @@ function applyOps(opSet, change, patch) {
     if (insert) {
       opSet = applyInsert(opSet, opWithId)
     }
+    if (action === 'mov') {
+      opSet = applyMove(opSet, opWithId, localPatch)
+    }
     if (action.startsWith('make')) {
       newObjects = newObjects.add(getChildId(opWithId))
     }
     if (!newObjects.contains(obj)) {
       opSet = recordUndoHistory(opSet, opWithId)
     }
-    opSet = applyAssign(opSet, opWithId, localPatch)
+    if (action !== 'mov') {
+      // applyAssign is designed to update a single element, but move will update at least 2
+      opSet = applyAssign(opSet, opWithId, localPatch)
+    }
   })
   return opSet
 }
@@ -561,8 +603,10 @@ function getFieldOps(opSet, objectId, key) {
 
 function getParent(opSet, objectId, key) {
   if (key === '_head') return
+  // the ins operation that created the element with given key
   const insertion = opSet.getIn(['byObject', objectId, '_insertion', key])
   if (!insertion) throw new TypeError(`Missing index entry for list element ${key}`)
+  // element to insert after
   return insertion.get('key')
 }
 
@@ -587,6 +631,18 @@ function insertionsAfter(opSet, objectId, parentId, childId) {
     .map(op => op.get('opId'))
 }
 
+function movesAfter(opSet, objectId, parentId, childId) {
+  let childKey = null
+  if (childId) childKey = Map({opId: childId})
+
+  return opSet
+      .getIn(['byObject', objectId, '_movedAfter', parentId], List())
+      .filter(op => op.get('move') && (!childKey || lamportCompare(op, childKey) < 0))
+      .sort(lamportCompare)
+      .reverse() // descending order
+      .map(op => op.get('opId'))
+}
+
 function getNext(opSet, objectId, key) {
   const children = insertionsAfter(opSet, objectId, key)
   if (!children.isEmpty()) return children.first()
@@ -604,12 +660,35 @@ function getNext(opSet, objectId, key) {
 // Given the ID of a list element, returns the ID of the immediate predecessor list element,
 // or null if the given list element is at the head.
 function getPrevious(opSet, objectId, key) {
-  const parentId = getParent(opSet, objectId, key)
+  // id after which was originally inserted
+  // TODO rename, if "parent" is supposed to mean "inserted after"
+  let parentId = getParent(opSet, objectId, key)
+  // if element with parentId was moved, skip to element before
+  while (true) {
+    const moves = movesAfter(opSet, objectId, parentId)
+    const moved = !moves.isEmpty()
+    if (!moved) {
+      break
+    }
+    const beforeParent = getPrevious(opSet, objectId, parentId)
+    // potentially the element can be moved around several times (or even just once)
+    // and end up in the same spot again
+    const moveOp = moves.last()
+    if (moveOp.key === beforeParent) {
+      break
+    }
+
+    parentId = beforeParent
+  }
+
+  // other insertions after the parent in lamport order
   let children = insertionsAfter(opSet, objectId, parentId)
   if (children.first() === key) {
+    // the first element after the parent is key -> parentId is previous
     if (parentId === '_head') return null; else return parentId;
   }
 
+  // concurrent insertion
   let prevId
   for (let child of children) {
     if (child === key) break

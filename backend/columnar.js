@@ -33,7 +33,7 @@ const VALUE_TYPE = {
 }
 
 // make* actions must be at even-numbered indexes in this list
-const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable', 'link']
+const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable', 'link', 'mov']
 
 const OBJECT_TYPE = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
 
