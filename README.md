@@ -698,6 +698,19 @@ database.publications.filter(pub => pub.title.startsWith('Designing'))
 database.publications.map(pub => pub.publisher)
 ```
 
+You can modify rows in a table like this:
+
+```js
+database = Automerge.change(database, doc => {
+  // Update a row
+  let book = doc.publications.byId('29f6cd15-61ff-460d-b7fb-39a5594f32d5')
+  book.isbn = '1449373321'
+
+  // Delete a row
+  doc.publications.remove('29f6cd15-61ff-460d-b7fb-39a5594f32d5')
+})
+```
+
 Note that currently the `Automerge.Table` type does not enforce a schema. By convention, the row
 objects that you add to a table should have the same properties (like columns in a table), but
 Automerge does not enforce this. This is because different users may be running different versions
