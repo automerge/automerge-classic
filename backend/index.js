@@ -163,9 +163,9 @@ function apply(state, changes, request, isUndoable, isIncremental) {
   for (let change of changes) {
     for (let chunk of splitContainers(change)) {
       if (request) {
-        opSet = OpSet.addLocalChange(opSet, change, isUndoable, diffs)
+        opSet = OpSet.addLocalChange(opSet, chunk, isUndoable, diffs)
       } else {
-        opSet = OpSet.addChange(opSet, change, diffs)
+        opSet = OpSet.addChange(opSet, chunk, diffs)
       }
     }
   }
