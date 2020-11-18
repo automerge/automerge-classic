@@ -133,7 +133,7 @@ function getHistory(doc) {
   }).toArray()
 }
 
-module.exports = {
+global.Automerge = module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
   equals, getHistory, uuid,

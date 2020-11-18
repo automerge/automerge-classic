@@ -80,6 +80,13 @@ If you're using npm, `npm install automerge`. If you're using yarn, `yarn add au
 can import it with `require('automerge')` as in [the example below](#usage) (or
 `import * as Automerge from 'automerge'` if using ES2015 or TypeScript).
 
+You can also load Automerge via a script tag:
+
+```html
+<script src="https://unpkg.com/automerge"></script>
+<script>Automerge.from([])</script>
+```
+
 Otherwise, clone this repository, and then you can use the following commands:
 
 - `yarn install` — installs dependencies.
