@@ -351,6 +351,8 @@ like a git repository).
 >
 > **Unless you know what you are doing, you should stick with the default**, and let `actorId` be
 > auto-generated.
+>
+> To get the `actorId` of the current node, call `Automerge.getActorId(doc)`.
 
 ### Undo and redo
 
