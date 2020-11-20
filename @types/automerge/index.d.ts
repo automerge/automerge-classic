@@ -40,7 +40,9 @@ declare module 'automerge' {
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
+  function getClock<T>(doc: Doc<T>): Clock
   function getMissingDeps<T>(doc: Doc<T>): Clock
+  function getMissingChanges<T>(oldClock: Clock, newDoc: Doc<T>): Change[]
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
 

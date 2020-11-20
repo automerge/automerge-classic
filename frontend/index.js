@@ -488,6 +488,14 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
+/**
+ * Returns a vector clock representing the current change in doc.
+ * Use with Automerge.getMissingChanges.
+ */
+function getClock(doc) {
+  return getBackendState(doc).getIn(['opSet', 'clock']).toJS()
+}
+
 function getElementIds(list) {
   return list[ELEM_IDS]
 }
@@ -496,6 +504,6 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts,
-  getBackendState, getElementIds,
+  getBackendState, getElementIds, getClock,
   Text, Table, Counter
 }

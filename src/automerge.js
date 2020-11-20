@@ -1,3 +1,4 @@
+const { fromJS } = require('immutable')
 const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
@@ -106,6 +107,13 @@ function getMissingDeps(doc) {
   return Backend.getMissingDeps(Frontend.getBackendState(doc))
 }
 
+/**
+ * Returns an array of changes in newDoc since oldClock.
+ */
+function getMissingChanges(oldClock, newDoc) {
+  return Backend.getMissingChanges(Frontend.getBackendState(newDoc), fromJS(oldClock))
+}
+
 function equals(val1, val2) {
   if (!isObject(val1) || !isObject(val2)) return val1 === val2
   const keys1 = Object.keys(val1).sort(), keys2 = Object.keys(val2).sort()
@@ -136,7 +144,7 @@ function getHistory(doc) {
 module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
-  equals, getHistory, uuid,
+  getMissingChanges, equals, getHistory, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),
@@ -144,6 +152,6 @@ module.exports = {
 }
 
 for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
+     'setActorId', 'getConflicts', 'getClock', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }

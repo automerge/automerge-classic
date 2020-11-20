@@ -58,7 +58,7 @@ class Connection {
   maybeSendChanges (docId) {
     const doc = this._docSet.getDoc(docId)
     const state = Frontend.getBackendState(doc)
-    const clock = state.getIn(['opSet', 'clock'])
+    const clock = fromJS(Frontend.getClock(doc))
 
     if (this._theirClock.has(docId)) {
       const changes = Backend.getMissingChanges(state, this._theirClock.get(docId))
@@ -74,8 +74,7 @@ class Connection {
 
   // Callback that is called by the docSet whenever a document is changed
   docChanged (docId, doc) {
-    const state = Frontend.getBackendState(doc)
-    const clock = state.getIn(['opSet', 'clock'])
+    const clock = fromJS(Frontend.getClock(doc))
     if (!clock) {
       throw new TypeError('This object cannot be used for network sync. ' +
                           'Are you trying to sync a snapshot from the history?')

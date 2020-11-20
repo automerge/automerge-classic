@@ -402,8 +402,7 @@ The Automerge library itself is agnostic to the network layer — that is, you 
 communication mechanism you like to get changes from one node to another. There are currently a few
 options, with more under development:
 
-- Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
-  node and apply them on another.
+- Manually capture changes on one node and apply them on another. See the next section.
 - [`Automerge.Connection`](https://github.com/automerge/automerge/blob/main/src/connection.js), is
   an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
@@ -419,7 +418,12 @@ options, with more under development:
 - [Perge](https://github.com/sammccord/perge) is a minimal library that runs the `Automerge.Connection` protocol over
   [PeerJS](https://github.com/peers/peerjs).
 
-The `getChanges()/applyChanges()` API works as follows:
+### Manually capturing and applying changes
+
+There are two APIs to manually obtain list of changes to apply to another doc,
+`Automerge.getChanges()` and `Automerge.getClock`/`Automerge.getMissingChanges`.
+
+The `getChanges()` API works as follows:
 
 ```js
 // On one node
@@ -428,17 +432,40 @@ newDoc = Automerge.change(currentDoc, doc => {
 })
 let changes = Automerge.getChanges(currentDoc, newDoc)
 network.broadcast(JSON.stringify(changes))
+```
 
+`Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old doc and
+a new doc. It returns a list of all the changes made in `newDoc` since `oldDoc`.
+
+The `Automerge.getClock`/`Automerge.getMissingChanges` API works as follows:
+
+```js
+// On one node
+// Record where we are in currentDoc
+let oldClock = Automerge.getClock(currentDoc)
+newDoc = Automerge.change(currentDoc, doc => {
+  // make arbitrary change to the document
+})
+let changes = Automerge.getMissingChanges(oldClock, newDoc)
+network.broadcast(JSON.stringify(changes))
+```
+
+`Automerge.getChanges` requires you to keep an old doc around to compare with.
+`Automerge.getClock` returns a *vector clock* referring to the current state
+of a doc, without keeping the (much larger) document itself around.
+You can pass that clock to `Automerge.getMissingChanges` along with the current doc to get the list of changes.
+
+If you want a list of all the changes ever made in `doc`, you can call `Automerge.getAllChanges(doc)`.
+
+Once you have a list of changes, use `Automerge.applyChanges` to apply them to another doc:
+
+```js
 // On another node
 let changes = JSON.parse(network.receive())
 newDoc = Automerge.applyChanges(currentDoc, changes)
 ```
 
-Note that `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old state and
-a new state. It then returns a list of all the changes that were made in `newDoc` since `oldDoc`. If
-you want a list of all the changes ever made in `doc`, you can call `Automerge.getAllChanges(doc)`.
-
-The counterpart, `Automerge.applyChanges(oldDoc, changes)` applies the list of `changes` to the
+`Automerge.applyChanges(oldDoc, changes)` applies the list of `changes` to the
 given document, and returns a new document with those changes applied. Automerge guarantees that
 whenever any two documents have applied the same set of changes — even if the changes were applied
 in a different order — then those two documents are equal. That property is called _convergence_,
