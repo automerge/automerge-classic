@@ -141,6 +141,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
   if (fromBackend) {
     const seq = patch.clock ? patch.clock[actor] : undefined
     if (seq && seq > state.seq) state.seq = seq
+    state.clock = patch.clock
     state.deps = patch.deps
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
@@ -227,7 +228,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], deps: {}, canUndo: false, canRedo: false}
+  const state = {seq: 0, requests: [], clock: {}, deps: {}, canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }
@@ -489,11 +490,11 @@ function getBackendState(doc) {
 }
 
 /**
- * Returns a vector clock representing the current change in doc.
+ * Returns a vector clock representing the set of changes applied to the document.
  * Use with Automerge.getMissingChanges.
  */
 function getClock(doc) {
-  return getBackendState(doc).getIn(['opSet', 'clock']).toJS()
+  return doc[STATE].clock
 }
 
 function getElementIds(list) {

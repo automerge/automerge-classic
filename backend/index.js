@@ -169,7 +169,7 @@ function applyChanges(state, changes) {
 
 /**
  * Takes a single change request `change` made by the local user, and applies
- * it to the node state `state`. The difference to `applyChange()` is that this
+ * it to the node state `state`. The difference to `applyChanges()` is that this
  * function adds the change to the undo history, so it can be undone (whereas
  * remote changes are not normally added to the undo history). Returns a
  * two-element array `[state, patch]` where `state` is the updated node state,
@@ -212,6 +212,14 @@ function getPatch(state) {
   return makePatch(state, diffs)
 }
 
+/**
+ * Returns an object in which the keys are actor IDs, and the values are the number of changes we
+ * have applied from that actor ID. Used in conjunction with `getMissingChanges`.
+ */
+function getClock(state) {
+  return state.getIn(['opSet', 'clock']).toJS()
+}
+
 function getChanges(oldState, newState) {
   const oldClock = oldState.getIn(['opSet', 'clock'])
   const newClock = newState.getIn(['opSet', 'clock'])
@@ -227,8 +235,14 @@ function getChangesForActor(state, actorId) {
   return OpSet.getChangesForActor(state.get('opSet'), actorId).toJS()
 }
 
+/**
+ * Returns an array of changes that have been applied to the backend `state`, but which are not
+ * included in the vector clock `clock`. The clock is an object where keys are actor IDs and the
+ * values are sequence numbers, and for each actor we return any changes with a greater sequence
+ * number than that in the clock.
+ */
 function getMissingChanges(state, clock) {
-  return OpSet.getMissingChanges(state.get('opSet'), clock).toJS()
+  return OpSet.getMissingChanges(state.get('opSet'), fromJS(clock)).toJS()
 }
 
 function getMissingDeps(state) {
@@ -316,6 +330,6 @@ function redo(state, request) {
 }
 
 module.exports = {
-  init, applyChanges, applyLocalChange, getPatch,
+  init, applyChanges, applyLocalChange, getPatch, getClock,
   getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge
 }

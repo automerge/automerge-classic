@@ -437,6 +437,40 @@ describe('Automerge.Backend', () => {
     })
   })
 
+  describe('vector clock API', () => {
+    let backend
+
+    beforeEach(() => {
+      const s1 = Automerge.change(Automerge.init('A'), doc => doc.x = 1)
+      const s2 = Automerge.change(s1, doc => doc.x = 2)
+      const s3 = Automerge.change(Automerge.merge(Automerge.init('B'), s2), doc => doc.x = 3)
+      backend = Automerge.Frontend.getBackendState(s3)
+    })
+
+    it('should return the current vector clock', () => {
+      assert.deepStrictEqual(Backend.getClock(backend), {A: 2, B: 1})
+    })
+
+    it('should return all changes if the clock is empty', () => {
+      assert.deepStrictEqual(Backend.getMissingChanges(backend, {}), [
+        {actor: 'A', seq: 1, deps: {}, ops: [{action: 'set', obj: ROOT_ID, key: 'x', value: 1}]},
+        {actor: 'A', seq: 2, deps: {}, ops: [{action: 'set', obj: ROOT_ID, key: 'x', value: 2}]},
+        {actor: 'B', seq: 1, deps: {A: 2}, ops: [{action: 'set', obj: ROOT_ID, key: 'x', value: 3}]}
+      ])
+    })
+
+    it('should return the changes that are greater than the clock', () => {
+      assert.deepStrictEqual(Backend.getMissingChanges(backend, {A: 1}), [
+        {actor: 'A', seq: 2, deps: {}, ops: [{action: 'set', obj: ROOT_ID, key: 'x', value: 2}]},
+        {actor: 'B', seq: 1, deps: {A: 2}, ops: [{action: 'set', obj: ROOT_ID, key: 'x', value: 3}]}
+      ])
+    })
+
+    it('should return nothing if the clock matches the backend state', () => {
+      assert.deepStrictEqual(Backend.getMissingChanges(backend, {A: 2, B: 1}), [])
+    })
+  })
+
   describe('getChangesForActor()', () => {
     let oneDoc, twoDoc, mergeDoc
 

@@ -1,4 +1,3 @@
-const { fromJS } = require('immutable')
 const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
@@ -110,8 +109,8 @@ function getMissingDeps(doc) {
 /**
  * Returns an array of changes in newDoc since oldClock.
  */
-function getMissingChanges(oldClock, newDoc) {
-  return Backend.getMissingChanges(Frontend.getBackendState(newDoc), fromJS(oldClock))
+function getMissingChanges(newDoc, oldClock) {
+  return Backend.getMissingChanges(Frontend.getBackendState(newDoc), oldClock)
 }
 
 function equals(val1, val2) {

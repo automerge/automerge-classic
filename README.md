@@ -420,10 +420,10 @@ options, with more under development:
 
 ### Manually capturing and applying changes
 
-There are two APIs to manually obtain list of changes to apply to another doc,
-`Automerge.getChanges()` and `Automerge.getClock`/`Automerge.getMissingChanges`.
-
-The `getChanges()` API works as follows:
+There are several APIs to obtain a list of changes to apply to another doc:
+`Automerge.getChanges()`, `Automerge.getAllChanges()`, and `Automerge.getMissingChanges()`. You can
+then send the changes to another node, where you use `Automerge.applyChanges()` to update the
+document, like this:
 
 ```js
 // On one node
@@ -432,34 +432,7 @@ newDoc = Automerge.change(currentDoc, doc => {
 })
 let changes = Automerge.getChanges(currentDoc, newDoc)
 network.broadcast(JSON.stringify(changes))
-```
 
-`Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old doc and
-a new doc. It returns a list of all the changes made in `newDoc` since `oldDoc`.
-
-The `Automerge.getClock`/`Automerge.getMissingChanges` API works as follows:
-
-```js
-// On one node
-// Record where we are in currentDoc
-let oldClock = Automerge.getClock(currentDoc)
-newDoc = Automerge.change(currentDoc, doc => {
-  // make arbitrary change to the document
-})
-let changes = Automerge.getMissingChanges(oldClock, newDoc)
-network.broadcast(JSON.stringify(changes))
-```
-
-`Automerge.getChanges` requires you to keep an old doc around to compare with.
-`Automerge.getClock` returns a *vector clock* referring to the current state
-of a doc, without keeping the (much larger) document itself around.
-You can pass that clock to `Automerge.getMissingChanges` along with the current doc to get the list of changes.
-
-If you want a list of all the changes ever made in `doc`, you can call `Automerge.getAllChanges(doc)`.
-
-Once you have a list of changes, use `Automerge.applyChanges` to apply them to another doc:
-
-```js
 // On another node
 let changes = JSON.parse(network.receive())
 newDoc = Automerge.applyChanges(currentDoc, changes)
@@ -470,6 +443,35 @@ given document, and returns a new document with those changes applied. Automerge
 whenever any two documents have applied the same set of changes — even if the changes were applied
 in a different order — then those two documents are equal. That property is called _convergence_,
 and it is the essence of what Automerge is all about.
+
+For getting changes, the available functions are:
+
+* `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old doc and a new doc.
+  It returns a list of all the changes made in `newDoc` since `oldDoc`.
+* `Automerge.getAllChanges(doc)` returns a list of all changes ever made in `doc`.
+* `Automerge.getMissingChanges(doc, clock)` takes a document `doc` and a vector clock object `clock`
+  (described below). It returns all of the changes made in `doc` since the point in time identified
+  by `clock`.
+
+The vector clock used by `getMissingChanges` is an object that identifies a particular point in time
+in the lifetime of an object. It maps keys (actorIds) to values (number of changes we have applied
+from that particular actorId). You can get the current vector clock of a document using
+`Automerge.getClock()`, like in this example:
+
+```js
+// Record current clock value
+let oldClock = Automerge.getClock(currentDoc)
+newDoc = Automerge.change(currentDoc, doc => {
+  // make arbitrary change to the document
+})
+
+// Get all changes made since oldClock's point in time
+let changes = Automerge.getMissingChanges(newDoc, oldClock)
+```
+
+This approach has the advantage that you don't need to keep old documents around. Moreover, you can
+use the clock for syncing changes over a network: for example, one node can send another node its
+clock, and it replies with all of the changes made since that clock value.
 
 `Automerge.merge(doc1, doc2)` is a related function that is useful for testing. It looks for any
 changes that appear in `doc2` but not in `doc1`, and applies them to `doc1`, returning an updated

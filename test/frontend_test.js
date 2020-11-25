@@ -261,6 +261,22 @@ describe('Automerge.Frontend', () => {
       ])
     })
 
+    it('should use the vector clock from the last backend state', () => {
+      const actor1 = uuid(), actor2 = uuid(), state0 = Backend.init()
+      const doc0 = Frontend.init(actor1)
+      assert.deepStrictEqual(Frontend.getClock(doc0), {})
+      const [doc1, req1] = Frontend.change(doc0, doc => doc.number = 1)
+      assert.deepStrictEqual(Frontend.getClock(doc1), {})
+      const [state1, patch1] = Backend.applyLocalChange(state0, req1)
+      const doc2 = Frontend.applyPatch(doc1, patch1)
+      assert.deepStrictEqual(Frontend.getClock(doc2), {[actor1]: 1})
+      const [state2, patch2] = Backend.applyChanges(state1, [{actor: actor2, seq: 1, deps: {[actor1]: 1}, ops: [
+        {action: 'set', obj: ROOT_ID, key: 'number', value: 2}
+      ]}])
+      const doc3 = Frontend.applyPatch(doc2, patch2)
+      assert.deepStrictEqual(Frontend.getClock(doc3), {[actor1]: 1, [actor2]: 1})
+    })
+
     it('should remove pending requests once handled', () => {
       const actor = uuid()
       let [doc1, change1] = Frontend.change(Frontend.init(actor), doc => doc.blackbirds = 24)

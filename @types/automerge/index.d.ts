@@ -38,11 +38,11 @@ declare module 'automerge' {
   function getActorId<T>(doc: Doc<T>): string
   function getAllChanges<T>(doc: Doc<T>): Change[]
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
+  function getClock<T>(doc: Doc<T>): Clock
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
-  function getClock<T>(doc: Doc<T>): Clock
   function getMissingDeps<T>(doc: Doc<T>): Clock
-  function getMissingChanges<T>(oldClock: Clock, newDoc: Doc<T>): Change[]
+  function getMissingChanges<T>(newDoc: Doc<T>, oldClock: Clock): Change[]
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
   function getObjectId(object: any): UUID
 
@@ -154,6 +154,7 @@ declare module 'automerge' {
     function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
+    function getClock<T>(doc: Doc<T>): Clock
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
@@ -169,6 +170,7 @@ declare module 'automerge' {
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch]
     function getChanges(oldState: BackendState, newState: BackendState): Change[]
     function getChangesForActor(state: BackendState, actorId: string): Change[]
+    function getClock<T>(doc: Doc<T>): Clock
     function getMissingChanges(state: BackendState, clock: Clock): Change[]
     function getMissingDeps(state: BackendState): Clock
     function getPatch(state: BackendState): Patch

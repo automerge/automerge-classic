@@ -244,16 +244,24 @@ describe('TypeScript support', () => {
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
       let s2 = Automerge.change(s1, 'add chaffinch', doc => doc.birds.push('chaffinch'))
-      // Document-based API.
       const changes = Automerge.getChanges(s1, s2)
       assert.strictEqual(changes.length, 1)
       assert.strictEqual(changes[0].message, 'add chaffinch')
       assert.strictEqual(changes[0].actor, Automerge.getActorId(s2))
       assert.strictEqual(changes[0].seq, 2)
-      // Clock-based API.
-      let clock = Automerge.getClock(s1)
-      const changes2 = Automerge.getMissingChanges(clock, s2)
-      assert.deepEqual(changes, changes2)
+    })
+
+    it('should support a vector clock API', () => {
+      let s1 = Automerge.change(Automerge.init<BirdList>(), doc => (doc.birds = ['goldfinch']))
+      let clock1 = {[Automerge.getActorId(s1)]: 1}
+      assert.deepStrictEqual(Automerge.getClock(s1), clock1)
+      let s2 = Automerge.merge(Automerge.init<BirdList>(), s1)
+      let s3 = Automerge.change(s2, doc => doc.birds.push('chaffinch'))
+      let clock2 = {[Automerge.getActorId(s1)]: 1, [Automerge.getActorId(s2)]: 1}
+      assert.deepStrictEqual(Automerge.getClock(s3), clock2)
+      assert.strictEqual(Automerge.getMissingChanges(s3, {}).length, 2)
+      assert.strictEqual(Automerge.getMissingChanges(s3, clock1).length, 1)
+      assert.strictEqual(Automerge.getMissingChanges(s3, clock2).length, 0)
     })
 
     it('should include operations in changes', () => {

@@ -1532,5 +1532,15 @@ describe('Automerge', () => {
       let s6 = Automerge.applyChanges(s5, changes1to2)
       assert.deepEqual(Automerge.getMissingDeps(s6), {[Automerge.getActorId(s0)]: 2})
     })
+
+    it('should allow getting changes by vector clock', () => {
+      let s1 = Automerge.change(Automerge.init('actor1'), 'first', doc => doc.number = 1)
+      assert.deepStrictEqual(Automerge.getClock(s1), {actor1: 1})
+      let s2 = Automerge.change(Automerge.merge(Automerge.init('actor2'), s1), 'second', doc => doc.number = 2)
+      assert.deepStrictEqual(Automerge.getClock(s2), {actor1: 1, actor2: 1})
+      assert.deepStrictEqual(Automerge.getMissingChanges(s2, {}).map(c => c.message), ['first', 'second'])
+      assert.deepStrictEqual(Automerge.getMissingChanges(s2, {actor1: 1}).map(c => c.message), ['second'])
+      assert.deepStrictEqual(Automerge.getMissingChanges(s2, {actor1: 1, actor2: 1}).map(c => c.message), [])
+    })
   })
 })
