@@ -407,6 +407,8 @@ options, with more under development:
   an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
   contains an example that runs the Connection protocol over a simple TCP connection.
+- [Cevitxe](https://github.com/DevResults/cevitxe) extends Automerge with a WebSocket server for
+  synchronisation, database storage adapters, and integration with React and Redux.
 - [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
   ([usage example](https://github.com/automerge/automerge/issues/117)) runs the `Automerge.Connection`
   protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
