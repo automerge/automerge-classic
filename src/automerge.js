@@ -1,4 +1,3 @@
-const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const { encodeChange, decodeChange } = require('../backend/columnar')

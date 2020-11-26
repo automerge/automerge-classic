@@ -5761,16 +5761,6 @@ trampa@^1.0.0:
   resolved "https://registry.yarnpkg.com/trampa/-/trampa-1.0.1.tgz#b866bc192331f64b4f57a8acf4ab71d0e900b692"
   integrity sha512-93WeyHNuRggPEsfCe+yHxCgM2s6H3Q8Wmlt6b6ObJL8qc7eZlRaFjQxwTrB+zbvGtlDRnAkMoYYo3+2uH/fEwA==
 
-transit-immutable-js@^0.7.0:
-  version "0.7.0"
-  resolved "https://registry.yarnpkg.com/transit-immutable-js/-/transit-immutable-js-0.7.0.tgz#993e25089b6311ff402140f556276d6d253005d9"
-  integrity sha1-mT4lCJtjEf9AIUD1VidtbSUwBdk=
-
-transit-js@^0.8.861:
-  version "0.8.861"
-  resolved "https://registry.yarnpkg.com/transit-js/-/transit-js-0.8.861.tgz#829e516b80349a41fff5d59f5e6993b5473f72c9"
-  integrity sha512-4O9OrYPZw6C0M5gMTvaeOp+xYz6EF79JsyxIvqXHlt+pisSrioJWFOE80N8aCPoJLcNaXF442RZrVtdmd4wkDQ==
-
 trim-right@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/trim-right/-/trim-right-1.0.1.tgz#cb2e1203067e0c8de1f614094b9fe45704ea6003"
