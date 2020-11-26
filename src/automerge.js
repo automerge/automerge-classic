@@ -11,6 +11,7 @@ function docFromChanges(options, changes) {
   const doc = init(options)
   const [state, _] = Backend.applyChanges(Backend.init(), changes)
   const patch = Backend.getPatch(state)
+  if (options && options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = state
   return Frontend.applyPatch(doc, patch)
 }
