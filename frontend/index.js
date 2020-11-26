@@ -109,6 +109,7 @@ function makeChange(doc, requestType, context, options) {
 
   if (doc[OPTIONS].backend) {
     const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
+    if (options && options.patchCallback) options.patchCallback(patch)
     state.backendState = backendState
     state.requests = []
     return [applyPatchToDoc(doc, patch, state, true), request]

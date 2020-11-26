@@ -243,6 +243,24 @@ describe('Automerge', () => {
         assert.strictEqual(s2.list[0] instanceof Date, true)
         assert.strictEqual(s2.list[0].getTime(), now.getTime())
       })
+
+      it('should call patchCallback if supplied', () => {
+        let patches = []
+        s1 = Automerge.change(s1, {patchCallback: p => patches.push(p)}, doc => {
+          doc.birds = ['Goldfinch']
+        })
+        assert.deepStrictEqual(patches, [{
+          actor: Automerge.getActorId(s1), seq: 1, canUndo: true, canRedo: false,
+          clock: {[Automerge.getActorId(s1)]: 1}, deps: {[Automerge.getActorId(s1)]: 1},
+          diffs: [
+            {action: 'create', obj: Automerge.getObjectId(s1.birds), type: 'list'},
+            {action: 'insert', obj: Automerge.getObjectId(s1.birds), type: 'list',
+              elemId: `${Automerge.getActorId(s1)}:1`, index: 0, path: null, value: 'Goldfinch'},
+            {action: 'set', obj: ROOT_ID, type: 'map', key: 'birds',
+              value: Automerge.getObjectId(s1.birds), path: [], link: true}
+          ]
+        }])
+      })
     })
 
     describe('emptyChange()', () => {
@@ -1531,6 +1549,45 @@ describe('Automerge', () => {
       let s5 = Automerge.applyChanges(s4, changes2to3)
       let s6 = Automerge.applyChanges(s5, changes1to2)
       assert.deepEqual(Automerge.getMissingDeps(s6), {[Automerge.getActorId(s0)]: 2})
+    })
+
+    it('should call patchCallback if supplied when applying changes', () => {
+      let patches = []
+      let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
+      Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s1),
+                             {patchCallback: p => patches.push(p)})
+      assert.deepStrictEqual(patches, [{
+        canUndo: false, canRedo: false,
+        clock: {[Automerge.getActorId(s1)]: 1}, deps: {[Automerge.getActorId(s1)]: 1},
+        diffs: [
+          {action: 'create', obj: Automerge.getObjectId(s1.birds), type: 'list'},
+          {action: 'insert', obj: Automerge.getObjectId(s1.birds), type: 'list',
+            elemId: `${Automerge.getActorId(s1)}:1`, index: 0, path: null, value: 'Goldfinch'},
+          {action: 'set', obj: ROOT_ID, type: 'map', key: 'birds',
+            value: Automerge.getObjectId(s1.birds), path: [], link: true}
+        ]
+      }])
+    })
+
+    it('should merge multiple applied changes into one patch', () => {
+      let patches = []
+      let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
+      let s2 = Automerge.change(s1, doc => doc.birds.push('Chaffinch'))
+      Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2),
+                             {patchCallback: p => patches.push(p)})
+      assert.deepStrictEqual(patches, [{
+        canUndo: false, canRedo: false,
+        clock: {[Automerge.getActorId(s1)]: 2}, deps: {[Automerge.getActorId(s1)]: 2},
+        diffs: [
+          {action: 'create', obj: Automerge.getObjectId(s1.birds), type: 'list'},
+          {action: 'insert', obj: Automerge.getObjectId(s1.birds), type: 'list',
+            elemId: `${Automerge.getActorId(s1)}:1`, index: 0, path: null, value: 'Goldfinch'},
+          {action: 'set', obj: ROOT_ID, type: 'map', key: 'birds',
+            value: Automerge.getObjectId(s1.birds), path: [], link: true},
+          {action: 'insert', obj: Automerge.getObjectId(s1.birds), type: 'list',
+            elemId: `${Automerge.getActorId(s1)}:2`, index: 1, path: ['birds'], value: 'Chaffinch'}
+        ]
+      }])
     })
   })
 })

@@ -95,9 +95,10 @@ function getAllChanges(doc) {
   return getChanges(init(), doc)
 }
 
-function applyChanges(doc, changes) {
+function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = Backend.applyChanges(oldState, changes)
+  if (options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = newState
   return Frontend.applyPatch(doc, patch)
 }
