@@ -266,6 +266,21 @@ describe('Automerge', () => {
         assert.strictEqual(s2.list[0] instanceof Date, true)
         assert.strictEqual(s2.list[0].getTime(), now.getTime())
       })
+
+      it('should call patchCallback if supplied', () => {
+        const patches = [], actor = Automerge.getActorId(s1)
+        s1 = Automerge.change(s1, {patchCallback: p => patches.push(p)}, doc => {
+          doc.birds = ['Goldfinch']
+        })
+        assert.deepStrictEqual(patches, [{
+          actor, seq: 1, maxOp: 2, deps: [], clock: {[actor]: 1},
+          diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+            objectId: `1@${actor}`, type: 'list',
+            edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+            props: {0: {[`2@${actor}`]: {value: 'Goldfinch'}}}
+          }}}}
+        }])
+      })
     })
 
     describe('emptyChange()', () => {
@@ -1076,6 +1091,25 @@ describe('Automerge', () => {
       doc = Automerge.load(Automerge.save(doc))
       assert.deepStrictEqual(doc.foo, [1])
     })
+
+    it('should call patchCallback if supplied', () => {
+      const s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
+      const s2 = Automerge.change(s1, doc => doc.birds.push('Chaffinch'))
+      const patches = [], actor = Automerge.getActorId(s1)
+      Automerge.load(Automerge.save(s2), {patchCallback: p => patches.push(p)})
+      assert.deepStrictEqual(patches, [{
+        maxOp: 3, deps: [decodeChange(Automerge.getAllChanges(s2)[1]).hash], clock: {[actor]: 2},
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`},
+            {action: 'insert', index: 1, elemId: `3@${actor}`}
+          ], props: {
+            0: {[`2@${actor}`]: {value: 'Goldfinch'}},
+            1: {[`3@${actor}`]: {value: 'Chaffinch'}}
+          }
+        }}}}
+      }])
+    })
   })
 
   describe('history API', () => {
@@ -1182,6 +1216,41 @@ describe('Automerge', () => {
       let s5 = Automerge.applyChanges(s4, changes23)
       let s6 = Automerge.applyChanges(s5, changes12)
       assert.deepStrictEqual(Automerge.getMissingDeps(s6), [decodeChange(changes01[0]).hash])
+    })
+
+    it('should call patchCallback if supplied when applying changes', () => {
+      const s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
+      const patches = [], actor = Automerge.getActorId(s1)
+      Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s1),
+                             {patchCallback: p => patches.push(p)})
+      assert.deepStrictEqual(patches, [{
+        maxOp: 2, deps: [decodeChange(Automerge.getAllChanges(s1)[0]).hash], clock: {[actor]: 1},
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list',
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+          props: {0: {[`2@${actor}`]: {value: 'Goldfinch'}}}
+        }}}}
+      }])
+    })
+
+    it('should merge multiple applied changes into one patch', () => {
+      const s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
+      const s2 = Automerge.change(s1, doc => doc.birds.push('Chaffinch'))
+      const patches = [], actor = Automerge.getActorId(s2)
+      Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2),
+                             {patchCallback: p => patches.push(p)})
+      assert.deepStrictEqual(patches, [{
+        maxOp: 3, deps: [decodeChange(Automerge.getAllChanges(s2)[1]).hash], clock: {[actor]: 2},
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`},
+            {action: 'insert', index: 1, elemId: `3@${actor}`}
+          ], props: {
+            0: {[`2@${actor}`]: {value: 'Goldfinch'}},
+            1: {[`3@${actor}`]: {value: 'Chaffinch'}}
+          }
+        }}}}
+      }])
     })
   })
 })

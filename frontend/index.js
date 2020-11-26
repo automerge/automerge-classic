@@ -93,6 +93,7 @@ function makeChange(doc, context, options) {
 
   if (doc[OPTIONS].backend) {
     const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, change)
+    if (options && options.patchCallback) options.patchCallback(patch)
     state.backendState = backendState
     state.lastLocalChange = binaryChange
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the

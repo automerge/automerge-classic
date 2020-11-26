@@ -49,6 +49,7 @@ function free(doc) {
 function load(data, options) {
   const state = backend.load(data)
   const patch = backend.getPatch(state)
+  if (options && options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = state
   return Frontend.applyPatch(init(options), patch)
 }
@@ -75,9 +76,10 @@ function getAllChanges(doc) {
   return backend.getChanges(Frontend.getBackendState(doc), [])
 }
 
-function applyChanges(doc, changes) {
+function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = backend.applyChanges(oldState, changes)
+  if (options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = newState
   return Frontend.applyPatch(doc, patch)
 }
