@@ -108,37 +108,6 @@ function updateListElement(opSet, objectId, elemId, patch) {
 }
 
 /**
- * Computes the inverse of operation `op` and adds it to the list of undo operations
- * (`undoLocal`) in `opSet`. The inverse is the operation that restores the modified
- * field to its previous value. Returns the updated `opSet`.
- */
-function recordUndoHistory(opSet, op) {
-  if (!opSet.has('undoLocal')) return opSet
-  const objectId = op.get('obj'), key = getOperationKey(op), value = op.get('value')
-
-  let undoOps
-  if (op.get('action') === 'inc') {
-    undoOps = List.of(Map({action: 'inc', obj: objectId, key, insert: false, value: -value}))
-  } else {
-    undoOps = getFieldOps(opSet, objectId, key).map(ref => {
-      if (ref.get('insert')) {
-        ref = ref.set('key', key)
-      }
-      if (ref.get('action').startsWith('make')) {
-        ref = ref.set('action', 'link').set('child', getChildId(ref))
-      }
-      ref = ref.filter((v, k) => ['action', 'obj', 'key', 'value', 'datatype', 'child'].includes(k))
-      ref = ref.set('insert', false)
-      return ref
-    })
-  }
-  if (undoOps.isEmpty()) {
-    undoOps = List.of(Map({action: 'del', obj: objectId, key, insert: false}))
-  }
-  return opSet.update('undoLocal', undoLocal => undoLocal.concat(undoOps))
-}
-
-/**
  * Returns true if the operation `op` introduces a child object.
  */
 function isChildOp(op) {
@@ -367,9 +336,6 @@ function applyOps(opSet, change, patch) {
     if (action.startsWith('make')) {
       newObjects = newObjects.add(getChildId(opWithId))
     }
-    if (!newObjects.contains(obj)) {
-      opSet = recordUndoHistory(opSet, opWithId)
-    }
     opSet = applyAssign(opSet, opWithId, localPatch)
   })
   return opSet
@@ -450,19 +416,6 @@ function applyQueuedOps(opSet, patch) {
   }
 }
 
-function pushUndoHistory(opSet) {
-  const undoPos = opSet.get('undoPos')
-  return opSet
-    .update('undoStack', stack => {
-      return stack
-        .slice(0, undoPos)
-        .push(opSet.get('undoLocal'))
-    })
-    .set('undoPos', undoPos + 1)
-    .set('redoStack', List())
-    .remove('undoLocal')
-}
-
 function init() {
   return Map()
     .set('states',   Map())
@@ -471,14 +424,11 @@ function init() {
     .set('hashes',   Map())
     .set('deps',     Set())
     .set('maxOp',     0)
-    .set('undoPos',   0)
-    .set('undoStack', List())
-    .set('redoStack', List())
     .set('queue',    List())
 }
 
 /**
- * Adds `change` to `opSet` without any modification or undo history creation
+ * Adds `change` to `opSet` without any modification
  * (e.g. because it's a remote change, or we have loaded it from disk). `change`
  * is given as an Immutable.js Map object. `patch` is mutated to describe the
  * change (in the format used by patches).
@@ -490,19 +440,11 @@ function addChange(opSet, change, patch) {
 
 /**
  * Applies a change made by the local user and adds it to `opSet`. The `change`
- * is given as an Immutable.js Map object. If `isUndoable` is true, an undo
- * history entry is created. `patch` is mutated to describe the change (in the
- * format used by patches).
+ * is given as an Immutable.js Map object. `patch` is mutated to describe the
+ * change (in the format used by patches).
  */
-function addLocalChange(opSet, change, isUndoable, patch) {
-  if (isUndoable) {
-    opSet = opSet.set('undoLocal', List()) // setting the undoLocal key enables undo history capture
-    opSet = applyChange(opSet, change, patch)
-    opSet = pushUndoHistory(opSet)
-  } else {
-    opSet = applyChange(opSet, change, patch)
-  }
-  return opSet
+function addLocalChange(opSet, change, patch) {
+  return applyChange(opSet, change, patch)
 }
 
 /**

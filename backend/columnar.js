@@ -2081,7 +2081,7 @@ class BackendDoc {
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
     this.objectMeta = docState.objectMeta
-    return {version: this.version, clock, deps: this.heads, canUndo: false, canRedo: false, diffs: patches[ROOT_ID]}
+    return {version: this.version, clock, deps: this.heads, diffs: patches[ROOT_ID]}
   }
 }
 

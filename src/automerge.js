@@ -21,7 +21,7 @@ function init(options) {
  * Returns a new document object initialized with the given state.
  */
 function from(initialState, options) {
-  const changeOpts = {message: 'Initialization', undoable: false}
+  const changeOpts = {message: 'Initialization'}
   return change(init(options), changeOpts, doc => Object.assign(doc, initialState))
 }
 
@@ -32,16 +32,6 @@ function change(doc, options, callback) {
 
 function emptyChange(doc, options) {
   const [newDoc, change] = Frontend.emptyChange(doc, options)
-  return newDoc
-}
-
-function undo(doc, options) {
-  const [newDoc, change] = Frontend.undo(doc, options)
-  return newDoc
-}
-
-function redo(doc, options) {
-  const [newDoc, change] = Frontend.redo(doc, options)
   return newDoc
 }
 
@@ -133,14 +123,14 @@ function setDefaultBackend(newBackend) {
 }
 
 module.exports = {
-  init, from, change, emptyChange, undo, redo, clone, free,
+  init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend,
   get Backend() { return backend }
 }
 
-for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',
+for (let name of ['getObjectId', 'getObjectById', 'getActorId',
      'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }

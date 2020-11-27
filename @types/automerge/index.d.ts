@@ -50,12 +50,6 @@ declare module 'automerge' {
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
 
-  function canRedo<T>(doc: Doc<T>): boolean
-  function canUndo<T>(doc: Doc<T>): boolean
-
-  function redo<T>(doc: Doc<T>, message?: string): Doc<T>
-  function undo<T>(doc: Doc<T>, message?: string): Doc<T>
-
   // custom CRDT types
 
   class TableRow {
@@ -108,8 +102,6 @@ declare module 'automerge' {
 
   namespace Frontend {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
-    function canRedo<T>(doc: Doc<T>): boolean
-    function canUndo<T>(doc: Doc<T>): boolean
     function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Request]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Request]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
@@ -120,9 +112,7 @@ declare module 'automerge' {
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
     function getObjectId<T>(doc: Doc<T>): UUID
     function init<T>(options?: InitOptions): Doc<T>
-    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
-    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
   }
 
   namespace Backend {
@@ -167,7 +157,6 @@ declare module 'automerge' {
 
   // A change request, sent from the frontend to the backend
   interface Request {
-    requestType: RequestType
     actor: string
     seq: number
     time: number
@@ -201,8 +190,6 @@ declare module 'automerge' {
     clock: Clock
     deps: Hash[]
     version: number
-    canUndo: boolean
-    canRedo: boolean
     diffs: ObjectDiff
   }
 
@@ -222,11 +209,6 @@ declare module 'automerge' {
     action: 'insert' | 'remove'
     index: number
   }
-
-  type RequestType =
-    | 'change' //..
-    | 'redo'
-    | 'undo'
 
   type OpAction =
     | 'del'
