@@ -1596,6 +1596,9 @@ class BackendDoc {
                    op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                               : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
+    // An operation to be overwritten if it is a document operation that has at least one successor
+    const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
+
     if (!patches[objectId]) patches[objectId] = {objectId, type: docState.objectMeta[objectId].type, props: {}}
     let patch = patches[objectId]
 
@@ -1604,7 +1607,7 @@ class BackendDoc {
       if (!patch.edits) patch.edits = []
 
       // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
-      if (op[succNum] === 0) {
+      if (!isOverwritten) {
         if (!propState[elemId]) {
           patch.edits.push({action: 'insert', index: listIndex})
           propState[elemId] = {action: 'insert', visibleOps: [], hasChild: false}
@@ -1637,7 +1640,7 @@ class BackendDoc {
     // all of the visible values of the property (even the non-child-object values). Then, when we
     // subsequently process an update within that child object, we can construct the patch to
     // contain the conflicting values.
-    if (op[succNum] === 0) {
+    if (!isOverwritten) {
       if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
       propState[elemId].visibleOps.push(op)
       propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
@@ -1660,7 +1663,7 @@ class BackendDoc {
     }
 
     const key = op[keyStr] !== null ? op[keyStr] : listIndex
-    if (op[succNum] === 0 && patch.props[key]) {
+    if (!isOverwritten && patch.props[key]) {
       const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
       if (ACTIONS[op[action]] === 'set') {
         patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
@@ -1708,7 +1711,7 @@ class BackendDoc {
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
-    let changeOp = null, nextChangeOp = null, changeOps = []
+    let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
 
     // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
     // At each iteration, we either output the doc's op (possibly updated based on the change's ops)
@@ -1725,6 +1728,7 @@ class BackendDoc {
                 nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
           if (nextChangeOp !== null) {
             changeOps.push(nextChangeOp)
+            predSeen.push(new Array(nextChangeOp[predNum]))
           }
           if (opCount === 0) {
             nextChangeOp = null
@@ -1772,7 +1776,8 @@ class BackendDoc {
         // The doc operation is for the same key or list element in the same object as the change
         // ops, so we merge them. First, if any of the change ops' `pred` matches the opId of the
         // document operation, we update the document operation's `succ` accordingly.
-        for (let op of changeOps) {
+        for (let opIndex = 0; opIndex < changeOps.length; opIndex++) {
+          const op = changeOps[opIndex]
           for (let i = 0; i < op[predNum]; i++) {
             if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
               // Insert into the doc op's succ list such that the lists remains sorted
@@ -1782,9 +1787,7 @@ class BackendDoc {
               docOp[succCtr].splice(j, 0, op[idCtr])
               docOp[succActor].splice(j, 0, ops.idActorIndex)
               docOp[succNum]++
-              op[predCtr].splice(i, 1)
-              op[predActor].splice(i, 1)
-              op[predNum]--
+              predSeen[opIndex][i] = true
               break
             }
           }
@@ -1808,8 +1811,13 @@ class BackendDoc {
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
           for (let i = changeOps.length - 1; i >= 0; i--) {
-            if (ACTIONS[changeOps[i][action]] === 'del' && changeOps[i][predNum] === 0) {
+            let deleted = true
+            for (let j = 0; j < changeOps[i][predNum]; j++) {
+              if (!predSeen[i][j]) deleted = false
+            }
+            if (ACTIONS[changeOps[i][action]] === 'del' && deleted) {
               changeOps.splice(i, 1)
+              predSeen.splice(i, 1)
             }
           }
 
@@ -1843,25 +1851,30 @@ class BackendDoc {
 
       if (takeChangeOps > 0) {
         for (let i = 0; i < takeChangeOps; i++) {
-          const op = changeOps[i]
+          let op = changeOps[i]
           // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
           // the change op's own opId, so we must have seen them already)
-          if (op[predNum] > 0) {
-            throw new RangeError(`no matching operation for pred: ${op[predCtr][0]}@${docState.actorIds[op[predActor][0]]}`)
+          for (let j = 0; j < op[predNum]; j++) {
+            if (!predSeen[i][j]) {
+              throw new RangeError(`no matching operation for pred: ${op[predCtr][j]}@${docState.actorIds[op[predActor][j]]}`)
+            }
           }
           this.updatePatchProperty(patches, ops, op, docState, propState, listIndex)
           appendOperation(outCols, changeCols, op)
           if (op[insert]) {
             elemVisible = false
             listIndex++
+          } else {
+            elemVisible = true
           }
-          if (op[succNum] === 0) elemVisible = true
         }
 
         if (takeChangeOps === changeOps.length) {
           changeOps.length = 0
+          predSeen.length = 0
         } else {
           changeOps.splice(0, takeChangeOps)
+          predSeen.splice(0, takeChangeOps)
         }
         opsAppended += takeChangeOps
       }
