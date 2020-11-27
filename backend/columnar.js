@@ -1548,17 +1548,27 @@ function groupRelatedOps(change, changeCols, objectMeta) {
 
 class BackendDoc {
   constructor(buffer) {
+    this.version = 0
+    this.changes = []
+    this.changeByHash = {}
+    this.actorIds = []
+    this.heads = []
+    this.clock = {}
+
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
-      this.changesColumns = doc.changesColumns
+      for (let change of decodeChanges([buffer])) {
+        const binaryChange = encodeChange(change) // decoding and re-encoding, argh!
+        this.changes.push(binaryChange)
+        this.changeByHash[change.hash] = binaryChange
+        this.clock[change.actor] = Math.max(change.seq, this.clock[change.actor] || 0)
+      }
       this.actorIds = doc.actorIds
       this.heads = doc.heads
       this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
       this.numOps = 0 // TODO count actual number of ops in the document
       this.objectMeta = {} // TODO fill this in
     } else {
-      this.actorIds = []
-      this.heads = []
       this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
       this.numOps = 0
       this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
@@ -1941,9 +1951,7 @@ class BackendDoc {
    * document (including the new change's actorId), and `actorTable` is an array for translating
    * the change's actor indexes into the document's actor indexes.
    */
-  getActorTable(change) {
-    // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
-    let actorIds = this.actorIds
+  getActorTable(actorIds, change) {
     if (actorIds.indexOf(change.actorIds[0]) < 0) {
       if (change.seq !== 1) {
         throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
@@ -1966,7 +1974,7 @@ class BackendDoc {
    * Finalises the patch for a change. `patches` is a map from objectIds to patch for that
    * particular object, `objectIds` is the array of IDs of objects that are created or updated in the
    * change, and `docState` is an object containing various bits of document state, including
-   * `objectMeta`, a  map from objectIds to metadata about that object (such as its parent in the
+   * `objectMeta`, a map from objectIds to metadata about that object (such as its parent in the
    * document tree). Mutates `patches` such that child objects are linked into their parent object,
    * all the way to the root object.
    */
@@ -2021,34 +2029,59 @@ class BackendDoc {
    * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
    * object is not modified.
    */
-  applyChange(changeBuffer) {
-    const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
-    const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
-    const allCols = this.getAllColumns(changeCols)
-    const {actorIds, actorTable} = this.getActorTable(change)
-    const actorIndex = actorIds.indexOf(change.actorIds[0])
-    const objectMeta = Object.assign({}, this.objectMeta)
-    const {opSequences, objectIds} = groupRelatedOps(change, changeCols, objectMeta)
-
+  applyChanges(changeBuffers) {
     let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
     let docState = {
-      actorIds, actorTable, allCols, opsCols: this.docColumns, numOps: this.numOps,
-      objectMeta, lastIndex: {}
+      actorIds: this.actorIds, opsCols: this.docColumns, numOps: this.numOps,
+      objectMeta: Object.assign({}, this.objectMeta), lastIndex: {}
     }
-    for (let col of changeCols) col.decoder.reset()
-    for (let op of opSequences) {
-      op.idActorIndex = actorIndex
-      this.applyOps(patches, op, changeCols, docState)
+    let allObjectIds = {}, changeByHash = Object.assign({}, this.changeByHash)
+    let heads = {}, clock = Object.assign({}, this.clock)
+    for (let head of this.heads) heads[head] = true
+
+    for (let changeBuffer of changeBuffers) {
+      const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+      for (let dep of change.deps) {
+        // TODO enqueue changes that are not yet causally ready rather than throwing an exception
+        if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
+        delete heads[dep]
+      }
+      changeByHash[change.hash] = changeBuffer
+      heads[change.hash] = true
+      const expectedSeq = (clock[change.actor] || 0) + 1
+      if (change.seq !== expectedSeq) {
+        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+      }
+      clock[change.actor] = change.seq
+
+      const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+      docState.allCols = this.getAllColumns(changeCols)
+      Object.assign(docState, this.getActorTable(docState.actorIds, change))
+      const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
+      const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
+      for (let id of objectIds) allObjectIds[id] = true
+
+      for (let col of changeCols) col.decoder.reset()
+      for (let op of opSequences) {
+        op.idActorIndex = actorIndex
+        this.applyOps(patches, op, changeCols, docState)
+      }
     }
-    this.setupPatches(patches, objectIds, docState)
+
+    this.setupPatches(patches, Object.keys(allObjectIds), docState)
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
-    // the document is not modified (making `applyChange` atomic in the ACID sense).
+    // the document is not modified (making `applyChanges` atomic in the ACID sense).
+    this.version += 1
+    this.changes    = this.changes.concat(changeBuffers)
+    this.changeByHash = changeByHash
     this.actorIds   = docState.actorIds
+    this.heads      = Object.keys(heads).sort()
+    this.clock      = clock
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
     this.objectMeta = docState.objectMeta
-    return patches[ROOT_ID]
+    return {version: this.version, clock, deps: this.heads, canUndo: false, canRedo: false, diffs: patches[ROOT_ID]}
   }
 }
 
