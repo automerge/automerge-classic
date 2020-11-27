@@ -41,6 +41,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   network sync protocols, e.g. based on `Automerge.Connection`, which need to now exchange
   hashes rather than vector clocks.
 - **Removed**: `Backend.getMissingChanges()`; use `Backend.getChanges()` instead.
+- **Removed**: `Backend.getChangesForActor()` since it does not fit with a hash chaining approach.
 - **Added**: `Frontend.getDeps()` returns the latest change hashes in the current document state.
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been
   moved to a separate [automerge-connection](https://github.com/automerge/automerge-connection)

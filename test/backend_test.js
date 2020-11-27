@@ -632,23 +632,4 @@ describe('Automerge.Backend', () => {
       })
     })
   })
-
-  describe('getChangesForActor()', () => {
-    let oneDoc, twoDoc, mergeDoc
-
-    beforeEach(() => {
-      oneDoc = Automerge.change(Automerge.init('111111'), doc => doc.document = 'watch me now')
-      twoDoc = Automerge.merge(Automerge.init('222222'), oneDoc)
-      twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can mash potato')
-      twoDoc = Automerge.change(twoDoc, doc => doc.document = 'i can do the twist')
-    })
-
-    it('should get changes for a single actor', () => {
-      const state = Automerge.Frontend.getBackendState(twoDoc)
-      const actorChanges = Backend.getChangesForActor(state, '222222')
-
-      assert.strictEqual(actorChanges.length, 2)
-      assert.strictEqual(decodeChange(actorChanges[0]).actor, '222222')
-    })
-  })
 })

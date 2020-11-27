@@ -121,7 +121,6 @@ declare module 'automerge' {
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
-    function getChangesForActor(state: BackendState, actorId: string): Uint8Array[]
     function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState

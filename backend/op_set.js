@@ -476,15 +476,6 @@ function getMissingChanges(opSet, haveDeps) {
     .toJSON()
 }
 
-function getChangesForActor(opSet, forActor, afterSeq) {
-  afterSeq = afterSeq || 0
-
-  return opSet.getIn(['states', forActor], List())
-    .skip(afterSeq)
-    .map(hash => opSet.getIn(['hashes', hash, 'change']))
-    .toJSON()
-}
-
 function getMissingDeps(opSet) {
   let missing = {}, inQueue = {}
   for (let binaryChange of opSet.get('queue')) {
@@ -624,6 +615,6 @@ function constructObject(opSet, objectId) {
 }
 
 module.exports = {
-  init, addChange, addLocalChange, getMissingChanges, getChangesForActor, getMissingDeps,
+  init, addChange, addLocalChange, getMissingChanges, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
 }

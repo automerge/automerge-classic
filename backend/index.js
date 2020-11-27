@@ -298,11 +298,6 @@ function getPatch(backend) {
   return makePatch(state, diffs, null, false)
 }
 
-function getChangesForActor(backend, actorId) {
-  const state = backendState(backend)
-  return OpSet.getChangesForActor(state.get('opSet'), actorId)
-}
-
 function getChanges(backend, haveDeps) {
   if (!Array.isArray(haveDeps)) {
     throw new TypeError('Pass an array of hashes to Backend.getChanges()')
@@ -318,5 +313,5 @@ function getMissingDeps(backend) {
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getChangesForActor, getChanges, getMissingDeps
+  getChanges, getMissingDeps
 }
