@@ -73,6 +73,7 @@ performance, and it gives users more control over their data.
 The [essay on local-first software](https://www.inkandswitch.com/local-first.html) goes into more
 detail on the philosophy behind Automerge, and the pros and cons of this approach.
 
+
 ## Setup
 
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
@@ -175,10 +176,7 @@ let finalDoc = Automerge.merge(doc1, doc2)
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(finalDoc).map(state => [
-  state.change.message,
-  state.snapshot.cards.length,
-])
+Automerge.getHistory(finalDoc).map(state => [state.change.message, state.snapshot.cards.length])
 // [ [ 'Initialization', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],
@@ -293,7 +291,7 @@ state = Automerge.change(state, 'Add card', doc => {
   const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
   doc.cards = {
     ids: [...doc.cards.ids, newItem.id],
-    entities: { ...doc.cards.entities, [newItem.id]: newItem },
+    entities: { ...doc.cards.entities, [newItem.id]: newItem }
   }
 })
 ```
@@ -678,7 +676,7 @@ let database = Automerge.change(Automerge.init(), doc => {
     authors: [martinID],
     title: 'Designing Data-Intensive Applications',
     publisher: "O'Reilly Media",
-    year: 2017,
+    year: 2017
   })
 })
 ```
