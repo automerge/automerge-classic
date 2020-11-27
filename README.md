@@ -73,7 +73,6 @@ performance, and it gives users more control over their data.
 The [essay on local-first software](https://www.inkandswitch.com/local-first.html) goes into more
 detail on the philosophy behind Automerge, and the pros and cons of this approach.
 
-
 ## Setup
 
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
@@ -176,7 +175,10 @@ let finalDoc = Automerge.merge(doc1, doc2)
 // can also see a snapshot of the application state at any moment in time in the
 // past. For example, we can count how many cards there were at each point:
 
-Automerge.getHistory(finalDoc).map(state => [state.change.message, state.snapshot.cards.length])
+Automerge.getHistory(finalDoc).map(state => [
+  state.change.message,
+  state.snapshot.cards.length,
+])
 // [ [ 'Initialization', 0 ],
 //   [ 'Add card', 1 ],
 //   [ 'Add another card', 2 ],
@@ -291,7 +293,7 @@ state = Automerge.change(state, 'Add card', doc => {
   const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
   doc.cards = {
     ids: [...doc.cards.ids, newItem.id],
-    entities: { ...doc.cards.entities, [newItem.id]: newItem }
+    entities: { ...doc.cards.entities, [newItem.id]: newItem },
   }
 })
 ```
@@ -404,10 +406,13 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/main/src/connection.js), is
+- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/main/src/connection.js) is
   an implementation of a protocol that syncs up two nodes by determining missing changes and sending
   them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
   contains an example that runs the Connection protocol over a simple TCP connection.
+- [Cevitxe](https://github.com/DevResults/cevitxe) uses Automerge behind a familiar Redux interface.
+  It provides multiple database adapters for persistence, and synchronization via a tiny relay
+  server that allows peers to connect to each other via WebSockets.
 - [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
   ([usage example](https://github.com/automerge/automerge/issues/117)) runs the `Automerge.Connection`
   protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
@@ -673,7 +678,7 @@ let database = Automerge.change(Automerge.init(), doc => {
     authors: [martinID],
     title: 'Designing Data-Intensive Applications',
     publisher: "O'Reilly Media",
-    year: 2017
+    year: 2017,
   })
 })
 ```
