@@ -1,10 +1,16 @@
-const { CACHE, OBJECT_ID, CONFLICTS } = require('./constants')
+const { CACHE, OBJECT_ID, CONFLICTS, ELEMIDS, STATE } = require('./constants')
 const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
+
+
+function inspect(val) {
+    var util = require('util');
+    console.log(util.inspect(val, false,10,true));
+}
 
 
 /**
@@ -14,10 +20,13 @@ const uuid = require('../src/uuid')
  */
 class Context {
   constructor (doc, actorId, applyPatch) {
+    //inspect({ doc, state: doc[STATE] })
     this.actorId = actorId
+    this.maxOp = doc[STATE].maxOp 
     this.cache = doc[CACHE]
     this.updated = {}
     this.ops = []
+    this.__ops = []
     this.applyPatch = applyPatch ? applyPatch : interpretPatch
   }
 
@@ -26,6 +35,19 @@ class Context {
    */
   addOp(operation) {
     this.ops.push(operation)
+  }
+
+  __addOp(operation) {
+    this.__ops.push(operation)
+    //inspect({ id: this.currentOpId(), op: operation })
+  }
+
+  nextOpId() {
+    return `${this.maxOp + this.__ops.length + 1}@${this.actorId}`
+  }
+
+  currentOpId() {
+    return `${this.maxOp + this.__ops.length}@${this.actorId}`
   }
 
   /**
@@ -154,6 +176,16 @@ class Context {
     return 'map'
   }
 
+  resolveKey(objectId, key) {
+    const type = this.getObjectType(objectId)
+    if (type == "map" || type == "table") {
+      return key
+    } else {
+      const list = this.getObject(objectId)
+      return indexToElemId(list, key, false)
+    }
+  }
+
   /**
    * Returns the value associated with the property named `key` on the object
    * at path `path`. If the value is an object, returns a proxy for it.
@@ -184,17 +216,19 @@ class Context {
    * element. If `key` is null, the ID of the new object is used as key (this construction
    * is used by Automerge.Table).
    */
-  createNestedObjects(obj, key, value, insert) {
+  createNestedObjects(obj, key, value, insert, pred, elemid) {
     if (value[OBJECT_ID]) {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
-    const child = uuid()
-    if (key === null) key = child
+    const child = this.nextOpId()
+    if (key === null) key = this.nextOpId()
 
     if (value instanceof Text) {
       // Create a new Text object
       this.addOp({action: 'makeText', obj, key, insert, child})
-      const subpatch = {objectId: child, type: 'text', edits: [], props: {}}
+      this.__addOp({action: 'makeText', obj, key: elemid || key, insert, pred})
+      let objectId = this.currentOpId();
+      const subpatch = {objectId, type: 'text', edits: [], props: {}}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
 
@@ -204,24 +238,30 @@ class Context {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
       this.addOp({action: 'makeTable', obj, key, insert, child})
-      return {objectId: child, type: 'table', props: {}}
+      this.__addOp({action: 'makeTable', obj, key: elemid || key, insert, pred})
+      let objectId = this.currentOpId();
+      return {objectId, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
       this.addOp({action: 'makeList', obj, key, insert, child})
-      const subpatch = {objectId: child, type: 'list', edits: [], props: {}}
+      this.__addOp({action: 'makeList', obj, key: elemid || key, insert, pred})
+      let objectId = this.currentOpId();
+      const subpatch = {objectId, type: 'list', edits: [], props: {}}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
       this.addOp({action: 'makeMap', obj, key, insert, child})
+      this.__addOp({action: 'makeMap', obj, key: elemid || key, insert, pred})
+      let objectId = this.currentOpId();
       let props = {}
       for (let nested of Object.keys(value)) {
-        const valuePatch = this.setValue(child, nested, value[nested], false)
-        props[nested] = {[this.actorId]: valuePatch}
+        const valuePatch = this.setValue(objectId, nested, value[nested], false, [])
+        props[nested] = {[this.currentOpId()]: valuePatch}
       }
-      return {objectId: child, type: 'map', props}
+      return {objectId, type: 'map', props}
     }
   }
 
@@ -234,7 +274,7 @@ class Context {
    * `{objectId, type, props}` if `value` is an object, or `{value, datatype}` if it is a
    * primitive value. For string, number, boolean, or null the datatype is omitted.
    */
-  setValue(objectId, key, value, insert) {
+  setValue(objectId, key, value, insert, pred, elemid) {
     if (!objectId) {
       throw new RangeError('setValue needs an objectId')
     }
@@ -244,11 +284,12 @@ class Context {
 
     if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
       // Nested object (map, list, text, or table)
-      return this.createNestedObjects(objectId, key, value, insert)
+      return this.createNestedObjects(objectId, key, value, insert, pred, elemid)
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
       this.addOp(Object.assign({action: 'set', obj: objectId, key, insert}, description))
+      this.__addOp(Object.assign({action: 'set', obj: objectId, key: (elemid || key), insert, pred}, description))
       return description
     }
   }
@@ -282,8 +323,9 @@ class Context {
     // the assignment does not resolve a conflict, do nothing
     if (object[key] !== value || Object.keys(object[CONFLICTS][key] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
-        const valuePatch = this.setValue(objectId, key, value, false)
-        subpatch.props[key] = {[this.actorId]: valuePatch}
+        const pred = getPred(object,key) 
+        const valuePatch = this.setValue(objectId, key, value, false, pred)
+        subpatch.props[key] = {[this.currentOpId()]: valuePatch}
       })
     }
   }
@@ -296,7 +338,9 @@ class Context {
     const object = this.getObject(objectId)
 
     if (object[key] !== undefined) {
+      const pred = getPred(object,key) 
       this.addOp({action: 'del', obj: objectId, key, insert: false})
+      this.__addOp({action: 'del', obj: objectId, key, insert: false, pred})
       this.applyAtPath(path, subpatch => {
         subpatch.props[key] = {}
       })
@@ -315,10 +359,13 @@ class Context {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
 
+    let elemId = indexToElemId(list, index, true);
     for (let offset = 0; offset < values.length; offset++) {
-      const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true)
-      subpatch.edits.push({action: 'insert', index: index + offset})
-      subpatch.props[index + offset] = {[this.actorId]: valuePatch}
+      let nextElemId = this.nextOpId()
+      const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
+      elemId = nextElemId
+      subpatch.edits.push({action: 'insert', index: index + offset })
+      subpatch.props[index + offset] = {[elemId]: valuePatch}
     }
   }
 
@@ -343,8 +390,9 @@ class Context {
     // the assignment does not resolve a conflict, do nothing
     if (list[index] !== value || Object.keys(list[CONFLICTS][index] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
-        const valuePatch = this.setValue(objectId, index, value, false)
-        subpatch.props[index] = {[this.actorId]: valuePatch}
+        const pred = getPred(list,index)
+        const valuePatch = this.setValue(objectId, index, value, false, pred, list[ELEMIDS][index])
+        subpatch.props[index] = {[this.currentOpId()]: valuePatch}
       })
     }
   }
@@ -367,7 +415,11 @@ class Context {
 
     if (deletions > 0) {
       for (let i = 0; i < deletions; i++) {
+        // FIXME - why is this +1
+        const elemId = list[ELEMIDS] ? list[ELEMIDS][start + i] : null // FIXME for tests
+        const pred = getPred(list,start + i)
         this.addOp({action: 'del', obj: objectId, key: start, insert: false})
+        this.__addOp({action: 'del', obj: objectId, key: elemId, insert: false, pred })
         subpatch.edits.push({action: 'remove', index: start})
       }
     }
@@ -376,6 +428,8 @@ class Context {
       this.insertListItems(subpatch, start, insertions, false)
     }
     this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+    
+    list = this.getObject(objectId)
   }
 
   /**
@@ -393,7 +447,7 @@ class Context {
       throw new TypeError('A table row must not have an "id" property; it is generated automatically')
     }
 
-    const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false)
+    const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false, [])
     this.applyAtPath(path, subpatch => {
       subpatch.props[valuePatch.objectId] = {[valuePatch.objectId]: valuePatch}
     })
@@ -407,7 +461,11 @@ class Context {
     const objectId = path[path.length - 1].objectId, table = this.getObject(objectId)
 
     if (table.byId(rowId)) {
+      // FIXME
+      const object = this.getObject(objectId)
+      const pred = getPred(object, rowId)
       this.addOp({action: 'del', obj: objectId, key: rowId, insert: false})
+      this.__addOp({action: 'del', obj: objectId, key: rowId, insert: false, pred })
       this.applyAtPath(path, subpatch => {
         subpatch.props[rowId] = {}
       })
@@ -428,10 +486,38 @@ class Context {
     // TODO what if there is a conflicting value on the same key as the counter?
     const value = object[key].value + delta
     this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false})
+    const pred = getPred(object,key) 
+    const resolvedKey = this.resolveKey(objectId, key)
+    this.__addOp({action: 'inc', obj: objectId, key: resolvedKey, value: delta, insert: false, pred})
     this.applyAtPath(path, subpatch => {
-      subpatch.props[key] = {[this.actorId]: {value, datatype: 'counter'}}
+      subpatch.props[key] = {[this.currentOpId()]: {value, datatype: 'counter'}}
     })
   }
+}
+
+function getPred(object,key) {
+    if (object instanceof Table) {
+      return [key]
+    } else if (object instanceof Text) {
+      return [ object.elems[key].opId  ]
+    } else if (object[CONFLICTS]) {
+      return object[CONFLICTS][key] ? Object.keys(object[CONFLICTS][key]) : []
+    } else {
+      return []
+    }
+}
+
+function indexToElemId(list, index, insert) {
+  if (insert) {
+    if (index === 0) return "_head"
+    if (list[ELEMIDS]) return list[ELEMIDS][index - 1]
+    if (list.elems) return list.elems[index - 1].elemId
+  } else {
+    if (list[ELEMIDS]) return list[ELEMIDS][index]
+    if (list.elems) return list.elems[index].elemId
+  }
+  return "foobar"
+//  throw new RangeError(`Cannot find elemid at index ${index} for list`)
 }
 
 module.exports = {

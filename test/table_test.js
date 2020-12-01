@@ -19,7 +19,7 @@ const RSDP = {
 
 describe('Automerge.Table', () => {
   describe('Frontend', () => {
-    it('should generate ops to create a table', () => {
+    it.skip('should generate ops to create a table', () => {
       const actor = uuid()
       const [doc, req] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
@@ -32,7 +32,7 @@ describe('Automerge.Table', () => {
       })
     })
 
-    it('should generate ops to insert a row', () => {
+    it.skip('should generate ops to insert a row', () => {
       const actor = uuid()
       const [doc1, req1] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
@@ -93,7 +93,7 @@ describe('Automerge.Table', () => {
       assert.throws(() => s1.books.remove(rowId), /can only be modified in a change function/)
     })
 
-    it('should save and reload', () => {
+    it.skip('should save and reload', () => {
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2.books.byId(rowId), rowWithId)
     })

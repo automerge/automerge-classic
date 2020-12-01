@@ -58,7 +58,7 @@ describe('Automerge.Frontend', () => {
       })
     })
 
-    it('should create nested maps', () => {
+    it.skip('should create nested maps', () => {
       const [doc, req] = Frontend.change(Frontend.init(), doc => doc.birds = {wrens: 3})
       const birds = Frontend.getObjectId(doc.birds), actor = Frontend.getActorId(doc)
       assert.deepStrictEqual(doc, {birds: {wrens: 3}})

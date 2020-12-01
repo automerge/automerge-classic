@@ -8,6 +8,11 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
 
+function inspect(val) {
+  var util = require('util');
+  console.log(util.inspect(val, false,10,true));
+}
+
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
  * compactly in binary form.
@@ -82,6 +87,16 @@ function makeChange(doc, requestType, context, options) {
   const state = copyObject(doc[STATE])
   state.seq += 1
 
+  const change = {
+    actor,
+    seq: state.seq,
+    startOp: state.maxOp + 1,
+    deps: state.deps,
+    time:  Math.round(new Date().getTime() / 1000),
+    message: (options && typeof options.message === 'string') ? options.message : '',
+    ops: []
+  }
+
   const request = {
     requestType, actor, seq: state.seq,
     time: Math.round(new Date().getTime() / 1000),
@@ -93,10 +108,11 @@ function makeChange(doc, requestType, context, options) {
   }
   if (context) {
     request.ops = context.ops
+    change.ops = context.__ops
   }
 
   if (doc[OPTIONS].backend) {
-    const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
+    const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request, change)
     state.backendState = backendState
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
     // context invoking interpretPatch as soon as any change is made, and the second time here
@@ -122,6 +138,9 @@ function makeChange(doc, requestType, context, options) {
  * change from the frontend.
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
+  //console.log("PATCH");
+  //inspect(patch)
+  //console.log("DOC",doc);
   const actor = getActorId(doc)
   const updated = {}
   interpretPatch(patch.diffs, doc, updated)
@@ -133,6 +152,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     }
     state.clock   = patch.clock
     state.deps    = patch.deps
+    state.maxOp   = patch.maxOp
     state.version = patch.version
     state.canUndo = patch.canUndo
     state.canRedo = patch.canRedo
@@ -160,7 +180,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
+  const state = {seq: 0, maxOp: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
   if (options.backend) {
     state.backendState = options.backend.init()
   }

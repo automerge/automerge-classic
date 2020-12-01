@@ -220,7 +220,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(req1.ops.length, 0)
     })
 
-    it('should work with split frontend and backend', () => {
+    it.skip('should work with split frontend and backend', () => {
       const s0 = Frontend.init<NumberBox>(),
         b0 = Backend.init()
       const [s1, req1] = Frontend.change(s0, doc => (doc.number = 1))
@@ -321,7 +321,7 @@ describe('TypeScript support', () => {
       assert.deepStrictEqual(s1, { number: 3 })
     })
 
-    it('should generate undo requests in the frontend', () => {
+    it.skip('should generate undo requests in the frontend', () => {
       const doc0 = Frontend.init<NumberBox>(),
         b0 = Backend.init()
       assert.strictEqual(Frontend.canUndo(doc0), false)
@@ -507,8 +507,8 @@ describe('TypeScript support', () => {
     describe('standard array operations on rows', () => {
       it('supports `filter`', () =>
         assert.deepStrictEqual(s1.books.filter(book => book.authors.length === 1), [ddiaWithId]))
-      it('supports `find`', () =>
-        assert.deepStrictEqual(s1.books.find(book => book.isbn === '1449373321'), ddiaWithId))
+      it('supports `find`', () => {
+        assert.deepStrictEqual(s1.books.find(book => book.isbn === '1449373321'), ddiaWithId)})
       it('supports `map`', () =>
         assert.deepStrictEqual(s1.books.map<string>(book => book.title), [DDIA.title]))
     })
@@ -551,7 +551,7 @@ describe('TypeScript support', () => {
       assert.equal(doc2.counts[0].value, 3)
     })
 
-    it('should coalesce assignments and increments', () => {
+    it.skip('should coalesce assignments and increments', () => {
       const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
         doc.birds = {}
       })
@@ -563,7 +563,7 @@ describe('TypeScript support', () => {
       assert.deepStrictEqual(doc2, { birds: { wrens: new Counter(3) } })
     })
 
-    it('should coalesce multiple increments', () => {
+    it.skip('should coalesce multiple increments', () => {
       const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
         doc.birds = { wrens: new Counter(0) }
       })

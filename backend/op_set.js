@@ -3,6 +3,11 @@ const { SkipList } = require('./skip_list')
 const { decodeChange, decodeChangeMeta } = require('./columnar')
 const { ROOT_ID, parseOpId } = require('../src/common')
 
+function inspect(val) {
+    var util = require('util');
+    console.log(util.inspect(val, false,10,true));
+}
+
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
 function causallyReady(opSet, change) {
@@ -102,7 +107,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    if (patch) patch.edits.push({action: 'insert', index})
+    if (patch) patch.edits.push({action: 'insert', index })
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -327,8 +332,18 @@ function finalizePatch(opSet, patch) {
         newProps[index] = patch.props[elemId]
       }
     }
-    patch.props = newProps
+   patch.props = newProps
   }
+
+/*
+  if (patch.type === 'list' || patch.type === 'text') {
+    for (let elemId of Object.keys(patch.props)) {
+      if (Object.keys(patch.props[elemId]).length === 0) {
+        delete patch.props[elemId]
+      }
+    }
+  }
+*/
 
   for (let key of Object.keys(patch.props)) {
     for (let opId of Object.keys(patch.props[key])) {
@@ -660,7 +675,7 @@ function constructList(opSet, objectId, type) {
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {
-      patch.edits.push({action: 'insert', index})
+      patch.edits.push({action: 'insert', index })
       patch.props[index] = {}
       for (let op of fieldOps) {
         patch.props[index][op.get('opId')] = constructField(opSet, op)

@@ -135,7 +135,6 @@ function applyRetainOp(text, offset, op) {
   let length = op.retain
 
   if (op.attributes) {
-    console.log(op)
     text.insertAt(offset, { attributes: op.attributes })
     offset += 1
   }

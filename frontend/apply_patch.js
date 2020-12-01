@@ -1,8 +1,13 @@
 const { ROOT_ID, isObject, copyObject, parseOpId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS, ELEMIDS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
+
+function inspect(val) {
+    var util = require('util');
+    console.log(util.inspect(val, false,10,true));
+}
 
 /**
  * Reconstructs the value from the patch object `patch`.
@@ -56,7 +61,8 @@ function lamportCompare(ts1, ts2) {
  * to `conflicts[key]`. If there is no conflict, the conflicts object contains
  * just a single opId-value mapping.
  */
-function applyProperties(props, object, conflicts, updated) {
+
+function applyProperties(props, object, conflicts, elemids, updated) {
   if (!props) return
 
   for (let key of Object.keys(props)) {
@@ -76,6 +82,9 @@ function applyProperties(props, object, conflicts, updated) {
     } else {
       object[key] = values[opIds[0]]
       conflicts[key] = values
+      if (elemids && elemids[key] === undefined) {
+        elemids[key] = opIds[0]
+      }
     }
   }
 }
@@ -156,7 +165,7 @@ function updateMapObject(patch, obj, updated) {
   }
 
   const object = updated[objectId]
-  applyProperties(patch.props, object, object[CONFLICTS], updated)
+  applyProperties(patch.props, object, object[CONFLICTS], null, updated)
   return object
 }
 
@@ -195,9 +204,22 @@ function updateTableObject(patch, obj, updated) {
 function cloneListObject(originalList, objectId) {
   const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
+  const elemids = (originalList && originalList[CONFLICTS]) ? originalList[ELEMIDS].slice() : []
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
+  Object.defineProperty(list, ELEMIDS,   {value: elemids})
   return list
+}
+
+function cloneTextObject(origionalText, objectId) {
+  const elems = origionalText && origionalText.elems ? origionalText.elems.slice() : [] // slice() makes a shallow clone
+  const conflicts = (origionalText && origionalText[CONFLICTS]) ? origionalText[CONFLICTS].slice() : []
+  const elemids = (origionalText && origionalText[ELEMIDS]) ? origionalText[ELEMIDS].slice() : []
+  const text = { elems }
+  Object.defineProperty(text, OBJECT_ID, {value: objectId})
+  Object.defineProperty(text, CONFLICTS, {value: conflicts})
+  Object.defineProperty(text, ELEMIDS,   {value: elemids})
+  return text
 }
 
 /**
@@ -211,23 +233,65 @@ function updateListObject(patch, obj, updated) {
     updated[objectId] = cloneListObject(obj, objectId)
   }
 
-  const list = updated[objectId], conflicts = list[CONFLICTS]
+  const list = updated[objectId], conflicts = list[CONFLICTS], elemids = list[ELEMIDS]
+  const props = patch.props
 
   iterateEdits(patch.edits,
-    (index, insertions) => { // insertion
+     (index, insertions) => { // insertion
       const blanks = new Array(insertions)
+      elemids  .splice(index, 0, ...blanks)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
+     },
+     (index, count) => { // deletion
+       elemids  .splice(index, count)
+       list     .splice(index, count)
+       conflicts.splice(index, count)
+     }
+   )
+
+   applyProperties(patch.props, list, conflicts, elemids, updated)
+   return list
+ }
+
+/*
+  iterateEdits(patch.edits,
+    (index, insertions) => { // insertion
+      const values = insertions.map(key => {
+        const values = {}, opIds = Object.keys(props[key]).sort(lamportCompare).reverse()
+        for (let opId of opIds) {
+          const subpatch = props[key][opId]
+          if (conflicts[key] && conflicts[key][opId]) {
+            values[opId] = getValue(subpatch, conflicts[key][opId], updated)
+          } else {
+            values[opId] = getValue(subpatch, undefined, updated)
+          }
+        }
+        return { val: values[opIds[0]] , conflicts: values }
+      })
+
+      const newItems = values.map(v => v.val)
+      const newConflicts = values.map(v => v.conflicts)
+
+      console.log("newelemids",insertions)
+      console.log("newConflicts",newConflicts)
+      console.log("newConflicts",newConflicts)
+
+      elemids  .splice(index, 0, ...insertions)
+      list     .splice(index, 0, ...values.map(v => v.val))
+      conflicts.splice(index, 0, ...values.map(v => v.conflicts))
     },
     (index, count) => { // deletion
+      elemids  .splice(index, count)
       list     .splice(index, count)
       conflicts.splice(index, count)
     }
   )
 
-  applyProperties(patch.props, list, conflicts, updated)
+//  applyProperties(patch.props, list, conflicts, updated)
   return list
 }
+*/
 
 /**
  * Updates the text object `obj` according to the modifications described in
@@ -236,23 +300,26 @@ function updateListObject(patch, obj, updated) {
  */
 function updateTextObject(patch, obj, updated) {
   const objectId = patch.objectId
-  let elems
-  if (updated[objectId]) {
-    elems = updated[objectId].elems
-  } else if (obj) {
-    elems = obj.elems.slice()
-  } else {
-    elems = []
+  if (!updated[objectId]) {
+    updated[objectId] = cloneTextObject(obj, objectId)
   }
+
+  const props = patch.props
+  const text = updated[objectId], conflicts = text[CONFLICTS], elemids = text[ELEMIDS]
+  const elems = text.elems
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      const blanks = []
-      for (let i = 0; i < insertions; i++) blanks.push({})
-      elems.splice(index, 0, ...blanks)
+      const emptyObjs = []
+      for (let i = 0; i < insertions; i++) emptyObjs.push({})
+      elems.splice(index, 0, ...emptyObjs)
+      conflicts.splice(index, 0, ...(new Array(insertions)))
+      elemids.splice(index, 0, ...(new Array(insertions)))
     },
     (index, deletions) => { // deletion
       elems.splice(index, deletions)
+      conflicts.splice(index, deletions)
+      elemids.splice(index, deletions)
     }
   )
 
@@ -260,13 +327,18 @@ function updateTextObject(patch, obj, updated) {
     const opId = Object.keys(patch.props[key]).sort(lamportCompare).reverse()[0]
     if (!opId) throw new RangeError(`No default value at index ${key}`)
 
-    // TODO Text object does not support conflicts. Should it?
+    if (elemids[key] === undefined) {
+      elemids[key] = opId
+    }
+
     const oldValue = (elems[key].opId === opId) ? elems[key].value : undefined
     elems[key].value = getValue(patch.props[key][opId], oldValue, updated)
     elems[key].opId = opId
+
+    conflicts[key] = patch.props[key]
   }
 
-  updated[objectId] = instantiateText(objectId, elems)
+  updated[objectId] = instantiateText(objectId, elems, conflicts, elemids)
   return updated[objectId]
 }
 

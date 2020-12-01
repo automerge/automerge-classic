@@ -3,6 +3,12 @@ const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
+const assert = require('assert')
+
+function inspect(val) {
+    var util = require('util');
+    console.log(util.inspect(val, false,10,true));
+}
 
 function backendState(backend) {
   if (backend.frozen) {
@@ -45,7 +51,7 @@ function fillInPred(opSet, change) {
  * made its change (which may lag behind the backend, because there might be remote changes that
  * the backend has already applied, but that the frontend has not yet seen).
  */
-function processChangeRequest(state, opSet, request, startOp) {
+function processChangeRequest(state, opSet, request, startOp, incomingChange) {
   const { actor, seq, deps, time, message } = request
   const change = { actor, seq, startOp, deps, time, message, ops: [] }
 
@@ -144,7 +150,8 @@ function makePatch(state, diffs, request, isIncremental) {
   const deps    = state.getIn(['opSet', 'deps']).toJSON().sort()
   const canUndo = state.getIn(['opSet', 'undoPos']) > 0
   const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
-  const patch = {version, clock, deps, canUndo, canRedo, diffs}
+  const maxOp = state.getIn(['opSet', 'maxOp'], 0)
+  const patch = {version, clock, deps, canUndo, canRedo, maxOp, diffs}
 
   if (isIncremental && request) {
     patch.actor = request.actor
@@ -211,7 +218,7 @@ function applyChanges(backend, changes) {
  * two-element array `[backend, patch]` where `backend` is the updated node state,
  * and `patch` confirms the modifications to the document objects.
  */
-function applyLocalChange(backend, request) {
+function applyLocalChange(backend, request, incomingChange) {
   let state = backendState(backend)
   if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
@@ -232,7 +239,7 @@ function applyLocalChange(backend, request) {
 
   let change, startOp = versionObj.getIn(['opSet', 'maxOp'], 0) + 1
   if (request.requestType === 'change') {
-    ;[state, change] = processChangeRequest(state, versionObj.get('opSet'), request, startOp)
+    ;[state, change] = processChangeRequest(state, versionObj.get('opSet'), request, startOp, incomingChange)
   } else if (request.requestType === 'undo') {
     ;[state, change] = undo(state, request, startOp)
   } else if (request.requestType === 'redo') {
@@ -242,6 +249,17 @@ function applyLocalChange(backend, request) {
   }
 
   fillInPred(versionObj.get('opSet'), change)
+
+//  console.log("INCOMING")
+//  inspect(incomingChange)
+//  console.log("CHANGE")
+//  inspect(change)
+  if (request.requestType === 'change' && incomingChange) {
+    change.deps.sort();
+    incomingChange.deps.sort();
+    assert.deepStrictEqual(change, incomingChange);
+  }
+
   const binaryChange = encodeChange(change)
   let patch, isUndoable = (request.requestType === 'change' && request.undoable !== false)
   ;[state, patch] = apply(state, [binaryChange], request, isUndoable, true)
