@@ -1662,9 +1662,42 @@ class BackendDoc {
       }
     }
 
+    const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
     const key = op[keyStr] !== null ? op[keyStr] : listIndex
-    if (!isOverwritten && patch.props[key]) {
-      const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+
+    // For counters, increment operations are succs to the set operation that created the counter,
+    // but in this case we want to add the values rather than overwriting them.
+    if (isOverwritten && ACTIONS[op[action]] === 'set' && (op[valLen] & 0x0f) === VALUE_TYPE.COUNTER) {
+      // This is the initial set operation that creates a counter. Initialise the counter state
+      // to contain all successors of the set operation. Only if we later find that each of these
+      // successor operations is an increment, we make the counter visible in the patch.
+      if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+      if (!propState[elemId].counterStates) propState[elemId].counterStates = {}
+      let counterStates = propState[elemId].counterStates
+      let counterState = {opId, value: decodeValue(op[valLen], op[valRaw]).value, succs: {}}
+
+      for (let i = 0; i < op[succNum]; i++) {
+        const succOp = `${op[succCtr][i]}@${docState.actorIds[op[succActor][i]]}`
+        counterStates[succOp] = counterState
+        counterState.succs[succOp] = true
+      }
+
+    } else if (ACTIONS[op[action]] === 'inc') {
+      // Incrementing a previously created counter.
+      if (!propState[elemId] || !propState[elemId].counterStates || !propState[elemId].counterStates[opId]) {
+        throw new RangeError(`increment operation ${opId} for unknown counter`)
+      }
+      let counterState = propState[elemId].counterStates[opId]
+      counterState.value += decodeValue(op[valLen], op[valRaw]).value
+      delete counterState.succs[opId]
+
+      if (Object.keys(counterState.succs).length === 0 && patch.props[key]) {
+        patch.props[key][counterState.opId] = {datatype: 'counter', value: counterState.value}
+        // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
+      }
+
+    } else if (patch.props[key] && !isOverwritten) {
+      // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
       if (ACTIONS[op[action]] === 'set') {
         patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
       } else if (op[action] % 2 === 0) { // even-numbered action == make* operation

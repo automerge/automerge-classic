@@ -930,6 +930,87 @@ describe('BackendDoc applying changes', () => {
     })
   })
 
+  it('should handle a counter inside a map', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
+      {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2, pred: [`1@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
+      version: 1, clock: {[actor]: 1}, deps: [hash(change1)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        counter: {[`1@${actor}`]: {value: 1, datatype: 'counter'}}
+      }}
+    })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+      version: 2, clock: {[actor]: 2}, deps: [hash(change2)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+      }}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [],
+      objCtr:   [],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [2, 7, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72], // 2x 'counter'
+      idActor:  [2, 0],
+      idCtr:    [2, 1],
+      insert:   [2],
+      action:   [0x7e, 1, 5],
+      valLen:   [0x7e, 0x18, 0x13],
+      valRaw:   [1, 2],
+      succNum:  [0x7e, 1, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 2]
+    })
+  })
+
+  it('should handle a counter inside a list element', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeList', obj: ROOT_ID,      key: 'list',       insert: false, pred: []},
+      {action: 'set',      obj: `1@${actor}`, key: '_head',      insert: true,  pred: [], value: 1, datatype: 'counter'}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'inc',      obj: `1@${actor}`, key: `2@${actor}`, value: 2, pred: [`2@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
+      version: 1, clock: {[actor]: 1}, deps: [hash(change1)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list', edits: [{action: 'insert', index: 0}],
+        props: {0: {[`2@${actor}`]: {value: 1, datatype: 'counter'}}}
+      }}}}
+    })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+      version: 2, clock: {[actor]: 2}, deps: [hash(change2)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list', edits: [],
+        props: {0: {[`2@${actor}`]: {value: 3, datatype: 'counter'}}}
+      }}}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 2, 0],
+      objCtr:   [0, 1, 2, 1],
+      keyActor: [0, 2, 0x7f, 0], // null, null, 0
+      keyCtr:   [0, 1, 0x7e, 0, 2], // null, 0, 2
+      keyStr:   [0x7f, 4, 0x6c, 0x69, 0x73, 0x74, 0, 2], // 'list', null, null
+      idActor:  [3, 0],
+      idCtr:    [3, 1], // 1, 2, 3
+      insert:   [1, 1, 1], // false, true, false
+      action:   [0x7d, 2, 1, 5], // makeList, set, inc
+      valLen:   [0x7d, 0, 0x18, 0x13], // null, counter, uint
+      valRaw:   [1, 2],
+      succNum:  [0x7d, 0, 1, 0],
+      succActor: [0x7f, 0],
+      succCtr:   [0x7f, 3]
+    })
+  })
+
   it('should handle conflicts inside list elements', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
