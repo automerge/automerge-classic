@@ -938,6 +938,9 @@ describe('BackendDoc applying changes', () => {
     const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
       {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2, pred: [`1@${actor}`]}
     ]}
+    const change3 = {actor, seq: 3, startOp: 3, time: 0, deps: [hash(change2)], ops: [
+      {action: 'inc', obj: ROOT_ID, key: 'counter', value: 3, pred: [`1@${actor}`]}
+    ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
       version: 1, clock: {[actor]: 1}, deps: [hash(change1)],
@@ -951,21 +954,27 @@ describe('BackendDoc applying changes', () => {
         counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
       }}
     })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
+      version: 3, clock: {[actor]: 3}, deps: [hash(change3)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        counter: {[`1@${actor}`]: {value: 6, datatype: 'counter'}}
+      }}
+    })
     checkColumns(backend.docColumns, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
       keyCtr:   [],
-      keyStr:   [2, 7, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72], // 2x 'counter'
-      idActor:  [2, 0],
-      idCtr:    [2, 1],
-      insert:   [2],
-      action:   [0x7e, 1, 5],
-      valLen:   [0x7e, 0x18, 0x13],
-      valRaw:   [1, 2],
-      succNum:  [0x7e, 1, 0],
-      succActor: [0x7f, 0],
-      succCtr:   [0x7f, 2]
+      keyStr:   [3, 7, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72], // 3x 'counter'
+      idActor:  [3, 0],
+      idCtr:    [3, 1],
+      insert:   [3],
+      action:   [0x7f, 1, 2, 5], // set, inc, inc
+      valLen:   [0x7f, 0x18, 2, 0x13], // counter, uint, uint
+      valRaw:   [1, 2, 3],
+      succNum:  [0x7f, 2, 2, 0], // 2, 0, 0
+      succActor: [2, 0],
+      succCtr:   [0x7e, 2, 1] // 2, 3
     })
   })
 
@@ -1008,6 +1017,31 @@ describe('BackendDoc applying changes', () => {
       succNum:  [0x7d, 0, 1, 0],
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
+    })
+  })
+
+  it('should delete a counter from a map', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
+      {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2, pred: [`1@${actor}`]}
+    ]}
+    const change3 = {actor, seq: 3, startOp: 3, time: 0, deps: [hash(change2)], ops: [
+      {action: 'del', obj: ROOT_ID, key: 'counter', pred: [`1@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChanges([encodeChange(change1)])
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+      version: 2, clock: {[actor]: 2}, deps: [hash(change2)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+      }}
+    })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
+      version: 3, clock: {[actor]: 3}, deps: [hash(change3)],
+      diffs: {objectId: ROOT_ID, type: 'map', props: {counter: {}}}
     })
   })
 

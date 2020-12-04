@@ -687,6 +687,21 @@ describe('Automerge', () => {
           ]
         })
       })
+
+      it.skip('should allow deleting counters from maps', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})
+        const s2 = Automerge.change(s1, doc => doc.birds.wrens.increment(2))
+        const s3 = Automerge.change(s2, doc => delete doc.birds.wrens)
+        assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
+        assert.deepStrictEqual(s2, {birds: {}})
+      })
+
+      it('should not allow deleting counters from lists', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.recordings = [new Automerge.Counter(1)])
+        const s2 = Automerge.change(s1, doc => doc.recordings[0].increment(2))
+        assert.deepStrictEqual(s2, {recordings: [new Automerge.Counter(3)]})
+        assert.throws(() => { Automerge.change(s2, doc => doc.recordings.deleteAt(0)) }, /Unsupported operation/)
+      })
     })
   })
 

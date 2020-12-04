@@ -367,6 +367,27 @@ class Context {
 
     if (deletions > 0) {
       for (let i = 0; i < deletions; i++) {
+        if (this.getObjectField(path, objectId, start + i) instanceof Counter) {
+          // This may seem bizarre, but it's really fiddly to implement deletion of counters from
+          // lists, and I doubt anyone ever needs to do this, so I'm just going to throw an
+          // exception for now. The reason is: a counter is created by a set operation with counter
+          // datatype, and subsequent increment ops are successors to the set operation. Normally, a
+          // set operation with successor indicates a value that has been overwritten, so a set
+          // operation with successors is normally invisible. Counters are an exception, because the
+          // increment operations don't make the set operation invisible. When a counter appears in
+          // a map, this is not too bad: if all successors are increments, then the counter remains
+          // visible; if one or more successors are deletions, it goes away. However, when deleting
+          // a list element, we have the additional challenge that we need to distinguish between a
+          // list element that is being deleted by the current change (in which case we need to put
+          // a 'remove' action in the patch's edits for that list) and a list element that was
+          // already deleted previously (in which case the patch should not reflect the deletion).
+          // This can be done, but as I said, it's fiddly. If someone wants to pick this up in the
+          // future, hopefully the above description will be enough to get you started. Good luck!
+          throw new TypeError('Unsupported operation: deleting a counter from a list')
+        }
+      }
+
+      for (let i = 0; i < deletions; i++) {
         this.addOp({action: 'del', obj: objectId, key: start, insert: false})
         subpatch.edits.push({action: 'remove', index: start})
       }
