@@ -13,7 +13,6 @@ const uuid = require('../src/uuid')
  */
 class Context {
   constructor (doc, actorId, applyPatch) {
-    //inspect({ doc, state: doc[STATE] })
     this.actorId = actorId
     this.maxOp = doc[STATE].maxOp 
     this.cache = doc[CACHE]
@@ -209,11 +208,11 @@ class Context {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
     const child = this.nextOpId()
-    if (key === null) key = this.nextOpId()
+    const objectId = child
+    if (key === null) key = child
 
     if (value instanceof Text) {
       // Create a new Text object
-      const objectId = this.nextOpId();
       this.addOp({action: 'makeText', obj, key, insert, child})
       this.__addOp({action: 'makeText', obj, key: elemid || key, insert, pred})
       const subpatch = {objectId, type: 'text', edits: [], props: {}}
@@ -225,14 +224,12 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      const objectId = this.nextOpId();
       this.addOp({action: 'makeTable', obj, key, insert, child})
       this.__addOp({action: 'makeTable', obj, key: elemid || key, insert, pred})
       return {objectId, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      const objectId = this.nextOpId();
       this.addOp({action: 'makeList', obj, key, insert, child})
       this.__addOp({action: 'makeList', obj, key: elemid || key, insert, pred})
       const subpatch = {objectId, type: 'list', edits: [], props: {}}
@@ -241,7 +238,6 @@ class Context {
 
     } else {
       // Create a new map object
-      const objectId = this.nextOpId();
       this.addOp({action: 'makeMap', obj, key, insert, child})
       this.__addOp({action: 'makeMap', obj, key: elemid || key, insert, pred})
       let props = {}
