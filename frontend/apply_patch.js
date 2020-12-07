@@ -236,17 +236,17 @@ function updateListObject(patch, obj, updated) {
       elemids  .splice(index, 0, ...blanks)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
-     },
-     (index, count) => { // deletion
-       elemids  .splice(index, count)
-       list     .splice(index, count)
-       conflicts.splice(index, count)
-     }
-   )
+    },
+    (index, count) => { // deletion
+      elemids  .splice(index, count)
+      list     .splice(index, count)
+      conflicts.splice(index, count)
+    }
+  )
 
-   applyProperties(patch.props, list, conflicts, elemids, updated)
-   return list
- }
+  applyProperties(patch.props, list, conflicts, elemids, updated)
+  return list
+}
 
 /**
  * Updates the text object `obj` according to the modifications described in
