@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, LOCAL } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -43,6 +43,7 @@ function updateRootObject(doc, updated, state) {
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, STATE,    {value: state})
+  Object.defineProperty(newDoc, LOCAL,    {value: null})
 
   if (doc[OPTIONS].freeze) {
     for (let objectId of Object.keys(updated)) {

@@ -8,7 +8,8 @@ const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (s
 const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type) of conflicts
 const ELEMIDS   = Symbol('_elemIds')   // list of elemids
 const CHANGE    = Symbol('_change')    // the context object on proxy objects used in change callback
+const LOCAL     = Symbol('_local')
 
 module.exports = {
-  OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE
+  OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, LOCAL
 }
