@@ -5,11 +5,6 @@ const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
 const assert = require('assert')
 
-function inspect(val) {
-    var util = require('util');
-    console.log(util.inspect(val, false,10,true));
-}
-
 function backendState(backend) {
   if (backend.frozen) {
     throw new Error(

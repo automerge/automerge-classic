@@ -6,13 +6,6 @@ const { Counter, getWriteableCounter } = require('./counter')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
-
-function inspect(val) {
-    var util = require('util');
-    console.log(util.inspect(val, false,10,true));
-}
-
-
 /**
  * An instance of this class is passed to `rootObjectProxy()`. The methods are
  * called by proxy object mutation functions to query the current object state

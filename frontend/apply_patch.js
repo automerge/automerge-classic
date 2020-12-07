@@ -4,11 +4,6 @@ const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
-function inspect(val) {
-    var util = require('util');
-    console.log(util.inspect(val, false,10,true));
-}
-
 /**
  * Reconstructs the value from the patch object `patch`.
  */
@@ -204,7 +199,7 @@ function updateTableObject(patch, obj, updated) {
 function cloneListObject(originalList, objectId) {
   const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
-  const elemids = (originalList && originalList[CONFLICTS]) ? originalList[ELEMIDS].slice() : []
+  const elemids = (originalList && originalList[ELEMIDS]) ? originalList[ELEMIDS].slice() : []
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
   Object.defineProperty(list, ELEMIDS,   {value: elemids})
@@ -234,10 +229,9 @@ function updateListObject(patch, obj, updated) {
   }
 
   const list = updated[objectId], conflicts = list[CONFLICTS], elemids = list[ELEMIDS]
-  const props = patch.props
 
   iterateEdits(patch.edits,
-     (index, insertions) => { // insertion
+    (index, insertions) => { // insertion
       const blanks = new Array(insertions)
       elemids  .splice(index, 0, ...blanks)
       list     .splice(index, 0, ...blanks)
@@ -253,45 +247,6 @@ function updateListObject(patch, obj, updated) {
    applyProperties(patch.props, list, conflicts, elemids, updated)
    return list
  }
-
-/*
-  iterateEdits(patch.edits,
-    (index, insertions) => { // insertion
-      const values = insertions.map(key => {
-        const values = {}, opIds = Object.keys(props[key]).sort(lamportCompare).reverse()
-        for (let opId of opIds) {
-          const subpatch = props[key][opId]
-          if (conflicts[key] && conflicts[key][opId]) {
-            values[opId] = getValue(subpatch, conflicts[key][opId], updated)
-          } else {
-            values[opId] = getValue(subpatch, undefined, updated)
-          }
-        }
-        return { val: values[opIds[0]] , conflicts: values }
-      })
-
-      const newItems = values.map(v => v.val)
-      const newConflicts = values.map(v => v.conflicts)
-
-      console.log("newelemids",insertions)
-      console.log("newConflicts",newConflicts)
-      console.log("newConflicts",newConflicts)
-
-      elemids  .splice(index, 0, ...insertions)
-      list     .splice(index, 0, ...values.map(v => v.val))
-      conflicts.splice(index, 0, ...values.map(v => v.conflicts))
-    },
-    (index, count) => { // deletion
-      elemids  .splice(index, count)
-      list     .splice(index, count)
-      conflicts.splice(index, count)
-    }
-  )
-
-//  applyProperties(patch.props, list, conflicts, updated)
-  return list
-}
-*/
 
 /**
  * Updates the text object `obj` according to the modifications described in
@@ -310,9 +265,9 @@ function updateTextObject(patch, obj, updated) {
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      const emptyObjs = []
-      for (let i = 0; i < insertions; i++) emptyObjs.push({})
-      elems.splice(index, 0, ...emptyObjs)
+      const blanks = []
+      for (let i = 0; i < insertions; i++) blanks.push({})
+      elems.splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...(new Array(insertions)))
       elemids.splice(index, 0, ...(new Array(insertions)))
     },
