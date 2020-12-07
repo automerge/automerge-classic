@@ -5,3 +5,4 @@
 4. calculate deps correctly for multiple frontend changes in flight
 5. table test load/save bug
 6. need more tests
+7. need a test for getLastLocalChange()

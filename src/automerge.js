@@ -4,6 +4,8 @@ const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
+const LOCAL = Symbol('_local')
+
 ///// Automerge.* API
 
 function init(options) {
@@ -27,12 +29,18 @@ function from(initialState, options) {
 
 function change(doc, options, callback) {
   const [newDoc, change] = Frontend.change(doc, options, callback)
+  Object.defineProperty(newDoc, LOCAL, {value: change})
   return newDoc
 }
 
 function emptyChange(doc, options) {
   const [newDoc, change] = Frontend.emptyChange(doc, options)
+  Object.defineProperty(newDoc, LOCAL, {value: change})
   return newDoc
+}
+
+function getLastLocalChange(doc) {
+  return doc[LOCAL]
 }
 
 function clone(doc) {
