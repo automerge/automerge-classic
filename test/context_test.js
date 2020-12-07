@@ -51,9 +51,9 @@ describe('Proxying context', () => {
     it('should create nested maps', () => {
       context.setMapKey([], 'birds', {goldfinches: 3})
       assert(applyPatch.calledOnce)
-      const objectId = applyPatch.firstCall.args[0].props.birds[`2@${context.actorId}`].objectId
+      const objectId = applyPatch.firstCall.args[0].props.birds[`1@${context.actorId}`].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[`2@${context.actorId}`]: {objectId, type: 'map', props: {
+        birds: {[`1@${context.actorId}`]: {objectId, type: 'map', props: {
           goldfinches: {[`2@${context.actorId}`]: {value: 3}}
         }}}
       }})
@@ -116,9 +116,9 @@ describe('Proxying context', () => {
     it('should create nested lists', () => {
       context.setMapKey([], 'birds', ['sparrow', 'goldfinch'])
       assert(applyPatch.calledOnce)
-      const objectId = applyPatch.firstCall.args[0].props.birds[`3@${context.actorId}`].objectId
+      const objectId = applyPatch.firstCall.args[0].props.birds[`1@${context.actorId}`].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
-        birds: {[`3@${context.actorId}`]: {objectId, type: 'list', props: {
+        birds: {[`1@${context.actorId}`]: {objectId, type: 'list', props: {
           0: {[`2@${context.actorId}`]: {value: 'sparrow'}},
           1: {[`3@${context.actorId}`]: {value: 'goldfinch'}}
         }, edits: [
@@ -134,10 +134,10 @@ describe('Proxying context', () => {
 
     it('should create nested Text objects', () => {
       context.setMapKey([], 'text', new Text('hi'))
-      const objectId = applyPatch.firstCall.args[0].props.text[`3@${context.actorId}`].objectId
+      const objectId = applyPatch.firstCall.args[0].props.text[`1@${context.actorId}`].objectId
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
-        text: {[`3@${context.actorId}`]: {objectId, type: 'text', props: {
+        text: {[`1@${context.actorId}`]: {objectId, type: 'text', props: {
           0: {[`2@${context.actorId}`]: {value: 'h'}},
           1: {[`3@${context.actorId}`]: {value: 'i'}}
         }, edits: [
@@ -245,10 +245,10 @@ describe('Proxying context', () => {
     it('should create nested objects on assignment', () => {
       context.setListIndex([{key: 'birds', objectId: listId}], 1, {english: 'goldfinch', latin: 'carduelis'})
       assert(applyPatch.calledOnce)
-      const nestedId = applyPatch.firstCall.args[0].props.birds.actor1.props[1][`3@${context.actorId}`].objectId
+      const nestedId = applyPatch.firstCall.args[0].props.birds.actor1.props[1][`1@${context.actorId}`].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', props: {
-          1: {[`3@${context.actorId}`]: {objectId: nestedId, type: 'map', props: {
+          1: {[`1@${context.actorId}`]: {objectId: nestedId, type: 'map', props: {
             english: {[`2@${context.actorId}`]: {value: 'goldfinch'}},
             latin: {[`3@${context.actorId}`]: {value: 'carduelis'}}
           }}}

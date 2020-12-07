@@ -32,15 +32,10 @@ class Context {
 
   __addOp(operation) {
     this.__ops.push(operation)
-    //inspect({ id: this.currentOpId(), op: operation })
   }
 
   nextOpId() {
     return `${this.maxOp + this.__ops.length + 1}@${this.actorId}`
-  }
-
-  currentOpId() {
-    return `${this.maxOp + this.__ops.length}@${this.actorId}`
   }
 
   /**
@@ -218,9 +213,9 @@ class Context {
 
     if (value instanceof Text) {
       // Create a new Text object
+      const objectId = this.nextOpId();
       this.addOp({action: 'makeText', obj, key, insert, child})
       this.__addOp({action: 'makeText', obj, key: elemid || key, insert, pred})
-      let objectId = this.currentOpId();
       const subpatch = {objectId, type: 'text', edits: [], props: {}}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
@@ -230,29 +225,30 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
+      const objectId = this.nextOpId();
       this.addOp({action: 'makeTable', obj, key, insert, child})
       this.__addOp({action: 'makeTable', obj, key: elemid || key, insert, pred})
-      let objectId = this.currentOpId();
       return {objectId, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
+      const objectId = this.nextOpId();
       this.addOp({action: 'makeList', obj, key, insert, child})
       this.__addOp({action: 'makeList', obj, key: elemid || key, insert, pred})
-      let objectId = this.currentOpId();
       const subpatch = {objectId, type: 'list', edits: [], props: {}}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
+      const objectId = this.nextOpId();
       this.addOp({action: 'makeMap', obj, key, insert, child})
       this.__addOp({action: 'makeMap', obj, key: elemid || key, insert, pred})
-      let objectId = this.currentOpId();
       let props = {}
       for (let nested of Object.keys(value)) {
+        const opId = this.nextOpId();
         const valuePatch = this.setValue(objectId, nested, value[nested], false, [])
-        props[nested] = {[this.currentOpId()]: valuePatch}
+        props[nested] = {[opId]: valuePatch}
       }
       return {objectId, type: 'map', props}
     }
@@ -317,8 +313,9 @@ class Context {
     if (object[key] !== value || Object.keys(object[CONFLICTS][key] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
         const pred = getPred(object,key) 
+        const opId = this.nextOpId();
         const valuePatch = this.setValue(objectId, key, value, false, pred)
-        subpatch.props[key] = {[this.currentOpId()]: valuePatch}
+        subpatch.props[key] = {[opId]: valuePatch}
       })
     }
   }
@@ -384,8 +381,9 @@ class Context {
     if (list[index] !== value || Object.keys(list[CONFLICTS][index] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
         const pred = getPred(list,index)
+        const opId = this.nextOpId();
         const valuePatch = this.setValue(objectId, index, value, false, pred, list[ELEMIDS][index])
-        subpatch.props[index] = {[this.currentOpId()]: valuePatch}
+        subpatch.props[index] = {[opId]: valuePatch}
       })
     }
   }
@@ -498,12 +496,13 @@ class Context {
 
     // TODO what if there is a conflicting value on the same key as the counter?
     const value = object[key].value + delta
+    const opId = this.nextOpId();
     this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false})
     const pred = getPred(object,key) 
     const resolvedKey = this.resolveKey(objectId, key)
     this.__addOp({action: 'inc', obj: objectId, key: resolvedKey, value: delta, insert: false, pred})
     this.applyAtPath(path, subpatch => {
-      subpatch.props[key] = {[this.currentOpId()]: {value, datatype: 'counter'}}
+      subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
     })
   }
 }
