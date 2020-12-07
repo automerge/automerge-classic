@@ -299,48 +299,6 @@ like a git repository).
 > **Unless you know what you are doing, you should stick with the default**, and let `actorId` be
 > auto-generated.
 
-### Undo and redo
-
-Automerge makes it easy to support an undo/redo feature in your application. Note that undo is a
-somewhat tricky concept in a collaborative application! Here, "undo" is taken as meaning "what the
-user expects to happen when they hit <kbd>ctrl+Z</kbd>/<kbd>⌘ Z</kbd>". In particular, the undo
-feature undoes the most recent change _by the local user_; it cannot currently be used to revert
-changes made by other users.
-
-Moreover, undo is not the same as jumping back to a previous version of a document; see
-[the next section](#examining-document-history) on how to examine document history. Undo works by
-applying the inverse operation of the local user's most recent change, and redo works by applying
-the inverse of the inverse. Both undo and redo create new changes, so from other users' point of
-view, an undo or redo looks the same as any other kind of change.
-
-To check whether undo is currently available, use the function `Automerge.canUndo(doc)`. It returns
-true if the local user has made any changes since the document was created or loaded. You can then
-call `Automerge.undo(doc)` to perform an undo. The functions `canRedo()` and `redo()` do the
-inverse:
-
-```js
-let doc = Automerge.change(Automerge.init(), doc => {
-  doc.birds = []
-})
-doc = Automerge.change(doc, doc => {
-  doc.birds.push('blackbird')
-})
-doc = Automerge.change(doc, doc => {
-  doc.birds.push('robin')
-})
-// now doc is {birds: ['blackbird', 'robin']}
-
-Automerge.canUndo(doc) // returns true
-doc = Automerge.undo(doc) // now doc is {birds: ['blackbird']}
-doc = Automerge.undo(doc) // now doc is {birds: []}
-doc = Automerge.redo(doc) // now doc is {birds: ['blackbird']}
-doc = Automerge.redo(doc) // now doc is {birds: ['blackbird', 'robin']}
-```
-
-You can pass an optional `message` as second argument to `Automerge.undo(doc, message)` and
-`Automerge.redo(doc, message)`. This string is used as "commit message" that describes the undo/redo
-change, and it appears in the [change history](#examining-document-history).
-
 ### Sending and receiving changes
 
 The Automerge library itself is agnostic to the network layer — that is, you can use whatever

@@ -148,10 +148,8 @@ function makePatch(state, diffs, request, isIncremental) {
   const version = state.get('versions').last().get('version')
   const clock   = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toJSON()
   const deps    = state.getIn(['opSet', 'deps']).toJSON().sort()
-  const canUndo = state.getIn(['opSet', 'undoPos']) > 0
-  const canRedo = !state.getIn(['opSet', 'redoStack']).isEmpty()
   const maxOp = state.getIn(['opSet', 'maxOp'], 0)
-  const patch = {version, clock, deps, canUndo, canRedo, maxOp, diffs}
+  const patch = {version, clock, deps, diffs, maxOp}
 
   if (isIncremental && request) {
     patch.actor = request.actor
@@ -164,13 +162,13 @@ function makePatch(state, diffs, request, isIncremental) {
  * The implementation behind `applyChanges()`, `applyLocalChange()`, and
  * `loadChanges()`.
  */
-function apply(state, changes, request, isUndoable, isIncremental) {
+function apply(state, changes, request, isIncremental) {
   let diffs = isIncremental ? {} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
     for (let chunk of splitContainers(change)) {
       if (request) {
-        opSet = OpSet.addLocalChange(opSet, chunk, isUndoable, diffs)
+        opSet = OpSet.addLocalChange(opSet, chunk, diffs)
       } else {
         opSet = OpSet.addChange(opSet, chunk, diffs)
       }
@@ -205,18 +203,16 @@ function applyChanges(backend, changes) {
   // been local changes. Since we are applying a remote change here, we have to set that flag to
   // false on all existing version objects.
   state = state.update('versions', versions => versions.map(v => v.set('localOnly', false)))
-  ;[state, patch] = apply(state, changes, null, false, true)
+  ;[state, patch] = apply(state, changes, null, true)
   backend.frozen = true
   return [{state}, patch]
 }
 
 /**
  * Takes a single change request `request` made by the local user, and applies
- * it to the node state `backend`. The difference to `applyChanges()` is that this
- * function adds the change to the undo history, so it can be undone (whereas
- * remote changes are not normally added to the undo history). Returns a
- * two-element array `[backend, patch]` where `backend` is the updated node state,
- * and `patch` confirms the modifications to the document objects.
+ * it to the node state `backend`. Returns a two-element array `[backend, patch]`
+ * where `backend` is the updated node state, and `patch` confirms the
+ * modifications to the document objects.
  */
 function applyLocalChange(backend, request, incomingChange) {
   let state = backendState(backend)
@@ -237,23 +233,11 @@ function applyLocalChange(backend, request, incomingChange) {
   }
   request.deps = versionObj.getIn(['opSet', 'deps']).toJSON()
 
-  let change, startOp = versionObj.getIn(['opSet', 'maxOp'], 0) + 1
-  if (request.requestType === 'change') {
-    ;[state, change] = processChangeRequest(state, versionObj.get('opSet'), request, startOp, incomingChange)
-  } else if (request.requestType === 'undo') {
-    ;[state, change] = undo(state, request, startOp)
-  } else if (request.requestType === 'redo') {
-    ;[state, change] = redo(state, request, startOp)
-  } else {
-    throw new RangeError(`Unknown requestType: ${request.requestType}`)
-  }
+  const startOp = versionObj.getIn(['opSet', 'maxOp'], 0) + 1
+  const [state1, change] = processChangeRequest(state, versionObj.get('opSet'), request, startOp, incomingChange)
 
   fillInPred(versionObj.get('opSet'), change)
 
-//  console.log("INCOMING")
-//  inspect(incomingChange)
-//  console.log("CHANGE")
-//  inspect(change)
   if (request.requestType === 'change' && incomingChange) {
     change.deps.sort();
     incomingChange.deps.sort();
@@ -261,10 +245,9 @@ function applyLocalChange(backend, request, incomingChange) {
   }
 
   const binaryChange = encodeChange(change)
-  let patch, isUndoable = (request.requestType === 'change' && request.undoable !== false)
-  ;[state, patch] = apply(state, [binaryChange], request, isUndoable, true)
+  const [state2, patch] = apply(state1, [binaryChange], request, true)
 
-  state = state.update('versions', versions => {
+  const state3 = state2.update('versions', versions => {
     // Remove any versions before the one referenced by the current request, since future requests
     // will always reference a version number that is greater than or equal to the current
     return versions.filter(v => v.get('version') >= request.version)
@@ -277,14 +260,14 @@ function applyLocalChange(backend, request, incomingChange) {
       // match the state of the frontend (which has not yet seen the remote update).
       .map(v => {
         if (v.get('localOnly')) {
-          return v.set('opSet', state.get('opSet'))
+          return v.set('opSet', state2.get('opSet'))
         } else {
-          return v.set('opSet', OpSet.addLocalChange(v.get('opSet'), binaryChange, false, null))
+          return v.set('opSet', OpSet.addLocalChange(v.get('opSet'), binaryChange, null))
         }
       })
   })
   backend.frozen = true
-  return [{state}, patch]
+  return [{state: state3}, patch]
 }
 
 /**
@@ -314,7 +297,7 @@ function load(data) {
  */
 function loadChanges(backend, changes) {
   const state = backendState(backend)
-  const [newState, _] = apply(state, changes, null, false, false)
+  const [newState, _] = apply(state, changes, null, false)
   backend.frozen = true
   return {state: newState}
 }
@@ -327,11 +310,6 @@ function getPatch(backend) {
   const state = backendState(backend)
   const diffs = constructPatch(save(backend))
   return makePatch(state, diffs, null, false)
-}
-
-function getChangesForActor(backend, actorId) {
-  const state = backendState(backend)
-  return OpSet.getChangesForActor(state.get('opSet'), actorId)
 }
 
 function getChanges(backend, haveDeps) {
@@ -347,86 +325,7 @@ function getMissingDeps(backend) {
   return OpSet.getMissingDeps(state.get('opSet'))
 }
 
-/**
- * Undoes the last change by the local user in the node state `state`. The
- * `request` object contains all parts of the change except the operations;
- * this function fetches the operations from the undo stack, pushes a record
- * onto the redo stack, and returns a two-element list `[state, change]`
- * where `change` is the change to be applied.
- */
-function undo(state, request, startOp) {
-  const undoPos = state.getIn(['opSet', 'undoPos'])
-  const undoOps = state.getIn(['opSet', 'undoStack', undoPos - 1])
-  if (undoPos < 1 || !undoOps) {
-    throw new RangeError('Cannot undo: there is nothing to be undone')
-  }
-  const { actor, seq, deps, time, message } = request
-  const change = {actor, seq, startOp, deps, time, message, ops: undoOps.toJS()}
-
-  let opSet = state.get('opSet')
-  let redoOps = List().withMutations(redoOps => {
-    for (let op of undoOps) {
-      if (!['set', 'del', 'link', 'inc'].includes(op.get('action'))) {
-        throw new RangeError(`Unexpected operation type in undo history: ${op}`)
-      }
-      // TODO this duplicates OpSet.recordUndoHistory
-      const key = OpSet.getOperationKey(op)
-      const fieldOps = OpSet.getFieldOps(opSet, op.get('obj'), key)
-      if (op.get('action') === 'inc') {
-        redoOps.push(Map({action: 'inc', obj: op.get('obj'), key, insert: false, value: -op.get('value')}))
-      } else if (fieldOps.isEmpty()) {
-        redoOps.push(Map({action: 'del', obj: op.get('obj'), key, insert: false}))
-      } else {
-        for (let fieldOp of fieldOps) {
-          if (fieldOp.get('insert')) {
-            fieldOp = fieldOp.remove('insert').set('key', key)
-          }
-          if (fieldOp.get('action').startsWith('make')) {
-            const childId = fieldOp.get('child', fieldOp.get('opId'))
-            fieldOp = fieldOp.set('action', 'link').set('child', childId)
-          }
-          fieldOp = fieldOp.remove('opId').remove('pred').set('insert', false)
-          redoOps.push(fieldOp)
-        }
-      }
-    }
-  })
-
-  opSet = opSet
-    .set('undoPos', undoPos - 1)
-    .update('redoStack', stack => stack.push(redoOps))
-  return [state.set('opSet', opSet), change]
-}
-
-/**
- * Redoes the last `undo()` in the node state `state`. The `request` object
- * contains all parts of the change except the operations; this function
- * fetches the operations from the redo stack, and returns two-element list
- * `[state, change]` where `change` is the change to be applied.
- */
-function redo(state, request, startOp) {
-  const redoOps = state.getIn(['opSet', 'redoStack']).last()
-  if (!redoOps) {
-    throw new RangeError('Cannot redo: the last change was not an undo')
-  }
-  const { actor, seq, deps, time, message } = request
-  const change = {actor, seq, startOp, deps, time, message, ops: redoOps.toJS()}
-
-  let opSet = state.get('opSet')
-    .update('undoPos', undoPos => undoPos + 1)
-    .update('redoStack', stack => stack.pop())
-  return [state.set('opSet', opSet), change]
-}
-
-function getUndoStack(backend) {
-  return backendState(backend).getIn(['opSet', 'undoStack']).toJS()
-}
-
-function getRedoStack(backend) {
-  return backendState(backend).getIn(['opSet', 'redoStack']).toJS()
-}
-
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getChangesForActor, getChanges, getMissingDeps, getUndoStack, getRedoStack
+  getChanges, getMissingDeps
 }

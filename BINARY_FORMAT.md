@@ -110,9 +110,7 @@ Note several differences to the old format:
 2. In the old format, the `make*` operations created a new object, but requried
    a separate `link` object to integrate them into the document tree. Now, every
    `make*` operation includes the `obj` and `key` to which the new object should
-   be assigned. `link` operations still exist, but they are now only used in the
-   context of undo/redo (`link` undoes a `del` operation that removed a child
-   object).
+   be assigned.
 3. The `obj` field of a `make*` operation is now the ID of the parent object,
    not the ID of the object being created.
 4. Assignments to the same property or list element: in the old format, we had
@@ -168,15 +166,6 @@ The responsibilities between frontend and backend are assigned as follows:
     not list element IDs.
   * The reason for this is to keep the management of the list element ID data
     structure, which can be expensive, off the UI thread.
-* Undo history is maintained by the backend. This means that an undo request
-  will only take effect after a round-trip through the backend.
-  * Actually, it should be possible to implement frontend-only undo in the
-    "easy case" where the most recent change to the frontend is a local one
-    (and hence the undo is just returning to a previous state, not having to
-    merge a mixture of local and remote state changes). Waiting for the
-    round-trip through the backend would then only be required if the most
-    recent patch applied to the frontend is a remote one. However, this is
-    not implemented yet.
 
 ### Change requests
 
@@ -185,7 +174,6 @@ as the result of local user input.
 
 A change request is a JSON object with the following properties:
 
-* `requestType`: One of `'change'`, `'undo'`, or `'redo'`.
 * `actor`, `seq`, `time` and `message`: As in the change format. The
   frontend knows the local actorId and generates the sequence number.
   These properties appear on all request types.
@@ -193,9 +181,7 @@ A change request is a JSON object with the following properties:
   (as assigned by the backend) that the frontend has seen at the time it
   generated this change request. The version number is zero for a newly
   created document.
-* `ops`: When the `requestType` is `change`, this is an array of
-  operation object as described below. Not present on `undo` and `redo`
-  requests.
+* `ops`: an array of operation object as described below.
 
 Each operation in the `ops` array is similar to the operations in a change
 (as documented above), with the following differences:
@@ -244,7 +230,7 @@ A patch is a JSON object with the following properties:
   `version` is different from `seq`: `version` is incremented on any
   patch, regardless of whether it is the result of local or remote
   changes, while `seq` is incremented only on local changes.
-* `clock`, `canUndo`, `canRedo`: Like in the old patch format.
+* `clock`: Like in the old patch format.
 * `diffs`: A JSON object describing the changes that need to be made to
   the document. In the old patch format, this was a flat list of changes,
   while in the new patch format this is a nested structure mirroring the

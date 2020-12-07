@@ -72,14 +72,13 @@ function updateRootObject(doc, updated, state) {
 
 /**
  * Adds a new change request to the list of pending requests, and returns an
- * updated document root object. `requestType` is a string indicating the type
- * of request, which may be "change", "undo", or "redo". For the "change" request
- * type, the details of the change are taken from the context object `context`.
+ * updated document root object.
+ * The details of the change are taken from the context object `context`.
  * `options` contains properties that may affect how the change is processed; in
  * particular, the `message` property of `options` is an optional human-readable
  * string describing the change.
  */
-function makeChange(doc, requestType, context, options) {
+function makeChange(doc, context, options) {
   const actor = getActorId(doc)
   if (!actor) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
@@ -98,13 +97,9 @@ function makeChange(doc, requestType, context, options) {
   }
 
   const request = {
-    requestType, actor, seq: state.seq,
-    time: Math.round(new Date().getTime() / 1000),
+    actor, seq: state.seq, time: Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
     version: state.version
-  }
-  if (options && options.undoable === false) {
-    request.undoable = false
   }
   if (context) {
     request.ops = context.ops
@@ -154,8 +149,6 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     state.deps    = patch.deps
     state.maxOp   = patch.maxOp
     state.version = patch.version
-    state.canUndo = patch.canUndo
-    state.canRedo = patch.canRedo
   }
   return updateRootObject(doc, updated, state)
 }
@@ -180,7 +173,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, maxOp: 0, requests: [], version: 0, clock: {}, deps: [], canUndo: false, canRedo: false}
+  const state = {seq: 0, maxOp: 0, requests: [], version: 0, clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
   }
@@ -204,7 +197,6 @@ function from(initialState, options) {
  * Changes a document `doc` according to actions taken by the local user.
  * `options` is an object that can contain the following properties:
  *  - `message`: an optional descriptive string that is attached to the change.
- *  - `undoable`: false if the change should not affect the undo history.
  * If `options` is a string, it is treated as `message`.
  *
  * The actual change is made within the callback function `callback`, which is
@@ -241,7 +233,7 @@ function change(doc, options, callback) {
     // If the callback didn't change anything, return the original document object unchanged
     return [doc, null]
   } else {
-    return makeChange(doc, 'change', context, options)
+    return makeChange(doc, context, options)
   }
 }
 
@@ -265,7 +257,7 @@ function emptyChange(doc, options) {
   if (!actorId) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
   }
-  return makeChange(doc, 'change', new Context(doc, actorId), options)
+  return makeChange(doc, new Context(doc, actorId), options)
 }
 
 /**
@@ -309,81 +301,6 @@ function applyPatch(doc, patch) {
     state.requests[0].before = newDoc
     return updateRootObject(doc, {}, state)
   }
-}
-
-/**
- * Returns `true` if undo is currently possible on the document `doc` (because
- * there is a local change that has not already been undone); `false` if not.
- */
-function canUndo(doc) {
-  return !!doc[STATE].canUndo && !isUndoRedoInFlight(doc)
-}
-
-/**
- * Returns `true` if one of the pending requests is an undo or redo.
- */
-function isUndoRedoInFlight(doc) {
-  return doc[STATE].requests.some(req => ['undo', 'redo'].includes(req.requestType))
-}
-
-/**
- * Creates a request to perform an undo on the document `doc`, returning a
- * two-element array `[doc, request]` where `doc` is the updated document, and
- * `request` needs to be sent to the backend. `options` is an object as
- * described in the documentation for the `change` function; it may contain a
- * `message` property with an optional change description to attach to the undo.
- * Note that the undo does not take effect immediately: only after the request
- * is sent to the backend, and the backend responds with a patch, does the
- * user-visible document update actually happen.
- */
-function undo(doc, options) {
-  if (typeof options === 'string') {
-    options = {message: options}
-  }
-  if (options !== undefined && !isObject(options)) {
-    throw new TypeError('Unsupported type of options')
-  }
-  if (!doc[STATE].canUndo) {
-    throw new Error('Cannot undo: there is nothing to be undone')
-  }
-  if (isUndoRedoInFlight(doc)) {
-    throw new Error('Can only have one undo in flight at any one time')
-  }
-  return makeChange(doc, 'undo', null, options)
-}
-
-/**
- * Returns `true` if redo is currently possible on the document `doc` (because
- * a prior action was an undo that has not already been redone); `false` if not.
- */
-function canRedo(doc) {
-  return !!doc[STATE].canRedo && !isUndoRedoInFlight(doc)
-}
-
-/**
- * Creates a request to perform a redo of a prior undo on the document `doc`,
- * returning a two-element array `[doc, request]` where `doc` is the updated
- * document, and `request` needs to be sent to the backend. `options` is an
- * object as described in the documentation for the `change` function; it may
- * contain a `message` property with an optional change description to attach
- * to the redo. Note that the redo does not take effect immediately: only
- * after the request is sent to the backend, and the backend responds with a
- * patch, does the user-visible document update actually happen.
- */
-function redo(doc, options) {
-  if (typeof options === 'string') {
-    options = {message: options}
-  }
-  if (options !== undefined && !isObject(options)) {
-    throw new TypeError('Unsupported type of options')
-  }
-  if (!doc[STATE].canRedo) {
-    throw new Error('Cannot redo: there is no prior undo')
-  }
-  if (isUndoRedoInFlight(doc)) {
-    throw new Error('Can only have one redo in flight at any one time')
-  }
-  return makeChange(doc, 'redo', null, options)
 }
 
 /**
@@ -456,7 +373,6 @@ function getBackendState(doc) {
 
 module.exports = {
   init, from, change, emptyChange, applyPatch,
-  canUndo, undo, canRedo, redo,
   getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,
   getBackendState,
   Text, Table, Counter

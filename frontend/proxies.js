@@ -1,5 +1,6 @@
 const { ROOT_ID } = require('../src/common')
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
+const { Counter } = require('./counter')
 const { Text } = require('./text')
 const { Table } = require('./table')
 

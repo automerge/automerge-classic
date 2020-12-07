@@ -1548,17 +1548,27 @@ function groupRelatedOps(change, changeCols, objectMeta) {
 
 class BackendDoc {
   constructor(buffer) {
+    this.version = 0
+    this.changes = []
+    this.changeByHash = {}
+    this.actorIds = []
+    this.heads = []
+    this.clock = {}
+
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
-      this.changesColumns = doc.changesColumns
+      for (let change of decodeChanges([buffer])) {
+        const binaryChange = encodeChange(change) // decoding and re-encoding, argh!
+        this.changes.push(binaryChange)
+        this.changeByHash[change.hash] = binaryChange
+        this.clock[change.actor] = Math.max(change.seq, this.clock[change.actor] || 0)
+      }
       this.actorIds = doc.actorIds
       this.heads = doc.heads
       this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
       this.numOps = 0 // TODO count actual number of ops in the document
       this.objectMeta = {} // TODO fill this in
     } else {
-      this.actorIds = []
-      this.heads = []
       this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
       this.numOps = 0
       this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
@@ -1586,6 +1596,9 @@ class BackendDoc {
                    op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                               : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
+    // An operation to be overwritten if it is a document operation that has at least one successor
+    const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
+
     if (!patches[objectId]) patches[objectId] = {objectId, type: docState.objectMeta[objectId].type, props: {}}
     let patch = patches[objectId]
 
@@ -1594,7 +1607,7 @@ class BackendDoc {
       if (!patch.edits) patch.edits = []
 
       // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
-      if (op[succNum] === 0) {
+      if (!isOverwritten) {
         if (!propState[elemId]) {
           patch.edits.push({action: 'insert', index: listIndex})
           propState[elemId] = {action: 'insert', visibleOps: [], hasChild: false}
@@ -1627,7 +1640,7 @@ class BackendDoc {
     // all of the visible values of the property (even the non-child-object values). Then, when we
     // subsequently process an update within that child object, we can construct the patch to
     // contain the conflicting values.
-    if (op[succNum] === 0) {
+    if (!isOverwritten) {
       if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
       propState[elemId].visibleOps.push(op)
       propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
@@ -1649,9 +1662,42 @@ class BackendDoc {
       }
     }
 
+    const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
     const key = op[keyStr] !== null ? op[keyStr] : listIndex
-    if (op[succNum] === 0 && patch.props[key]) {
-      const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+
+    // For counters, increment operations are succs to the set operation that created the counter,
+    // but in this case we want to add the values rather than overwriting them.
+    if (isOverwritten && ACTIONS[op[action]] === 'set' && (op[valLen] & 0x0f) === VALUE_TYPE.COUNTER) {
+      // This is the initial set operation that creates a counter. Initialise the counter state
+      // to contain all successors of the set operation. Only if we later find that each of these
+      // successor operations is an increment, we make the counter visible in the patch.
+      if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+      if (!propState[elemId].counterStates) propState[elemId].counterStates = {}
+      let counterStates = propState[elemId].counterStates
+      let counterState = {opId, value: decodeValue(op[valLen], op[valRaw]).value, succs: {}}
+
+      for (let i = 0; i < op[succNum]; i++) {
+        const succOp = `${op[succCtr][i]}@${docState.actorIds[op[succActor][i]]}`
+        counterStates[succOp] = counterState
+        counterState.succs[succOp] = true
+      }
+
+    } else if (ACTIONS[op[action]] === 'inc') {
+      // Incrementing a previously created counter.
+      if (!propState[elemId] || !propState[elemId].counterStates || !propState[elemId].counterStates[opId]) {
+        throw new RangeError(`increment operation ${opId} for unknown counter`)
+      }
+      let counterState = propState[elemId].counterStates[opId]
+      counterState.value += decodeValue(op[valLen], op[valRaw]).value
+      delete counterState.succs[opId]
+
+      if (Object.keys(counterState.succs).length === 0 && patch.props[key]) {
+        patch.props[key][counterState.opId] = {datatype: 'counter', value: counterState.value}
+        // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
+      }
+
+    } else if (patch.props[key] && !isOverwritten) {
+      // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
       if (ACTIONS[op[action]] === 'set') {
         patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
       } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
@@ -1698,7 +1744,7 @@ class BackendDoc {
     let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
     let docOpsConsumed = (docOp === null ? 0 : 1)
     let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
-    let changeOp = null, nextChangeOp = null, changeOps = []
+    let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
 
     // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
     // At each iteration, we either output the doc's op (possibly updated based on the change's ops)
@@ -1715,6 +1761,7 @@ class BackendDoc {
                 nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
           if (nextChangeOp !== null) {
             changeOps.push(nextChangeOp)
+            predSeen.push(new Array(nextChangeOp[predNum]))
           }
           if (opCount === 0) {
             nextChangeOp = null
@@ -1762,7 +1809,8 @@ class BackendDoc {
         // The doc operation is for the same key or list element in the same object as the change
         // ops, so we merge them. First, if any of the change ops' `pred` matches the opId of the
         // document operation, we update the document operation's `succ` accordingly.
-        for (let op of changeOps) {
+        for (let opIndex = 0; opIndex < changeOps.length; opIndex++) {
+          const op = changeOps[opIndex]
           for (let i = 0; i < op[predNum]; i++) {
             if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
               // Insert into the doc op's succ list such that the lists remains sorted
@@ -1772,9 +1820,7 @@ class BackendDoc {
               docOp[succCtr].splice(j, 0, op[idCtr])
               docOp[succActor].splice(j, 0, ops.idActorIndex)
               docOp[succNum]++
-              op[predCtr].splice(i, 1)
-              op[predActor].splice(i, 1)
-              op[predNum]--
+              predSeen[opIndex][i] = true
               break
             }
           }
@@ -1798,8 +1844,13 @@ class BackendDoc {
           // A deletion op in the change is represented in the document only by its entries in the
           // succ list of the operations it overwrites; it has no separate row in the set of ops.
           for (let i = changeOps.length - 1; i >= 0; i--) {
-            if (ACTIONS[changeOps[i][action]] === 'del' && changeOps[i][predNum] === 0) {
+            let deleted = true
+            for (let j = 0; j < changeOps[i][predNum]; j++) {
+              if (!predSeen[i][j]) deleted = false
+            }
+            if (ACTIONS[changeOps[i][action]] === 'del' && deleted) {
               changeOps.splice(i, 1)
+              predSeen.splice(i, 1)
             }
           }
 
@@ -1833,25 +1884,30 @@ class BackendDoc {
 
       if (takeChangeOps > 0) {
         for (let i = 0; i < takeChangeOps; i++) {
-          const op = changeOps[i]
+          let op = changeOps[i]
           // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
           // the change op's own opId, so we must have seen them already)
-          if (op[predNum] > 0) {
-            throw new RangeError(`no matching operation for pred: ${op[predCtr][0]}@${docState.actorIds[op[predActor][0]]}`)
+          for (let j = 0; j < op[predNum]; j++) {
+            if (!predSeen[i][j]) {
+              throw new RangeError(`no matching operation for pred: ${op[predCtr][j]}@${docState.actorIds[op[predActor][j]]}`)
+            }
           }
           this.updatePatchProperty(patches, ops, op, docState, propState, listIndex)
           appendOperation(outCols, changeCols, op)
           if (op[insert]) {
             elemVisible = false
             listIndex++
+          } else {
+            elemVisible = true
           }
-          if (op[succNum] === 0) elemVisible = true
         }
 
         if (takeChangeOps === changeOps.length) {
           changeOps.length = 0
+          predSeen.length = 0
         } else {
           changeOps.splice(0, takeChangeOps)
+          predSeen.splice(0, takeChangeOps)
         }
         opsAppended += takeChangeOps
       }
@@ -1941,9 +1997,7 @@ class BackendDoc {
    * document (including the new change's actorId), and `actorTable` is an array for translating
    * the change's actor indexes into the document's actor indexes.
    */
-  getActorTable(change) {
-    // TODO check if change is causally ready, enqueue it if not (cf. OpSet.applyQueuedOps)
-    let actorIds = this.actorIds
+  getActorTable(actorIds, change) {
     if (actorIds.indexOf(change.actorIds[0]) < 0) {
       if (change.seq !== 1) {
         throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
@@ -1966,7 +2020,7 @@ class BackendDoc {
    * Finalises the patch for a change. `patches` is a map from objectIds to patch for that
    * particular object, `objectIds` is the array of IDs of objects that are created or updated in the
    * change, and `docState` is an object containing various bits of document state, including
-   * `objectMeta`, a  map from objectIds to metadata about that object (such as its parent in the
+   * `objectMeta`, a map from objectIds to metadata about that object (such as its parent in the
    * document tree). Mutates `patches` such that child objects are linked into their parent object,
    * all the way to the root object.
    */
@@ -2021,34 +2075,59 @@ class BackendDoc {
    * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
    * object is not modified.
    */
-  applyChange(changeBuffer) {
-    const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
-    const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
-    const allCols = this.getAllColumns(changeCols)
-    const {actorIds, actorTable} = this.getActorTable(change)
-    const actorIndex = actorIds.indexOf(change.actorIds[0])
-    const objectMeta = Object.assign({}, this.objectMeta)
-    const {opSequences, objectIds} = groupRelatedOps(change, changeCols, objectMeta)
-
+  applyChanges(changeBuffers) {
     let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
     let docState = {
-      actorIds, actorTable, allCols, opsCols: this.docColumns, numOps: this.numOps,
-      objectMeta, lastIndex: {}
+      actorIds: this.actorIds, opsCols: this.docColumns, numOps: this.numOps,
+      objectMeta: Object.assign({}, this.objectMeta), lastIndex: {}
     }
-    for (let col of changeCols) col.decoder.reset()
-    for (let op of opSequences) {
-      op.idActorIndex = actorIndex
-      this.applyOps(patches, op, changeCols, docState)
+    let allObjectIds = {}, changeByHash = Object.assign({}, this.changeByHash)
+    let heads = {}, clock = Object.assign({}, this.clock)
+    for (let head of this.heads) heads[head] = true
+
+    for (let changeBuffer of changeBuffers) {
+      const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+      for (let dep of change.deps) {
+        // TODO enqueue changes that are not yet causally ready rather than throwing an exception
+        if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
+        delete heads[dep]
+      }
+      changeByHash[change.hash] = changeBuffer
+      heads[change.hash] = true
+      const expectedSeq = (clock[change.actor] || 0) + 1
+      if (change.seq !== expectedSeq) {
+        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+      }
+      clock[change.actor] = change.seq
+
+      const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+      docState.allCols = this.getAllColumns(changeCols)
+      Object.assign(docState, this.getActorTable(docState.actorIds, change))
+      const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
+      const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
+      for (let id of objectIds) allObjectIds[id] = true
+
+      for (let col of changeCols) col.decoder.reset()
+      for (let op of opSequences) {
+        op.idActorIndex = actorIndex
+        this.applyOps(patches, op, changeCols, docState)
+      }
     }
-    this.setupPatches(patches, objectIds, docState)
+
+    this.setupPatches(patches, Object.keys(allObjectIds), docState)
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
-    // the document is not modified (making `applyChange` atomic in the ACID sense).
+    // the document is not modified (making `applyChanges` atomic in the ACID sense).
+    this.version += 1
+    this.changes    = this.changes.concat(changeBuffers)
+    this.changeByHash = changeByHash
     this.actorIds   = docState.actorIds
+    this.heads      = Object.keys(heads).sort()
+    this.clock      = clock
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
     this.objectMeta = docState.objectMeta
-    return patches[ROOT_ID]
+    return {version: this.version, clock, deps: this.heads, diffs: patches[ROOT_ID]}
   }
 }
 

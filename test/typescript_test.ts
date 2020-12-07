@@ -230,8 +230,6 @@ describe('TypeScript support', () => {
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
       assert.strictEqual(patch1.seq, 1)
       assert.strictEqual(patch1.version, 1)
-      assert.strictEqual(patch1.canUndo, true)
-      assert.strictEqual(patch1.canRedo, false)
       assert.strictEqual(patch1.diffs.objectId, ROOT_ID)
       assert.strictEqual(patch1.diffs.type, 'map')
       assert.deepStrictEqual(Object.keys(patch1.diffs.props), ['number'])
@@ -283,59 +281,6 @@ describe('TypeScript support', () => {
       s2 = Automerge.change(s2, doc => doc.birds.push('chaffinch'))
       let s3 = Automerge.merge(s1, s2)
       assert.deepStrictEqual(s3.birds, ['greenfinch', 'goldfinch', 'chaffinch'])
-    })
-  })
-
-  describe('undo and redo', () => {
-    it('should undo field assignment', () => {
-      let s1 = Automerge.change(Automerge.init<NumberBox>(), doc => (doc.number = 3))
-      s1 = Automerge.change(s1, doc => (doc.number = 4))
-      assert.strictEqual(s1.number, 4)
-      assert.strictEqual(Automerge.canUndo(s1), true)
-      s1 = Automerge.undo(s1)
-      assert.strictEqual(s1.number, 3)
-      assert.strictEqual(Automerge.canUndo(s1), true)
-      s1 = Automerge.undo(s1)
-      assert.strictEqual(s1.number, undefined)
-      assert.strictEqual(Automerge.canUndo(s1), false)
-    })
-
-    it('should redo previous undos', () => {
-      let s1 = Automerge.change(Automerge.init<NumberBox>(), doc => (doc.number = 3))
-      s1 = Automerge.change(s1, doc => (doc.number = 4))
-      assert.strictEqual(Automerge.canRedo(s1), false)
-      s1 = Automerge.undo(s1)
-      assert.strictEqual(s1.number, 3)
-      assert.strictEqual(Automerge.canRedo(s1), true)
-      s1 = Automerge.redo(s1)
-      assert.strictEqual(s1.number, 4)
-      assert.strictEqual(Automerge.canRedo(s1), false)
-    })
-
-    it('should allow an optional message on undos', () => {
-      let s1 = Automerge.change(Automerge.init<NumberBox>(), doc => (doc.number = 3))
-      s1 = Automerge.change(s1, doc => (doc.number = 4))
-      s1 = Automerge.undo(s1, 'go back to 3')
-      assert.strictEqual(Automerge.getHistory(s1).length, 3)
-      assert.strictEqual(Automerge.getHistory(s1)[2].change.message, 'go back to 3')
-      assert.deepStrictEqual(s1, { number: 3 })
-    })
-
-    it.skip('should generate undo requests in the frontend', () => {
-      const doc0 = Frontend.init<NumberBox>(),
-        b0 = Backend.init()
-      assert.strictEqual(Frontend.canUndo(doc0), false)
-      const [doc1, req1] = Frontend.change(doc0, doc => (doc.number = 1))
-      const [b1, patch1] = Backend.applyLocalChange(b0, req1)
-      const doc1a = Frontend.applyPatch(doc1, patch1)
-      assert.strictEqual(Frontend.canUndo(doc1a), true)
-      const [doc2, req2] = Frontend.undo(doc1a)
-      assert.strictEqual(req2.requestType, 'undo')
-      assert.strictEqual(req2.actor, Frontend.getActorId(doc0))
-      assert.strictEqual(req2.seq, 2)
-      const [b2, patch2] = Backend.applyLocalChange(b1, req2)
-      const doc2a = Frontend.applyPatch(doc2, patch2)
-      assert.deepStrictEqual(doc2a, {})
     })
   })
 
