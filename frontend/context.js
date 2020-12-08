@@ -261,7 +261,7 @@ class Context {
       this.__addOp({action: 'makeMap', obj, key: elemid || key, insert, pred})
       let props = {}
       for (let nested of Object.keys(value)) {
-        const opId = this.nextOpId();
+        const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, nested, value[nested], false, [])
         props[nested] = {[opId]: valuePatch}
       }
@@ -328,7 +328,7 @@ class Context {
     if (object[key] !== value || Object.keys(object[CONFLICTS][key] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
         const pred = getPred(object,key) 
-        const opId = this.nextOpId();
+        const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, key, value, false, pred)
         subpatch.props[key] = {[opId]: valuePatch}
       })
@@ -364,7 +364,7 @@ class Context {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
 
-    let elemId = indexToElemId(list, index, true);
+    let elemId = indexToElemId(list, index, true)
     for (let offset = 0; offset < values.length; offset++) {
       let nextElemId = this.nextOpId()
       const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
@@ -396,7 +396,7 @@ class Context {
     if (list[index] !== value || Object.keys(list[CONFLICTS][index] || {}).length > 1 || value === undefined) {
       this.applyAtPath(path, subpatch => {
         const pred = getPred(list,index)
-        const opId = this.nextOpId();
+        const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, index, value, false, pred, list[ELEMIDS][index])
         subpatch.props[index] = {[opId]: valuePatch}
       })
@@ -511,7 +511,7 @@ class Context {
 
     // TODO what if there is a conflicting value on the same key as the counter?
     const value = object[key].value + delta
-    const opId = this.nextOpId();
+    const opId = this.nextOpId()
     this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false})
     const pred = getPred(object,key) 
     const resolvedKey = this.resolveKey(objectId, key)

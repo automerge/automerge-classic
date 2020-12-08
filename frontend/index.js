@@ -8,11 +8,6 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
 
-function inspect(val) {
-  var util = require('util');
-  console.log(util.inspect(val, false,10,true));
-}
-
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
  * compactly in binary form.
@@ -110,6 +105,7 @@ function makeChange(doc, context, options) {
 
   if (doc[OPTIONS].backend) {
     const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request, change)
+//    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange2(state.backendState, change)
     state.backendState = backendState
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
     // context invoking interpretPatch as soon as any change is made, and the second time here
@@ -137,9 +133,6 @@ function makeChange(doc, context, options) {
  * change from the frontend.
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
-  //console.log("PATCH");
-  //inspect(patch)
-  //console.log("DOC",doc);
   const actor = getActorId(doc)
   const updated = {}
   interpretPatch(patch.diffs, doc, updated)

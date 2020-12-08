@@ -249,9 +249,9 @@ function applyLocalChange(backend, request, incomingChange) {
   fillInPred(versionObj.get('opSet'), change)
 
   if (request.requestType === 'change' && incomingChange) {
-    change.deps.sort();
-    incomingChange.deps.sort();
-    assert.deepStrictEqual(change, incomingChange);
+    change.deps.sort()
+    incomingChange.deps.sort()
+    assert.deepStrictEqual(change, incomingChange)
   }
 
   const binaryChange = encodeChange(change)
