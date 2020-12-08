@@ -66,19 +66,18 @@ describe('Automerge', () => {
       s1 = Automerge.init()
     })
 
-    it('BASIC TEST', () => {
-      s2 = Automerge.change(s1, (doc) => {
-        doc.foo = [ 1,2,3,4 ]
-      })
-      s3 = Automerge.change(s2, (doc) => {
-        doc.foo.splice(1,2,'a','b')
-      })
-    })
-
     it('should not mutate objects', () => {
       s2 = Automerge.change(s1, doc => doc.foo = 'bar')
       assert.strictEqual(s1.foo, undefined)
       assert.strictEqual(s2.foo, 'bar')
+    })
+
+    it('changes should be retrievable', () => {
+      const change1 = Automerge.getLastLocalChange(s1)
+      s2 = Automerge.change(s1, doc => doc.foo = 'bar')
+      const change2 = Automerge.getLastLocalChange(s1)
+//      assert.strictEqual(change1, null)
+//      assert.strictEqual(decodeChange(change2), {})
     })
 
     it('should not register any conflicts on repeated assignment', () => {

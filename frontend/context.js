@@ -29,8 +29,27 @@ class Context {
     this.ops.push(operation)
   }
 
-  __addOp(operation) {
-    this.__ops.push(operation)
+  __addOp(op) {
+
+    /*
+    // Detect duplicate assignments to the same object and key
+    if (['set', 'del', 'link', 'inc'].includes(op.action) && !op.insert) {
+      if (!assignments[op.obj]) {
+        assignments[op.obj] = {[op.key]: op}
+      } else if (!assignments[op.obj][op.key]) {
+        assignments[op.obj][op.key] = op
+      } else if (op.action === 'inc') {
+        assignments[op.obj][op.key].value += op.value
+        continue
+      } else {
+        assignments[op.obj][op.key].action = op.action
+        assignments[op.obj][op.key].value = op.value
+        continue
+      }
+    }
+    */
+
+    this.__ops.push(op)
   }
 
   nextOpId() {

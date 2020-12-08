@@ -133,7 +133,7 @@ module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend,
+  Frontend, setDefaultBackend, getLastLocalChange,
   get Backend() { return backend }
 }
 

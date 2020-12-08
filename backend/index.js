@@ -209,6 +209,21 @@ function applyChanges(backend, changes) {
  * where `backend` is the updated node state, and `patch` confirms the
  * modifications to the document objects.
  */
+function applyLocalChange2(backend, change) {
+  const state = backendState(backend)
+  if (change.seq > 1 && change.deps.length === 0) {
+    const lastHash =  state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
+    if (!lastHash) {
+      throw new RangeError(`Cannot find hash of localChange before seq=${change.seq}`)
+    }
+    change.deps = [ lastHash ]
+  }
+  const binaryChange = encodeChange(change)
+  const request = { actor: change.actor, seq: change.seq }
+  const [state2, patch] = apply(state, [binaryChange], request, true)
+  return [{ state: state2 }, patch, binaryChange]
+}
+
 function applyLocalChange(backend, request, incomingChange) {
   let state = backendState(backend)
   if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
@@ -262,7 +277,7 @@ function applyLocalChange(backend, request, incomingChange) {
       })
   })
   backend.frozen = true
-  return [{state: state3}, patch]
+  return [{state: state3}, patch, binaryChange]
 }
 
 /**
@@ -321,6 +336,6 @@ function getMissingDeps(backend) {
 }
 
 module.exports = {
-  init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
+  init, clone, free, applyChanges, applyLocalChange, applyLocalChange2, save, load, loadChanges, getPatch,
   getChanges, getMissingDeps
 }
