@@ -102,10 +102,10 @@ declare module 'automerge' {
 
   namespace Frontend {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
-    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Request]
-    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Request]
-    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
-    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Request]
+    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
+    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
+    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
@@ -118,6 +118,7 @@ declare module 'automerge' {
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
+    function applyLocalChange2(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
@@ -167,6 +168,7 @@ declare module 'automerge' {
   interface Change {
     message: string
     actor: string
+    time: number
     seq: number
     deps: Hash[]
     ops: Op[]

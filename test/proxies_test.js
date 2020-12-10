@@ -377,7 +377,7 @@ describe('Automerge proxy API', () => {
     })
 
     describe('should support standard mutation methods', () => {
-      it.skip('fill()', () => {
+      it('fill()', () => {
         root = Automerge.change(root, doc => doc.list.fill('a'))
         assert.deepStrictEqual(root.list, ['a', 'a', 'a'])
         root = Automerge.change(root, doc => doc.list.fill('c', 1).fill('b', 1, 2))

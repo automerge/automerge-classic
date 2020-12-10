@@ -6,6 +6,11 @@ const { Counter, getWriteableCounter } = require('./counter')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
+function inspect(d) {
+  const util = require('util');
+  console.log(util.inspect(d,2,null,2))
+}
+
 /**
  * An instance of this class is passed to `rootObjectProxy()`. The methods are
  * called by proxy object mutation functions to query the current object state
@@ -30,25 +35,6 @@ class Context {
   }
 
   __addOp(op) {
-
-    /*
-    // Detect duplicate assignments to the same object and key
-    if (['set', 'del', 'link', 'inc'].includes(op.action) && !op.insert) {
-      if (!assignments[op.obj]) {
-        assignments[op.obj] = {[op.key]: op}
-      } else if (!assignments[op.obj][op.key]) {
-        assignments[op.obj][op.key] = op
-      } else if (op.action === 'inc') {
-        assignments[op.obj][op.key].value += op.value
-        continue
-      } else {
-        assignments[op.obj][op.key].action = op.action
-        assignments[op.obj][op.key].value = op.value
-        continue
-      }
-    }
-    */
-
     this.__ops.push(op)
   }
 

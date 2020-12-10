@@ -128,7 +128,7 @@ describe('Automerge', () => {
         assert.strictEqual(s2.x, undefined)
       })
 
-      it.skip('should allow repeated reading and writing of values', () => {
+      it('should allow repeated reading and writing of values', () => {
         s2 = Automerge.change(s1, 'change message', doc => {
           doc.value = 'a'
           assert.strictEqual(doc.value, 'a')
@@ -140,7 +140,7 @@ describe('Automerge', () => {
         assert.deepStrictEqual(s2, {value: 'c'})
       })
 
-      it.skip('should not record conflicts when writing the same field several times within one change', () => {
+      it('should not record conflicts when writing the same field several times within one change', () => {
         s1 = Automerge.change(s1, 'change message', doc => {
           doc.value = 'a'
           doc.value = 'b'
@@ -393,8 +393,7 @@ describe('Automerge', () => {
         assert.strictEqual(s1.textStyle.fontSize, 12)
       })
 
-      // FIXME multi assignment 
-      it.skip('should handle assignment of multiple nested properties', () => {
+      it('should handle assignment of multiple nested properties', () => {
         s1 = Automerge.change(s1, doc => {
           doc['textStyle'] = {bold: false, fontSize: 12}
           Object.assign(doc.textStyle, {typeface: 'Optima', fontSize: 14})
@@ -662,40 +661,6 @@ describe('Automerge', () => {
     })
 
     describe('counters', () => {
-      it.skip('should coalesce assignments and increments', () => {
-        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {})
-        const s2 = Automerge.change(s1, doc => {
-          doc.birds.wrens = new Automerge.Counter(1)
-          doc.birds.wrens.increment(2)
-        })
-        assert.deepStrictEqual(s1, {birds: {}})
-        assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
-        const changes = Automerge.getAllChanges(s2).map(decodeChange)
-        assert.deepStrictEqual(changes[1], {
-          hash: changes[1].hash, actor: Automerge.getActorId(s2), seq: 2, startOp: 2,
-          time: changes[1].time, message: '', deps: [changes[0].hash], ops: [
-            {obj: Automerge.getObjectId(s2.birds), action: 'set', key: 'wrens', insert: false, value: 3, datatype: 'counter', pred: []}
-          ]
-        })
-      })
-
-      it.skip('should coalesce multiple increments', () => {
-        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter()})
-        const s2 = Automerge.change(s1, doc => {
-          doc.birds.wrens.increment(2)
-          doc.birds.wrens.decrement()
-          doc.birds.wrens.increment(3)
-        })
-        assert.deepStrictEqual(s1, {birds: {wrens: new Automerge.Counter(0)}})
-        assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(4)}})
-        const changes = Automerge.getAllChanges(s2).map(decodeChange), actor = Automerge.getActorId(s2)
-        assert.deepStrictEqual(changes[1], {
-          hash: changes[1].hash, actor, seq: 2, startOp: 3, time: changes[1].time,
-          message: '', deps: [changes[0].hash], ops: [
-            {obj: Automerge.getObjectId(s2.birds), action: 'inc', key: 'wrens', insert: false, value: 4, pred: [`2@${actor}`]}
-          ]
-        })
-      })
 
       it.skip('should allow deleting counters from maps', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})

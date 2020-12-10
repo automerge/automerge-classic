@@ -194,14 +194,14 @@ describe('TypeScript support', () => {
 
     it('should allow changes in the frontend', () => {
       const s0 = Frontend.init<BirdList>()
-      const [s1, req1] = Frontend.change(s0, doc => (doc.birds = ['goldfinch']))
-      const [s2, req2] = Frontend.change(s1, doc => doc.birds.push('chaffinch'))
+      const [s1, change1] = Frontend.change(s0, doc => (doc.birds = ['goldfinch']))
+      const [s2, change2] = Frontend.change(s1, doc => doc.birds.push('chaffinch'))
       assert.strictEqual(s2.birds[1], 'chaffinch')
       assert.deepStrictEqual(s2, { birds: ['goldfinch', 'chaffinch'] })
-      assert.strictEqual(req2.actor, Frontend.getActorId(s0))
-      assert.strictEqual(req2.seq, 2)
-      assert.strictEqual(req2.time > 0, true)
-      assert.strictEqual(req2.message, '')
+      assert.strictEqual(change2.actor, Frontend.getActorId(s0))
+      assert.strictEqual(change2.seq, 2)
+      assert.strictEqual(change2.time > 0, true)
+      assert.strictEqual(change2.message, '')
     })
 
     it('should accept a message in the frontend', () => {
@@ -220,11 +220,11 @@ describe('TypeScript support', () => {
       assert.strictEqual(req1.ops.length, 0)
     })
 
-    it.skip('should work with split frontend and backend', () => {
+    it('should work with split frontend and backend', () => {
       const s0 = Frontend.init<NumberBox>(),
         b0 = Backend.init()
-      const [s1, req1] = Frontend.change(s0, doc => (doc.number = 1))
-      const [b1, patch1] = Backend.applyLocalChange(b0, req1)
+      const [s1, change1] = Frontend.change(s0, doc => (doc.number = 1))
+      const [b1, patch1] = Backend.applyLocalChange2(b0, change1)
       const s2 = Frontend.applyPatch(s1, patch1)
       assert.strictEqual(s2.number, 1)
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
@@ -494,31 +494,6 @@ describe('TypeScript support', () => {
         doc.counts[0].increment(2)
       })
       assert.equal(doc2.counts[0].value, 3)
-    })
-
-    it.skip('should coalesce assignments and increments', () => {
-      const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
-        doc.birds = {}
-      })
-      const doc2 = Automerge.change(doc1, doc => {
-        doc.birds.wrens = new Counter(1)
-        doc.birds.wrens.increment(2)
-      })
-      assert.deepStrictEqual(doc1, { birds: {} })
-      assert.deepStrictEqual(doc2, { birds: { wrens: new Counter(3) } })
-    })
-
-    it.skip('should coalesce multiple increments', () => {
-      const doc1 = Automerge.change(Automerge.init<BirdCounterMap>(), doc => {
-        doc.birds = { wrens: new Counter(0) }
-      })
-      const doc2 = Automerge.change(doc1, doc => {
-        doc.birds.wrens.increment(2)
-        doc.birds.wrens.decrement(1)
-        doc.birds.wrens.increment(3)
-      })
-      assert.equal(doc1.birds.wrens, 0)
-      assert.equal(doc2.birds.wrens, 4)
     })
 
     describe('counter as numeric primitive', () => {

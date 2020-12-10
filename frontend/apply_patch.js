@@ -4,6 +4,11 @@ const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
+function inspect(d) {
+  const util = require('util')
+  console.log(util.inspect(d,2,null,2))
+}
+
 /**
  * Reconstructs the value from the patch object `patch`.
  */
