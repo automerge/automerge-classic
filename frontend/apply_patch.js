@@ -213,12 +213,8 @@ function cloneListObject(originalList, objectId) {
 
 function cloneTextObject(origionalText, objectId) {
   const elems = origionalText && origionalText.elems ? origionalText.elems.slice() : [] // slice() makes a shallow clone
-  const conflicts = (origionalText && origionalText[CONFLICTS]) ? origionalText[CONFLICTS].slice() : []
-  const elemids = (origionalText && origionalText[ELEMIDS]) ? origionalText[ELEMIDS].slice() : []
   const text = { elems }
   Object.defineProperty(text, OBJECT_ID, {value: objectId})
-  Object.defineProperty(text, CONFLICTS, {value: conflicts})
-  Object.defineProperty(text, ELEMIDS,   {value: elemids})
   return text
 }
 
@@ -265,40 +261,34 @@ function updateTextObject(patch, obj, updated) {
   }
 
   const props = patch.props
-  const text = updated[objectId], conflicts = text[CONFLICTS], elemids = text[ELEMIDS]
+  const text = updated[objectId]
   const elems = text.elems
 
   iterateEdits(patch.edits,
     (index, insertions) => { // insertion
-      const blanks = []
-      for (let i = 0; i < insertions; i++) blanks.push({})
+      const blanks = new Array(insertions).fill().map(Object)
       elems.splice(index, 0, ...blanks)
-      conflicts.splice(index, 0, ...(new Array(insertions)))
-      elemids.splice(index, 0, ...(new Array(insertions)))
     },
     (index, deletions) => { // deletion
       elems.splice(index, deletions)
-      conflicts.splice(index, deletions)
-      elemids.splice(index, deletions)
     }
   )
 
   for (let key of Object.keys(patch.props || {})) {
-    const opId = Object.keys(patch.props[key]).sort(lamportCompare).reverse()[0]
+    const pred = Object.keys(patch.props[key])
+    const opId = pred.sort(lamportCompare).reverse()[0]
     if (!opId) throw new RangeError(`No default value at index ${key}`)
-
-    if (elemids[key] === undefined) {
-      elemids[key] = opId
-    }
 
     const oldValue = (elems[key].opId === opId) ? elems[key].value : undefined
     elems[key].value = getValue(patch.props[key][opId], oldValue, updated)
     elems[key].opId = opId
-
-    conflicts[key] = patch.props[key]
+    elems[key].pred = pred
+    if (elems[key].id === undefined) {
+      elems[key].id = opId
+    }
   }
 
-  updated[objectId] = instantiateText(objectId, elems, conflicts, elemids)
+  updated[objectId] = instantiateText(objectId, elems)
   return updated[objectId]
 }
 

@@ -1,4 +1,4 @@
-const { OBJECT_ID, CONFLICTS, ELEMIDS } = require('./constants')
+const { OBJECT_ID } = require('./constants')
 
 class Text {
   constructor (text) {
@@ -161,11 +161,9 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
   }
 }
 
-function instantiateText(objectId, elems, conflicts, elemids) {
+function instantiateText(objectId, elems) {
   const instance = Object.create(Text.prototype)
   instance[OBJECT_ID] = objectId
-  instance[ELEMIDS] = elemids
-  instance[CONFLICTS] = conflicts
   instance.elems = elems
   return instance
 }

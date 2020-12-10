@@ -174,7 +174,7 @@ class Context {
       return key
     } else {
       const list = this.getObject(objectId)
-      return indexToElemId(list, key, false)
+      return getEid(list, key, false)
     }
   }
 
@@ -350,7 +350,7 @@ class Context {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
 
-    let elemId = indexToElemId(list, index, true)
+    let elemId = getEid(list, index, true)
     for (let offset = 0; offset < values.length; offset++) {
       let nextElemId = this.nextOpId()
       const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
@@ -383,7 +383,7 @@ class Context {
       this.applyAtPath(path, subpatch => {
         const pred = getPred(list,index)
         const opId = this.nextOpId()
-        const valuePatch = this.setValue(objectId, index, value, false, pred, list[ELEMIDS][index])
+        const valuePatch = this.setValue(objectId, index, value, false, pred, getEid(list,index))
         subpatch.props[index] = {[opId]: valuePatch}
       })
     }
@@ -425,10 +425,8 @@ class Context {
           // future, hopefully the above description will be enough to get you started. Good luck!
           throw new TypeError('Unsupported operation: deleting a counter from a list')
         }
-      }
-      for (let i = 0; i < deletions; i++) {
-        // FIXME - loop twice?
-        const elemId = list[ELEMIDS] ? list[ELEMIDS][start + i] : null // FIXME for tests // +1?
+
+        const elemId = getEid(list, start + i)
         const pred = getPred(list,start + i)
         this.addOp({action: 'del', obj: objectId, key: start, insert: false})
         this.__addOp({action: 'del', obj: objectId, key: elemId, insert: false, pred })
@@ -512,7 +510,7 @@ function getPred(object,key) {
     if (object instanceof Table) {
       return [key]
     } else if (object instanceof Text) {
-      return [ object.elems[key].opId  ]
+      return object.elems[key].pred
     } else if (object[CONFLICTS]) {
       return object[CONFLICTS][key] ? Object.keys(object[CONFLICTS][key]) : []
     } else {
@@ -520,14 +518,15 @@ function getPred(object,key) {
     }
 }
 
-function indexToElemId(list, index, insert) {
+function getEid(list, index, insert) {
+  insert = insert || false
   if (insert) {
     if (index === 0) return "_head"
     if (list[ELEMIDS]) return list[ELEMIDS][index - 1]
-    if (list.elems) return list.elems[index - 1].elemId
+    if (list.elems) return list.elems[index - 1].id
   } else {
     if (list[ELEMIDS]) return list[ELEMIDS][index]
-    if (list.elems) return list.elems[index].elemId
+    if (list.elems) return list.elems[index].id
   }
   return "foobar"
 //  throw new RangeError(`Cannot find elemid at index ${index} for list`)
