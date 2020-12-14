@@ -94,6 +94,9 @@ describe('Automerge.Table', () => {
     })
 
     it.skip('should save and reload', () => {
+      // FIXME - the bug is in parseAllOpIds()
+      // maps and tables with a string key that has an `@` gets
+      // improperly encoded as an opId
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2.books.byId(rowId), rowWithId)
     })
