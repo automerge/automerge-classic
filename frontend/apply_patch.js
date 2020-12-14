@@ -211,8 +211,8 @@ function cloneListObject(originalList, objectId) {
   return list
 }
 
-function cloneTextObject(origionalText, objectId) {
-  const elems = origionalText && origionalText.elems ? origionalText.elems.slice() : [] // slice() makes a shallow clone
+function cloneTextObject(originalText, objectId) {
+  const elems = originalText && originalText.elems ? originalText.elems.slice() : [] // slice() makes a shallow clone
   const text = { elems }
   Object.defineProperty(text, OBJECT_ID, {value: objectId})
   return text
