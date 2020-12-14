@@ -7,7 +7,7 @@ const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 function inspect(d) {
-  const util = require('util');
+  const util = require('util')
   console.log(util.inspect(d,2,null,2))
 }
 

@@ -6,10 +6,10 @@ const STATE     = Symbol('_state')     // object containing metadata about curre
 // Properties of all Automerge objects
 const OBJECT_ID = Symbol('_objectId')  // the object ID of the current object (string)
 const CONFLICTS = Symbol('_conflicts') // map or list (depending on object type) of conflicts
-const ELEMIDS   = Symbol('_elemIds')   // list of elemids
 const CHANGE    = Symbol('_change')    // the context object on proxy objects used in change callback
-const LOCAL     = Symbol('_local')
+const ELEMIDS   = Symbol('_elemIds')   // elemids tracked for lists - needed for local change generation
+const LOCAL     = Symbol('_local')     // LOCAL is for caching the last binary change genrated by the backend
 
 module.exports = {
-  OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, LOCAL
+  OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEMIDS, LOCAL
 }
