@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, LOCAL } = require('./constants')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -43,7 +43,6 @@ function updateRootObject(doc, updated, state) {
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
   Object.defineProperty(newDoc, STATE,    {value: state})
-  Object.defineProperty(newDoc, LOCAL,    {value: null})
 
   if (doc[OPTIONS].freeze) {
     for (let objectId of Object.keys(updated)) {
@@ -112,12 +111,13 @@ function makeChange(doc, context, options) {
     const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request, change)
 //    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange2(state.backendState, change)
     state.backendState = backendState
+    state.lastLocalChange = binaryChange
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
     // context invoking interpretPatch as soon as any change is made, and the second time here
     // (after a round-trip through the backend). This is perhaps more robust, as changes only take
     // effect in the form processed by the backend, but the downside is a performance cost.
     // Should we change this?
-    return [applyPatchToDoc(doc, patch, state, true), change, binaryChange]
+    return [applyPatchToDoc(doc, patch, state, true), change]
 
   } else {
     if (!context) context = new Context(doc, actor)
@@ -126,8 +126,12 @@ function makeChange(doc, context, options) {
     state.requests = state.requests.concat([queuedRequest])
     state.maxOp = state.maxOp + change.ops.length
     state.deps = []
-    return [updateRootObject(doc, context.updated, state), change, null]
+    return [updateRootObject(doc, context.updated, state), change]
   }
+}
+
+function getLastLocalChange(doc) {
+  doc[STATE] ? doc[STATE].lastLocalChange : null
 }
 
 /**
@@ -178,13 +182,13 @@ function init(options) {
   const state = {seq: 0, maxOp: 0, requests: [], version: 0, clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
+    state.lastLocalChange = null
   }
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
   Object.defineProperty(root, STATE,     {value: Object.freeze(state)})
-  Object.defineProperty(root, LOCAL,     {value: null})
   return Object.freeze(root)
 }
 
@@ -376,7 +380,7 @@ function getBackendState(doc) {
 
 module.exports = {
   init, from, change, emptyChange, applyPatch,
-  getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,
+  getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts, getLastLocalChange,
   getBackendState,
   Text, Table, Counter
 }

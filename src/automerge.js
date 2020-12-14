@@ -2,7 +2,6 @@ const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
-const { LOCAL } = require('../frontend/constants')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
 ///// Automerge.* API
@@ -28,18 +27,16 @@ function from(initialState, options) {
 
 function change(doc, options, callback) {
   const [newDoc, change] = Frontend.change(doc, options, callback)
-  newDoc[LOCAL] = change
   return newDoc
 }
 
 function emptyChange(doc, options) {
   const [newDoc, change] = Frontend.emptyChange(doc, options)
-  newDoc[LOCAL] = change
   return newDoc
 }
 
 function getLastLocalChange(doc) {
-  return doc[LOCAL]
+  return Frontend.getLastLocalChange(doc)
 }
 
 function clone(doc) {
