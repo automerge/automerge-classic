@@ -130,7 +130,7 @@ describe('Automerge.Backend', () => {
         version: 1, clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {value: 'chaffinch'}}}
         }}}}
       })
@@ -194,7 +194,7 @@ describe('Automerge.Backend', () => {
         version: 2, clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0}, {action: 'remove', index: 0}
+            {action: 'insert', index: 0, elemId: `2@${actor}`}, {action: 'remove', index: 0}
           ], props: {}
         }}}}
       })
@@ -252,7 +252,7 @@ describe('Automerge.Backend', () => {
         version: 1, clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2,
         diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}}
         }}}}
       })
@@ -433,7 +433,7 @@ describe('Automerge.Backend', () => {
         deps: [changes[1].hash], maxOp: 3,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
           birds: {['1@111111']: {objectId: '1@111111', type: 'list',
-            edits: [{action: 'insert', index: 0}, {action: 'remove', index: 0}],
+            edits: [{action: 'insert', index: 0, elemId: '2@111111'}, {action: 'remove', index: 0}],
             props: {}
           }}
         }}
@@ -552,7 +552,7 @@ describe('Automerge.Backend', () => {
         version: 0, clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {value: 'chaffinch'}}}
         }}}}
       })
@@ -575,7 +575,7 @@ describe('Automerge.Backend', () => {
         version: 0, clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 6,
         diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}, {action: 'insert', index: 1}],
+          edits: [{action: 'insert', index: 0, elemId: `5@${actor}`}, {action: 'insert', index: 1, elemId: `3@${actor}`}],
           props: {0: {[`5@${actor}`]: {value: 'greenfinch'}}, 1: {[`6@${actor}`]: {value: 'goldfinches!!'}}}
         }}}}
       })
@@ -594,7 +594,7 @@ describe('Automerge.Backend', () => {
         version: 0, clock: {[actor]: 1}, deps: [hash(change)], maxOp: 4,
         diffs: {objectId: ROOT_ID, type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {
             objectId: `2@${actor}`, type: 'map', props: {
               title: {[`3@${actor}`]: {value: 'water plants'}},
@@ -630,7 +630,7 @@ describe('Automerge.Backend', () => {
         version: 0, clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2,
         diffs: {objectId: ROOT_ID, type: 'map', props: {list: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}}
         }}}}
       })

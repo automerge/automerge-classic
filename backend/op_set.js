@@ -102,7 +102,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    if (patch) patch.edits.push({action: 'insert', index})
+    if (patch) patch.edits.push({action: 'insert', index, elemId})
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -593,7 +593,7 @@ function constructList(opSet, objectId, type) {
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {
-      patch.edits.push({action: 'insert', index})
+      patch.edits.push({action: 'insert', index, elemId})
       patch.props[index] = {}
       for (let op of fieldOps) {
         patch.props[index][op.get('opId')] = constructField(opSet, op)

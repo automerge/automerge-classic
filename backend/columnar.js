@@ -4,6 +4,12 @@ const {
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
 } = require('./encoding')
 
+
+function inspect(d) {
+  const util = require('util')
+  console.log(util.inspect(d,2,null,2))
+}
+
 // Maybe we should be using the platform's built-in hash implementation?
 // Node has the crypto module: https://nodejs.org/api/crypto.html and browsers have
 // https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest
@@ -1077,7 +1083,7 @@ function addPatchProperty(objects, property) {
     } else if (obj.type === 'list' || obj.type === 'text') {
       if (!obj.edits) obj.edits = []
       obj.props[obj.edits.length] = values
-      obj.edits.push({action: 'insert', index: obj.edits.length})
+      obj.edits.push({action: 'insert', index: obj.edits.length, elemId: property.key})
     }
   }
 }

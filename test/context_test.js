@@ -122,7 +122,7 @@ describe('Proxying context', () => {
           0: {[`2@${context.actorId}`]: {value: 'sparrow'}},
           1: {[`3@${context.actorId}`]: {value: 'goldfinch'}}
         }, edits: [
-          {action: 'insert', index: 0}, {action: 'insert', index: 1}
+          {action: 'insert', index: 0, elemId: `2@${context.actorId}`}, {action: 'insert', index: 1, elemId: `3@${context.actorId}`}
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
@@ -141,7 +141,7 @@ describe('Proxying context', () => {
           0: {[`2@${context.actorId}`]: {value: 'h'}},
           1: {[`3@${context.actorId}`]: {value: 'i'}}
         }, edits: [
-          {action: 'insert', index: 0}, {action: 'insert', index: 1}
+          {action: 'insert', index: 0, elemId: `2@${context.actorId}`}, {action: 'insert', index: 1, elemId: `3@${context.actorId}`}
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
@@ -267,7 +267,7 @@ describe('Proxying context', () => {
       const nestedId = applyPatch.firstCall.args[0].props.birds.actor1.props[2][`1@${context.actorId}`].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', edits: [
-          {action: 'insert', index: 2}
+          {action: 'insert', index: 2, elemId: `1@${context.actorId}`}
         ], props: {
           2: {[`1@${context.actorId}`]: {objectId: nestedId, type: 'map', props: {
             english: {[`2@${context.actorId}`]: {value: 'goldfinch'}},
@@ -302,8 +302,8 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         birds: {actor1: {objectId: listId, type: 'list', edits: [
           {action: 'remove', index: 0},
-          {action: 'insert', index: 0},
-          {action: 'insert', index: 1}
+          {action: 'insert', index: 0, elemId: `2@${context.actorId}`},
+          {action: 'insert', index: 1, elemId: `3@${context.actorId}`}
         ], props: {
           0: {[`2@${context.actorId}`]: {value: 'starling'}},
           1: {[`3@${context.actorId}`]: {value: 'goldfinch'}}
