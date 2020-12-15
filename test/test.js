@@ -662,12 +662,12 @@ describe('Automerge', () => {
 
     describe('counters', () => {
 
-      it.skip('should allow deleting counters from maps', () => {
+      it('should allow deleting counters from maps', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})
         const s2 = Automerge.change(s1, doc => doc.birds.wrens.increment(2))
         const s3 = Automerge.change(s2, doc => delete doc.birds.wrens)
         assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
-        assert.deepStrictEqual(s2, {birds: {}})
+        assert.deepStrictEqual(s3, {birds: {}})
       })
 
       it('should not allow deleting counters from lists', () => {
@@ -992,6 +992,12 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.todos = [{title: 'water plants', done: false}])
       let s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2, {todos: [{title: 'water plants', done: false}]})
+    })
+
+    it.only('should save and load maps with @ symbols in the keys', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc["123@4567"] = "hello")
+      let s2 = Automerge.load(Automerge.save(s1))
+      assert.deepStrictEqual(s2, { ["123@4567"]: "hello" })
     })
 
     it('should reconstitute conflicts', () => {
