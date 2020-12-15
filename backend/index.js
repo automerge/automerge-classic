@@ -5,6 +5,12 @@ const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
 const assert = require('assert')
 
+
+function inspect(d) {
+  const util = require('util')
+  console.log(util.inspect(d,2,null,2))
+}
+
 function backendState(backend) {
   if (backend.frozen) {
     throw new Error(
@@ -221,6 +227,7 @@ function applyLocalChange2(backend, change) {
   const binaryChange = encodeChange(change)
   const request = { actor: change.actor, seq: change.seq }
   const [state2, patch] = apply(state, [binaryChange], request, true)
+  backend.frozen = true
   return [{ state: state2 }, patch, binaryChange]
 }
 

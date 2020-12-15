@@ -152,7 +152,7 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
       state.seq = patch.clock[actor]
     }
     state.clock   = patch.clock
-    state.deps    = patch.clock[actor] === state.seq ? patch.deps : []
+    state.deps    = patch.actor === actor && patch.clock[actor] < state.seq ? [] : patch.deps
     state.maxOp   = Math.max(state.maxOp, patch.maxOp)
     state.version = patch.version
   }
