@@ -75,9 +75,14 @@ describe('Automerge', () => {
     it('changes should be retrievable', () => {
       const change1 = Automerge.getLastLocalChange(s1)
       s2 = Automerge.change(s1, doc => doc.foo = 'bar')
-      const change2 = Automerge.getLastLocalChange(s1)
-//      assert.strictEqual(change1, null)
-//      assert.strictEqual(decodeChange(change2), {})
+      const change2 = Automerge.getLastLocalChange(s2)
+      assert.strictEqual(change1, null)
+      const change = decodeChange(change2);
+      assert.deepStrictEqual(change, {
+        actor: change.actor, deps: [], seq: 1, startOp: 1,
+        hash: change.hash, message: "", time: change.time,
+        ops: [{action: "set",insert: false, key: "foo", obj: "00000000-0000-0000-0000-000000000000", pred: [], value: "bar" }]
+      })
     })
 
     it('should not register any conflicts on repeated assignment', () => {
@@ -994,7 +999,7 @@ describe('Automerge', () => {
       assert.deepStrictEqual(s2, {todos: [{title: 'water plants', done: false}]})
     })
 
-    it.only('should save and load maps with @ symbols in the keys', () => {
+    it('should save and load maps with @ symbols in the keys', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc["123@4567"] = "hello")
       let s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2, { ["123@4567"]: "hello" })

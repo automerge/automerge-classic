@@ -131,7 +131,7 @@ function makeChange(doc, context, options) {
 }
 
 function getLastLocalChange(doc) {
-  doc[STATE] ? doc[STATE].lastLocalChange : null
+  return doc[STATE] && doc[STATE].lastLocalChange ? doc[STATE].lastLocalChange : null
 }
 
 /**
