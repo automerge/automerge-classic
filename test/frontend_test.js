@@ -395,7 +395,7 @@ describe('Automerge.Frontend', () => {
         ]
       })
       const state0 = Backend.init()
-      const [state1, patch1] = Backend.applyLocalChange2(state0, change1) // FIXME - applyLocalChange
+      const [state1, patch1] = Backend.applyLocalChange(state0, change1) // FIXME - applyLocalChange
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const [doc3, change3] = Frontend.change(doc2a, doc => doc.number = 3)
       assert.deepStrictEqual(change3, {
@@ -426,8 +426,8 @@ describe('Automerge.Frontend', () => {
       })
 
       const state0 = Backend.init()
-      const [state1, patch1, binChange1] = Backend.applyLocalChange2(state0, change1)
-      const [state2, patch2, binChange2] = Backend.applyLocalChange2(state1, change2)
+      const [state1, patch1, binChange1] = Backend.applyLocalChange(state0, change1)
+      const [state2, patch2, binChange2] = Backend.applyLocalChange(state1, change2)
 
       const hash1 = decodeChange(binChange1).hash
       const hash2 = decodeChange(binChange2).hash

@@ -117,8 +117,7 @@ declare module 'automerge' {
 
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
-    function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
-    function applyLocalChange2(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
+    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]

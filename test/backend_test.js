@@ -261,8 +261,8 @@ describe('Automerge.Backend', () => {
 
   describe('applyLocalChange()', () => {
     it('should apply change requests', () => {
-      const change1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      const change1 = {actor: '111111', seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
@@ -283,11 +283,11 @@ describe('Automerge.Backend', () => {
 
     it('should throw an exception on duplicate requests', () => {
       const actor = uuid()
-      const change1 = {requestType: 'change', actor, seq: 1, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      const change1 = {actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred:[]}
       ]}
-      const change2 = {requestType: 'change', actor, seq: 2, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      const change2 = {actor, seq: 2, time: 0, startOp: 2, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred:[]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
@@ -297,11 +297,11 @@ describe('Automerge.Backend', () => {
     })
 
     it('should handle frontend and backend changes happening concurrently', () => {
-      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie'}
+      const local1 = {actor: '111111', seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]}
-      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      const local2 = {actor: '111111', seq: 2, time: 0, startOp: 2, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: ['1@111111']}
       ]}
       const remote1 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'set', obj: ROOT_ID, key: 'fish', value: 'goldfish', pred: []}
@@ -334,16 +334,16 @@ describe('Automerge.Backend', () => {
     })
 
     it('should detect conflicts based on the frontend version', () => {
-      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 0, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'goldfinch'}
+      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'goldfinch', pred: []}
       ]}
       // remote1 depends on local1; the deps field is filled in below when we've computed the hash
       const remote1 = {actor: '222222', seq: 1, startOp: 2, time: 0, deps: [], ops: [
         {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: ['1@111111']}
       ]}
       // local2 is concurrent with remote1 (because version < 2)
-      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, version: 1, ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay'}
+      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, startOp: 2, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: ['1@111111']}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
@@ -375,15 +375,15 @@ describe('Automerge.Backend', () => {
       const remote2 = {actor: '222222', seq: 2, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
         {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
       ]}
-      const local1 = {requestType: 'change', actor: '111111', seq: 1, time: 0, version: 1, ops: [
-        {obj: '1@222222', action: 'set', key: 0, insert: true, value: 'goldfinch'}
+      const local1 = {actor: '111111', seq: 1, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
+        {obj: '1@222222', action: 'set', key: "_head", insert: true, value: 'goldfinch', pred:[]}
       ]}
-      const local2 = {requestType: 'change', actor: '111111', seq: 2, time: 0, version: 1, ops: [
-        {obj: '1@222222', action: 'set', key: 1, insert: true, value: 'wagtail'}
+      const local2 = {actor: '111111', seq: 2, startOp: 3, time: 0, deps: [hash(local1)], ops: [
+        {obj: '1@222222', action: 'set', key: "2@111111", insert: true, value: 'wagtail', pred:[]}
       ]}
-      const local3 = {requestType: 'change', actor: '111111', seq: 3, time: 0, version: 4, ops: [
-        {obj: '1@222222', action: 'set', key: 0, value: 'Magpie'},
-        {obj: '1@222222', action: 'set', key: 1, value: 'Goldfinch'}
+      const local3 = {actor: '111111', seq: 3, startOp: 4, time: 0, deps: [hash(local2),hash(remote2)], ops: [
+        {obj: '1@222222', action: 'set', key: "2@222222", value: 'Magpie', pred:["2@222222"]},
+        {obj: '1@222222', action: 'set', key: "2@111111", value: 'Goldfinch', pred:["2@111111"]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
@@ -417,12 +417,12 @@ describe('Automerge.Backend', () => {
     })
 
     it('should handle list element insertion and deletion in the same change', () => {
-      const local1 = {requestType: 'change', actor: '111111', seq: 1, startOp: 1, time: 0, version: 0, ops: [
-        {obj: ROOT_ID, action: 'makeList', key: 'birds'}
+      const local1 = {requestType: 'change', actor: '111111', seq: 1, startOp: 1, deps: [], time: 0, ops: [
+        {obj: ROOT_ID, action: 'makeList', key: 'birds', pred: []}
       ]}
-      const local2 = {requestType: 'change', actor: '111111', seq: 2, startOp: 2, time: 0, version: 0, ops: [
-        {obj: '1@111111', action: 'set', key: 0, insert: true, value: 'magpie'},
-        {obj: '1@111111', action: 'del', key: 0}
+      const local2 = {requestType: 'change', actor: '111111', seq: 2, startOp: 2, deps: [], time: 0, ops: [
+        {obj: '1@111111', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
+        {obj: '1@111111', action: 'del', key: '2@111111', pred: ['2@111111']}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)

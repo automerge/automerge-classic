@@ -224,7 +224,7 @@ describe('TypeScript support', () => {
       const s0 = Frontend.init<NumberBox>(),
         b0 = Backend.init()
       const [s1, change1] = Frontend.change(s0, doc => (doc.number = 1))
-      const [b1, patch1] = Backend.applyLocalChange2(b0, change1)
+      const [b1, patch1] = Backend.applyLocalChange(b0, change1)
       const s2 = Frontend.applyPatch(s1, patch1)
       assert.strictEqual(s2.number, 1)
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))

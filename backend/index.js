@@ -215,8 +215,11 @@ function applyChanges(backend, changes) {
  * where `backend` is the updated node state, and `patch` confirms the
  * modifications to the document objects.
  */
-function applyLocalChange2(backend, change) {
+function applyLocalChange(backend, change) {
   const state = backendState(backend)
+  if (change.seq <= state.getIn(['opSet', 'states', change.actor], List()).size) {
+    throw new RangeError('Change request has already been applied')
+  }
   if (change.seq > 1 && change.deps.length === 0) {
     const lastHash =  state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
     if (!lastHash) {
@@ -231,7 +234,7 @@ function applyLocalChange2(backend, change) {
   return [{ state: state2 }, patch, binaryChange]
 }
 
-function applyLocalChange(backend, request, incomingChange) {
+function applyLocalChange_old(backend, request, incomingChange) {
   let state = backendState(backend)
   if (typeof request.actor !== 'string' || typeof request.seq !== 'number') {
     throw new TypeError('Change request requries `actor` and `seq` properties')
@@ -343,6 +346,6 @@ function getMissingDeps(backend) {
 }
 
 module.exports = {
-  init, clone, free, applyChanges, applyLocalChange, applyLocalChange2, save, load, loadChanges, getPatch,
+  init, clone, free, applyChanges, applyLocalChange, applyLocalChange_old, save, load, loadChanges, getPatch,
   getChanges, getMissingDeps
 }
