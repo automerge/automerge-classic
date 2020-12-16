@@ -509,7 +509,7 @@ class Context {
 
 function getPred(object,key) {
     if (object instanceof Table) {
-      return [key]
+      return [ object.entries[key][OBJECT_ID] ]
     } else if (object instanceof Text) {
       return object.elems[key].pred
     } else if (object[CONFLICTS]) {
