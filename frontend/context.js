@@ -457,11 +457,12 @@ class Context {
       throw new TypeError('A table row must not have an "id" property; it is generated automatically')
     }
 
-    const valuePatch = this.setValue(path[path.length - 1].objectId, null, row, false, [])
+    const id = uuid();
+    const valuePatch = this.setValue(path[path.length - 1].objectId, id, row, false, [])
     this.applyAtPath(path, subpatch => {
-      subpatch.props[valuePatch.objectId] = {[valuePatch.objectId]: valuePatch}
+      subpatch.props[id] = {[valuePatch.objectId]: valuePatch}
     })
-    return valuePatch.objectId
+    return id
   }
 
   /**

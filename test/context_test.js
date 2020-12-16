@@ -332,16 +332,16 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {actor1: {objectId: tableId, type: 'table', props: {
-          [rowId]: {[rowId]: {objectId: rowId, type: 'map', props: {
+          [rowId]: {[`1@${context.actorId}`]: {objectId: `1@${context.actorId}`, type: 'map', props: {
             author: {[`2@${context.actorId}`]: {value: 'Mary Shelley'}},
             title: {[`3@${context.actorId}`]: {value: 'Frankenstein'}}
           }}}
         }}}
       }})
-      assert.deepStrictEqual(context.ops, [
-        {obj: tableId, action: 'makeMap', key: rowId, insert: false, child: rowId},
-        {obj: rowId, action: 'set', key: 'author', insert: false, value: 'Mary Shelley'},
-        {obj: rowId, action: 'set', key: 'title', insert: false, value: 'Frankenstein'}
+      assert.deepStrictEqual(context.__ops, [
+        {obj: tableId, action: 'makeMap', key: rowId, insert: false, pred:[] },
+        {obj: `1@${context.actorId}`, action: 'set', key: 'author', insert: false, value: 'Mary Shelley', pred:[]},
+        {obj: `1@${context.actorId}`, action: 'set', key: 'title', insert: false, value: 'Frankenstein', pred:[]}
       ])
     })
 

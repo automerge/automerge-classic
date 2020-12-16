@@ -42,11 +42,12 @@ describe('Automerge.Table', () => {
         rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
       const books = Frontend.getObjectId(doc2.books)
+      const rowObjID = Frontend.getObjectId(doc2.books.entries[rowId])
       assert.deepStrictEqual(change2, {
         actor, seq: 2, time: change2.time, message: '', startOp: 2, deps: [], ops: [
           {obj: books, action: 'makeMap', key: rowId, insert: false, pred: [] },
-          {obj: rowId, action: 'set', key: 'authors', insert: false, value: 'Kleppmann, Martin', pred: []},
-          {obj: rowId, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications', pred:[]}
+          {obj: rowObjID, action: 'set', key: 'authors', insert: false, value: 'Kleppmann, Martin', pred: []},
+          {obj: rowObjID, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications', pred:[]}
         ]
       })
     })
@@ -93,7 +94,7 @@ describe('Automerge.Table', () => {
       assert.throws(() => s1.books.remove(rowId), /can only be modified in a change function/)
     })
 
-    it.skip('should save and reload', () => {
+    it('should save and reload', () => {
       // FIXME - the bug is in parseAllOpIds()
       // maps and tables with a string key that has an `@` gets
       // improperly encoded as an opId
