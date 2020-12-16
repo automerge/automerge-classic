@@ -96,20 +96,12 @@ function makeChange(doc, context, options) {
     ops: []
   }
 
-  const request = {
-    actor, seq: state.seq, time: Math.round(new Date().getTime() / 1000),
-    message: (options && typeof options.message === 'string') ? options.message : '',
-    version: state.version
-  }
-
   if (context) {
-    request.ops = context.ops
     change.ops = context.__ops
   }
 
   if (doc[OPTIONS].backend) {
-    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange_old(state.backendState, request, change)
-    //const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, change)
+    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, change)
     state.backendState = backendState
     state.lastLocalChange = binaryChange
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
@@ -121,7 +113,7 @@ function makeChange(doc, context, options) {
 
   } else {
     if (!context) context = new Context(doc, actor)
-    const queuedRequest = copyObject(request)
+    const queuedRequest = copyObject(change)
     queuedRequest.before = doc
     state.requests = state.requests.concat([queuedRequest])
     state.maxOp = state.maxOp + change.ops.length
@@ -154,7 +146,6 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     state.clock   = patch.clock
     state.deps    = patch.actor === actor && patch.clock[actor] < state.seq ? [] : patch.deps
     state.maxOp   = Math.max(state.maxOp, patch.maxOp)
-    state.version = patch.version
   }
   return updateRootObject(doc, updated, state)
 }
@@ -179,7 +170,7 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, maxOp: 0, requests: [], version: 0, clock: {}, deps: []}
+  const state = {seq: 0, maxOp: 0, requests: [], clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
     state.lastLocalChange = null

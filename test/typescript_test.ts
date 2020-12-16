@@ -229,7 +229,6 @@ describe('TypeScript support', () => {
       assert.strictEqual(s2.number, 1)
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
       assert.strictEqual(patch1.seq, 1)
-      assert.strictEqual(patch1.version, 1)
       assert.strictEqual(patch1.diffs.objectId, ROOT_ID)
       assert.strictEqual(patch1.diffs.type, 'map')
       assert.deepStrictEqual(Object.keys(patch1.diffs.props), ['number'])
