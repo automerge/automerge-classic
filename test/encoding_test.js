@@ -698,6 +698,16 @@ describe('Binary encoding', () => {
         checkEncoded(encoder, [0x7d, 0, 1, 2, 4, 3, 0x7d, 4, 5, 6])
       })
 
+      it('should allow insertion into repetition run', () => {
+        const decoder1 = new RLEDecoder('uint', encodeRLE('uint', [1, 2, 3, 3, 4]))
+        const decoder2 = new RLEDecoder('uint', encodeRLE('uint', [5]))
+        const encoder = new RLEEncoder('uint')
+        encoder.copyFrom(decoder1, {count: 3})
+        encoder.copyFrom(decoder2)
+        encoder.copyFrom(decoder1)
+        checkEncoded(encoder, [0x7a, 1, 2, 3, 5, 3, 4])
+      })
+
       it('should allow copying from a decoder starting with nulls', () => {
         const decoder = new RLEDecoder('uint', new Uint8Array([0, 2, 0x7f, 0])) // null, null, 0
         new RLEEncoder('uint').copyFrom(decoder, {count: 1})

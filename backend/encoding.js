@@ -705,70 +705,40 @@ class RLEEncoder extends Encoder {
     if (remaining === 0 || decoder.done) return sumValues ? {nonNullValues, sum} : {nonNullValues}
 
     // Copy data at the record level without expanding repetitions
-    let startOffset, endOffset, skipValues = !sumValues, firstRun = true
+    let firstRun = (decoder.count > 0)
     while (remaining > 0 && !decoder.done) {
-      endOffset = decoder.offset
-      if (firstRun && decoder.count === 0) {
-        firstRun = false
-        startOffset = decoder.offset
-      }
       if (!firstRun) decoder.readRecord()
-
       const numValues = Math.min(decoder.count, remaining)
       decoder.count -= numValues
 
       if (decoder.state === 'literal') {
         nonNullValues += numValues
-        if (skipValues && !firstRun) {
-          decoder.skipRawValues(numValues)
-        } else {
-          for (let i = 0; i < numValues; i++) {
-            if (decoder.done) throw new RangeError('incomplete literal')
-            const value = decoder.readRawValue()
-            if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
-            decoder.lastValue = value
-            this._appendValue(value)
-            if (sumValues) sum += (sumShift ? (value >>> sumShift) : value)
-          }
+        for (let i = 0; i < numValues; i++) {
+          if (decoder.done) throw new RangeError('incomplete literal')
+          const value = decoder.readRawValue()
+          if (value === decoder.lastValue) throw new RangeError('Repetition of values is not allowed in literal')
+          decoder.lastValue = value
+          this._appendValue(value)
+          if (sumValues) sum += (sumShift ? (value >>> sumShift) : value)
         }
       } else if (decoder.state === 'repetition') {
         nonNullValues += numValues
         if (sumValues) sum += numValues * (sumShift ? (decoder.lastValue >>> sumShift) : decoder.lastValue)
-        if (!skipValues || firstRun) {
-          const value = decoder.lastValue
+        const value = decoder.lastValue
+        this._appendValue(value)
+        if (numValues > 1) {
           this._appendValue(value)
-          if (numValues > 1) {
-            this._appendValue(value)
-            if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
-            this.count += numValues - 2
-          }
+          if (this.state !== 'repetition') throw new RangeError(`Unexpected state ${this.state}`)
+          this.count += numValues - 2
         }
       } else if (decoder.state === 'nulls') {
-        if (!skipValues || firstRun) {
-          this._appendValue(null)
-          if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
-          this.count += numValues - 1
-        }
+        this._appendValue(null)
+        if (this.state !== 'nulls') throw new RangeError(`Unexpected state ${this.state}`)
+        this.count += numValues - 1
       }
 
-      if (firstRun) {
-        firstRun = false
-        startOffset = decoder.offset
-        remaining -= numValues
-      } else if ((decoder.done || remaining === numValues) && skipValues) {
-        // If that was the last record, and we skipped over its values, we have to go back and re-read
-        // it. However, we can directly copy the previous records at the byte level.
-        skipValues = false
-        decoder.offset = endOffset
-        decoder.state = undefined
-        if (this.state === 'literal') this.literal.push(this.lastValue)
-        this.flush()
-        if (startOffset < endOffset) {
-          this.appendRawBytes(decoder.buf.subarray(startOffset, endOffset))
-        }
-      } else {
-        remaining -= numValues
-      }
+      firstRun = false
+      remaining -= numValues
     }
     if (count && remaining > 0 && decoder.done) throw new RangeError(`cannot copy ${count} values`)
     return sumValues ? {nonNullValues, sum} : {nonNullValues}
