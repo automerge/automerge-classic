@@ -61,8 +61,7 @@ function lamportCompare(ts1, ts2) {
  * to `conflicts[key]`. If there is no conflict, the conflicts object contains
  * just a single opId-value mapping.
  */
-
-function applyProperties(props, object, conflicts, elemids, updated) {
+function applyProperties(props, object, conflicts, updated) {
   if (!props) return
 
   for (let key of Object.keys(props)) {
@@ -82,33 +81,30 @@ function applyProperties(props, object, conflicts, elemids, updated) {
     } else {
       object[key] = values[opIds[0]]
       conflicts[key] = values
-      if (elemids && elemids[key] === undefined) {
-        elemids[key] = opIds[0]
-      }
     }
   }
 }
 
 /**
  * `edits` is an array of edits to a list data structure, each of which is an object of the form
- * either `{action: 'insert', index}` or `{action: 'remove', index}`. This merges adjacent edits
- * and calls `insertCallback(index, count)` or `removeCallback(index, count)`, as appropriate,
- * for each sequence of insertions or removals.
+ * either `{action: 'insert', index, elemId}` or `{action: 'remove', index}`. This merges adjacent
+ * edits and calls `insertCallback(index, elemIds)` or `removeCallback(index, count)`, as
+ * appropriate, for each sequence of insertions or removals.
  */
 function iterateEdits(edits, insertCallback, removeCallback) {
   if (!edits) return
   let splicePos = -1, deletions, insertions
 
   for (let i = 0; i < edits.length; i++) {
-    const edit = edits[i], action = edit.action, index = edit.index
+    const { action, index, elemId } = edits[i]
 
     if (action === 'insert') {
       if (splicePos < 0) {
         splicePos = index
         deletions = 0
-        insertions = 0
+        insertions = []
       }
-      insertions += 1
+      insertions.push(elemId)
 
       // If there are multiple consecutive insertions at successive indexes,
       // accumulate them and then process them in a single insertCallback
@@ -123,7 +119,7 @@ function iterateEdits(edits, insertCallback, removeCallback) {
       if (splicePos < 0) {
         splicePos = index
         deletions = 0
-        insertions = 0
+        insertions = []
       }
       deletions += 1
 
@@ -165,7 +161,7 @@ function updateMapObject(patch, obj, updated) {
   }
 
   const object = updated[objectId]
-  applyProperties(patch.props, object, object[CONFLICTS], null, updated)
+  applyProperties(patch.props, object, object[CONFLICTS], updated)
   return object
 }
 
@@ -211,13 +207,6 @@ function cloneListObject(originalList, objectId) {
   return list
 }
 
-function cloneTextObject(originalText, objectId) {
-  const elems = originalText && originalText.elems ? originalText.elems.slice() : [] // slice() makes a shallow clone
-  const text = { elems }
-  Object.defineProperty(text, OBJECT_ID, {value: objectId})
-  return text
-}
-
 /**
  * Updates the list object `obj` according to the modifications described in
  * `patch`, or creates a new object if `obj` is undefined. Mutates `updated`
@@ -232,9 +221,9 @@ function updateListObject(patch, obj, updated) {
   const list = updated[objectId], conflicts = list[CONFLICTS], elemids = list[ELEMIDS]
 
   iterateEdits(patch.edits,
-    (index, insertions) => { // insertion
-      const blanks = new Array(insertions)
-      elemids  .splice(index, 0, ...blanks)
+    (index, newElems) => { // insertion
+      const blanks = new Array(newElems.length)
+      elemids  .splice(index, 0, ...newElems)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
     },
@@ -245,7 +234,7 @@ function updateListObject(patch, obj, updated) {
     }
   )
 
-  applyProperties(patch.props, list, conflicts, elemids, updated)
+  applyProperties(patch.props, list, conflicts, updated)
   return list
 }
 
@@ -256,17 +245,18 @@ function updateListObject(patch, obj, updated) {
  */
 function updateTextObject(patch, obj, updated) {
   const objectId = patch.objectId
-  if (!updated[objectId]) {
-    updated[objectId] = cloneTextObject(obj, objectId)
+  let elems
+  if (updated[objectId]) {
+    elems = updated[objectId].elems
+  } else if (obj) {
+    elems = obj.elems.slice()
+  } else {
+    elems = []
   }
 
-  const props = patch.props
-  const text = updated[objectId]
-  const elems = text.elems
-
   iterateEdits(patch.edits,
-    (index, insertions) => { // insertion
-      const blanks = new Array(insertions).fill().map(Object)
+    (index, elemIds) => { // insertion
+      const blanks = elemIds.map(id => { return {id} })
       elems.splice(index, 0, ...blanks)
     },
     (index, deletions) => { // deletion
@@ -279,13 +269,8 @@ function updateTextObject(patch, obj, updated) {
     const opId = pred.sort(lamportCompare).reverse()[0]
     if (!opId) throw new RangeError(`No default value at index ${key}`)
 
-    const oldValue = (elems[key].opId === opId) ? elems[key].value : undefined
-    elems[key].value = getValue(patch.props[key][opId], oldValue, updated)
-    elems[key].opId = opId
+    elems[key].value = getValue(patch.props[key][opId], elems[key].value, updated)
     elems[key].pred = pred
-    if (elems[key].id === undefined) {
-      elems[key].id = opId
-    }
   }
 
   updated[objectId] = instantiateText(objectId, elems)

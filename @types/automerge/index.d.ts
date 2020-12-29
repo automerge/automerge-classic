@@ -208,6 +208,7 @@ declare module 'automerge' {
   interface Edit {
     action: 'insert' | 'remove'
     index: number
+    elemId: string
   }
 
   type OpAction =
