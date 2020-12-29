@@ -359,17 +359,17 @@ describe('Proxying context', () => {
     })
 
     it('should delete a table row', () => {
-      const rowId = `1@${uuid()}`
+      const rowId = uuid()
       const row = {author: 'Mary Shelley', title: 'Frankenstein'}
       row[OBJECT_ID] = rowId
       table.entries[rowId] = row
-      context.deleteTableRow([{key: 'books', objectId: tableId}], rowId)
+      context.deleteTableRow([{key: 'books', objectId: tableId}], rowId, '5@actor1')
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: ROOT_ID, type: 'map', props: {
         books: {'1@actor1': {objectId: tableId, type: 'table', props: {[rowId]: {}}}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: tableId, action: 'del', key: rowId, insert: false, pred: [rowId]}
+        {obj: tableId, action: 'del', key: rowId, insert: false, pred: ['5@actor1']}
       ])
     })
   })

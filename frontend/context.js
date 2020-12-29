@@ -452,15 +452,13 @@ class Context {
 
   /**
    * Updates the table object at path `path`, deleting the row with ID `rowId`.
+   * `pred` is the opId of the operation that originally created the row.
    */
-  deleteTableRow(path, rowId) {
+  deleteTableRow(path, rowId, pred) {
     const objectId = path[path.length - 1].objectId, table = this.getObject(objectId)
 
     if (table.byId(rowId)) {
-      // FIXME
-      const object = this.getObject(objectId)
-      const pred = getPred(object, rowId)
-      this.addOp({action: 'del', obj: objectId, key: rowId, insert: false, pred})
+      this.addOp({action: 'del', obj: objectId, key: rowId, insert: false, pred: [pred]})
       this.applyAtPath(path, subpatch => {
         subpatch.props[rowId] = {}
       })
@@ -492,7 +490,7 @@ class Context {
 
 function getPred(object, key) {
   if (object instanceof Table) {
-    return [ object.entries[key][OBJECT_ID] ]
+    return [object.opIds[key]]
   } else if (object instanceof Text) {
     return object.elems[key].pred
   } else if (object[CONFLICTS]) {
