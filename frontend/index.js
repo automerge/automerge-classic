@@ -93,11 +93,7 @@ function makeChange(doc, context, options) {
     deps: state.deps,
     time:  Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
-    ops: []
-  }
-
-  if (context) {
-    change.ops = context.__ops
+    ops: context ? context.ops : []
   }
 
   if (doc[OPTIONS].backend) {
