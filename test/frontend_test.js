@@ -54,7 +54,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc, {bird: 'magpie'})
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
-          {obj: ROOT_ID, action: 'set', key: 'bird', insert: false, value: 'magpie', pred:[]}
+          {obj: ROOT_ID, action: 'set', key: 'bird', insert: false, value: 'magpie', pred: []}
         ]
       })
     })
@@ -66,7 +66,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
           {obj: ROOT_ID, action: 'makeMap', key: 'birds', insert: false, pred: []},
-          {obj: birds,   action: 'set',     key: 'wrens', insert: false, value: 3, pred:[]}
+          {obj: birds,   action: 'set',     key: 'wrens', insert: false, value: 3, pred: []}
         ]
       })
     })
@@ -79,7 +79,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: {wrens: 3, sparrows: 15}})
       assert.deepStrictEqual(change2, {
         actor, seq: 2, time: change2.time, message: '', startOp: 3, deps: [], ops: [
-          {obj: birds, action: 'set', key: 'sparrows', insert: false, value: 15, pred:[]}
+          {obj: birds, action: 'set', key: 'sparrows', insert: false, value: 15, pred: []}
         ]
       })
     })
@@ -91,7 +91,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc1, {magpies: 2, sparrows: 15})
       assert.deepStrictEqual(doc2, {sparrows: 15})
       assert.deepStrictEqual(change2, {
-        actor, seq: 2, time: change2.time, message: '', startOp: 3, deps:[], ops: [
+        actor, seq: 2, time: change2.time, message: '', startOp: 3, deps: [], ops: [
           {obj: ROOT_ID, action: 'del', key: 'magpies', insert: false, pred: [ `1@${actor}`]}
         ]
       })
@@ -104,7 +104,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
           {obj: ROOT_ID, action: 'makeList', key: 'birds', insert: false, pred: []},
-          {obj: `1@${actor}`, action: 'set', key: '_head', insert: true, value: 'chaffinch', pred:[]}
+          {obj: `1@${actor}`, action: 'set', key: '_head', insert: true, value: 'chaffinch', pred: []}
         ]
       })
     })
@@ -187,8 +187,8 @@ describe('Automerge.Frontend', () => {
         assert.deepStrictEqual(doc2, {counts: [new Frontend.Counter(3)]})
         assert.deepStrictEqual(change1, {
           actor, deps: [], seq: 1, time: change1.time, message: '', startOp: 1, ops: [
-            {obj: ROOT_ID, action: 'makeList', key: 'counts', insert: false, pred:[] },
-            {obj: counts, action: 'set', key: "_head", insert: true, value: 1, datatype: 'counter', pred:[] }
+            {obj: ROOT_ID, action: 'makeList', key: 'counts', insert: false, pred: []},
+            {obj: counts, action: 'set', key: '_head', insert: true, value: 1, datatype: 'counter', pred: []}
           ]
         })
         assert.deepStrictEqual(change2, {
@@ -259,10 +259,10 @@ describe('Automerge.Frontend', () => {
       let requests = getRequests(doc2)
       assert.deepStrictEqual(requests, [
         {actor, seq: 1, deps: [], startOp: 1, time: requests[0].time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24, pred:[]}
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24, pred: []}
         ]},
         {actor, seq: 2, deps: [], startOp: 2, time: requests[1].time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1, pred:[]}
+          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1, pred: []}
         ]}
       ])
 
@@ -275,7 +275,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {blackbirds: 24, partridges: 1})
       assert.deepStrictEqual(requests, [
         {actor, seq: 2, deps: [], startOp: 2, time: requests[0].time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1, pred:[]}
+          {obj: ROOT_ID, action: 'set', key: 'partridges', insert: false, value: 1, pred: []}
         ]}
       ])
 
@@ -294,7 +294,7 @@ describe('Automerge.Frontend', () => {
       let requests = getRequests(doc)
       assert.deepStrictEqual(requests, [
         {actor, seq: 1, deps: [], startOp: 1, time: requests[0].time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24, pred:[]}
+          {obj: ROOT_ID, action: 'set', key: 'blackbirds', insert: false, value: 24, pred: []}
         ]}
       ])
 
@@ -385,13 +385,13 @@ describe('Automerge.Frontend', () => {
       assert.equal(binChange1, null)
       assert.equal(binChange2, null)
       assert.deepStrictEqual(change1, {
-        actor, deps:[], startOp:1, seq: 1, time: change1.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred:[]}
+        actor, deps: [], startOp: 1, seq: 1, time: change1.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred: []}
         ]
       })
       assert.deepStrictEqual(change2, {
-        actor, deps:[], startOp:2, seq: 2, time: change2.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred:[`1@${actor}`]}
+        actor, deps: [], startOp: 2, seq: 2, time: change2.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred: [`1@${actor}`]}
         ]
       })
       const state0 = Backend.init()
@@ -414,14 +414,14 @@ describe('Automerge.Frontend', () => {
       assert.equal(_binChange2, null)
 
       assert.deepStrictEqual(change1, {
-        actor, deps:[], startOp:1, seq: 1, time: change1.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred:[]}
+        actor, deps: [], startOp: 1, seq: 1, time: change1.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred: []}
         ]
       })
 
       assert.deepStrictEqual(change2, {
-        actor, deps:[], startOp:2, seq: 2, time: change2.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred:[`1@${actor}`]}
+        actor, deps: [], startOp: 2, seq: 2, time: change2.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred: [`1@${actor}`]}
         ]
       })
 

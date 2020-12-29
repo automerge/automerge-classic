@@ -1,7 +1,7 @@
 const assert = require('assert')
 const sinon = require('sinon')
 const { Context } = require('../frontend/context')
-const { CACHE, OBJECT_ID, CONFLICTS, STATE, ELEMIDS } = require('../frontend/constants')
+const { CACHE, OBJECT_ID, CONFLICTS, STATE, ELEM_IDS } = require('../frontend/constants')
 const { ROOT_ID } = require('../src/common')
 const { Counter } = require('../frontend/counter')
 const { Table, instantiateTable } = require('../frontend/table')
@@ -237,7 +237,7 @@ describe('Proxying context', () => {
       list = ['swallow', 'magpie']
       Object.defineProperty(list, OBJECT_ID, {value: listId})
       Object.defineProperty(list, CONFLICTS, {value: [{'1@xxx': 'swallow'}, {'2@xxx': 'magpie'}]})
-      Object.defineProperty(list, ELEMIDS,   {value: ['1@xxx', '2@xxx']})
+      Object.defineProperty(list, ELEM_IDS,  {value: ['1@xxx', '2@xxx']})
       context.cache[listId] = list
       context.cache[ROOT_ID] = {[OBJECT_ID]: ROOT_ID, birds: list, [CONFLICTS]: {birds: {'1@actor1': list}}}
     })

@@ -134,9 +134,9 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     if (patch.clock[actor] && patch.clock[actor] > state.seq) {
       state.seq = patch.clock[actor]
     }
-    state.clock   = patch.clock
-    state.deps    = patch.actor === actor && patch.clock[actor] < state.seq ? [] : patch.deps
-    state.maxOp   = Math.max(state.maxOp, patch.maxOp)
+    state.clock = patch.clock
+    state.deps  = patch.actor === actor && patch.clock[actor] < state.seq ? [] : patch.deps
+    state.maxOp = Math.max(state.maxOp, patch.maxOp)
   }
   return updateRootObject(doc, updated, state)
 }

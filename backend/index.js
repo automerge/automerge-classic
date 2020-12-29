@@ -38,8 +38,8 @@ function free(backend) {
  * object modifications `diffs`.
  */
 function makePatch(state, diffs, request, isIncremental) {
-  const clock   = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toJSON()
-  const deps    = state.getIn(['opSet', 'deps']).toJSON().sort()
+  const clock = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toJSON()
+  const deps  = state.getIn(['opSet', 'deps']).toJSON().sort()
   const maxOp = state.getIn(['opSet', 'maxOp'], 0)
   const patch = {clock, deps, diffs, maxOp}
 
@@ -97,7 +97,7 @@ function applyLocalChange(backend, change) {
     throw new RangeError('Change request has already been applied')
   }
   if (change.seq > 1 && change.deps.length === 0) {
-    const lastHash =  state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
+    const lastHash = state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
     if (!lastHash) {
       throw new RangeError(`Cannot find hash of localChange before seq=${change.seq}`)
     }

@@ -1,5 +1,5 @@
 const { ROOT_ID, isObject, copyObject, parseOpId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEMIDS } = require('./constants')
+const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
@@ -195,10 +195,10 @@ function updateTableObject(patch, obj, updated) {
 function cloneListObject(originalList, objectId) {
   const list = originalList ? originalList.slice() : [] // slice() makes a shallow clone
   const conflicts = (originalList && originalList[CONFLICTS]) ? originalList[CONFLICTS].slice() : []
-  const elemids = (originalList && originalList[ELEMIDS]) ? originalList[ELEMIDS].slice() : []
+  const elemIds = (originalList && originalList[ELEM_IDS]) ? originalList[ELEM_IDS].slice() : []
   Object.defineProperty(list, OBJECT_ID, {value: objectId})
   Object.defineProperty(list, CONFLICTS, {value: conflicts})
-  Object.defineProperty(list, ELEMIDS,   {value: elemids})
+  Object.defineProperty(list, ELEM_IDS,  {value: elemIds})
   return list
 }
 
@@ -213,17 +213,17 @@ function updateListObject(patch, obj, updated) {
     updated[objectId] = cloneListObject(obj, objectId)
   }
 
-  const list = updated[objectId], conflicts = list[CONFLICTS], elemids = list[ELEMIDS]
+  const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
 
   iterateEdits(patch.edits,
     (index, newElems) => { // insertion
       const blanks = new Array(newElems.length)
-      elemids  .splice(index, 0, ...newElems)
+      elemIds  .splice(index, 0, ...newElems)
       list     .splice(index, 0, ...blanks)
       conflicts.splice(index, 0, ...blanks)
     },
     (index, count) => { // deletion
-      elemids  .splice(index, count)
+      elemIds  .splice(index, count)
       list     .splice(index, count)
       conflicts.splice(index, count)
     }
@@ -251,7 +251,7 @@ function updateTextObject(patch, obj, updated) {
 
   iterateEdits(patch.edits,
     (index, elemIds) => { // insertion
-      const blanks = elemIds.map(id => { return {id} })
+      const blanks = elemIds.map(elemId => ({elemId}))
       elems.splice(index, 0, ...blanks)
     },
     (index, deletions) => { // deletion

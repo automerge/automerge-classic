@@ -45,9 +45,9 @@ describe('Automerge.Table', () => {
       const rowObjID = Frontend.getObjectId(doc2.books.entries[rowId])
       assert.deepStrictEqual(change2, {
         actor, seq: 2, time: change2.time, message: '', startOp: 2, deps: [], ops: [
-          {obj: books, action: 'makeMap', key: rowId, insert: false, pred: [] },
+          {obj: books, action: 'makeMap', key: rowId, insert: false, pred: []},
           {obj: rowObjID, action: 'set', key: 'authors', insert: false, value: 'Kleppmann, Martin', pred: []},
-          {obj: rowObjID, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications', pred:[]}
+          {obj: rowObjID, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications', pred: []}
         ]
       })
     })

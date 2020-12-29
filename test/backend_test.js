@@ -282,10 +282,10 @@ describe('Automerge.Backend', () => {
     it('should throw an exception on duplicate requests', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred:[]}
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
       ]}
       const change2 = {actor, seq: 2, time: 0, startOp: 2, deps: [], ops: [
-        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred:[]}
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'jay', pred: []}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
@@ -374,14 +374,14 @@ describe('Automerge.Backend', () => {
         {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
       ]}
       const local1 = {actor: '111111', seq: 1, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
-        {obj: '1@222222', action: 'set', key: "_head", insert: true, value: 'goldfinch', pred:[]}
+        {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
       ]}
       const local2 = {actor: '111111', seq: 2, startOp: 3, time: 0, deps: [hash(local1)], ops: [
-        {obj: '1@222222', action: 'set', key: "2@111111", insert: true, value: 'wagtail', pred:[]}
+        {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
       ]}
       const local3 = {actor: '111111', seq: 3, startOp: 4, time: 0, deps: [hash(local2),hash(remote2)], ops: [
-        {obj: '1@222222', action: 'set', key: "2@222222", value: 'Magpie', pred:["2@222222"]},
-        {obj: '1@222222', action: 'set', key: "2@111111", value: 'Goldfinch', pred:["2@111111"]}
+        {obj: '1@222222', action: 'set', key: '2@222222', value: 'Magpie', pred: ['2@222222']},
+        {obj: '1@222222', action: 'set', key: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
