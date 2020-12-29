@@ -88,7 +88,7 @@ function makeChange(doc, context, options) {
     deps: state.deps,
     time:  Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
-    ops: context ? context.ops : []
+    ops: context.ops
   }
 
   if (doc[OPTIONS].backend) {
@@ -103,7 +103,6 @@ function makeChange(doc, context, options) {
     return [applyPatchToDoc(doc, patch, state, true), change]
 
   } else {
-    if (!context) context = new Context(doc, actor)
     const queuedRequest = copyObject(change)
     queuedRequest.before = doc
     state.requests = state.requests.concat([queuedRequest])

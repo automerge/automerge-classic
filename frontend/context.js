@@ -162,13 +162,16 @@ class Context {
     return 'map'
   }
 
+  /**
+   * Returns the unique identifier of property `key` in object `objectId`. If the object is a list
+   * or text, `key` is an index and we return the elemId. Otherwise the key is just itself.
+   */
   resolveKey(objectId, key) {
     const type = this.getObjectType(objectId)
-    if (type == "map" || type == "table") {
-      return key
+    if (type === 'list' || type === 'text') {
+      return getElemId(this.getObject(objectId), key, false)
     } else {
-      const list = this.getObject(objectId)
-      return getElemId(list, key, false)
+      return key
     }
   }
 
@@ -206,9 +209,8 @@ class Context {
     if (value[OBJECT_ID]) {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
-    const child = this.nextOpId()
-    const objectId = child
-    if (key === null) key = child
+    const objectId = this.nextOpId()
+    if (key === null) key = objectId
 
     if (value instanceof Text) {
       // Create a new Text object
@@ -250,7 +252,12 @@ class Context {
    * `objectId` is the ID of the object being modified, `key` is the property name or list
    * index being updated, and `value` is the new value being assigned. If `insert` is true,
    * a new list element is inserted at index `key`, and `value` is assigned to that new list
-   * element. Returns a patch describing the new value. The return value is of the form
+   * element. `pred` is an array of opIds for previous values of the property being assigned,
+   * which are overwritten by this operation. If the object being modified is a list or text,
+   * `elemId` is the element ID of the list element being updated (if insert=false), or the
+   * element ID of the list element immediately preceding the insertion (if insert=true).
+   *
+   * Returns a patch describing the new value. The return value is of the form
    * `{objectId, type, props}` if `value` is an object, or `{value, datatype}` if it is a
    * primitive value. For string, number, boolean, or null the datatype is omitted.
    */

@@ -35,10 +35,6 @@ function emptyChange(doc, options) {
   return newDoc
 }
 
-function getLastLocalChange(doc) {
-  return Frontend.getLastLocalChange(doc)
-}
-
 function clone(doc) {
   const state = backend.clone(Frontend.getBackendState(doc))
   const patch = backend.getPatch(state)
@@ -130,11 +126,11 @@ module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend, getLastLocalChange,
+  Frontend, setDefaultBackend,
   get Backend() { return backend }
 }
 
 for (let name of ['getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
+     'setActorId', 'getConflicts', 'getLastLocalChange', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }
