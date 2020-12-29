@@ -3,13 +3,6 @@ const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
-const assert = require('assert')
-
-
-function inspect(d) {
-  const util = require('util')
-  console.log(util.inspect(d,2,null,2))
-}
 
 function backendState(backend) {
   if (backend.frozen) {

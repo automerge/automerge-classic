@@ -8,11 +8,6 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
 
-function inspect(d) {
-  const util = require('util')
-  console.log(util.inspect(d,2,null,2))
-}
-
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
  * compactly in binary form.

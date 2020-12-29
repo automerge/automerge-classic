@@ -6,10 +6,6 @@ const { Counter, getWriteableCounter } = require('./counter')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
-function inspect(d) {
-  const util = require('util')
-  console.log(util.inspect(d,2,null,2))
-}
 
 /**
  * An instance of this class is passed to `rootObjectProxy()`. The methods are
@@ -429,8 +425,6 @@ class Context {
       this.insertListItems(subpatch, start, insertions, false)
     }
     this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
-    
-    list = this.getObject(objectId)
   }
 
   /**
@@ -518,8 +512,7 @@ function getEid(list, index, insert) {
     if (list[ELEMIDS]) return list[ELEMIDS][index]
     if (list.elems) return list.elems[index].id
   }
-  return "foobar"
-//  throw new RangeError(`Cannot find elemid at index ${index} for list`)
+  throw new RangeError(`Cannot find elemId at list index ${index}`)
 }
 
 module.exports = {

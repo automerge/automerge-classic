@@ -8,11 +8,6 @@ const { Table, instantiateTable } = require('../frontend/table')
 const { Text } = require('../frontend/text')
 const uuid = require('../src/uuid')
 
-function inspect(val) {
-    var util = require('util');
-    console.log(util.inspect(val, false,10,true));
-}
-
 describe('Proxying context', () => {
   let context, applyPatch
 
@@ -390,7 +385,3 @@ describe('Proxying context', () => {
     assert.deepStrictEqual(context.ops, [{obj: ROOT_ID, action: 'inc', key: 'counter', insert: false, value: 1, pred: ['1@actor1']}])
   })
 })
-
-function LIST(list) {
-  return list[ELEMIDS] = new Array(list.length)
-}
