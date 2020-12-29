@@ -305,6 +305,13 @@ describe('TypeScript support', () => {
       assert.strictEqual(Automerge.getObjectById(s1, obj).length, 1)
       assert.strictEqual(Automerge.getObjectById(s1, obj), s1.birds)
     })
+
+    it('should allow looking up list element IDs', () => {
+      const s0 = Automerge.init<BirdList>()
+      const s1 = Automerge.change(s0, doc => (doc.birds = ['goldfinch']))
+      const elemIds = Automerge.Frontend.getElementIds(s1.birds)
+      assert.deepStrictEqual(elemIds, [`2@${Automerge.getActorId(s1)}`])
+    })
   })
 
   describe('Automerge.Text', () => {
@@ -364,6 +371,14 @@ describe('TypeScript support', () => {
       it('supports `length`', () => assert.strictEqual(doc.text.length, 9))
       it('supports `concat`', () => assert.strictEqual(doc.text.concat(['j']).length, 10))
       it('supports `includes`', () => assert.strictEqual(doc.text.includes('q'), false))
+    })
+
+    describe('getElementIds', () => {
+      it('should return the element ID of each character', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b'))
+        const elemIds = Automerge.Frontend.getElementIds(doc.text)
+        assert.deepStrictEqual(elemIds, [`2@${Automerge.getActorId(doc)}`, `3@${Automerge.getActorId(doc)}`])
+      })
     })
   })
 

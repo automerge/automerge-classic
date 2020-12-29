@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -360,9 +360,21 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
+/**
+ * Given an array or text object from an Automerge document, returns an array
+ * containing the unique element ID of each list element/character.
+ */
+function getElementIds(list) {
+  if (list instanceof Text) {
+    return list.elems.map(elem => elem.elemId)
+  } else {
+    return list[ELEM_IDS]
+  }
+}
+
 module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts, getLastLocalChange,
-  getBackendState,
+  getBackendState, getElementIds,
   Text, Table, Counter
 }

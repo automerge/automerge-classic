@@ -46,8 +46,6 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been
   moved to a separate [automerge-connection](https://github.com/automerge/automerge-connection)
   repository.
-- **Removed**: `Frontend.getElementIds` is no longer available because the necessary metadata is
-  now maintained by the backend.
 
 ## [Unreleased]
 

@@ -109,6 +109,7 @@ declare module 'automerge' {
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
+    function getElementIds(list: any): string[]
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
     function getObjectId<T>(doc: Doc<T>): UUID
     function init<T>(options?: InitOptions): Doc<T>
