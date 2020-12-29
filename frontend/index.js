@@ -103,12 +103,11 @@ function makeChange(doc, context, options) {
     return [applyPatchToDoc(doc, patch, state, true), change]
 
   } else {
-    const queuedRequest = copyObject(change)
-    queuedRequest.before = doc
+    const queuedRequest = {actor, seq: change.seq, before: doc}
     state.requests = state.requests.concat([queuedRequest])
     state.maxOp = state.maxOp + change.ops.length
     state.deps = []
-    return [updateRootObject(doc, context.updated, state), change]
+    return [updateRootObject(doc, context ? context.updated : {}, state), change]
   }
 }
 
@@ -272,13 +271,13 @@ function applyPatch(doc, patch) {
 
   if (state.requests.length > 0) {
     baseDoc = state.requests[0].before
-    if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
+    if (patch.actor === getActorId(doc)) {
       if (state.requests[0].seq !== patch.seq) {
         throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${state.requests[0].seq}`)
       }
-      state.requests = state.requests.slice(1).map(copyObject)
+      state.requests = state.requests.slice(1)
     } else {
-      state.requests = state.requests.slice().map(copyObject)
+      state.requests = state.requests.slice()
     }
   } else {
     baseDoc = doc
@@ -289,6 +288,7 @@ function applyPatch(doc, patch) {
   if (state.requests.length === 0) {
     return newDoc
   } else {
+    state.requests[0] = copyObject(state.requests[0])
     state.requests[0].before = newDoc
     return updateRootObject(doc, {}, state)
   }
