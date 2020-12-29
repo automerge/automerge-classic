@@ -113,6 +113,9 @@ function makeChange(doc, context, options) {
   }
 }
 
+/**
+ * Returns the binary encoding of the last change made by the local actor.
+ */
 function getLastLocalChange(doc) {
   return doc[STATE] && doc[STATE].lastLocalChange ? doc[STATE].lastLocalChange : null
 }
