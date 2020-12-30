@@ -361,7 +361,9 @@ function applyChange(opSet, binaryChange, patch) {
 
   let maxOpId = 0
   for (let depHash of change.get('deps')) {
-    maxOpId = Math.max(maxOpId, opSet.getIn(['hashes', depHash, 'maxOpId']))
+    const depOpId = opSet.getIn(['hashes', depHash, 'maxOpId'])
+    if (depOpId === undefined) throw new RangeError(`Unknown dependency hash ${depHash}`)
+    maxOpId = Math.max(maxOpId, depOpId)
     opSet = opSet.updateIn(['hashes', depHash, 'depsFuture'], Set(), future => future.add(hash))
   }
   if (startOp !== maxOpId + 1) {
