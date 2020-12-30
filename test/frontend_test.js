@@ -380,7 +380,7 @@ describe('Automerge.Frontend', () => {
         ]
       })
       const state0 = Backend.init()
-      const [state1, patch1] = Backend.applyLocalChange(state0, change1) // FIXME - applyLocalChange
+      const [state1, patch1, binChange1] = Backend.applyLocalChange(state0, change1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
       const [doc3, change3] = Frontend.change(doc2a, doc => doc.number = 3)
       assert.deepStrictEqual(change3, {
@@ -391,54 +391,42 @@ describe('Automerge.Frontend', () => {
     })
 
     it('deps are filled in if the frontend does not have the latest patch', () => {
-      const actor = uuid()
-      const [doc1, change1, _binChange1] = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
-      const [doc2, change2, _binChange2] = Frontend.change(doc1, doc => doc.number = 2)
+      const actor1 = uuid(), actor2 = uuid()
+      const [doc1, change1] = Frontend.change(Frontend.init(actor1), doc => doc.number = 1)
+      const [state1, patch1, binChange1] = Backend.applyLocalChange(Backend.init(), change1)
 
-      assert.equal(_binChange1, null)
-      assert.equal(_binChange2, null)
-
-      assert.deepStrictEqual(change1, {
-        actor, deps: [], startOp: 1, seq: 1, time: change1.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred: []}
-        ]
-      })
-
+      const [state1a, patch1a] = Backend.applyChanges(Backend.init(), [binChange1])
+      const doc1a = Frontend.applyPatch(Frontend.init(actor2), patch1a)
+      const [doc2, change2] = Frontend.change(doc1a, doc => doc.number = 2)
+      const [doc3, change3] = Frontend.change(doc2, doc => doc.number = 3)
       assert.deepStrictEqual(change2, {
-        actor, deps: [], startOp: 2, seq: 2, time: change2.time, message: '', ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred: [`1@${actor}`]}
+        actor: actor2, seq: 1, startOp: 2, deps: [decodeChange(binChange1).hash], time: change2.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 2, pred: [`1@${actor1}`]}
         ]
       })
-
-      const state0 = Backend.init()
-      const [state1, patch1, binChange1] = Backend.applyLocalChange(state0, change1)
-      const [state2, patch2, binChange2] = Backend.applyLocalChange(state1, change2)
-
-      const hash1 = decodeChange(binChange1).hash
-      const hash2 = decodeChange(binChange2).hash
-
-      const doc2a = Frontend.applyPatch(doc2, patch1)
-      const doc2b = Frontend.applyPatch(doc2a, patch2)
-
-      const [doc3, change3] = Frontend.change(doc2a, doc => doc.number = 3)
-
-      assert.deepStrictEqual(doc1[STATE].deps,  [])       // blank deps b/c we havent seen a patch
-      assert.deepStrictEqual(doc2[STATE].deps,  [])       // ditto
-      assert.deepStrictEqual(doc2a[STATE].deps, [])      // we have seen a patch but its not up to date
-      assert.deepStrictEqual(doc2b[STATE].deps, [hash2]) // we're up do date
-      assert.deepStrictEqual(doc3[STATE].deps,  [])       // and again - not up to date
-
-      assert.equal(doc1[STATE].maxOp,  1)
-      assert.equal(doc2[STATE].maxOp,  2)
-      assert.equal(doc2a[STATE].maxOp, 2)
-      assert.equal(doc2b[STATE].maxOp, 2)
-      assert.equal(doc3[STATE].maxOp,  3)
-
       assert.deepStrictEqual(change3, {
-        actor, seq: 3, startOp: 3, time: change3.time, message: '', deps: [], ops: [
-          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 3, pred: [`2@${actor}`]}
+        actor: actor2, seq: 2, startOp: 3, deps: [], time: change3.time, message: '', ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 3, pred: [`2@${actor2}`]}
         ]
       })
+
+      const [state2, patch2, binChange2] = Backend.applyLocalChange(state1a, change2)
+      const [state3, patch3, binChange3] = Backend.applyLocalChange(state2, change3)
+      assert.deepStrictEqual(decodeChange(binChange2).deps, [decodeChange(binChange1).hash])
+      assert.deepStrictEqual(decodeChange(binChange3).deps, [decodeChange(binChange2).hash])
+      assert.deepStrictEqual(patch1a.deps, [decodeChange(binChange1).hash])
+      assert.deepStrictEqual(patch2.deps, [])
+
+      const doc2a = Frontend.applyPatch(doc3, patch2)
+      const doc3a = Frontend.applyPatch(doc2a, patch3)
+      const [doc4, change4] = Frontend.change(doc3a, doc => doc.number = 4)
+      assert.deepStrictEqual(change4, {
+        actor: actor2, seq: 3, startOp: 4, time: change4.time, message: '', deps: [], ops: [
+          {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 4, pred: [`3@${actor2}`]}
+        ]
+      })
+      const [state4, patch4, binChange4] = Backend.applyLocalChange(state3, change4)
+      assert.deepStrictEqual(decodeChange(binChange4).deps, [decodeChange(binChange3).hash])
     })
   })
 

@@ -266,7 +266,7 @@ describe('Automerge.Backend', () => {
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
       const changes01 = Backend.getChanges(s1, []).map(decodeChange)
       assert.deepStrictEqual(patch1, {
-        actor: '111111', seq: 1, clock: {'111111': 1}, deps: [changes01[0].hash], maxOp: 1,
+        actor: '111111', seq: 1, clock: {'111111': 1}, deps: [], maxOp: 1,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
           bird: {['1@111111']: {value: 'magpie'}}
         }}
@@ -352,8 +352,7 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
       const changes23 = Backend.getChanges(s3, [changes12[0].hash]).map(decodeChange)
       assert.deepStrictEqual(patch3, {
-        actor: '111111', seq: 2, clock: {'111111': 2, '222222': 1}, 
-        deps: [changes23[0].hash, hash(remote1)].sort(), maxOp: 2,
+        actor: '111111', seq: 2, clock: {'111111': 2, '222222': 1}, deps: [hash(remote1)], maxOp: 2,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
           bird: {'2@222222': {value: 'magpie'}, '2@111111': {value: 'jay'}}
         }}
@@ -376,10 +375,10 @@ describe('Automerge.Backend', () => {
       const local1 = {actor: '111111', seq: 1, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
         {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
       ]}
-      const local2 = {actor: '111111', seq: 2, startOp: 3, time: 0, deps: [hash(local1)], ops: [
+      const local2 = {actor: '111111', seq: 2, startOp: 3, time: 0, deps: [], ops: [
         {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
       ]}
-      const local3 = {actor: '111111', seq: 3, startOp: 4, time: 0, deps: [hash(local2),hash(remote2)], ops: [
+      const local3 = {actor: '111111', seq: 3, startOp: 4, time: 0, deps: [hash(remote2)], ops: [
         {obj: '1@222222', action: 'set', key: '2@222222', value: 'Magpie', pred: ['2@222222']},
         {obj: '1@222222', action: 'set', key: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
       ]}
@@ -427,8 +426,7 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyLocalChange(s1, local2)
       const changes = Backend.getChanges(s2, []).map(decodeChange)
       assert.deepStrictEqual(patch2, {
-        actor: '111111', seq: 2, clock: {'111111': 2},
-        deps: [changes[1].hash], maxOp: 3,
+        actor: '111111', seq: 2, clock: {'111111': 2}, deps: [], maxOp: 3,
         diffs: {objectId: ROOT_ID, type: 'map', props: {
           birds: {['1@111111']: {objectId: '1@111111', type: 'list',
             edits: [{action: 'insert', index: 0, elemId: '2@111111'}, {action: 'remove', index: 0}],

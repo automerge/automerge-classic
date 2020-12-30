@@ -46,6 +46,10 @@ function makePatch(state, diffs, request, isIncremental) {
   if (isIncremental && request) {
     patch.actor = request.actor
     patch.seq   = request.seq
+
+    // Omit the local actor's own last change from deps
+    const lastHash = state.getIn(['opSet', 'states', request.actor, request.seq - 1])
+    patch.deps = patch.deps.filter(dep => dep !== lastHash)
   }
   return patch
 }
@@ -97,13 +101,30 @@ function applyLocalChange(backend, change) {
   if (change.seq <= state.getIn(['opSet', 'states', change.actor], List()).size) {
     throw new RangeError('Change request has already been applied')
   }
-  if (change.seq > 1 && change.deps.length === 0) {
+
+  // Add the local actor's last change hash to deps. We do this because when frontend
+  // and backend are on separate threads, the frontend may fire off several local
+  // changes in sequence before getting a response from the backend; since the binary
+  // encoding and hashing is done by the backend, the frontend does not know the hash
+  // of its own last change in this case. Rather than handle this situation as a
+  // special case, we say that the frontend includes only specifies other actors'
+  // deps in changes it generates, and the dependency from the local actor's last
+  // change is always added here in the backend.
+  //
+  // Strictly speaking, we should check whether the local actor's last change is
+  // indirectly reachable through a different actor's change; in that case, it is not
+  // necessary to add this dependency. However, it doesn't do any harm either (only
+  // using a few extra bytes of storage).
+  if (change.seq > 1) {
     const lastHash = state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
     if (!lastHash) {
       throw new RangeError(`Cannot find hash of localChange before seq=${change.seq}`)
     }
-    change.deps = [ lastHash ]
+    let deps = {[lastHash]: true}
+    for (let hash of change.deps) deps[hash] = true
+    change.deps = Object.keys(deps).sort()
   }
+
   const binaryChange = encodeChange(change)
   const request = { actor: change.actor, seq: change.seq }
   const [state2, patch] = apply(state, [binaryChange], request, true)

@@ -286,7 +286,7 @@ describe('Automerge', () => {
         s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
         const history = Automerge.getHistory(s1)
         const emptyChange = history[2].change
-        assert.deepStrictEqual(emptyChange.deps, [history[1].change.hash])
+        assert.deepStrictEqual(emptyChange.deps, [history[0].change.hash, history[1].change.hash].sort())
         assert.deepStrictEqual(emptyChange.ops, [])
       })
     })
