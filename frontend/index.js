@@ -221,7 +221,7 @@ function change(doc, options, callback) {
 
   if (Object.keys(context.updated).length === 0) {
     // If the callback didn't change anything, return the original document object unchanged
-    return [doc, null, null]
+    return [doc, null]
   } else {
     return makeChange(doc, context, options)
   }

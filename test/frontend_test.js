@@ -367,10 +367,8 @@ describe('Automerge.Frontend', () => {
 
     it('should allow interleaving of patches and changes', () => {
       const actor = uuid()
-      const [doc1, change1, binChange1] = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
-      const [doc2, change2, binChange2] = Frontend.change(doc1, doc => doc.number = 2)
-      assert.equal(binChange1, null)
-      assert.equal(binChange2, null)
+      const [doc1, change1] = Frontend.change(Frontend.init(actor), doc => doc.number = 1)
+      const [doc2, change2] = Frontend.change(doc1, doc => doc.number = 2)
       assert.deepStrictEqual(change1, {
         actor, deps: [], startOp: 1, seq: 1, time: change1.time, message: '', ops: [
           {obj: ROOT_ID, action: 'set', key: 'number', insert: false, value: 1, pred: []}
