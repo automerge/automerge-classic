@@ -42,9 +42,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   hashes rather than vector clocks.
 - **Removed**: `Backend.getMissingChanges()`; use `Backend.getChanges()` instead.
 - **Removed**: `Backend.getChangesForActor()` since it does not fit with a hash chaining approach.
-- **Added**: `Frontend.getDeps()` returns the latest change hashes in the current document state,
-  and `Frontend.getLastLocalChange()` returns the binary encoding of the last change made by the
-  local actor.
+- **Added**: `Frontend.getLastLocalChange()` returns the binary encoding of the last change made
+  by the local actor, and `Backend.getHeads()` returns the latest change hashes in the current
+  document state.
 - **Changed**: `Backend.applyLocalChange()` now returns an array of three values: the updated
   backend state, the patch to apply to the frontend, and the binary encoding of the change.
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been

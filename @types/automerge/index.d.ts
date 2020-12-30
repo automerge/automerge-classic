@@ -109,7 +109,6 @@ declare module 'automerge' {
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
-    function getDeps<T>(doc: Doc<T>): string[]
     function getElementIds(list: any): string[]
     function getLastLocalChange<T>(doc: Doc<T>): Uint8Array
     function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
@@ -124,6 +123,7 @@ declare module 'automerge' {
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
+    function getHeads(state: BackendState): Hash[]
     function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState

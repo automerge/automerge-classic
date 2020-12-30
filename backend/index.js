@@ -21,11 +21,11 @@ function backendState(backend) {
 function init() {
   const opSet = OpSet.init()
   const state = Map({opSet, objectIds: Map()})
-  return {state}
+  return {state, heads: []}
 }
 
 function clone(backend) {
-  return {state: backendState(backend)}
+  return {state: backendState(backend), heads: backend.heads}
 }
 
 function free(backend) {
@@ -81,8 +81,9 @@ function apply(state, changes, request, isIncremental) {
  */
 function applyChanges(backend, changes) {
   let [state, patch] = apply(backendState(backend), changes, null, true)
+  const heads = OpSet.getHeads(state.get('opSet'))
   backend.frozen = true
-  return [{state}, patch]
+  return [{state, heads}, patch]
 }
 
 /**
@@ -106,8 +107,9 @@ function applyLocalChange(backend, change) {
   const binaryChange = encodeChange(change)
   const request = { actor: change.actor, seq: change.seq }
   const [state2, patch] = apply(state, [binaryChange], request, true)
+  const heads = OpSet.getHeads(state2.get('opSet'))
   backend.frozen = true
-  return [{ state: state2 }, patch, binaryChange]
+  return [{state: state2, heads}, patch, binaryChange]
 }
 
 /**
@@ -139,7 +141,7 @@ function loadChanges(backend, changes) {
   const state = backendState(backend)
   const [newState, _] = apply(state, changes, null, false)
   backend.frozen = true
-  return {state: newState}
+  return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
 }
 
 /**
@@ -150,6 +152,14 @@ function getPatch(backend) {
   const state = backendState(backend)
   const diffs = constructPatch(save(backend))
   return makePatch(state, diffs, null, false)
+}
+
+/**
+ * Returns an array of hashes of the current "head" changes (i.e. those changes
+ * that no other change depends on).
+ */
+function getHeads(backend) {
+  return backend.heads
 }
 
 function getChanges(backend, haveDeps) {
@@ -167,5 +177,5 @@ function getMissingDeps(backend) {
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getChanges, getMissingDeps
+  getHeads, getChanges, getMissingDeps
 }

@@ -335,14 +335,6 @@ function setActorId(doc, actorId) {
 }
 
 /**
- * Returns an array of hashes of the "head" changes (i.e. those changes that
- * are not depended on by any other change), according to the current doc state.
- */
-function getDeps(doc) {
-  return doc[STATE].deps
-}
-
-/**
  * Fetches the conflicts on the property `key` of `object`, which may be any
  * object in a document. If `object` is a list, then `key` must be a list
  * index; if `object` is a map, then `key` must be a property name.
@@ -376,7 +368,7 @@ function getElementIds(list) {
 
 module.exports = {
   init, from, change, emptyChange, applyPatch,
-  getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts, getLastLocalChange,
+  getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
   Text, Table, Counter
 }

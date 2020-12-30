@@ -448,6 +448,14 @@ function addLocalChange(opSet, change, patch) {
 }
 
 /**
+ * Returns an array of hashes of the current "head" changes (i.e. those changes
+ * that no other change depends on).
+ */
+function getHeads(opSet) {
+  return opSet.get('deps').toJSON().sort()
+}
+
+/**
  * Returns all the changes in `opSet` that need to be sent to another replica.
  * `haveDeps` is an Immutable.js List object containing the hashes (as hex
  * strings) of the heads that the other replica has. Those changes in `haveDeps`
@@ -615,6 +623,6 @@ function constructObject(opSet, objectId) {
 }
 
 module.exports = {
-  init, addChange, addLocalChange, getMissingChanges, getMissingDeps,
+  init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
 }
