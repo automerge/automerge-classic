@@ -20,7 +20,7 @@ function compareRows(properties, row1, row2) {
 /**
  * A relational-style unordered collection of records (rows). Each row is an
  * object that maps column names to values. The set of rows is represented by
- * a map from object ID to row object.
+ * a map from UUID to row object.
  */
 class Table {
   /**
@@ -29,6 +29,7 @@ class Table {
    */
   constructor() {
     this.entries = Object.freeze({})
+    this.opIds = Object.freeze({})
     Object.freeze(this)
   }
 
@@ -140,14 +141,15 @@ class Table {
     if (!this[OBJECT_ID]) {
       throw new RangeError('clone() requires the objectId to be set')
     }
-    return instantiateTable(this[OBJECT_ID], copyObject(this.entries))
+    return instantiateTable(this[OBJECT_ID], copyObject(this.entries), copyObject(this.opIds))
   }
 
   /**
-   * Sets the entry with key `id` to `value`. This method is for internal use
-   * only; it is not part of the public API of Automerge.Table.
+   * Sets the entry with key `id` to `value`. `opId` is the ID of the operation
+   * performing this assignment. This method is for internal use only; it is
+   * not part of the public API of Automerge.Table.
    */
-  _set(id, value) {
+  _set(id, value, opId) {
     if (Object.isFrozen(this.entries)) {
       throw new Error('A table can only be modified in a change function')
     }
@@ -155,6 +157,7 @@ class Table {
       Object.defineProperty(value, 'id', {value: id, enumerable: true})
     }
     this.entries[id] = value
+    this.opIds[id] = opId
   }
 
   /**
@@ -165,6 +168,7 @@ class Table {
       throw new Error('A table can only be modified in a change function')
     }
     delete this.entries[id]
+    delete this.opIds[id]
   }
 
   /**
@@ -172,6 +176,7 @@ class Table {
    */
   _freeze() {
     Object.freeze(this.entries)
+    Object.freeze(this.opIds)
     Object.freeze(this)
   }
 
@@ -189,6 +194,7 @@ class Table {
     instance[OBJECT_ID] = this[OBJECT_ID]
     instance.context = context
     instance.entries = this.entries
+    instance.opIds = this.opIds
     instance.path = path
     return instance
   }
@@ -235,7 +241,7 @@ class WriteableTable extends Table {
    */
   remove(id) {
     if (isObject(this.entries[id]) && this.entries[id].id === id) {
-      this.context.deleteTableRow(this.path, id)
+      this.context.deleteTableRow(this.path, id, this.opIds[id])
     } else {
       throw new RangeError(`There is no row with ID ${id} in this table`)
     }
@@ -246,7 +252,7 @@ class WriteableTable extends Table {
  * This function is used to instantiate a Table object in the context of
  * applying a patch (see apply_patch.js).
  */
-function instantiateTable(objectId, entries) {
+function instantiateTable(objectId, entries, opIds) {
   const instance = Object.create(Table.prototype)
   if (!objectId) {
     throw new RangeError('instantiateTable requires an objectId to be given')
@@ -254,6 +260,7 @@ function instantiateTable(objectId, entries) {
   instance[OBJECT_ID] = objectId
   instance[CONFLICTS] = Object.freeze({})
   instance.entries = entries || {}
+  instance.opIds = opIds || {}
   return instance
 }
 

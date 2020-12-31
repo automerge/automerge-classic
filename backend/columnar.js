@@ -1077,7 +1077,7 @@ function addPatchProperty(objects, property) {
     } else if (obj.type === 'list' || obj.type === 'text') {
       if (!obj.edits) obj.edits = []
       obj.props[obj.edits.length] = values
-      obj.edits.push({action: 'insert', index: obj.edits.length})
+      obj.edits.push({action: 'insert', index: obj.edits.length, elemId: property.key})
     }
   }
 }

@@ -72,6 +72,19 @@ describe('Automerge', () => {
       assert.strictEqual(s2.foo, 'bar')
     })
 
+    it('changes should be retrievable', () => {
+      const change1 = Automerge.getLastLocalChange(s1)
+      s2 = Automerge.change(s1, doc => doc.foo = 'bar')
+      const change2 = Automerge.getLastLocalChange(s2)
+      assert.strictEqual(change1, null)
+      const change = decodeChange(change2)
+      assert.deepStrictEqual(change, {
+        actor: change.actor, deps: [], seq: 1, startOp: 1,
+        hash: change.hash, message: '', time: change.time,
+        ops: [{obj: ROOT_ID, key: 'foo', action: 'set', insert: false, value: 'bar', pred: []}]
+      })
+    })
+
     it('should not register any conflicts on repeated assignment', () => {
       assert.strictEqual(Automerge.getConflicts(s1, 'foo'), undefined)
       s1 = Automerge.change(s1, 'change', doc => doc.foo = 'one')
@@ -273,7 +286,7 @@ describe('Automerge', () => {
         s1 = Automerge.emptyChange(Automerge.merge(s1, s2))
         const history = Automerge.getHistory(s1)
         const emptyChange = history[2].change
-        assert.deepStrictEqual(emptyChange.deps, [history[1].change.hash])
+        assert.deepStrictEqual(emptyChange.deps, [history[0].change.hash, history[1].change.hash].sort())
         assert.deepStrictEqual(emptyChange.ops, [])
       })
     })
@@ -582,6 +595,35 @@ describe('Automerge', () => {
         assert.deepStrictEqual(s1.noodleMatrix[1], ['udon', 'tempura udon'])
       })
 
+      it('should handle deep nesting', () => {
+        s1 = Automerge.change(s1, doc => doc.nesting = {
+          maps: { m1: { m2: { foo: "bar", baz: {} }, m2a: { } } },
+          lists: [ [ 1,2,3 ] , [ [ 3,4,5,[6]], 7 ] ],
+          mapsinlists: [ { foo: "bar" } , [ { bar: "baz" } ] ],
+          listsinmaps: { foo: [1,2,3], bar: [ [ { baz: "123" } ] ] }
+        })
+        s1 = Automerge.change(s1, doc => {
+          doc.nesting.maps.m1a = "123"
+          doc.nesting.maps.m1.m2.baz.xxx = "123"
+          delete doc.nesting.maps.m1.m2a
+          doc.nesting.lists.shift()
+          doc.nesting.lists[0][0].pop()
+          doc.nesting.lists[0][0].push(100)
+          doc.nesting.mapsinlists[0].foo = "baz"
+          doc.nesting.mapsinlists[1][0].foo = "bar"
+          delete doc.nesting.mapsinlists[1]
+          doc.nesting.listsinmaps.foo.push(4)
+          doc.nesting.listsinmaps.bar[0][0].baz = "456"
+          delete doc.nesting.listsinmaps.bar
+        })
+        assert.deepStrictEqual(s1, { nesting: {
+          maps: { m1: { m2: { foo: "bar", baz: { xxx: "123" } } }, m1a: "123" },
+          lists: [ [ [ 3,4,5,100 ], 7 ] ],
+          mapsinlists: [ { foo: "baz" } ],
+          listsinmaps: { foo: [1,2,3,4] }
+        }})
+      })
+
       it('should handle replacement of the entire list', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = ['udon', 'soba', 'ramen'])
         s1 = Automerge.change(s1, doc => doc.japaneseNoodles = doc.noodles.slice())
@@ -653,47 +695,13 @@ describe('Automerge', () => {
     })
 
     describe('counters', () => {
-      it('should coalesce assignments and increments', () => {
-        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {})
-        const s2 = Automerge.change(s1, doc => {
-          doc.birds.wrens = new Automerge.Counter(1)
-          doc.birds.wrens.increment(2)
-        })
-        assert.deepStrictEqual(s1, {birds: {}})
-        assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
-        const changes = Automerge.getAllChanges(s2).map(decodeChange)
-        assert.deepStrictEqual(changes[1], {
-          hash: changes[1].hash, actor: Automerge.getActorId(s2), seq: 2, startOp: 2,
-          time: changes[1].time, message: '', deps: [changes[0].hash], ops: [
-            {obj: Automerge.getObjectId(s2.birds), action: 'set', key: 'wrens', insert: false, value: 3, datatype: 'counter', pred: []}
-          ]
-        })
-      })
 
-      it('should coalesce multiple increments', () => {
-        const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter()})
-        const s2 = Automerge.change(s1, doc => {
-          doc.birds.wrens.increment(2)
-          doc.birds.wrens.decrement()
-          doc.birds.wrens.increment(3)
-        })
-        assert.deepStrictEqual(s1, {birds: {wrens: new Automerge.Counter(0)}})
-        assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(4)}})
-        const changes = Automerge.getAllChanges(s2).map(decodeChange), actor = Automerge.getActorId(s2)
-        assert.deepStrictEqual(changes[1], {
-          hash: changes[1].hash, actor, seq: 2, startOp: 3, time: changes[1].time,
-          message: '', deps: [changes[0].hash], ops: [
-            {obj: Automerge.getObjectId(s2.birds), action: 'inc', key: 'wrens', insert: false, value: 4, pred: [`2@${actor}`]}
-          ]
-        })
-      })
-
-      it.skip('should allow deleting counters from maps', () => {
+      it('should allow deleting counters from maps', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})
         const s2 = Automerge.change(s1, doc => doc.birds.wrens.increment(2))
         const s3 = Automerge.change(s2, doc => delete doc.birds.wrens)
         assert.deepStrictEqual(s2, {birds: {wrens: new Automerge.Counter(3)}})
-        assert.deepStrictEqual(s2, {birds: {}})
+        assert.deepStrictEqual(s3, {birds: {}})
       })
 
       it('should not allow deleting counters from lists', () => {
@@ -1018,6 +1026,12 @@ describe('Automerge', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.todos = [{title: 'water plants', done: false}])
       let s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2, {todos: [{title: 'water plants', done: false}]})
+    })
+
+    it.skip('should save and load maps with @ symbols in the keys', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc["123@4567"] = "hello")
+      let s2 = Automerge.load(Automerge.save(s1))
+      assert.deepStrictEqual(s2, { ["123@4567"]: "hello" })
     })
 
     it('should reconstitute conflicts', () => {

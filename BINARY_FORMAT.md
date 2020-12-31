@@ -39,39 +39,50 @@ a new operation, an actor always picks a counter value that is 1 greater than
 any existing counter value in the document (it's a
 [Lamport timestamp](https://en.wikipedia.org/wiki/Lamport_timestamps)).
 
+Another difference is that while the old format used actorIds and sequence
+numbers (essentially, a vector clock) to represent causal dependencies, the new
+format identifies each change by the SHA-256 hash of its binary encoding, and
+causal dependencies are represented using the hashes of the preceding changes
+(very much like a Git commit history).
+
 A change is a JSON object with the following properties:
 
-* `actor`, `seq`, `deps`, `message`: as in the old format, documented in
-  `INTERNALS.md`.
+* `actor`: The ID of the actor that generated the change, as a lowercase
+  hexadecimal string.
+* `seq`: The sequence number of the change, starting with 1 for a given actor
+  ID and proceeding as an incrementing sequence.
+* `deps`: An array of 64-digit lowercase hexadecimal strings containing the
+  SHA-256 hashes of the binary encoding of the changes that causally precede
+  this change. The array is empty for the first ever change, contains one
+  hash in the case of a linear editing history, and multiple hashes in the case
+  of a "merge commit".
 * `startOp`: An integer, containing the counter value of the ID of the first
   operation in this change. Subsequent operations are assigned IDs in an
   incrementing sequence.
 * `time`: The timestamp at which this change was generated, as an integer
   indicating the number of milliseconds since the 1970 Unix epoch. Dates
   before the epoch are represented as a negative number.
+* `message`: An optional human-readable "commit message" that describes the
+  change in a meaningful way. It is not interpreted by Automerge, only
+  stored for introspection, debugging, undo, and similar purposes.
 * `ops`: An array of operations, as documented below.
 
 An operation is a JSON object with the following properties:
 
-* `action`: One of `'set'`, `'del'`, `'inc'`, `'link'`, `'makeMap'`,
-  `'makeList'`, `'makeText'`, or `'makeTable'`. These have broadly the same
-  meaning as before:
+* `action`: One of `'set'`, `'del'`, `'inc'`, `'makeMap'`, `'makeList'`,
+  `'makeText'`, or `'makeTable'`. These have broadly the same meaning as before:
   * `set` assigns a primitive value (string, number, boolean, or null) to a
     property of an object or a list element
   * `del` deletes a property or list element
   * `inc` increments or decrements a counter stored in a particular property or
     list element
-  * `link` updates a property or list element to reference some other object
-    that already exists
   * `make*` creates a new object of the specified type, and assigns it to a
     property of an object or a list element
 * `obj`: The objectId of the object being modified in this operation. This may
-  be the UUID consisting of all zeros (indicating the root object), a string
+  be the UUID consisting of all zeros (indicating the root object) or a string
   of the form `counter@actorId` (indicating the object created by the operation
-  with that ID), or a string containing another UUID (if the object was created
-  by an operation with a `child` property). Note: in `make*` operations, the
-  `obj` property contains the ID of the parent object, not the ID of the object
-  being created.
+  with that ID). Note: in `make*` operations, the `obj` property contains the ID
+  of the *parent object*, not the ID of the object being created.
 * `insert`: A boolean that may be present on operations that modify list or text
   objects, and on all operation types except `del` and `inc`. If the `insert`
   property is false or absent, the operation updates the property or list
@@ -81,17 +92,15 @@ An operation is a JSON object with the following properties:
 * `key`: A string that identifies the property of the object `obj` that is being
   modified, present on all operations. If the object is a map, this is a string
   containing the property name. If the object is a table, this is a string
-  containing the primary key of the row. If the object is a list or text, this
-  is a string of the form `counter@actorId` identifying the list element ID, or
-  the string `'_head'` indicating insertion at the beginning of the list (the
-  value `'_head'` is allowed only if `insert` is true).
+  containing the primary key of the row (a UUID). If the object is a list or
+  text, this is a string of the form `counter@actorId` identifying the list
+  element ID, or the string `'_head'` indicating insertion at the beginning of
+  the list (the value `'_head'` is allowed only if `insert` is true).
 * `value`: On `set` operations only, this property contains the primitive value
   (string, number, boolean, or null) to assign.
 * `datatype`: On `set` operations only, this property can optionally be set to
   `'counter'` or `'timestamp'` to change the way the value is interpreted, as
   in the old format.
-* `child`: Only used in the case of a `link` operation, in which case this
-  property contains the ID of the child object being referenced.
 * `pred`: An array of IDs of operations that are overwritten by this operation,
   in the form `counter@actorId`. Any existing operations that are not
   overwritten must be concurrent, and result in a conflict. The `pred` property
@@ -122,11 +131,9 @@ Note several differences to the old format:
 Open questions:
 
 * Get rid of the all-zeros UUID, and just use a special string `_root` instead?
-* Get rid of the option for objects to be created with a UUID objectId, and
-  force all objects to use operationIds? This would imply that a frontend object
-  cannot know its objectId until after a round-trip through the backend. This is
-  particularly relevant to Automerge.Table, which currently uses the objectId of
-  a row as its primary key.
+* Use different properties for `key` in the cases where it is a string versus
+  being an opId? (At the moment we treat it as opId if it contains an `@` sign,
+  which effectively rules out string properties from containing `@`.)
 
 
 Binary representation of changes
@@ -148,66 +155,20 @@ The responsibilities between frontend and backend are assigned as follows:
 * The frontend knows the current session's actorId; the backend does not. This
   opens the possibility of in the future maybe having multiple frontends backed
   by a single backend.
-* The frontend assigns sequence numbers to locally generated changes.
-* The backend assigns operation IDs.
-  * Therefore, when the frontend creates a new object, it doesn't know that
-    object's ID (= the ID of the `make*` operation that created it) until after
-    a round-trip through the backend. The frontend-backend protocol therefore
-    needs to use a temporary object ID for objects whose creation is in flight.
-    We use UUIDs as these temporary IDs.
-  * The reason for having the backend assign operation IDs is that the exact
-    number of operations in a change is not known until the backend has filtered
-    out duplicate operations, which requires information not known to the
-    frontend. And the exact number of operations is important because operation
-    IDs are assigned sequentially within a change, to maximise compression.
-* The frontend references list elements by their index; the mapping between
-  indexes and list element IDs is only known to the backend.
-  * Hence, both directions of the frontend-backend protocol use list indexes,
-    not list element IDs.
-  * The reason for this is to keep the management of the list element ID data
-    structure, which can be expensive, off the UI thread.
+* The frontend assigns sequence numbers and operation IDs to locally generated
+  changes, and produces a JSON representation of the change.
+* The backend translates the JSON change into the binary encoding, computes its
+  hash, and fills in the dependency hashes as described below.
 
-### Change requests
-
-As in the old format, a change request is sent from the frontend to the backend
-as the result of local user input.
-
-A change request is a JSON object with the following properties:
-
-* `actor`, `seq`, `time` and `message`: As in the change format. The
-  frontend knows the local actorId and generates the sequence number.
-  These properties appear on all request types.
-* `version`: An integer containing the highest document version number
-  (as assigned by the backend) that the frontend has seen at the time it
-  generated this change request. The version number is zero for a newly
-  created document.
-* `ops`: an array of operation object as described below.
-
-Each operation in the `ops` array is similar to the operations in a change
-(as documented above), with the following differences:
-
-* When the object being modified is a list or text, the `key` property
-  does not contain a list element ID or the string `_head`, but instead,
-  it contains the integer index of the list element being updated. If the
-  `insert` property of the operation is true, the `key` property contains
-  the index at which the new list element is being inserted.
-* Every `make*` operation must have a `child` property containing a UUID,
-  and subsequent operations (in the same change request or later requests)
-  may refer to this UUID in their `obj` when updating this newly created
-  object. The backend will translate this temporary UUID-based objectId
-  into an operationId.
-* The operation has no `pred` property; this is filled in by the backend.
-
-**NOTE:** The backend's processing of change requests from the frontend
-currently relies on the immutability of the backend. Translating any list
-indexes in the change request into the corresponding element IDs relies on
-the backend knowing the state of the list at the time when the frontend
-generated the request. In the meantime, the backend may have processed
-remote changes that could have modified the list. If the backend is
-mutable, it will have to support list index translation queries on a state
-that contains all local changes, but excludes any remote changes that had
-not yet been seen by the frontend at the time it generated the request.
-
+When the frontend generates a new change, it does so using the JSON
+representation described above, with one exception: in its dependencies it omits
+the hash of the last change generated by the local actor. We do this because the
+binary encoding happens in the backend (on the basis of keeping the frontend as
+simple as possible and moving as much as possible of the language-independent
+logic into the backend), so the frontend does not know the hash of a change
+until it has done a round-trip through the backend. Omitting the hash of the
+local actor's most recent change allows the frontend to generate several changes
+in quick succession without waiting for a response from the backend.
 
 ### Patch format
 
@@ -223,19 +184,20 @@ A patch is a JSON object with the following properties:
   request, these properties are set to the `actor` and `seq` of that
   request. Absent on patches that result from remote changes or loading
   changes from file.
-* `version`: An integer that sequentially numbers the patches applied to
-  a particular document, starting with zero. The backend assigns these
-  version numbers, and when the frontend makes a change request, it must
-  include the latest version number it has seen in its request. Note that
-  `version` is different from `seq`: `version` is incremented on any
-  patch, regardless of whether it is the result of local or remote
-  changes, while `seq` is incremented only on local changes.
-* `clock`: Like in the old patch format.
+* `deps`: The SHA-256 hashes of the latest changes received by the backend,
+  with the exception of the most recent local change (in the case where the
+  patch is the result of a local change request). "Latest" means "there is
+  no other change that depends on this change", so there can be several
+  "latest" changes in the case of concurrent updates. The frontend should
+  include `deps` in the next change request it sends to the backend.
+* `clock`: Object in which the keys are actor IDs, and the values are the
+  highest sequence number that the backend has processed from that actor.
+  Includes all actor IDs ever seen by the backend.
 * `diffs`: A JSON object describing the changes that need to be made to
   the document. In the old patch format, this was a flat list of changes,
   while in the new patch format this is a nested structure mirroring the
   structure of the document, as described below.
-  
+
 A diff object has either the following structure:
 
 ```js
@@ -280,11 +242,10 @@ can be empty, in which case the whole object is left unchanged.
 must be applied first, before applying the updates in `props`. `edits`
 consists of an array of objects of one of the following forms:
 
-* `{action: 'insert', index: 0}`: Insert a new list element at the given
-  index. The value associated with this list element is given separately
-  in the `props` part of the diff.
-* `{action: 'remove', index: 0}`: Remove the list element at the given
-  index.
+* `{action: 'insert', index: 0, elemId: '123@abcdef'}`: Insert a new list
+  element with unique ID `elemId` at the given index. The value associated
+  with this list element is given separately in the `props` part of the diff.
+* `{action: 'remove', index: 0}`: Remove the list element at the given index.
 
 The edits must be applied in the order they appear in the array.
 

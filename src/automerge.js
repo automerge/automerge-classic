@@ -66,8 +66,9 @@ function merge(localDoc, remoteDoc) {
 }
 
 function getChanges(oldDoc, newDoc) {
+  const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  return backend.getChanges(newState, Frontend.getDeps(oldDoc))
+  return backend.getChanges(newState, backend.getHeads(oldState))
 }
 
 function getAllChanges(doc) {
@@ -131,6 +132,6 @@ module.exports = {
 }
 
 for (let name of ['getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
+     'setActorId', 'getConflicts', 'getLastLocalChange', 'Text', 'Table', 'Counter']) {
   module.exports[name] = Frontend[name]
 }

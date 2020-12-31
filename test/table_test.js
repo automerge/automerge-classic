@@ -21,32 +21,33 @@ describe('Automerge.Table', () => {
   describe('Frontend', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
-      const [doc, req] = Frontend.change(Frontend.init(actor), doc => {
+      const [doc, change] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
       })
       const books = Frontend.getObjectId(doc.books)
-      assert.deepStrictEqual(req, {
-        actor, seq: 1, time: req.time, message: '', version: 0, ops: [
-          {obj: ROOT_ID, action: 'makeTable', key: 'books', insert: false, child: books}
+      assert.deepStrictEqual(change, {
+        actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
+          {obj: ROOT_ID, action: 'makeTable', key: 'books', insert: false, pred: []}
         ]
       })
     })
 
     it('should generate ops to insert a row', () => {
       const actor = uuid()
-      const [doc1, req1] = Frontend.change(Frontend.init(actor), doc => {
+      const [doc1, change1] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
       })
       let rowId
-      const [doc2, req2] = Frontend.change(doc1, doc => {
+      const [doc2, change2] = Frontend.change(doc1, doc => {
         rowId = doc.books.add({authors: 'Kleppmann, Martin', title: 'Designing Data-Intensive Applications'})
       })
       const books = Frontend.getObjectId(doc2.books)
-      assert.deepStrictEqual(req2, {
-        actor, seq: 2, time: req2.time, message: '', version: 0, ops: [
-          {obj: books, action: 'makeMap', key: rowId, insert: false, child: rowId},
-          {obj: rowId, action: 'set', key: 'authors', insert: false, value: 'Kleppmann, Martin'},
-          {obj: rowId, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications'}
+      const rowObjID = Frontend.getObjectId(doc2.books.entries[rowId])
+      assert.deepStrictEqual(change2, {
+        actor, seq: 2, time: change2.time, message: '', startOp: 2, deps: [], ops: [
+          {obj: books, action: 'makeMap', key: rowId, insert: false, pred: []},
+          {obj: rowObjID, action: 'set', key: 'authors', insert: false, value: 'Kleppmann, Martin', pred: []},
+          {obj: rowObjID, action: 'set', key: 'title', insert: false, value: 'Designing Data-Intensive Applications', pred: []}
         ]
       })
     })
@@ -94,6 +95,9 @@ describe('Automerge.Table', () => {
     })
 
     it('should save and reload', () => {
+      // FIXME - the bug is in parseAllOpIds()
+      // maps and tables with a string key that has an `@` gets
+      // improperly encoded as an opId
       const s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2.books.byId(rowId), rowWithId)
     })

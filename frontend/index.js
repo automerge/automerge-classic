@@ -1,4 +1,4 @@
-const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE } = require('./constants')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
 const { ROOT_ID, isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
@@ -81,32 +81,41 @@ function makeChange(doc, context, options) {
   const state = copyObject(doc[STATE])
   state.seq += 1
 
-  const request = {
-    actor, seq: state.seq, time: Math.round(new Date().getTime() / 1000),
+  const change = {
+    actor,
+    seq: state.seq,
+    startOp: state.maxOp + 1,
+    deps: state.deps,
+    time:  Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
-    version: state.version
-  }
-  if (context) {
-    request.ops = context.ops
+    ops: context.ops
   }
 
   if (doc[OPTIONS].backend) {
-    const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
+    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, change)
     state.backendState = backendState
+    state.lastLocalChange = binaryChange
     // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
     // context invoking interpretPatch as soon as any change is made, and the second time here
     // (after a round-trip through the backend). This is perhaps more robust, as changes only take
     // effect in the form processed by the backend, but the downside is a performance cost.
     // Should we change this?
-    return [applyPatchToDoc(doc, patch, state, true), request]
+    return [applyPatchToDoc(doc, patch, state, true), change]
 
   } else {
-    if (!context) context = new Context(doc, actor)
-    const queuedRequest = copyObject(request)
-    queuedRequest.before = doc
+    const queuedRequest = {actor, seq: change.seq, before: doc}
     state.requests = state.requests.concat([queuedRequest])
-    return [updateRootObject(doc, context.updated, state), request]
+    state.maxOp = state.maxOp + change.ops.length
+    state.deps = []
+    return [updateRootObject(doc, context ? context.updated : {}, state), change]
   }
+}
+
+/**
+ * Returns the binary encoding of the last change made by the local actor.
+ */
+function getLastLocalChange(doc) {
+  return doc[STATE] && doc[STATE].lastLocalChange ? doc[STATE].lastLocalChange : null
 }
 
 /**
@@ -126,9 +135,9 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     if (patch.clock[actor] && patch.clock[actor] > state.seq) {
       state.seq = patch.clock[actor]
     }
-    state.clock   = patch.clock
-    state.deps    = patch.deps
-    state.version = patch.version
+    state.clock = patch.clock
+    state.deps  = patch.deps
+    state.maxOp = Math.max(state.maxOp, patch.maxOp)
   }
   return updateRootObject(doc, updated, state)
 }
@@ -153,9 +162,10 @@ function init(options) {
   }
 
   const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], version: 0, clock: {}, deps: []}
+  const state = {seq: 0, maxOp: 0, requests: [], clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
+    state.lastLocalChange = null
   }
   Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
@@ -261,13 +271,13 @@ function applyPatch(doc, patch) {
 
   if (state.requests.length > 0) {
     baseDoc = state.requests[0].before
-    if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
+    if (patch.actor === getActorId(doc)) {
       if (state.requests[0].seq !== patch.seq) {
         throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${state.requests[0].seq}`)
       }
-      state.requests = state.requests.slice(1).map(copyObject)
+      state.requests = state.requests.slice(1)
     } else {
-      state.requests = state.requests.slice().map(copyObject)
+      state.requests = state.requests.slice()
     }
   } else {
     baseDoc = doc
@@ -278,6 +288,7 @@ function applyPatch(doc, patch) {
   if (state.requests.length === 0) {
     return newDoc
   } else {
+    state.requests[0] = copyObject(state.requests[0])
     state.requests[0].before = newDoc
     return updateRootObject(doc, {}, state)
   }
@@ -324,14 +335,6 @@ function setActorId(doc, actorId) {
 }
 
 /**
- * Returns an array of hashes of the "head" changes (i.e. those changes that
- * are not depended on by any other change), according to the current doc state.
- */
-function getDeps(doc) {
-  return doc[STATE].deps
-}
-
-/**
  * Fetches the conflicts on the property `key` of `object`, which may be any
  * object in a document. If `object` is a list, then `key` must be a list
  * index; if `object` is a map, then `key` must be a property name.
@@ -351,9 +354,21 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
+/**
+ * Given an array or text object from an Automerge document, returns an array
+ * containing the unique element ID of each list element/character.
+ */
+function getElementIds(list) {
+  if (list instanceof Text) {
+    return list.elems.map(elem => elem.elemId)
+  } else {
+    return list[ELEM_IDS]
+  }
+}
+
 module.exports = {
   init, from, change, emptyChange, applyPatch,
-  getObjectId, getObjectById, getActorId, setActorId, getDeps, getConflicts,
-  getBackendState,
+  getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
+  getBackendState, getElementIds,
   Text, Table, Counter
 }

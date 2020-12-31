@@ -44,8 +44,8 @@ declare module 'automerge' {
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Hash[]
-  function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
-  function getObjectId(object: any): UUID
+  function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
+  function getObjectId(object: any): OpId
 
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
@@ -102,25 +102,28 @@ declare module 'automerge' {
 
   namespace Frontend {
     function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
-    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Request]
-    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Request]
-    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Request]
-    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Request]
+    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
+    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
+    function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
-    function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
-    function getObjectId<T>(doc: Doc<T>): UUID
+    function getElementIds(list: any): string[]
+    function getLastLocalChange<T>(doc: Doc<T>): Uint8Array
+    function getObjectById<T>(doc: Doc<T>, objectId: OpId): Doc<T>
+    function getObjectId<T>(doc: Doc<T>): OpId
     function init<T>(options?: InitOptions): Doc<T>
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
   }
 
   namespace Backend {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
-    function applyLocalChange(state: BackendState, request: Request): [BackendState, Patch]
+    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
+    function getHeads(state: BackendState): Hash[]
     function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
@@ -131,7 +134,8 @@ declare module 'automerge' {
 
   // Internals
 
-  type Hash = string
+  type Hash = string // 64-digit hex string
+  type OpId = string // of the form `${counter}@${actorId}`
 
   type UUID = string
   type UUIDGenerator = () => UUID
@@ -154,19 +158,10 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
-  // A change request, sent from the frontend to the backend
-  interface Request {
-    actor: string
-    seq: number
-    time: number
-    message: string
-    version: number
-    ops: Op[]
-  }
-
   interface Change {
     message: string
     actor: string
+    time: number
     seq: number
     deps: Hash[]
     ops: Op[]
@@ -174,13 +169,13 @@ declare module 'automerge' {
 
   interface Op {
     action: OpAction
-    obj: UUID
+    obj: OpId
     key: string | number
     insert: boolean
-    child?: UUID
+    child?: OpId
     value?: number | boolean | string | null
     datatype?: DataType
-    pred?: UUID[]
+    pred?: OpId[]
   }
 
   interface Patch {
@@ -188,15 +183,14 @@ declare module 'automerge' {
     seq?: number
     clock: Clock
     deps: Hash[]
-    version: number
     diffs: ObjectDiff
   }
 
   interface ObjectDiff {
-    objectId: UUID
+    objectId: OpId
     type: CollectionType
     edits?: Edit[]
-    props?: {[propName: string]: {[actorId: string]: ObjectDiff | ValueDiff}}
+    props?: {[propName: string]: {[opId: string]: ObjectDiff | ValueDiff}}
   }
 
   interface ValueDiff {
@@ -207,6 +201,7 @@ declare module 'automerge' {
   interface Edit {
     action: 'insert' | 'remove'
     index: number
+    elemId: OpId
   }
 
   type OpAction =
@@ -251,6 +246,4 @@ declare module 'automerge' {
   interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
   interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
   type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
-
-  type Lookup<T, K> = K extends keyof T ? T[K] : never
 }
