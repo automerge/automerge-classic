@@ -1548,7 +1548,7 @@ function groupRelatedOps(change, changeCols, objectMeta) {
 
 class BackendDoc {
   constructor(buffer) {
-    this.version = 0
+    this.maxOp = 0
     this.changes = []
     this.changeByHash = {}
     this.actorIds = []
@@ -1609,7 +1609,7 @@ class BackendDoc {
       // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
       if (!isOverwritten) {
         if (!propState[elemId]) {
-          patch.edits.push({action: 'insert', index: listIndex})
+          patch.edits.push({action: 'insert', index: listIndex, elemId})
           propState[elemId] = {action: 'insert', visibleOps: [], hasChild: false}
         } else if (propState[elemId].action === 'remove') {
           patch.edits.pop()
@@ -2075,18 +2075,21 @@ class BackendDoc {
    * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
    * object is not modified.
    */
-  applyChanges(changeBuffers) {
+  applyChanges(changeBuffers, isLocal = false) {
     let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
     let docState = {
       actorIds: this.actorIds, opsCols: this.docColumns, numOps: this.numOps,
       objectMeta: Object.assign({}, this.objectMeta), lastIndex: {}
     }
     let allObjectIds = {}, changeByHash = Object.assign({}, this.changeByHash)
-    let heads = {}, clock = Object.assign({}, this.clock)
+    let maxOp = this.maxOp, heads = {}, clock = Object.assign({}, this.clock)
     for (let head of this.heads) heads[head] = true
 
+    let decodedChanges = []
     for (let changeBuffer of changeBuffers) {
       const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+      decodedChanges.push(change)
+
       for (let dep of change.deps) {
         // TODO enqueue changes that are not yet causally ready rather than throwing an exception
         if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
@@ -2094,6 +2097,7 @@ class BackendDoc {
       }
       changeByHash[change.hash] = changeBuffer
       heads[change.hash] = true
+
       const expectedSeq = (clock[change.actor] || 0) + 1
       if (change.seq !== expectedSeq) {
         throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
@@ -2106,6 +2110,8 @@ class BackendDoc {
       const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
       const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
       for (let id of objectIds) allObjectIds[id] = true
+      const lastOps = opSequences[opSequences.length - 1]
+      if (lastOps) maxOp = Math.max(maxOp, lastOps.idCtr + lastOps.consecutiveOps - 1)
 
       for (let col of changeCols) col.decoder.reset()
       for (let op of opSequences) {
@@ -2118,7 +2124,7 @@ class BackendDoc {
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
     // the document is not modified (making `applyChanges` atomic in the ACID sense).
-    this.version += 1
+    this.maxOp      = maxOp
     this.changes    = this.changes.concat(changeBuffers)
     this.changeByHash = changeByHash
     this.actorIds   = docState.actorIds
@@ -2127,7 +2133,13 @@ class BackendDoc {
     this.docColumns = docState.opsCols
     this.numOps     = docState.numOps
     this.objectMeta = docState.objectMeta
-    return {version: this.version, clock, deps: this.heads, diffs: patches[ROOT_ID]}
+
+    let patch = {maxOp, clock, deps: this.heads, diffs: patches[ROOT_ID]}
+    if (isLocal && decodedChanges.length === 1) {
+      patch.actor = decodedChanges[0].actor
+      patch.seq = decodedChanges[0].seq
+    }
+    return patch
   }
 }
 
