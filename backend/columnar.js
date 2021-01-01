@@ -1551,6 +1551,7 @@ class BackendDoc {
     this.maxOp = 0
     this.changes = []
     this.changeByHash = {}
+    this.hashesByActor = {}
     this.actorIds = []
     this.heads = []
     this.clock = {}
@@ -1573,6 +1574,25 @@ class BackendDoc {
       this.numOps = 0
       this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
+  }
+
+  /**
+   * Makes a copy of this BackendDoc that can be independently modified.
+   */
+  clone() {
+    // It's sufficient to just copy the object's member variables because we don't mutate the
+    // contents of those variables (so no deep cloning is needed)
+    let copy = new BackendDoc()
+    copy.maxOp = this.maxOp
+    copy.changes = this.changes
+    copy.changeByHash = this.changeByHash
+    copy.actorIds = this.actorIds
+    copy.heads = this.heads
+    copy.clock = this.clock
+    copy.docColumns = this.docColumns
+    copy.numOps = this.numOps
+    copy.objectMeta = this.objectMeta
+    return copy
   }
 
   /**
@@ -2134,12 +2154,59 @@ class BackendDoc {
     this.numOps     = docState.numOps
     this.objectMeta = docState.objectMeta
 
+    for (let change of decodedChanges) {
+      if (change.seq === 1) this.hashesByActor[change.actor] = []
+      this.hashesByActor[change.actor].push(change.hash)
+    }
+
     let patch = {maxOp, clock, deps: this.heads, diffs: patches[ROOT_ID]}
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
       patch.seq = decodedChanges[0].seq
     }
     return patch
+  }
+
+  /**
+   * Returns all the changes that need to be sent to another replica. `hashes` is a list of change
+   * hashes known to the other replica. The changes in `hashes` and any of their transitive
+   * dependencies will not be returned; any changes later than or concurrent to the hashes will be
+   * returned. If `hashes` is an empty list, all changes are returned.
+   *
+   * NOTE: This function throws an exception if any of the given hashes are not known to this
+   * replica. This means that if the other replica is ahead of us, this function cannot be used
+   * directly to find the changes to send. TODO need to fix this.
+   */
+  getChanges(hashes) {
+    const haveHashes = {}, changes = this.changes.map(decodeChangeColumns)
+    for (let hash of hashes) haveHashes[hash] = true
+    for (let i = changes.length - 1; i >= 0; i--) {
+      if (haveHashes[changes[i].hash]) {
+        for (let dep of changes[i].deps) haveHashes[dep] = true
+      }
+    }
+    let result = []
+    for (let i = 0; i < changes.length; i++) {
+      if (!haveHashes[changes[i].hash]) {
+        result.push(this.changes[i])
+      }
+    }
+    return result
+  }
+
+  /**
+   * When you attempt to apply a change whose dependencies are not satisfied, it is queued up and
+   * the missing dependency's hash is returned from this method.
+   */
+  getMissingDeps() {
+    return [] // TODO implement this
+  }
+
+  /**
+   * Serialises the current document state into a single byte array.
+   */
+  save() {
+    return encodeDocument(this.changes)
   }
 }
 

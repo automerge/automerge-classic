@@ -2,7 +2,11 @@ const { Map, List } = require('immutable')
 const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
-const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
+const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
+
+// Feature flag: false uses old Immutable.js-based backend data structures, true uses new
+// byte-array-based data structures. New data structures are not yet fully working.
+const USE_NEW_BACKEND = false
 
 function backendState(backend) {
   if (backend.frozen) {
@@ -15,17 +19,31 @@ function backendState(backend) {
   return backend.state
 }
 
+function hashesByActor(state, actorId) {
+  if (USE_NEW_BACKEND) {
+    return state.hashesByActor[actorId] || []
+  } else {
+    return state.getIn(['opSet', 'states', actorId], List()).toJS()
+  }
+}
+
 /**
  * Returns an empty node state.
  */
 function init() {
-  const opSet = OpSet.init()
-  const state = Map({opSet, objectIds: Map()})
-  return {state, heads: []}
+  if (USE_NEW_BACKEND) {
+    return {state: new BackendDoc(), heads: []}
+  } else {
+    return {state: Map({opSet: OpSet.init(), objectIds: Map()}), heads: []}
+  }
 }
 
 function clone(backend) {
-  return {state: backendState(backend), heads: backend.heads}
+  if (USE_NEW_BACKEND) {
+    return {state: backendState(backend).clone(), heads: backend.heads}
+  } else {
+    return {state: backendState(backend), heads: backend.heads}
+  }
 }
 
 function free(backend) {
@@ -84,10 +102,17 @@ function apply(state, changes, request, isIncremental) {
  * to the document objects to reflect these changes.
  */
 function applyChanges(backend, changes) {
-  let [state, patch] = apply(backendState(backend), changes, null, true)
-  const heads = OpSet.getHeads(state.get('opSet'))
-  backend.frozen = true
-  return [{state, heads}, patch]
+  if (USE_NEW_BACKEND) {
+    const state = backendState(backend)
+    const patch = state.applyChanges(changes)
+    backend.frozen = true
+    return [{state, heads: state.heads}, patch]
+  } else {
+    let [state, patch] = apply(backendState(backend), changes, null, true)
+    const heads = OpSet.getHeads(state.get('opSet'))
+    backend.frozen = true
+    return [{state, heads}, patch]
+  }
 }
 
 /**
@@ -98,7 +123,7 @@ function applyChanges(backend, changes) {
  */
 function applyLocalChange(backend, change) {
   const state = backendState(backend)
-  if (change.seq <= state.getIn(['opSet', 'states', change.actor], List()).size) {
+  if (change.seq <= hashesByActor(state, change.actor).length) {
     throw new RangeError('Change request has already been applied')
   }
 
@@ -116,7 +141,7 @@ function applyLocalChange(backend, change) {
   // necessary to add this dependency. However, it doesn't do any harm either (only
   // using a few extra bytes of storage).
   if (change.seq > 1) {
-    const lastHash = state.getIn(['opSet', 'states', change.actor, (change.seq - 2)])
+    const lastHash = hashesByActor(state, change.actor)[change.seq - 2]
     if (!lastHash) {
       throw new RangeError(`Cannot find hash of localChange before seq=${change.seq}`)
     }
@@ -126,18 +151,34 @@ function applyLocalChange(backend, change) {
   }
 
   const binaryChange = encodeChange(change)
-  const request = { actor: change.actor, seq: change.seq }
-  const [state2, patch] = apply(state, [binaryChange], request, true)
-  const heads = OpSet.getHeads(state2.get('opSet'))
-  backend.frozen = true
-  return [{state: state2, heads}, patch, binaryChange]
+
+  if (USE_NEW_BACKEND) {
+    const patch = state.applyChanges([binaryChange], true)
+    backend.frozen = true
+
+    // On the patch we send out, omit the last local change hash
+    const lastHash = hashesByActor(state, change.actor)[change.seq - 1]
+    patch.deps = patch.deps.filter(head => head !== lastHash)
+    return [{state, heads: state.heads}, patch, binaryChange]
+
+  } else {
+    const request = {actor: change.actor, seq: change.seq}
+    const [state2, patch] = apply(state, [binaryChange], request, true)
+    const heads = OpSet.getHeads(state2.get('opSet'))
+    backend.frozen = true
+    return [{state: state2, heads}, patch, binaryChange]
+  }
 }
 
 /**
  * Returns the state of the document serialised to an Uint8Array.
  */
 function save(backend) {
-  return encodeDocument(getChanges(backend, []))
+  if (USE_NEW_BACKEND) {
+    return backendState(backend).save()
+  } else {
+    return encodeDocument(getChanges(backend, []))
+  }
 }
 
 /**
@@ -145,10 +186,15 @@ function save(backend) {
  * backend initialised with this state.
  */
 function load(data) {
-  // Reconstruct the original change history that created the document.
-  // It's a bit silly to convert to and from the binary encoding several times...!
-  const binaryChanges = decodeChanges([data]).map(encodeChange)
-  return loadChanges(init(), binaryChanges)
+  if (USE_NEW_BACKEND) {
+    const state = new BackendDoc(data)
+    return {state, heads: state.heads}
+  } else {
+    // Reconstruct the original change history that created the document.
+    // It's a bit silly to convert to and from the binary encoding several times...!
+    const binaryChanges = decodeChanges([data]).map(encodeChange)
+    return loadChanges(init(), binaryChanges)
+  }
 }
 
 /**
@@ -160,9 +206,15 @@ function load(data) {
  */
 function loadChanges(backend, changes) {
   const state = backendState(backend)
-  const [newState, _] = apply(state, changes, null, false)
-  backend.frozen = true
-  return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
+  if (USE_NEW_BACKEND) {
+    state.applyChanges(changes)
+    backend.frozen = true
+    return {state, heads: state.heads}
+  } else {
+    const [newState, _] = apply(state, changes, null, false)
+    backend.frozen = true
+    return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
+  }
 }
 
 /**
@@ -171,8 +223,18 @@ function loadChanges(backend, changes) {
  */
 function getPatch(backend) {
   const state = backendState(backend)
-  const diffs = constructPatch(save(backend))
-  return makePatch(state, diffs, null, false)
+  if (USE_NEW_BACKEND) {
+    const diffs = constructPatch(state.save())
+    return {
+      maxOp: state.maxOp,
+      clock: state.clock,
+      deps: state.heads,
+      diffs: diffs
+    }
+  } else {
+    const diffs = constructPatch(save(backend))
+    return makePatch(state, diffs, null, false)
+  }
 }
 
 /**
@@ -187,13 +249,22 @@ function getChanges(backend, haveDeps) {
   if (!Array.isArray(haveDeps)) {
     throw new TypeError('Pass an array of hashes to Backend.getChanges()')
   }
+
   const state = backendState(backend)
-  return OpSet.getMissingChanges(state.get('opSet'), List(haveDeps))
+  if (USE_NEW_BACKEND) {
+    return state.getChanges(haveDeps)
+  } else {
+    return OpSet.getMissingChanges(state.get('opSet'), List(haveDeps))
+  }
 }
 
 function getMissingDeps(backend) {
   const state = backendState(backend)
-  return OpSet.getMissingDeps(state.get('opSet'))
+  if (USE_NEW_BACKEND) {
+    return state.getMissingDeps()
+  } else {
+    return OpSet.getMissingDeps(state.get('opSet'))
+  }
 }
 
 module.exports = {
