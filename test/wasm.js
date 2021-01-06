@@ -8,12 +8,224 @@
 // Since this file relies on an environment variable and filesystem paths, it
 // currently only works in Node, not in a browser.
 
-const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
-const path = require('path')
-
-if (process.env.WASM_BACKEND_PATH) {
-  const wasmBackend = require(path.resolve(process.env.WASM_BACKEND_PATH))
-  Automerge.setDefaultBackend(wasmBackend)
-} else {
+if (!process.env.WASM_BACKEND_PATH) {
   throw new RangeError('Please set environment variable WASM_BACKEND_PATH to the path of the WebAssembly backend')
+}
+
+const assert = require('assert')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+const jsBackend = require('../backend')
+const { decodeChange } = require('../backend/columnar')
+const { ROOT_ID } = require('../src/common')
+const uuid = require('../src/uuid')
+
+const path = require('path')
+const wasmBackend = require(path.resolve(process.env.WASM_BACKEND_PATH))
+Automerge.setDefaultBackend(wasmBackend)
+
+describe('JavaScript-WebAssembly interoperability', () => {
+  const directions = [
+    {source: jsBackend, dest: wasmBackend, sourceName: 'JS', destName: 'Wasm'},
+    {source: wasmBackend, dest: jsBackend, sourceName: 'Wasm', destName: 'JS'}
+  ]
+
+  for (let direction of directions) {
+    describe(`from ${direction.sourceName} to ${direction.destName}`, () => {
+      interopTests(direction.source, direction.dest)
+    })
+  }
+})
+
+function interopTests(sourceBackend, destBackend) {
+  let source, dest
+  beforeEach(() => {
+    source = sourceBackend.init()
+    dest = destBackend.init()
+  })
+
+  it('should set a key in a map', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
+      ]
+    })
+    const [dest1, patch] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        bird: {[`1@${actor}`]: {value: 'magpie'}}
+      }}
+    })
+  })
+
+  it('should delete a key from a map', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'bird', value: 'magpie', pred: []}
+      ]
+    })
+    const [source2, p2, change2] = sourceBackend.applyLocalChange(source1, {
+      actor, seq: 2, startOp: 2, time: 0, deps: [], ops: [
+        {action: 'del', obj: ROOT_ID, key: 'bird', pred: [`1@${actor}`]}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
+    assert.deepStrictEqual(patch2, {
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {bird: {}}}
+    })
+  })
+
+  it('should create nested maps', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeMap', obj: ROOT_ID, key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: 'wrens', value: 3, pred: []}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {value: 3}}}
+      }}}}
+    })
+  })
+
+  it('should create lists', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: ROOT_ID, key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list',
+        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+        props: {0: {[`2@${actor}`]: {value: 'chaffinch'}}}
+      }}}}
+    })
+  })
+
+  it('should delete list elements', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: ROOT_ID, key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+      ]
+    })
+    const [source2, p2, change2] = sourceBackend.applyLocalChange(source1, {
+      actor, seq: 2, startOp: 3, time: 0, deps: [], ops: [
+        {action: 'del', obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
+    assert.deepStrictEqual(patch2, {
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 3,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'list', props: {},
+        edits: [{action: 'remove', index: 0}]
+      }}}}
+    })
+  })
+
+  it('should support Text objects', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeText', obj: ROOT_ID, key: 'text', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: '_head',      insert: true, value: 'a', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, insert: true, value: 'b', pred: []},
+        {action: 'set', obj: `1@${actor}`, key: `3@${actor}`, insert: true, value: 'c', pred: []}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`},
+          {action: 'insert', index: 1, elemId: `3@${actor}`},
+          {action: 'insert', index: 2, elemId: `4@${actor}`}
+        ],
+        props: {
+          0: {[`2@${actor}`]: {value: 'a'}},
+          1: {[`3@${actor}`]: {value: 'b'}},
+          2: {[`4@${actor}`]: {value: 'c'}},
+        }
+      }}}}
+    })
+  })
+
+  it('should support Table objects', () => {
+    const actor = uuid(), rowId = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeTable', obj: ROOT_ID,      key: 'birds',   insert: false, pred: []},
+        {action: 'makeMap',   obj: `1@${actor}`, key: rowId,     insert: false, pred: []},
+        {action: 'set',       obj: `2@${actor}`, key: 'species', insert: false, value: 'Chaffinch', pred: []},
+        {action: 'set',       obj: `2@${actor}`, key: 'colour',  insert: false, value: 'brown',     pred: []}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {birds: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'table', props: {[rowId]: {[`2@${actor}`]: {
+          objectId: `2@${actor}`, type: 'map', props: {
+            species: {[`3@${actor}`]: {value: 'Chaffinch'}},
+            colour:  {[`4@${actor}`]: {value: 'brown'}}
+          }
+        }}}
+      }}}}
+    })
+  })
+
+  it('should support Counter objects', () => {
+    const actor = uuid()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'counter', value: 1, datatype: 'counter', pred: []}
+      ]
+    })
+    const [source2, p2, change2] = sourceBackend.applyLocalChange(source1, {
+      actor, seq: 2, startOp: 2, time: 0, deps: [], ops: [
+        {action: 'inc', obj: ROOT_ID, key: 'counter', value: 2, pred: [`1@${actor}`]}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
+    assert.deepStrictEqual(patch2, {
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+      }}
+    })
+  })
+
+  it('should support Date objects', () => {
+    const actor = uuid(), now = new Date()
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: ROOT_ID, key: 'now', value: now.getTime(), datatype: 'timestamp', pred: []}
+      ]
+    })
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      diffs: {objectId: ROOT_ID, type: 'map', props: {
+        now: {[`1@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}
+      }}
+    })
+  })
 }
