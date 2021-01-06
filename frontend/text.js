@@ -23,6 +23,10 @@ class Text {
     return this.elems[index].value
   }
 
+  getElemId (index) {
+    return this.elems[index].elemId
+  }
+
   /**
    * Iterates over the text elements character by character, including any
    * inline objects.

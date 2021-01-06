@@ -207,6 +207,7 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.length, 1)
     assert.strictEqual(s1.text.get(0), 'a')
     assert.strictEqual(s1.text.toString(), 'a')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
   })
 
   it('should support deletion', () => {
@@ -374,6 +375,7 @@ describe('Automerge.Text', () => {
 
     it('should allow fetching non-textual characters', () => {
       assert.deepEqual(s1.text.get(1), { attribute: 'bold' })
+      assert.strictEqual(s1.text.getElemId(1), `3@${Automerge.getActorId(s1)}`)
     })
 
     it('should include control characters in string length', () => {

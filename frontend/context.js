@@ -507,16 +507,13 @@ function getPred(object, key) {
   }
 }
 
-function getElemId(list, index, insert) {
-  insert = insert || false
+function getElemId(list, index, insert = false) {
   if (insert) {
     if (index === 0) return '_head'
-    if (list[ELEM_IDS]) return list[ELEM_IDS][index - 1]
-    if (list.elems) return list.elems[index - 1].elemId
-  } else {
-    if (list[ELEM_IDS]) return list[ELEM_IDS][index]
-    if (list.elems) return list.elems[index].elemId
+    index -= 1
   }
+  if (list[ELEM_IDS]) return list[ELEM_IDS][index]
+  if (list.getElemId) return list.getElemId(index)
   throw new RangeError(`Cannot find elemId at list index ${index}`)
 }
 
