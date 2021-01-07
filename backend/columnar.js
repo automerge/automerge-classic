@@ -75,7 +75,9 @@ const DOCUMENT_COLUMNS = {
   time:      2 << 3 | COLUMN_TYPE.INT_DELTA,
   message:   3 << 3 | COLUMN_TYPE.STRING_RLE,
   depsNum:   4 << 3 | COLUMN_TYPE.GROUP_CARD,
-  depsIndex: 4 << 3 | COLUMN_TYPE.INT_DELTA
+  depsIndex: 4 << 3 | COLUMN_TYPE.INT_DELTA,
+  extraLen:  5 << 3 | COLUMN_TYPE.VALUE_LEN,
+  extraRaw:  5 << 3 | COLUMN_TYPE.VALUE_RAW
 }
 
 /**
@@ -666,6 +668,7 @@ function encodeChange(changeObj) {
     const columns = encodeOps(change.ops, false)
     encodeColumnInfo(encoder, columns)
     for (let column of columns) encoder.appendRawBytes(column.encoder.buffer)
+    if (change.extraBytes) encoder.appendRawBytes(change.extraBytes)
   })
 
   const hexHash = bytesToHexString(hash)
@@ -686,6 +689,10 @@ function decodeChangeColumns(buffer) {
   const columns = decodeColumnInfo(chunkDecoder)
   for (let i = 0; i < columns.length; i++) {
     columns[i].buffer = chunkDecoder.readRawBytes(columns[i].bufferLen)
+  }
+  if (!chunkDecoder.done) {
+    const restLen = chunkDecoder.buf.byteLength - chunkDecoder.offset
+    change.extraBytes = chunkDecoder.readRawBytes(restLen)
   }
 
   change.columns = columns
@@ -913,7 +920,9 @@ function encodeDocumentChanges(changes) {
     time      : new DeltaEncoder(),
     message   : new RLEEncoder('utf8'),
     depsNum   : new RLEEncoder('uint'),
-    depsIndex : new DeltaEncoder()
+    depsIndex : new DeltaEncoder(),
+    extraLen  : new RLEEncoder('uint'),
+    extraRaw  : new Encoder()
   }
   let indexByHash = {} // map from change hash to its index in the changes array
   let heads = {} // change hashes that are not a dependency of any other change
@@ -936,6 +945,13 @@ function encodeDocumentChanges(changes) {
       }
       columns.depsIndex.appendValue(indexByHash[dep])
       if (heads[dep]) delete heads[dep]
+    }
+
+    if (change.extraBytes) {
+      columns.extraLen.appendValue(change.extraBytes.byteLength << 4 | VALUE_TYPE.BYTES)
+      columns.extraRaw.appendRawBytes(change.extraBytes)
+    } else {
+      columns.extraLen.appendValue(VALUE_TYPE.BYTES) // zero-length byte array
     }
   }
 
@@ -962,6 +978,12 @@ function decodeDocumentChanges(changes, expectedHeads) {
     }
     change.deps.sort()
     delete change.depsNum
+
+    if (change.extraLen_datatype !== VALUE_TYPE.BYTES) {
+      throw new RangeError(`Bad datatype for extra bytes: ${VALUE_TYPE.BYTES}`)
+    }
+    change.extraBytes = change.extraLen
+    delete change.extraLen_datatype
 
     // Encoding and decoding again to compute the hash of the change
     changes[i] = decodeChange(encodeChange(change))
@@ -1028,7 +1050,8 @@ function decodeDocumentHeader(buffer) {
     opsColumns[i].buffer = decoder.readRawBytes(opsColumns[i].bufferLen)
   }
 
-  return { changesColumns, opsColumns, actorIds, heads }
+  const extraBytes = decoder.readRawBytes(decoder.buf.byteLength - decoder.offset)
+  return { changesColumns, opsColumns, actorIds, heads, extraBytes }
 }
 
 function decodeDocument(buffer) {

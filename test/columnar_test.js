@@ -1,6 +1,6 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { DOC_OPS_COLUMNS, encodeChange, decodeChange, BackendDoc } = require('../backend/columnar')
+const { DOC_OPS_COLUMNS, encodeChange, decodeChange, encodeDocument, decodeDocument, BackendDoc } = require('../backend/columnar')
 const uuid = require('../src/uuid')
 
 function checkColumns(actualCols, expectedCols) {
@@ -50,6 +50,37 @@ describe('change encoding', () => {
     ])
     const decoded = decodeChange(encodeChange(change1))
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))
+  })
+
+  describe('with trailing bytes', () => {
+    let change = Uint8Array.from([
+      0x85, 0x6f, 0x4a, 0x83, // magic bytes
+      0x15, 0x72, 0xa6, 0x6c, // checksum
+      1, 61, 0, 2, 0x12, 0x34, // chunkType: change, length, deps, actor '1234'
+      1, 1, 252, 250, 220, 255, 5, // seq, startOp, time
+      14, 73, 110, 105, 116, 105, 97, 108, 105, 122, 97, 116, 105, 111, 110, // message: 'Initialization'
+      0, 6, // actor list, column count
+      13, 3, 28, 1, 34, 2, // keyStr, insert, action
+      46, 2, 47, 1, 56, 2, // valLen, valRaw, predNum
+      0x7f, 1, 0x78, // keyStr: 'x'
+      1, // insert: false
+      0x7f, 1, // action: set
+      0x7f, 19, // valLen: 1 byte of type uint
+      1, // valRaw: 1
+      0x7f, 0, // predNum: 0
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9 // 10 trailing bytes
+    ])
+
+    it('should allow decoding and re-encoding', () => {
+      // NOTE: This calls the JavaScript encoding and decoding functions, even when the WebAssembly
+      // backend is loaded. Should the wasm backend export its own functions for testing?
+      checkEncoded(change, encodeChange(decodeChange(change)))
+    })
+
+    it('should be preserved in document encoding', () => {
+      const reconstructed = encodeChange(decodeDocument(encodeDocument([change]))[0])
+      checkEncoded(change, reconstructed)
+    })
   })
 })
 
