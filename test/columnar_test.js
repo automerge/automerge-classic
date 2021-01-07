@@ -27,21 +27,26 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0xa9, 0xfe, 0x24, 0x30, // checksum
-      1, 93, 0, 2, 0xaa, 0xaa, // chunkType: change, length, deps, actor 'aaaa'
+      0xcf, 0xc7, 0x77, 0xe2, // checksum
+      1, 94, 0, 2, 0xaa, 0xaa, // chunkType: change, length, deps, actor 'aaaa'
       1, 1, 9, 0, 0, // seq, startOp, time, message, actor list
-      1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
-      2, 4, 0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
-      9, 8, 0, 2, 0x7f, 0, 0, 1, 0x7f, 0, // keyActor column: null, null, 0, null, 0
-      11, 7, 0, 1, 0x7c, 0, 2, 0x7e, 4, // keyCtr column: null, 0, 2, 0, 4
-      13, 8, 0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // keyStr column: 'text', null, null, null, null
-      28, 4, 1, 1, 1, 2, // insert column: false, true, false, true, true
-      34, 6, 0x7d, 4, 1, 3, 2, 1, // action column: makeText, set, del, set, set
-      46, 6, 0x7d, 0, 0x16, 0, 2, 0x16, // valLen column: 0, 0x16, 0, 0x16, 0x16
-      47, 3, 0x68, 0x48, 0x69, // valRaw column: 'h', 'H', 'i'
-      56, 6, 2, 0, 0x7f, 1, 2, 0, // predNum column: 0, 0, 1, 0, 0
-      57, 2, 0x7f, 0, // predActor column: 0
-      59, 2, 0x7f, 2 // predCtr column: 2
+      12, 1, 4, 2, 4, // column count, objActor, objCtr
+      9, 8, 11, 7, 13, 8, // keyActor, keyCtr, keyStr
+      28, 4, 34, 6, // insert, action
+      46, 6, 47, 3, // valLen, valRaw
+      56, 6, 57, 2, 59, 2, // predNum, predActor, predCtr
+      0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
+      0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
+      0, 2, 0x7f, 0, 0, 1, 0x7f, 0, // keyActor column: null, null, 0, null, 0
+      0, 1, 0x7c, 0, 2, 0x7e, 4, // keyCtr column: null, 0, 2, 0, 4
+      0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4, // keyStr column: 'text', null, null, null, null
+      1, 1, 1, 2, // insert column: false, true, false, true, true
+      0x7d, 4, 1, 3, 2, 1, // action column: makeText, set, del, set, set
+      0x7d, 0, 0x16, 0, 2, 0x16, // valLen column: 0, 0x16, 0, 0x16, 0x16
+      0x68, 0x48, 0x69, // valRaw column: 'h', 'H', 'i'
+      2, 0, 0x7f, 1, 2, 0, // predNum column: 0, 0, 1, 0, 0
+      0x7f, 0, // predActor column: 0
+      0x7f, 2 // predCtr column: 2
     ])
     const decoded = decodeChange(encodeChange(change1))
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))

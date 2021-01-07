@@ -544,16 +544,24 @@ function decodeColumns(columns, actorIds, columnSpec) {
   return parsedRows
 }
 
-function readColumns(decoder, numColumns = Number.MAX_SAFE_INTEGER) {
-  let lastColumnId = -1, columns = []
-  while (!decoder.done && columns.length < numColumns) {
-    const columnId = decoder.readUint32()
-    const columnBuf = decoder.readPrefixedBytes()
+function decodeColumnInfo(decoder) {
+  let lastColumnId = -1, columns = [], numColumns = decoder.readUint53()
+  for (let i = 0; i < numColumns; i++) {
+    const columnId = decoder.readUint53(), bufferLen = decoder.readUint53()
     if (columnId <= lastColumnId) throw new RangeError('Columns must be in ascending order')
     lastColumnId = columnId
-    columns.push({columnId, buffer: columnBuf})
+    columns.push({columnId, bufferLen})
   }
   return columns
+}
+
+function encodeColumnInfo(encoder, columns) {
+  const nonEmptyColumns = columns.filter(column => column.encoder.buffer.byteLength > 0)
+  encoder.appendUint53(nonEmptyColumns.length)
+  for (let column of nonEmptyColumns) {
+    encoder.appendUint53(column.id)
+    encoder.appendUint53(column.encoder.buffer.byteLength)
+  }
 }
 
 function decodeChangeHeader(decoder) {
@@ -580,7 +588,7 @@ function decodeChangeHeader(decoder) {
  * series of encoded columns. Calls `encodeHeaderCallback` with an encoder that
  * should be used to add the headers. The columns should be given as `columns`.
  */
-function encodeContainer(chunkType, columns, encodeHeaderCallback) {
+function encodeContainer(chunkType, encodeContentsCallback) {
   const CHECKSUM_SIZE = 4 // checksum is first 4 bytes of SHA-256 hash of the rest of the data
   const HEADER_SPACE = MAGIC_BYTES.byteLength + CHECKSUM_SIZE + 1 + 5 // 1 byte type + 5 bytes length
   const body = new Encoder()
@@ -588,15 +596,7 @@ function encodeContainer(chunkType, columns, encodeHeaderCallback) {
   // copy the header in here later. This is cheaper than copying the body since
   // the body is likely to be much larger than the header.
   body.appendRawBytes(new Uint8Array(HEADER_SPACE))
-  encodeHeaderCallback(body)
-
-  for (let column of columns) {
-    const buffer = column.encoder.buffer
-    if (buffer.byteLength > 0) {
-      body.appendUint53(column.id)
-      body.appendPrefixedBytes(buffer)
-    }
-  }
+  encodeContentsCallback(body)
 
   const bodyBuf = body.buffer
   const header = new Encoder()
@@ -649,7 +649,7 @@ function encodeChange(changeObj) {
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
 
-  const { hash, bytes } = encodeContainer('change', encodeOps(change.ops, false), encoder => {
+  const { hash, bytes } = encodeContainer('change', encoder => {
     if (!Array.isArray(change.deps)) throw new TypeError('deps is not an array')
     encoder.appendUint53(change.deps.length)
     for (let hash of change.deps.slice().sort()) {
@@ -662,6 +662,10 @@ function encodeChange(changeObj) {
     encoder.appendPrefixedString(change.message || '')
     encoder.appendUint53(actorIds.length - 1)
     for (let actor of actorIds.slice(1)) encoder.appendHexString(actor)
+
+    const columns = encodeOps(change.ops, false)
+    encodeColumnInfo(encoder, columns)
+    for (let column of columns) encoder.appendRawBytes(column.encoder.buffer)
   })
 
   const hexHash = bytesToHexString(hash)
@@ -679,8 +683,13 @@ function decodeChangeColumns(buffer) {
   if (header.chunkType !== 1) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
   const change = decodeChangeHeader(chunkDecoder)
+  const columns = decodeColumnInfo(chunkDecoder)
+  for (let i = 0; i < columns.length; i++) {
+    columns[i].buffer = chunkDecoder.readRawBytes(columns[i].bufferLen)
+  }
+
+  change.columns = columns
   change.hash = header.hash
-  change.columns = readColumns(chunkDecoder)
   return change
 }
 
@@ -978,12 +987,7 @@ function encodeDocument(binaryChanges) {
   const { changesColumns, heads } = encodeDocumentChanges(changes)
   const opsColumns = encodeOps(groupDocumentOps(changes), true)
 
-  let numChangesColumns = 0
-  for (let column of changesColumns) {
-    if (column.encoder.buffer.byteLength > 0) numChangesColumns++
-  }
-
-  return encodeContainer('document', changesColumns.concat(opsColumns), encoder => {
+  return encodeContainer('document', encoder => {
     encoder.appendUint53(actorIds.length)
     for (let actor of actorIds) {
       encoder.appendHexString(actor)
@@ -992,7 +996,10 @@ function encodeDocument(binaryChanges) {
     for (let head of heads.sort()) {
       encoder.appendRawBytes(hexStringToBytes(head))
     }
-    encoder.appendUint53(numChangesColumns)
+    encodeColumnInfo(encoder, changesColumns)
+    encodeColumnInfo(encoder, opsColumns)
+    for (let column of changesColumns) encoder.appendRawBytes(column.encoder.buffer)
+    for (let column of opsColumns) encoder.appendRawBytes(column.encoder.buffer)
   }).bytes
 }
 
@@ -1012,8 +1019,15 @@ function decodeDocumentHeader(buffer) {
     heads.push(bytesToHexString(decoder.readRawBytes(32)))
   }
 
-  const changesColumns = readColumns(decoder, decoder.readUint53())
-  const opsColumns = readColumns(decoder)
+  const changesColumns = decodeColumnInfo(decoder)
+  const opsColumns = decodeColumnInfo(decoder)
+  for (let i = 0; i < changesColumns.length; i++) {
+    changesColumns[i].buffer = decoder.readRawBytes(changesColumns[i].bufferLen)
+  }
+  for (let i = 0; i < opsColumns.length; i++) {
+    opsColumns[i].buffer = decoder.readRawBytes(opsColumns[i].bufferLen)
+  }
+
   return { changesColumns, opsColumns, actorIds, heads }
 }
 
