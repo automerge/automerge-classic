@@ -1,7 +1,7 @@
 const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
 const { decodeChange, decodeChangeMeta } = require('./columnar')
-const { ROOT_ID, parseOpId } = require('../src/common')
+const { parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
@@ -19,7 +19,7 @@ function causallyReady(opSet, change) {
  */
 function getPath(opSet, objectId) {
   let path = []
-  while (objectId !== ROOT_ID) {
+  while (objectId !== '_root') {
     const ref = opSet.getIn(['byObject', objectId, '_inbound'], Set()).first()
     if (!ref) throw new RangeError(`No path found to object ${objectId}`)
     path.unshift(ref)
@@ -33,7 +33,7 @@ function getPath(opSet, objectId) {
  * the type of the object with ID `objectId`.
  */
 function getObjectType(opSet, objectId) {
-  if (objectId === ROOT_ID) return 'map'
+  if (objectId === '_root') return 'map'
   const objInit = opSet.getIn(['byObject', objectId, '_init', 'action'])
   const type = {makeMap: 'map', makeTable: 'table', makeList: 'list', makeText: 'text'}[objInit]
   if (!type) throw new RangeError(`Unknown object type ${objInit} for ${objectId}`)
@@ -422,7 +422,7 @@ function init() {
   return Map()
     .set('states',   Map())
     .set('history',  List())
-    .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
+    .set('byObject', Map().set('_root', Map().set('_keys', Map())))
     .set('hashes',   Map())
     .set('deps',     Set())
     .set('maxOp',     0)
@@ -626,5 +626,5 @@ function constructObject(opSet, objectId) {
 
 module.exports = {
   init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
-  constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
+  constructObject, getFieldOps, getOperationKey, finalizePatch
 }

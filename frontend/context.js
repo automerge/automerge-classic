@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { ROOT_ID, isObject, copyObject } = require('../src/common')
+const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -111,7 +111,7 @@ class Context {
    * by mutating the patch object. Returns the subpatch at the given path.
    */
   getSubpatch(patch, path) {
-    let subpatch = patch.diffs, object = this.getObject(ROOT_ID)
+    let subpatch = patch.diffs, object = this.getObject('_root')
 
     for (let pathElem of path) {
       if (!subpatch.props) {
@@ -154,7 +154,7 @@ class Context {
    * the type of the object with ID `objectId`.
    */
   getObjectType(objectId) {
-    if (objectId === ROOT_ID) return 'map'
+    if (objectId === '_root') return 'map'
     const object = this.getObject(objectId)
     if (object instanceof Text) return 'text'
     if (object instanceof Table) return 'table'
@@ -285,9 +285,9 @@ class Context {
    * and then immediately applies the patch to the document.
    */
   applyAtPath(path, callback) {
-    let patch = {diffs: {objectId: ROOT_ID, type: 'map'}}
+    let patch = {diffs: {objectId: '_root', type: 'map'}}
     callback(this.getSubpatch(patch, path))
-    this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+    this.applyPatch(patch.diffs, this.cache._root, this.updated)
   }
 
   /**
@@ -299,7 +299,7 @@ class Context {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
     }
 
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
     if (object[key] instanceof Counter) {
       throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')
@@ -321,7 +321,7 @@ class Context {
    * Updates the map object at path `path`, deleting the property `key`.
    */
   deleteMapKey(path, key) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
 
     if (object[key] !== undefined) {
@@ -360,7 +360,7 @@ class Context {
    * position `index` with the new value `value`.
    */
   setListIndex(path, index, value) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const list = this.getObject(objectId)
     if (index === list.length) {
       return this.splice(path, index, 0, [value])
@@ -389,14 +389,14 @@ class Context {
    * list index `start`, and inserting the list of new elements `insertions` at that position.
    */
   splice(path, start, deletions, insertions) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     let list = this.getObject(objectId)
     if (start < 0 || deletions < 0 || start > list.length - deletions) {
       throw new RangeError(`${deletions} deletions starting at index ${start} are out of bounds for list of length ${list.length}`)
     }
     if (deletions === 0 && insertions.length === 0) return
 
-    let patch = {diffs: {objectId: ROOT_ID, type: 'map'}}
+    let patch = {diffs: {objectId: '_root', type: 'map'}}
     let subpatch = this.getSubpatch(patch, path)
     if (!subpatch.edits) subpatch.edits = []
 
@@ -431,7 +431,7 @@ class Context {
     if (insertions.length > 0) {
       this.insertListItems(subpatch, start, insertions, false)
     }
-    this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+    this.applyPatch(patch.diffs, this.cache._root, this.updated)
   }
 
   /**
@@ -477,7 +477,7 @@ class Context {
    * `key` in the object at path `path`.
    */
   increment(path, key, delta) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
     if (!(object[key] instanceof Counter)) {
       throw new TypeError('Only counter values can be incremented')

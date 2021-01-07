@@ -2,7 +2,6 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
 const { decodeChange } = require('../backend/columnar')
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{32}$/
 const OPID_PATTERN = /^[0-9]+@[0-9a-f]{32}$/
 
@@ -81,7 +80,7 @@ describe('Automerge', () => {
       assert.deepStrictEqual(change, {
         actor: change.actor, deps: [], seq: 1, startOp: 1,
         hash: change.hash, message: '', time: change.time,
-        ops: [{obj: ROOT_ID, key: 'foo', action: 'set', insert: false, value: 'bar', pred: []}]
+        ops: [{obj: '_root', key: 'foo', action: 'set', insert: false, value: 'bar', pred: []}]
       })
     })
 
@@ -369,7 +368,7 @@ describe('Automerge', () => {
       it('should assign an objectId to nested maps', () => {
         s1 = Automerge.change(s1, doc => { doc.nested = {} })
         assert.strictEqual(OPID_PATTERN.test(Automerge.getObjectId(s1.nested)), true)
-        assert.notEqual(Automerge.getObjectId(s1.nested), ROOT_ID)
+        assert.notEqual(Automerge.getObjectId(s1.nested), '_root')
       })
 
       it('should handle assignment of a nested property', () => {
@@ -1053,7 +1052,7 @@ describe('Automerge', () => {
       assert.deepStrictEqual(changes12, [{
         hash: changes12[0].hash, actor: '01234567', seq: 1, startOp: 1,
         time: changes12[0].time, message: '', deps: [], ops: [
-          {obj: ROOT_ID, action: 'makeList', key: 'list', insert: false, pred: []},
+          {obj: '_root', action: 'makeList', key: 'list', insert: false, pred: []},
           {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a', pred: []}
         ]
       }])

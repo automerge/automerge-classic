@@ -1,4 +1,4 @@
-const { ROOT_ID, copyObject, parseOpId, equalBytes } = require('../src/common')
+const { copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
   utf8ToString, hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
@@ -173,7 +173,7 @@ function parseAllOpIds(changes, single) {
  * `objActor` and `objCtr`.
  */
 function encodeObjectId(op, columns) {
-  if (op.obj.value === ROOT_ID) {
+  if (op.obj.value === '_root') {
     columns.objActor.appendValue(null)
     columns.objCtr.appendValue(null)
   } else if (op.obj.actorNum >= 0 && op.obj.counter > 0) {
@@ -441,7 +441,7 @@ function decodeOps(ops, forDocument) {
   const newOps = []
   for (let op of ops) {
     const newOp = {
-      obj: op.objCtr === null ? ROOT_ID : `${op.objCtr}@${op.objActor}`,
+      obj: op.objCtr === null ? '_root' : `${op.objCtr}@${op.objActor}`,
       key: op.keyCtr === 0 ? '_head' : (op.keyStr || `${op.keyCtr}@${op.keyActor}`),
       action: ACTIONS[op.action] || op.action
     }
@@ -746,8 +746,8 @@ function decodeChanges(binaryChanges) {
 
 function sortOpIds(a, b) {
   if (a === b) return 0
-  if (a === ROOT_ID) return -1
-  if (b === ROOT_ID) return +1
+  if (a === '_root') return -1
+  if (b === '_root') return +1
   const a_ = parseOpId(a), b_ = parseOpId(b)
   if (a_.counter < b_.counter) return -1
   if (a_.counter > b_.counter) return +1
@@ -761,7 +761,7 @@ function groupDocumentOps(changes) {
   for (let change of changes) {
     for (let i = 0; i < change.ops.length; i++) {
       const op = change.ops[i], opId = `${op.id.counter}@${op.id.actorId}`
-      const objectId = (op.obj.value === ROOT_ID) ? ROOT_ID : `${op.obj.counter}@${op.obj.actorId}`
+      const objectId = (op.obj.value === '_root') ? '_root' : `${op.obj.counter}@${op.obj.actorId}`
       if (op.action.startsWith('make')) {
         objectType[opId] = op.action
         if (op.action === 'makeList' || op.action === 'makeText') {
@@ -770,7 +770,7 @@ function groupDocumentOps(changes) {
       }
 
       let key
-      if (objectId === ROOT_ID || objectType[objectId] === 'makeMap' || objectType[objectId] === 'makeTable') {
+      if (objectId === '_root' || objectType[objectId] === 'makeMap' || objectType[objectId] === 'makeTable') {
         key = op.key.value
       } else if (objectType[objectId] === 'makeList' || objectType[objectId] === 'makeText') {
         if (op.insert) {
@@ -1092,7 +1092,7 @@ function constructPatch(documentBuffer) {
   const col = makeDecoders(opsColumns, DOC_OPS_COLUMNS).reduce(
     (acc, col) => Object.assign(acc, {[col.columnName]: col.decoder}), {})
 
-  let objects = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map'}}
+  let objects = {_root: {objectId: '_root', type: 'map'}}
   let property = null
 
   while (!col.idActor.done) {
@@ -1103,7 +1103,7 @@ function constructPatch(documentBuffer) {
     }
 
     const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
-    const objId = objActor === null ? ROOT_ID : `${objCtr}@${actorIds[objActor]}`
+    const objId = objActor === null ? '_root' : `${objCtr}@${actorIds[objActor]}`
     let obj = objects[objId]
     if (!obj) throw new RangeError(`Operation for nonexistent object: ${objId}`)
 
@@ -1143,7 +1143,7 @@ function constructPatch(documentBuffer) {
   }
 
   if (property) addPatchProperty(objects, property)
-  return objects[ROOT_ID]
+  return objects._root
 }
 
 /**
@@ -1501,7 +1501,7 @@ function groupRelatedOps(change, changeCols, objectMeta) {
     }
 
     thisOp.opId = `${thisOp.idCtr}@${thisOp.idActor}`
-    thisOp.objId = thisOp.objCtr === null ? ROOT_ID : `${thisOp.objCtr}@${thisOp.objActor}`
+    thisOp.objId = thisOp.objCtr === null ? '_root' : `${thisOp.objCtr}@${thisOp.objActor}`
     objectIds[thisOp.objId] = true
 
     // An even-numbered action indicates a make* operation that creates a new object.
@@ -1572,7 +1572,7 @@ class BackendDoc {
     } else {
       this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
       this.numOps = 0
-      this.objectMeta = {[ROOT_ID]: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
+      this.objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
   }
 
@@ -2096,7 +2096,7 @@ class BackendDoc {
    * object is not modified.
    */
   applyChanges(changeBuffers, isLocal = false) {
-    let patches = {[ROOT_ID]: {objectId: ROOT_ID, type: 'map', props: {}}}
+    let patches = {_root: {objectId: '_root', type: 'map', props: {}}}
     let docState = {
       actorIds: this.actorIds, opsCols: this.docColumns, numOps: this.numOps,
       objectMeta: Object.assign({}, this.objectMeta), lastIndex: {}
@@ -2159,7 +2159,7 @@ class BackendDoc {
       this.hashesByActor[change.actor].push(change.hash)
     }
 
-    let patch = {maxOp, clock, deps: this.heads, diffs: patches[ROOT_ID]}
+    let patch = {maxOp, clock, deps: this.heads, diffs: patches._root}
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
       patch.seq = decodedChanges[0].seq

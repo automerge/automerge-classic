@@ -3,7 +3,6 @@ import * as Automerge from 'automerge'
 import { Backend, Frontend, Counter, Doc } from 'automerge'
 
 const UUID_PATTERN = /^[0-9a-f]{32}$/
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 
 interface BirdList {
   birds: Automerge.List<string>
@@ -229,7 +228,7 @@ describe('TypeScript support', () => {
       assert.strictEqual(s2.number, 1)
       assert.strictEqual(patch1.actor, Automerge.getActorId(s0))
       assert.strictEqual(patch1.seq, 1)
-      assert.strictEqual(patch1.diffs.objectId, ROOT_ID)
+      assert.strictEqual(patch1.diffs.objectId, '_root')
       assert.strictEqual(patch1.diffs.type, 'map')
       assert.deepStrictEqual(Object.keys(patch1.diffs.props), ['number'])
       const value = patch1.diffs.props.number[`1@${Automerge.getActorId(s0)}`]
@@ -258,7 +257,7 @@ describe('TypeScript support', () => {
       const change = Automerge.decodeChange(changes[0])
       assert.strictEqual(change.ops.length, 1)
       assert.strictEqual(change.ops[0].action, 'set')
-      assert.strictEqual(change.ops[0].obj, ROOT_ID)
+      assert.strictEqual(change.ops[0].obj, '_root')
       assert.strictEqual(change.ops[0].key, 'number')
       assert.strictEqual(change.ops[0].value, 3)
     })

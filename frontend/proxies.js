@@ -1,4 +1,3 @@
-const { ROOT_ID } = require('../src/common')
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
 const { Counter } = require('./counter')
 const { Text } = require('./text')
@@ -225,7 +224,7 @@ function instantiateProxy(path, objectId, readonly) {
 
 function rootObjectProxy(context) {
   context.instantiateObject = instantiateProxy
-  return mapProxy(context, ROOT_ID, [])
+  return mapProxy(context, '_root', [])
 }
 
 module.exports = { rootObjectProxy }
