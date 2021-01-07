@@ -27,9 +27,9 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0x4f, 0x5f, 0x3a, 0xa5, // checksum
-      1, 93, 2, 0xaa, 0xaa, // chunkType: change, length, actor 'aaaa'
-      1, 1, 9, 0, 0, 0, // seq, startOp, time, message, actor list, deps
+      0xa9, 0xfe, 0x24, 0x30, // checksum
+      1, 93, 0, 2, 0xaa, 0xaa, // chunkType: change, length, deps, actor 'aaaa'
+      1, 1, 9, 0, 0, // seq, startOp, time, message, actor list
       1, 4, 0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
       2, 4, 0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
       9, 8, 0, 2, 0x7f, 0, 0, 1, 0x7f, 0, // keyActor column: null, null, 0, null, 0

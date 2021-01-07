@@ -557,20 +557,20 @@ function readColumns(decoder, numColumns = Number.MAX_SAFE_INTEGER) {
 }
 
 function decodeChangeHeader(decoder) {
+  const numDeps = decoder.readUint53(), deps = []
+  for (let i = 0; i < numDeps; i++) {
+    deps.push(bytesToHexString(decoder.readRawBytes(32)))
+  }
   let change = {
     actor:   decoder.readHexString(),
     seq:     decoder.readUint53(),
     startOp: decoder.readUint53(),
     time:    decoder.readInt53(),
     message: decoder.readPrefixedString(),
-    deps: []
+    deps
   }
   const actorIds = [change.actor], numActorIds = decoder.readUint53()
   for (let i = 0; i < numActorIds; i++) actorIds.push(decoder.readHexString())
-  const numDeps = decoder.readUint53()
-  for (let i = 0; i < numDeps; i++) {
-    change.deps.push(bytesToHexString(decoder.readRawBytes(32)))
-  }
   change.actorIds = actorIds
   return change
 }
@@ -650,6 +650,11 @@ function encodeChange(changeObj) {
   const change = changes[0]
 
   const { hash, bytes } = encodeContainer('change', encodeOps(change.ops, false), encoder => {
+    if (!Array.isArray(change.deps)) throw new TypeError('deps is not an array')
+    encoder.appendUint53(change.deps.length)
+    for (let hash of change.deps.slice().sort()) {
+      encoder.appendRawBytes(hexStringToBytes(hash))
+    }
     encoder.appendHexString(change.actor)
     encoder.appendUint53(change.seq)
     encoder.appendUint53(change.startOp)
@@ -657,11 +662,6 @@ function encodeChange(changeObj) {
     encoder.appendPrefixedString(change.message || '')
     encoder.appendUint53(actorIds.length - 1)
     for (let actor of actorIds.slice(1)) encoder.appendHexString(actor)
-    if (!Array.isArray(change.deps)) throw new TypeError('deps is not an array')
-    encoder.appendUint53(change.deps.length)
-    for (let hash of change.deps.slice().sort()) {
-      encoder.appendRawBytes(hexStringToBytes(hash))
-    }
   })
 
   const hexHash = bytesToHexString(hash)
