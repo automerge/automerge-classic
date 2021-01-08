@@ -238,7 +238,7 @@ class Context {
       // Create a new map object
       this.addOp({action: 'makeMap', obj, key: elemId || key, insert, pred})
       let props = {}
-      for (let nested of Object.keys(value)) {
+      for (let nested of Object.keys(value).sort()) {
         const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, nested, value[nested], false, [])
         props[nested] = {[opId]: valuePatch}
