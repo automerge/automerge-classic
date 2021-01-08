@@ -97,24 +97,12 @@ function deepCopyUpdate(objectTree, path, value) {
 }
 
 /**
- * Parses a string of the form '12345@someActorId' into an object of the form
- * {counter: 12345, actorId: 'someActorId'}, and any other string into an object
- * of the form {value: 'originalString'}.
- */
-function maybeParseOpId(value) {
-  if (value === undefined) return {}
-  // FIXME when parsing the "key" of an operation, need to correctly handle
-  // map property names that happen to contain an @ sign
-  return (value.indexOf('@') >= 0) ? parseOpId(value) : {value}
-}
-
-/**
  * Maps an opId of the form {counter: 12345, actorId: 'someActorId'} to the form
  * {counter: 12345, actorNum: 123, actorId: 'someActorId'}, where the actorNum
  * is the index into the `actorIds` array.
  */
 function actorIdToActorNum(opId, actorIds) {
-  if (!opId.actorId) return opId
+  if (!opId || !opId.actorId) return opId
   const counter = opId.counter
   const actorNum = actorIds.indexOf(opId.actorId)
   if (actorNum < 0) throw new RangeError('missing actorId') // should not happen
@@ -139,13 +127,13 @@ function parseAllOpIds(changes, single) {
     actors[change.actor] = true
     change.ops = change.ops.map(op => {
       op = copyObject(op)
-      op.obj = maybeParseOpId(op.obj)
-      op.key = maybeParseOpId(op.key)
-      op.child = maybeParseOpId(op.child)
+      if (op.obj !== '_root') op.obj = parseOpId(op.obj)
+      if (op.elemId && op.elemId !== '_head') op.elemId = parseOpId(op.elemId)
+      if (op.child) op.child = parseOpId(op.child)
       if (op.pred) op.pred = op.pred.map(parseOpId)
       if (op.obj.actorId) actors[op.obj.actorId] = true
-      if (op.key.actorId) actors[op.key.actorId] = true
-      if (op.child.actorId) actors[op.child.actorId] = true
+      if (op.elemId && op.elemId.actorId) actors[op.elemId.actorId] = true
+      if (op.child && op.child.actorId) actors[op.child.actorId] = true
       for (let pred of op.pred) actors[pred.actorId] = true
       return op
     })
@@ -162,7 +150,7 @@ function parseAllOpIds(changes, single) {
       let op = change.ops[i]
       op.id = {counter: change.startOp + i, actorNum: change.actorNum, actorId: change.actor}
       op.obj = actorIdToActorNum(op.obj, actorIds)
-      op.key = actorIdToActorNum(op.key, actorIds)
+      op.elemId = actorIdToActorNum(op.elemId, actorIds)
       op.child = actorIdToActorNum(op.child, actorIds)
       op.pred = op.pred.map(pred => actorIdToActorNum(pred, actorIds))
     }
@@ -175,7 +163,7 @@ function parseAllOpIds(changes, single) {
  * `objActor` and `objCtr`.
  */
 function encodeObjectId(op, columns) {
-  if (op.obj.value === '_root') {
+  if (op.obj === '_root') {
     columns.objActor.appendValue(null)
     columns.objCtr.appendValue(null)
   } else if (op.obj.actorNum >= 0 && op.obj.counter > 0) {
@@ -187,24 +175,24 @@ function encodeObjectId(op, columns) {
 }
 
 /**
- * Encodes the `key` property of operation `op` into the three columns
- * `keyActor`, `keyCtr`, and `keyStr`.
+ * Encodes the `key` and `elemId` properties of operation `op` into the three
+ * columns `keyActor`, `keyCtr`, and `keyStr`.
  */
 function encodeOperationKey(op, columns) {
-  if (op.key.value === '_head' && op.insert) {
+  if (op.key) {
+    columns.keyActor.appendValue(null)
+    columns.keyCtr.appendValue(null)
+    columns.keyStr.appendValue(op.key)
+  } else if (op.elemId === '_head' && op.insert) {
     columns.keyActor.appendValue(null)
     columns.keyCtr.appendValue(0)
     columns.keyStr.appendValue(null)
-  } else if (op.key.value) {
-    columns.keyActor.appendValue(null)
-    columns.keyCtr.appendValue(null)
-    columns.keyStr.appendValue(op.key.value)
-  } else if (op.key.actorNum >= 0 && op.key.counter > 0) {
-    columns.keyActor.appendValue(op.key.actorNum)
-    columns.keyCtr.appendValue(op.key.counter)
+  } else if (op.elemId && op.elemId.actorNum >= 0 && op.elemId.counter > 0) {
+    columns.keyActor.appendValue(op.elemId.actorNum)
+    columns.keyCtr.appendValue(op.elemId.counter)
     columns.keyStr.appendValue(null)
   } else {
-    throw new RangeError(`Unexpected operation key: ${JSON.stringify(op.key)}`)
+    throw new RangeError(`Unexpected operation key: ${JSON.stringify(op)}`)
   }
 }
 
@@ -401,7 +389,7 @@ function encodeOps(ops, forDocument) {
     encodeOperationAction(op, columns)
     encodeValue(op, columns)
 
-    if (op.child.counter) {
+    if (op.child && op.child.counter) {
       columns.chldActor.appendValue(op.child.actorNum)
       columns.chldCtr.appendValue(op.child.counter)
     } else {
@@ -442,11 +430,10 @@ function encodeOps(ops, forDocument) {
 function decodeOps(ops, forDocument) {
   const newOps = []
   for (let op of ops) {
-    const newOp = {
-      obj: op.objCtr === null ? '_root' : `${op.objCtr}@${op.objActor}`,
-      key: op.keyCtr === 0 ? '_head' : (op.keyStr || `${op.keyCtr}@${op.keyActor}`),
-      action: ACTIONS[op.action] || op.action
-    }
+    const obj = (op.objCtr === null) ? '_root' : `${op.objCtr}@${op.objActor}`
+    const elemId = op.keyStr ? undefined : (op.keyCtr === 0 ? '_head' : `${op.keyCtr}@${op.keyActor}`)
+    const action = ACTIONS[op.action] || op.action
+    const newOp = elemId ? {obj, elemId, action} : {obj, key: op.keyStr, action}
     newOp.insert = !!op.insert
     if (ACTIONS[op.action] === 'set' || ACTIONS[op.action] === 'inc') {
       newOp.value = op.valLen
@@ -777,7 +764,7 @@ function groupDocumentOps(changes) {
   for (let change of changes) {
     for (let i = 0; i < change.ops.length; i++) {
       const op = change.ops[i], opId = `${op.id.counter}@${op.id.actorId}`
-      const objectId = (op.obj.value === '_root') ? '_root' : `${op.obj.counter}@${op.obj.actorId}`
+      const objectId = (op.obj === '_root') ? '_root' : `${op.obj.counter}@${op.obj.actorId}`
       if (op.action.startsWith('make')) {
         objectType[opId] = op.action
         if (op.action === 'makeList' || op.action === 'makeText') {
@@ -787,15 +774,15 @@ function groupDocumentOps(changes) {
 
       let key
       if (objectId === '_root' || objectType[objectId] === 'makeMap' || objectType[objectId] === 'makeTable') {
-        key = op.key.value
+        key = op.key
       } else if (objectType[objectId] === 'makeList' || objectType[objectId] === 'makeText') {
         if (op.insert) {
           key = opId
-          const ref = (op.key.value === '_head') ? '_head' : `${op.key.counter}@${op.key.actorId}`
+          const ref = (op.elemId === '_head') ? '_head' : `${op.elemId.counter}@${op.elemId.actorId}`
           byReference[objectId][ref].push(opId)
           byReference[objectId][opId] = []
         } else {
-          key = `${op.key.counter}@${op.key.actorId}`
+          key = `${op.elemId.counter}@${op.elemId.actorId}`
         }
       } else {
         throw new RangeError(`Unknown object type for object ${objectId}`)
@@ -868,8 +855,12 @@ function groupChangeOps(changes, ops) {
     opsById[op.id] = op
     for (let succ of op.succ) {
       if (!opsById[succ]) {
-        const key = op.insert ? op.id : op.key
-        opsById[succ] = {id: succ, action: 'del', obj: op.obj, key, pred: []}
+        if (op.elemId) {
+          const elemId = op.insert ? op.id : op.elemId
+          opsById[succ] = {id: succ, action: 'del', obj: op.obj, elemId, pred: []}
+        } else {
+          opsById[succ] = {id: succ, action: 'del', obj: op.obj, key: op.key, pred: []}
+        }
       }
       opsById[succ].pred.push(op.id)
     }

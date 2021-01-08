@@ -103,7 +103,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
           {obj: '_root', action: 'makeList', key: 'birds', insert: false, pred: []},
-          {obj: `1@${actor}`, action: 'set', key: '_head', insert: true, value: 'chaffinch', pred: []}
+          {obj: `1@${actor}`, action: 'set', elemId: '_head', insert: true, value: 'chaffinch', pred: []}
         ]
       })
     })
@@ -116,7 +116,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['greenfinch']})
       assert.deepStrictEqual(change2, {
         actor, seq: 2, time: change2.time, message: '', startOp: 3, deps: [], ops: [
-          {obj: birds, action: 'set', key: `2@${actor}`, insert: false, value: 'greenfinch', pred: [ `2@${actor}` ]}
+          {obj: birds, action: 'set', elemId: `2@${actor}`, insert: false, value: 'greenfinch', pred: [ `2@${actor}` ]}
         ]
       })
     })
@@ -129,7 +129,7 @@ describe('Automerge.Frontend', () => {
       assert.deepStrictEqual(doc2, {birds: ['goldfinch']})
       assert.deepStrictEqual(change2, {
         actor, seq: 2, time: change2.time, message: '', startOp: 4, deps: [], ops: [
-          {obj: birds, action: 'del', key: `2@${actor}`, insert: false, pred: [`2@${actor}`]}
+          {obj: birds, action: 'del', elemId: `2@${actor}`, insert: false, pred: [`2@${actor}`]}
         ]
       })
     })
@@ -187,12 +187,12 @@ describe('Automerge.Frontend', () => {
         assert.deepStrictEqual(change1, {
           actor, deps: [], seq: 1, time: change1.time, message: '', startOp: 1, ops: [
             {obj: '_root', action: 'makeList', key: 'counts', insert: false, pred: []},
-            {obj: counts, action: 'set', key: '_head', insert: true, value: 1, datatype: 'counter', pred: []}
+            {obj: counts, action: 'set', elemId: '_head', insert: true, value: 1, datatype: 'counter', pred: []}
           ]
         })
         assert.deepStrictEqual(change2, {
           actor, deps: [], seq: 2, time: change2.time, message: '', startOp: 3, ops: [
-            {obj: counts, action: 'inc', key: `2@${actor}`, insert: false, value: 2, pred: [`2@${actor}`]}
+            {obj: counts, action: 'inc', elemId: `2@${actor}`, insert: false, value: 2, pred: [`2@${actor}`]}
           ]
         })
       })

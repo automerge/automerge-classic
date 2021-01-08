@@ -132,8 +132,8 @@ describe('Proxying context', () => {
       }})
       assert.deepStrictEqual(context.ops, [
         {obj: '_root', action: 'makeList', key: 'birds', insert: false, pred: []},
-        {obj: objectId, action: 'set', key: '_head', insert: true, value: 'sparrow', pred: []},
-        {obj: objectId, action: 'set', key: `2@${context.actorId}`, insert: true, value: 'goldfinch', pred: []}
+        {obj: objectId, action: 'set', elemId: '_head', insert: true, value: 'sparrow', pred: []},
+        {obj: objectId, action: 'set', elemId: `2@${context.actorId}`, insert: true, value: 'goldfinch', pred: []}
       ])
     })
 
@@ -152,8 +152,8 @@ describe('Proxying context', () => {
       }})
       assert.deepStrictEqual(context.ops, [
         {obj: '_root', action: 'makeText', key: 'text', insert: false, pred: []},
-        {obj: objectId, action: 'set', key: '_head', insert: true, value: 'h', pred: []},
-        {obj: objectId, action: 'set', key: `2@${context.actorId}`, insert: true, value: 'i', pred: []}
+        {obj: objectId, action: 'set', elemId: '_head', insert: true, value: 'h', pred: []},
+        {obj: objectId, action: 'set', elemId: `2@${context.actorId}`, insert: true, value: 'i', pred: []}
       ])
     })
 
@@ -250,7 +250,7 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'set', key: '1@xxx', insert: false, value: 'starling', pred: ['1@xxx']}
+        {obj: listId, action: 'set', elemId: '1@xxx', insert: false, value: 'starling', pred: ['1@xxx']}
       ])
     })
 
@@ -267,7 +267,7 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'makeMap', key: '2@xxx', insert: false, pred: ['2@xxx']},
+        {obj: listId, action: 'makeMap', elemId: '2@xxx', insert: false, pred: ['2@xxx']},
         {obj: nestedId, action: 'set', key: 'english', insert: false, value: 'goldfinch', pred: []},
         {obj: nestedId, action: 'set', key: 'latin', insert: false, value: 'carduelis', pred: []}
       ])
@@ -288,7 +288,7 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'makeMap', key: '2@xxx', insert: true, pred: []},
+        {obj: listId, action: 'makeMap', elemId: '2@xxx', insert: true, pred: []},
         {obj: nestedId, action: 'set', key: 'english', insert: false, value: 'goldfinch', pred: []},
         {obj: nestedId, action: 'set', key: 'latin', insert: false, value: 'carduelis', pred: []}
       ])
@@ -303,8 +303,8 @@ describe('Proxying context', () => {
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'del', key: '1@xxx', insert: false, pred: ['1@xxx']},
-        {obj: listId, action: 'del', key: '2@xxx', insert: false, pred: ['2@xxx']}
+        {obj: listId, action: 'del', elemId: '1@xxx', insert: false, pred: ['1@xxx']},
+        {obj: listId, action: 'del', elemId: '2@xxx', insert: false, pred: ['2@xxx']}
       ])
     })
 
@@ -322,9 +322,9 @@ describe('Proxying context', () => {
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'del', key: '1@xxx', insert: false, pred: ['1@xxx']},
-        {obj: listId, action: 'set', key: '_head', insert: true, value: 'starling', pred: []},
-        {obj: listId, action: 'set', key: `2@${context.actorId}`, insert: true, value: 'goldfinch', pred: []}
+        {obj: listId, action: 'del', elemId: '1@xxx', insert: false, pred: ['1@xxx']},
+        {obj: listId, action: 'set', elemId: '_head', insert: true, value: 'starling', pred: []},
+        {obj: listId, action: 'set', elemId: `2@${context.actorId}`, insert: true, value: 'goldfinch', pred: []}
       ])
     })
   })

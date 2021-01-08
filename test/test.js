@@ -1027,7 +1027,7 @@ describe('Automerge', () => {
       assert.deepStrictEqual(s2, {todos: [{title: 'water plants', done: false}]})
     })
 
-    it.skip('should save and load maps with @ symbols in the keys', () => {
+    it('should save and load maps with @ symbols in the keys', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc["123@4567"] = "hello")
       let s2 = Automerge.load(Automerge.save(s1))
       assert.deepStrictEqual(s2, { ["123@4567"]: "hello" })
@@ -1053,7 +1053,7 @@ describe('Automerge', () => {
         hash: changes12[0].hash, actor: '01234567', seq: 1, startOp: 1,
         time: changes12[0].time, message: '', deps: [], ops: [
           {obj: '_root', action: 'makeList', key: 'list', insert: false, pred: []},
-          {obj: listId,  action: 'set', key: '_head', insert: true, value: 'a', pred: []}
+          {obj: listId,  action: 'set', elemId: '_head', insert: true, value: 'a', pred: []}
         ]
       }])
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
@@ -1064,7 +1064,7 @@ describe('Automerge', () => {
       assert.deepStrictEqual(changes45[2], {
         hash: changes45[2].hash, actor: '01234567', seq: 3, startOp: 4,
         time: changes45[2].time, message: '', deps: [changes45[1].hash], ops: [
-          {obj: listId, action: 'set', key: '_head', insert: true, value: 'b', pred: []}
+          {obj: listId, action: 'set', elemId: '_head', insert: true, value: 'b', pred: []}
         ]
       })
     })

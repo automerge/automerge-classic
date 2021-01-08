@@ -163,19 +163,6 @@ class Context {
   }
 
   /**
-   * Returns the unique identifier of property `key` in object `objectId`. If the object is a list
-   * or text, `key` is an index and we return the elemId. Otherwise the key is just itself.
-   */
-  resolveKey(objectId, key) {
-    const type = this.getObjectType(objectId)
-    if (type === 'list' || type === 'text') {
-      return getElemId(this.getObject(objectId), key, false)
-    } else {
-      return key
-    }
-  }
-
-  /**
    * Returns the value associated with the property named `key` on the object
    * at path `path`. If the value is an object, returns a proxy for it.
    */
@@ -200,21 +187,24 @@ class Context {
   /**
    * Recursively creates Automerge versions of all the objects and nested objects in `value`,
    * constructing a patch and operations that describe the object tree. The new object is
-   * assigned to the property `key` in the object with ID `obj`. If `insert` is true, a new
-   * list element is created at index `key`, and the new object is assigned to that list
-   * element. If `key` is null, the ID of the new object is used as key (this construction
-   * is used by Automerge.Table).
+   * assigned to the property `key` in the object with ID `obj`. If the object is a list or
+   * text, `key` must be set to the list index being updated, and `elemId` must be set to the
+   * elemId of the element being updated. If `insert` is true, we insert a new list element
+   * (or text character) at index `key`, and `elemId` must be the elemId of the immediate
+   * predecessor element (or the string '_head' if inserting at index 0). If the assignment
+   * overwrites a previous value at this key/element, `pred` must be set to the array of the
+   * prior operations we are overwriting (empty array if there is no existing value).
    */
   createNestedObjects(obj, key, value, insert, pred, elemId) {
     if (value[OBJECT_ID]) {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
     const objectId = this.nextOpId()
-    if (key === null) key = objectId
 
     if (value instanceof Text) {
       // Create a new Text object
-      this.addOp({action: 'makeText', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeText', obj, elemId, insert, pred}
+                        : {action: 'makeText', obj, key, insert, pred})
       const subpatch = {objectId, type: 'text', edits: [], props: {}}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
@@ -224,19 +214,22 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      this.addOp({action: 'makeTable', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeTable', obj, elemId, insert, pred}
+                        : {action: 'makeTable', obj, key, insert, pred})
       return {objectId, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      this.addOp({action: 'makeList', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeList', obj, elemId, insert, pred}
+                        : {action: 'makeList', obj, key, insert, pred})
       const subpatch = {objectId, type: 'list', edits: [], props: {}}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
-      this.addOp({action: 'makeMap', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeMap', obj, elemId, insert, pred}
+                        : {action: 'makeMap', obj, key, insert, pred})
       let props = {}
       for (let nested of Object.keys(value)) {
         const opId = this.nextOpId()
@@ -275,7 +268,9 @@ class Context {
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      this.addOp(Object.assign({action: 'set', obj: objectId, key: (elemId || key), insert, pred}, description))
+      const op = elemId ? {action: 'set', obj: objectId, elemId, insert, pred}
+                        : {action: 'set', obj: objectId, key, insert, pred}
+      this.addOp(Object.assign(op, description))
       return description
     }
   }
@@ -423,7 +418,7 @@ class Context {
 
         const elemId = getElemId(list, start + i)
         const pred = getPred(list, start + i)
-        this.addOp({action: 'del', obj: objectId, key: elemId, insert: false, pred})
+        this.addOp({action: 'del', obj: objectId, elemId, insert: false, pred})
         subpatch.edits.push({action: 'remove', index: start})
       }
     }
@@ -484,11 +479,18 @@ class Context {
     }
 
     // TODO what if there is a conflicting value on the same key as the counter?
+    const type = this.getObjectType(objectId)
     const value = object[key].value + delta
     const opId = this.nextOpId()
     const pred = getPred(object, key)
-    const resolvedKey = this.resolveKey(objectId, key)
-    this.addOp({action: 'inc', obj: objectId, key: resolvedKey, value: delta, insert: false, pred})
+
+    if (type === 'list' || type === 'text') {
+      const elemId = getElemId(object, key, false)
+      this.addOp({action: 'inc', obj: objectId, elemId, value: delta, insert: false, pred})
+    } else {
+      this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false, pred})
+    }
+
     this.applyAtPath(path, subpatch => {
       subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
     })

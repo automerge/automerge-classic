@@ -64,9 +64,10 @@ function applyInsert(opSet, op) {
   const objectId = op.get('obj'), opId = op.get('opId')
   if (!opSet.get('byObject').has(objectId)) throw new Error(`Modification of unknown object ${objectId}`)
   if (opSet.hasIn(['byObject', objectId, '_insertion', opId])) throw new Error(`Duplicate list element ID ${opId}`)
+  if (!op.get('elemId')) throw new RangeError('insert operation has no key')
 
   return opSet
-    .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
+    .updateIn(['byObject', objectId, '_following', op.get('elemId')], List(), list => list.push(op))
     .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
@@ -127,7 +128,11 @@ function getChildId(op) {
  * the key is the element ID; in the case of maps, it is the property name.
  */
 function getOperationKey(op) {
-  return op.get('insert') ? op.get('opId') : op.get('key')
+  const keyStr = op.get('key')
+  if (keyStr) return keyStr
+  const key = op.get('insert') ? op.get('opId') : op.get('elemId')
+  if (!key) throw new RangeError(`operation has no key: ${op}`)
+  return key
 }
 
 /**
@@ -506,7 +511,7 @@ function getParent(opSet, objectId, key) {
   if (key === '_head') return
   const insertion = opSet.getIn(['byObject', objectId, '_insertion', key])
   if (!insertion) throw new TypeError(`Missing index entry for list element ${key}`)
-  return insertion.get('key')
+  return insertion.get('elemId')
 }
 
 function lamportCompare(op1, op2) {

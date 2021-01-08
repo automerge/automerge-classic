@@ -119,7 +119,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -137,10 +137,10 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]}
       const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, value: 'greenfinch', pred: [`2@${actor}`]}
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, value: 'greenfinch', pred: [`2@${actor}`]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -158,10 +158,10 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]}
       const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-        {action: 'del', obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]}
+        {action: 'del', obj: `1@${actor}`, elemId: `2@${actor}`, pred: [`2@${actor}`]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -181,8 +181,8 @@ describe('Automerge.Backend', () => {
         {action: 'makeList', obj: '_root', key: 'birds', pred: []}
       ]}
       const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []},
-        {action: 'del', obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []},
+        {action: 'del', obj: `1@${actor}`, elemId: `2@${actor}`, pred: [`2@${actor}`]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -241,7 +241,7 @@ describe('Automerge.Backend', () => {
       const now = new Date(), actor = uuid()
       const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'list', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: now.getTime(), datatype: 'timestamp', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: now.getTime(), datatype: 'timestamp', pred: []}
       ]}
       const s0 = Backend.init()
       const [s1, patch] = Backend.applyChanges(s0, [encodeChange(change)])
@@ -369,17 +369,17 @@ describe('Automerge.Backend', () => {
         {obj: '_root', action: 'makeList', key: 'birds', pred: []}
       ]}
       const remote2 = {actor: '222222', seq: 2, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
-        {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []}
+        {obj: '1@222222', action: 'set', elemId: '_head', insert: true, value: 'magpie', pred: []}
       ]}
       const local1 = {actor: '111111', seq: 1, startOp: 2, time: 0, deps: [hash(remote1)], ops: [
-        {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
+        {obj: '1@222222', action: 'set', elemId: '_head', insert: true, value: 'goldfinch', pred: []}
       ]}
       const local2 = {actor: '111111', seq: 2, startOp: 3, time: 0, deps: [], ops: [
-        {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
+        {obj: '1@222222', action: 'set', elemId: '2@111111', insert: true, value: 'wagtail', pred: []}
       ]}
       const local3 = {actor: '111111', seq: 3, startOp: 4, time: 0, deps: [hash(remote2)], ops: [
-        {obj: '1@222222', action: 'set', key: '2@222222', value: 'Magpie', pred: ['2@222222']},
-        {obj: '1@222222', action: 'set', key: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
+        {obj: '1@222222', action: 'set', elemId: '2@222222', value: 'Magpie', pred: ['2@222222']},
+        {obj: '1@222222', action: 'set', elemId: '2@111111', value: 'Goldfinch', pred: ['2@111111']}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
@@ -393,21 +393,21 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(changes12, [{
         hash: '96db9a3bb6471912a2acbe3948365d202b89145816efa37bd0ccaa3be8ebee14',
         actor: '111111', seq: 1, startOp: 2, time: 0, message: '', deps: [hash(remote1)], ops: [
-          {obj: '1@222222', action: 'set', key: '_head', insert: true, value: 'goldfinch', pred: []}
+          {obj: '1@222222', action: 'set', elemId: '_head', insert: true, value: 'goldfinch', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes34, [{
         hash: '57e8ec00028e0a0a1ae325ad2c86dd4d8f63ace7c3ccb67a351682f0f6879cfd',
         actor: '111111', seq: 2, startOp: 3, time: 0, message: '', deps: [changes12[0].hash], ops: [
-          {obj: '1@222222', action: 'set', key: '2@111111', insert: true, value: 'wagtail', pred: []}
+          {obj: '1@222222', action: 'set', elemId: '2@111111', insert: true, value: 'wagtail', pred: []}
         ]
       }])
       assert.deepStrictEqual(changes45, [{
         hash: 'd999eeeb5f69689f65b0e47b1f4dcc69c29b4b3ccaca69884425e5a6443e8d5d',
         actor: '111111', seq: 3, startOp: 4, time: 0, message: '',
         deps: [hash(remote2), changes34[0].hash].sort(), ops: [
-          {obj: '1@222222', action: 'set', key: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
-          {obj: '1@222222', action: 'set', key: '2@111111', insert: false, value: 'Goldfinch', pred: ['2@111111']}
+          {obj: '1@222222', action: 'set', elemId: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
+          {obj: '1@222222', action: 'set', elemId: '2@111111', insert: false, value: 'Goldfinch', pred: ['2@111111']}
         ]
       }])
     })
@@ -417,8 +417,8 @@ describe('Automerge.Backend', () => {
         {obj: '_root', action: 'makeList', key: 'birds', pred: []}
       ]}
       const local2 = {requestType: 'change', actor: '111111', seq: 2, startOp: 2, deps: [], time: 0, ops: [
-        {obj: '1@111111', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
-        {obj: '1@111111', action: 'del', key: '2@111111', pred: ['2@111111']}
+        {obj: '1@111111', action: 'set', elemId: '_head', insert: true, value: 'magpie', pred: []},
+        {obj: '1@111111', action: 'del', elemId: '2@111111', pred: ['2@111111']}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
@@ -440,8 +440,8 @@ describe('Automerge.Backend', () => {
       }, {
         hash: 'd96f0023f949581eb10459c2ad8467148857f1d230abc0f0fd446ab95fdbf7ea',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
-          {obj: '1@111111', action: 'set', key: '_head', insert: true, value: 'magpie', pred: []},
-          {obj: '1@111111', action: 'del', key: '2@111111', insert: false, pred: ['2@111111']}
+          {obj: '1@111111', action: 'set', elemId: '_head', insert: true, value: 'magpie', pred: []},
+          {obj: '1@111111', action: 'del', elemId: '2@111111', insert: false, pred: ['2@111111']}
         ]
       }])
     })
@@ -540,7 +540,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [encodeChange(change1)])
       assert.deepStrictEqual(Backend.getPatch(s1), {
@@ -557,13 +557,13 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head',      insert: true, value: 'chaffinch', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, insert: true, value: 'goldfinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'goldfinch', pred: []}
       ]}
       const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
-        {action: 'del', obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]},
-        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, insert: true, value: 'greenfinch', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: `3@${actor}`, value: 'goldfinches!!', pred: [`3@${actor}`]}
+        {action: 'del', obj: `1@${actor}`, elemId: `2@${actor}`, pred: [`2@${actor}`]},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'greenfinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `3@${actor}`, value: 'goldfinches!!', pred: [`3@${actor}`]}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2].map(encodeChange))
       assert.deepStrictEqual(Backend.getPatch(s1), {
@@ -580,7 +580,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'makeMap', obj: `1@${actor}`, key: '_head', insert: true, pred: []},
+        {action: 'makeMap', obj: `1@${actor}`, elemId: '_head', insert: true, pred: []},
         {action: 'set', obj: `2@${actor}`, key: 'title', value: 'water plants', pred: []},
         {action: 'set', obj: `2@${actor}`, key: 'done', value: false, pred: []}
       ]}
@@ -618,7 +618,7 @@ describe('Automerge.Backend', () => {
       const now = new Date(), actor = uuid()
       const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'list', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: now.getTime(), datatype: 'timestamp', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: now.getTime(), datatype: 'timestamp', pred: []}
       ]}
       const s1 = Backend.loadChanges(Backend.init(), [encodeChange(change)])
       assert.deepStrictEqual(Backend.getPatch(s1), {
