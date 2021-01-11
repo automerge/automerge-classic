@@ -446,6 +446,8 @@ describe('Automerge proxy API', () => {
         assert.deepEqual(root.list, ['a', 'b', 'c', 1])
         root = Automerge.change(root, doc => assert.deepEqual(doc.list.splice(1, 2, '-->'), ['b', 'c']))
         assert.deepEqual(root.list, ['a', '-->', 1])
+        root = Automerge.change(root, doc => assert.deepEqual(doc.list.splice(2, 200, '2'), ['1']))
+        assert.deepEqual(root.list, ['a', '-->', 2])
       })
 
       it('unshift()', () => {

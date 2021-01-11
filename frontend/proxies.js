@@ -75,7 +75,7 @@ function listMethods(context, listId) {
     splice(start, deleteCount, ...values) {
       let list = context.getObject(listId)
       start = parseListIndex(start)
-      if (deleteCount === undefined) {
+      if (deleteCount === undefined || deleteCount > list.length - start) {
         deleteCount = list.length - start
       }
       const deleted = []
