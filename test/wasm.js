@@ -100,7 +100,7 @@ function interopTests(sourceBackend, destBackend) {
     const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
       actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
@@ -119,12 +119,12 @@ function interopTests(sourceBackend, destBackend) {
     const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
       actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head', insert: true, value: 'chaffinch', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'chaffinch', pred: []}
       ]
     })
     const [source2, p2, change2] = sourceBackend.applyLocalChange(source1, {
       actor, seq: 2, startOp: 3, time: 0, deps: [], ops: [
-        {action: 'del', obj: `1@${actor}`, key: `2@${actor}`, pred: [`2@${actor}`]}
+        {action: 'del', obj: `1@${actor}`, elemId: `2@${actor}`, pred: [`2@${actor}`]}
       ]
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
@@ -143,9 +143,9 @@ function interopTests(sourceBackend, destBackend) {
     const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
       actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeText', obj: '_root', key: 'text', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: '_head',      insert: true, value: 'a', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: `2@${actor}`, insert: true, value: 'b', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: `3@${actor}`, insert: true, value: 'c', pred: []}
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, value: 'a', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'b', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `3@${actor}`, insert: true, value: 'c', pred: []}
       ]
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
