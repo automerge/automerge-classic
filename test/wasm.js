@@ -23,16 +23,13 @@ const wasmBackend = require(path.resolve(process.env.WASM_BACKEND_PATH))
 Automerge.setDefaultBackend(wasmBackend)
 
 describe('JavaScript-WebAssembly interoperability', () => {
-  const directions = [
-    {source: jsBackend, dest: wasmBackend, sourceName: 'JS', destName: 'Wasm'},
-    {source: wasmBackend, dest: jsBackend, sourceName: 'Wasm', destName: 'JS'}
-  ]
+  describe('from JS to Wasm', () => {
+    interopTests(jsBackend, wasmBackend)
+  })
 
-  for (let direction of directions) {
-    describe(`from ${direction.sourceName} to ${direction.destName}`, () => {
-      interopTests(direction.source, direction.dest)
-    })
-  }
+  describe('from Wasm to JS', () => {
+    interopTests(wasmBackend, jsBackend)
+  })
 })
 
 function interopTests(sourceBackend, destBackend) {
