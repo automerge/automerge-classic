@@ -86,16 +86,16 @@ An operation is a JSON object with the following properties:
 * `insert`: A boolean that may be present on operations that modify list or text
   objects, and on all operation types except `del` and `inc`. If the `insert`
   property is false or absent, the operation updates the property or list
-  element identified by `key`. If it is true, the operation inserts a new list
-  element or character after the element identified by `key`, and the ID of this
-  operation becomes the list element ID of the new element.
+  element identified by `elemId`. If it is true, the operation inserts a new
+  list element or character after the element identified by `elemId`, and the ID
+  of this operation becomes the list element ID of the new element.
 * `key`: A string that identifies the property of the object `obj` that is being
-  modified, present on all operations. If the object is a map, this is a string
-  containing the property name. If the object is a table, this is a string
-  containing the primary key of the row (a UUID). If the object is a list or
-  text, this is a string of the form `counter@actorId` identifying the list
-  element ID, or the string `'_head'` indicating insertion at the beginning of
-  the list (the value `'_head'` is allowed only if `insert` is true).
+  modified. If the object is a map, this is a string containing the property
+  name. If the object is a table, this is a string containing the primary key of
+  the row (a UUID). If the object is a list or text, `elemId` is used instead.
+* `elemId`: A string of the form `counter@actorId` identifying a list element or
+  text character, or the string `'_head'` indicating the beginning of the list.
+  The value `'_head'` is allowed only if `insert` is true.
 * `value`: On `set` operations only, this property contains the primitive value
   (string, number, boolean, or null) to assign.
 * `datatype`: On `set` operations only, this property can optionally be set to
@@ -127,13 +127,6 @@ Note several differences to the old format:
    assignment overwrites another, or whether they are concurrent. In the new
    format there is a new `pred` property of operations that explicitly captures
    the relationship between operations on the same property.
-
-Open questions:
-
-* Get rid of the all-zeros UUID, and just use a special string `_root` instead?
-* Use different properties for `key` in the cases where it is a string versus
-  being an opId? (At the moment we treat it as opId if it contains an `@` sign,
-  which effectively rules out string properties from containing `@`.)
 
 
 Binary representation of changes

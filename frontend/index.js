@@ -1,5 +1,5 @@
 const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
-const { ROOT_ID, isObject, copyObject } = require('../src/common')
+const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
@@ -30,10 +30,10 @@ function checkActorId(actorId) {
  * those updates.
  */
 function updateRootObject(doc, updated, state) {
-  let newDoc = updated[ROOT_ID]
+  let newDoc = updated._root
   if (!newDoc) {
-    newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
-    updated[ROOT_ID] = newDoc
+    newDoc = cloneRootObject(doc[CACHE]._root)
+    updated._root = newDoc
   }
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
@@ -161,13 +161,13 @@ function init(options) {
     checkActorId(options.actorId)
   }
 
-  const root = {}, cache = {[ROOT_ID]: root}
+  const root = {}, cache = {_root: root}
   const state = {seq: 0, maxOp: 0, requests: [], clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
     state.lastLocalChange = null
   }
-  Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
+  Object.defineProperty(root, OBJECT_ID, {value: '_root'})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
@@ -196,7 +196,7 @@ function from(initialState, options) {
  * changed, returns the original `doc` and a `null` change request.
  */
 function change(doc, options, callback) {
-  if (doc[OBJECT_ID] !== ROOT_ID) {
+  if (doc[OBJECT_ID] !== '_root') {
     throw new TypeError('The first argument to Automerge.change must be the document root')
   }
   if (doc[CHANGE]) {

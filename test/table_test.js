@@ -1,7 +1,6 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const Frontend = Automerge.Frontend
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const uuid = require('../src/uuid')
 const { assertEqualsOneOf } = require('./helpers')
 
@@ -27,7 +26,7 @@ describe('Automerge.Table', () => {
       const books = Frontend.getObjectId(doc.books)
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
-          {obj: ROOT_ID, action: 'makeTable', key: 'books', insert: false, pred: []}
+          {obj: '_root', action: 'makeTable', key: 'books', insert: false, pred: []}
         ]
       })
     })

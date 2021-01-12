@@ -1,5 +1,3 @@
-const { ROOT_ID } = require('../src/common')
-
 /**
  * Miniature implementation of a subset of Automerge, which is used below as definition of the
  * expected behaviour during fuzz testing. Supports the following:
@@ -14,12 +12,12 @@ const { ROOT_ID } = require('../src/common')
 class Micromerge {
   constructor() {
     this.byActor = {} // map from actorId to array of changes
-    this.byObjId = {[ROOT_ID]: {}} // objects, keyed by the ID of the operation that created the object
-    this.metadata = {[ROOT_ID]: {}} // map from objID to object with CRDT metadata for each object field
+    this.byObjId = {_root: {}} // objects, keyed by the ID of the operation that created the object
+    this.metadata = {_root: {}} // map from objID to object with CRDT metadata for each object field
   }
 
   get root() {
-    return this.byObjId[ROOT_ID]
+    return this.byObjId._root
   }
 
   /**
@@ -144,19 +142,19 @@ class Micromerge {
 const assert = require('assert')
 
 const change1 = {actor: '1234', seq: 1, deps: {}, startOp: 1, ops: [
-  {action: 'set',      obj: ROOT_ID,  key: 'title',  insert: false, value: 'Hello'},
-  {action: 'makeList', obj: ROOT_ID,  key: 'tags',   insert: false},
+  {action: 'set',      obj: '_root',  key: 'title',  insert: false, value: 'Hello'},
+  {action: 'makeList', obj: '_root',  key: 'tags',   insert: false},
   {action: 'set',      obj: '2@1234', key: '_head',  insert: true,  value: 'foo'}
 ]}
 
 const change2 = {actor: '1234', seq: 2, deps: {}, startOp: 4, ops: [
-  {action: 'set',      obj: ROOT_ID,  key: 'title',  insert: false, value: 'Hello 1'},
+  {action: 'set',      obj: '_root',  key: 'title',  insert: false, value: 'Hello 1'},
   {action: 'set',      obj: '2@1234', key: '3@1234', insert: true,  value: 'bar'},
   {action: 'del',      obj: '2@1234', key: '3@1234', insert: false}
 ]}
 
 const change3 = {actor: 'abcd', seq: 1, deps: {'1234': 1}, startOp: 4, ops: [
-  {action: 'set',      obj: ROOT_ID,  key: 'title',  insert: false, value: 'Hello 2'},
+  {action: 'set',      obj: '_root',  key: 'title',  insert: false, value: 'Hello 2'},
   {action: 'set',      obj: '2@1234', key: '3@1234', insert: true,  value: 'baz'}
 ]}
 
@@ -167,7 +165,7 @@ assert.deepStrictEqual(doc1.root, {title: 'Hello 2', tags: ['baz', 'bar']})
 assert.deepStrictEqual(doc2.root, {title: 'Hello 2', tags: ['baz', 'bar']})
 
 const change4 = {actor: '2345', seq: 1, deps: {}, startOp: 1, ops: [
-  {action: 'makeList', obj: ROOT_ID,  key: 'todos',  insert: false},
+  {action: 'makeList', obj: '_root',  key: 'todos',  insert: false},
   {action: 'set',      obj: '1@2345', key: '_head',  insert: true,  value: 'Task 1'},
   {action: 'set',      obj: '1@2345', key: '2@2345', insert: true,  value: 'Task 2'}
 ]}

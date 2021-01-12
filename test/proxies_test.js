@@ -1,21 +1,20 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
-const ROOT_ID = '00000000-0000-0000-0000-000000000000'
 const UUID_PATTERN = /^[0-9a-f]{32}$/
 
 describe('Automerge proxy API', () => {
   describe('root object', () => {
     it('should have a fixed object ID', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert.strictEqual(Automerge.getObjectId(doc), ROOT_ID)
+        assert.strictEqual(Automerge.getObjectId(doc), '_root')
       })
     })
 
     it('should know its actor ID', () => {
       Automerge.change(Automerge.init(), doc => {
         assert(UUID_PATTERN.test(Automerge.getActorId(doc).toString()))
-        assert.notEqual(Automerge.getActorId(doc), ROOT_ID)
+        assert.notEqual(Automerge.getActorId(doc), '_root')
         assert.strictEqual(Automerge.getActorId(Automerge.init('01234567')), '01234567')
       })
     })

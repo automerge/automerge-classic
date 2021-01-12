@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { ROOT_ID, isObject, copyObject } = require('../src/common')
+const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -111,7 +111,7 @@ class Context {
    * by mutating the patch object. Returns the subpatch at the given path.
    */
   getSubpatch(patch, path) {
-    let subpatch = patch.diffs, object = this.getObject(ROOT_ID)
+    let subpatch = patch.diffs, object = this.getObject('_root')
 
     for (let pathElem of path) {
       if (!subpatch.props) {
@@ -154,25 +154,12 @@ class Context {
    * the type of the object with ID `objectId`.
    */
   getObjectType(objectId) {
-    if (objectId === ROOT_ID) return 'map'
+    if (objectId === '_root') return 'map'
     const object = this.getObject(objectId)
     if (object instanceof Text) return 'text'
     if (object instanceof Table) return 'table'
     if (Array.isArray(object)) return 'list'
     return 'map'
-  }
-
-  /**
-   * Returns the unique identifier of property `key` in object `objectId`. If the object is a list
-   * or text, `key` is an index and we return the elemId. Otherwise the key is just itself.
-   */
-  resolveKey(objectId, key) {
-    const type = this.getObjectType(objectId)
-    if (type === 'list' || type === 'text') {
-      return getElemId(this.getObject(objectId), key, false)
-    } else {
-      return key
-    }
   }
 
   /**
@@ -200,21 +187,24 @@ class Context {
   /**
    * Recursively creates Automerge versions of all the objects and nested objects in `value`,
    * constructing a patch and operations that describe the object tree. The new object is
-   * assigned to the property `key` in the object with ID `obj`. If `insert` is true, a new
-   * list element is created at index `key`, and the new object is assigned to that list
-   * element. If `key` is null, the ID of the new object is used as key (this construction
-   * is used by Automerge.Table).
+   * assigned to the property `key` in the object with ID `obj`. If the object is a list or
+   * text, `key` must be set to the list index being updated, and `elemId` must be set to the
+   * elemId of the element being updated. If `insert` is true, we insert a new list element
+   * (or text character) at index `key`, and `elemId` must be the elemId of the immediate
+   * predecessor element (or the string '_head' if inserting at index 0). If the assignment
+   * overwrites a previous value at this key/element, `pred` must be set to the array of the
+   * prior operations we are overwriting (empty array if there is no existing value).
    */
   createNestedObjects(obj, key, value, insert, pred, elemId) {
     if (value[OBJECT_ID]) {
       throw new RangeError('Cannot create a reference to an existing document object')
     }
     const objectId = this.nextOpId()
-    if (key === null) key = objectId
 
     if (value instanceof Text) {
       // Create a new Text object
-      this.addOp({action: 'makeText', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeText', obj, elemId, insert, pred}
+                        : {action: 'makeText', obj, key, insert, pred})
       const subpatch = {objectId, type: 'text', edits: [], props: {}}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
@@ -224,19 +214,22 @@ class Context {
       if (value.count > 0) {
         throw new RangeError('Assigning a non-empty Table object is not supported')
       }
-      this.addOp({action: 'makeTable', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeTable', obj, elemId, insert, pred}
+                        : {action: 'makeTable', obj, key, insert, pred})
       return {objectId, type: 'table', props: {}}
 
     } else if (Array.isArray(value)) {
       // Create a new list object
-      this.addOp({action: 'makeList', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeList', obj, elemId, insert, pred}
+                        : {action: 'makeList', obj, key, insert, pred})
       const subpatch = {objectId, type: 'list', edits: [], props: {}}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
     } else {
       // Create a new map object
-      this.addOp({action: 'makeMap', obj, key: elemId || key, insert, pred})
+      this.addOp(elemId ? {action: 'makeMap', obj, elemId, insert, pred}
+                        : {action: 'makeMap', obj, key, insert, pred})
       let props = {}
       for (let nested of Object.keys(value).sort()) {
         const opId = this.nextOpId()
@@ -275,7 +268,9 @@ class Context {
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      this.addOp(Object.assign({action: 'set', obj: objectId, key: (elemId || key), insert, pred}, description))
+      const op = elemId ? {action: 'set', obj: objectId, elemId, insert, pred}
+                        : {action: 'set', obj: objectId, key, insert, pred}
+      this.addOp(Object.assign(op, description))
       return description
     }
   }
@@ -285,9 +280,9 @@ class Context {
    * and then immediately applies the patch to the document.
    */
   applyAtPath(path, callback) {
-    let patch = {diffs: {objectId: ROOT_ID, type: 'map'}}
+    let patch = {diffs: {objectId: '_root', type: 'map'}}
     callback(this.getSubpatch(patch, path))
-    this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+    this.applyPatch(patch.diffs, this.cache._root, this.updated)
   }
 
   /**
@@ -299,7 +294,7 @@ class Context {
       throw new RangeError(`The key of a map entry must be a string, not ${typeof key}`)
     }
 
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
     if (object[key] instanceof Counter) {
       throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')
@@ -321,7 +316,7 @@ class Context {
    * Updates the map object at path `path`, deleting the property `key`.
    */
   deleteMapKey(path, key) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
 
     if (object[key] !== undefined) {
@@ -360,7 +355,7 @@ class Context {
    * position `index` with the new value `value`.
    */
   setListIndex(path, index, value) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const list = this.getObject(objectId)
     if (index === list.length) {
       return this.splice(path, index, 0, [value])
@@ -389,14 +384,14 @@ class Context {
    * list index `start`, and inserting the list of new elements `insertions` at that position.
    */
   splice(path, start, deletions, insertions) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     let list = this.getObject(objectId)
     if (start < 0 || deletions < 0 || start > list.length - deletions) {
       throw new RangeError(`${deletions} deletions starting at index ${start} are out of bounds for list of length ${list.length}`)
     }
     if (deletions === 0 && insertions.length === 0) return
 
-    let patch = {diffs: {objectId: ROOT_ID, type: 'map'}}
+    let patch = {diffs: {objectId: '_root', type: 'map'}}
     let subpatch = this.getSubpatch(patch, path)
     if (!subpatch.edits) subpatch.edits = []
 
@@ -423,7 +418,7 @@ class Context {
 
         const elemId = getElemId(list, start + i)
         const pred = getPred(list, start + i)
-        this.addOp({action: 'del', obj: objectId, key: elemId, insert: false, pred})
+        this.addOp({action: 'del', obj: objectId, elemId, insert: false, pred})
         subpatch.edits.push({action: 'remove', index: start})
       }
     }
@@ -431,7 +426,7 @@ class Context {
     if (insertions.length > 0) {
       this.insertListItems(subpatch, start, insertions, false)
     }
-    this.applyPatch(patch.diffs, this.cache[ROOT_ID], this.updated)
+    this.applyPatch(patch.diffs, this.cache._root, this.updated)
   }
 
   /**
@@ -477,18 +472,25 @@ class Context {
    * `key` in the object at path `path`.
    */
   increment(path, key, delta) {
-    const objectId = path.length === 0 ? ROOT_ID : path[path.length - 1].objectId
+    const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const object = this.getObject(objectId)
     if (!(object[key] instanceof Counter)) {
       throw new TypeError('Only counter values can be incremented')
     }
 
     // TODO what if there is a conflicting value on the same key as the counter?
+    const type = this.getObjectType(objectId)
     const value = object[key].value + delta
     const opId = this.nextOpId()
     const pred = getPred(object, key)
-    const resolvedKey = this.resolveKey(objectId, key)
-    this.addOp({action: 'inc', obj: objectId, key: resolvedKey, value: delta, insert: false, pred})
+
+    if (type === 'list' || type === 'text') {
+      const elemId = getElemId(object, key, false)
+      this.addOp({action: 'inc', obj: objectId, elemId, value: delta, insert: false, pred})
+    } else {
+      this.addOp({action: 'inc', obj: objectId, key, value: delta, insert: false, pred})
+    }
+
     this.applyAtPath(path, subpatch => {
       subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
     })

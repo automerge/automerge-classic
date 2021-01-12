@@ -1,7 +1,7 @@
 const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
 const { decodeChange, decodeChangeMeta } = require('./columnar')
-const { ROOT_ID, parseOpId } = require('../src/common')
+const { parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.
@@ -19,7 +19,7 @@ function causallyReady(opSet, change) {
  */
 function getPath(opSet, objectId) {
   let path = []
-  while (objectId !== ROOT_ID) {
+  while (objectId !== '_root') {
     const ref = opSet.getIn(['byObject', objectId, '_inbound'], Set()).first()
     if (!ref) throw new RangeError(`No path found to object ${objectId}`)
     path.unshift(ref)
@@ -33,7 +33,7 @@ function getPath(opSet, objectId) {
  * the type of the object with ID `objectId`.
  */
 function getObjectType(opSet, objectId) {
-  if (objectId === ROOT_ID) return 'map'
+  if (objectId === '_root') return 'map'
   const objInit = opSet.getIn(['byObject', objectId, '_init', 'action'])
   const type = {makeMap: 'map', makeTable: 'table', makeList: 'list', makeText: 'text'}[objInit]
   if (!type) throw new RangeError(`Unknown object type ${objInit} for ${objectId}`)
@@ -64,9 +64,10 @@ function applyInsert(opSet, op) {
   const objectId = op.get('obj'), opId = op.get('opId')
   if (!opSet.get('byObject').has(objectId)) throw new Error(`Modification of unknown object ${objectId}`)
   if (opSet.hasIn(['byObject', objectId, '_insertion', opId])) throw new Error(`Duplicate list element ID ${opId}`)
+  if (!op.get('elemId')) throw new RangeError('insert operation has no key')
 
   return opSet
-    .updateIn(['byObject', objectId, '_following', op.get('key')], List(), list => list.push(op))
+    .updateIn(['byObject', objectId, '_following', op.get('elemId')], List(), list => list.push(op))
     .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
@@ -127,7 +128,11 @@ function getChildId(op) {
  * the key is the element ID; in the case of maps, it is the property name.
  */
 function getOperationKey(op) {
-  return op.get('insert') ? op.get('opId') : op.get('key')
+  const keyStr = op.get('key')
+  if (keyStr) return keyStr
+  const key = op.get('insert') ? op.get('opId') : op.get('elemId')
+  if (!key) throw new RangeError(`operation has no key: ${op}`)
+  return key
 }
 
 /**
@@ -422,7 +427,7 @@ function init() {
   return Map()
     .set('states',   Map())
     .set('history',  List())
-    .set('byObject', Map().set(ROOT_ID, Map().set('_keys', Map())))
+    .set('byObject', Map().set('_root', Map().set('_keys', Map())))
     .set('hashes',   Map())
     .set('deps',     Set())
     .set('maxOp',     0)
@@ -506,7 +511,7 @@ function getParent(opSet, objectId, key) {
   if (key === '_head') return
   const insertion = opSet.getIn(['byObject', objectId, '_insertion', key])
   if (!insertion) throw new TypeError(`Missing index entry for list element ${key}`)
-  return insertion.get('key')
+  return insertion.get('elemId')
 }
 
 function lamportCompare(op1, op2) {
@@ -626,5 +631,5 @@ function constructObject(opSet, objectId) {
 
 module.exports = {
   init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
-  constructObject, getFieldOps, getOperationKey, finalizePatch, ROOT_ID
+  constructObject, getFieldOps, getOperationKey, finalizePatch
 }

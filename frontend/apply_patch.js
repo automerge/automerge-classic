@@ -1,4 +1,4 @@
-const { ROOT_ID, isObject, copyObject, parseOpId } = require('../src/common')
+const { isObject, copyObject, parseOpId } = require('../src/common')
 const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
@@ -300,10 +300,10 @@ function interpretPatch(patch, obj, updated) {
  * Creates a writable copy of the immutable document root object `root`.
  */
 function cloneRootObject(root) {
-  if (root[OBJECT_ID] !== ROOT_ID) {
+  if (root[OBJECT_ID] !== '_root') {
     throw new RangeError(`Not the root object: ${root[OBJECT_ID]}`)
   }
-  return cloneMapObject(root, ROOT_ID)
+  return cloneMapObject(root, '_root')
 }
 
 module.exports = {
