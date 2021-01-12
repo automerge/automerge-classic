@@ -8,6 +8,11 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.14.2] — 2021-01-12
+
+- **Fixed** [#301]: Handling out-of-bounds argument in `Array.slice()` ([@pierreprinetti])
+- **Fixed** [#261]: Support calling `Array.indexOf()` with an object ([@philschatz])
+
 ## [0.14.1] — 2020-05-25
 
 - **Fixed** [#249]: Corrected TypeScript declaration for `Automerge.Table.rows` ([@lauritzsh])
@@ -242,7 +247,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - First public release.
 
 
-[Unreleased]: https://github.com/automerge/automerge/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/automerge/automerge/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/automerge/automerge/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/automerge/automerge/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/automerge/automerge/compare/v0.13.1...v0.14.0
 [0.13.0]: https://github.com/automerge/automerge/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/automerge/automerge/compare/v0.12.0...v0.12.1
@@ -272,6 +279,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#301]: https://github.com/automerge/automerge/pull/301
+[#261]: https://github.com/automerge/automerge/pull/261
 [#260]: https://github.com/automerge/automerge/issues/260
 [#258]: https://github.com/automerge/automerge/issues/258
 [#252]: https://github.com/automerge/automerge/pull/252
@@ -366,6 +375,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [@mmcgrana]: https://github.com/mmcgrana
 [@mmmm1998]: https://github.com/mmmm1998
 [@nornagon]: https://github.com/nornagon
+[@pierreprinetti]: https://github.com/pierreprinetti
+[@philschatz]: https://github.com/philschatz
 [@pvh]: https://github.com/pvh
 [@salzhrani]: https://github.com/salzhrani
 [@saranrapjs]: https://github.com/saranrapjs
