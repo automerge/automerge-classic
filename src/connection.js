@@ -67,9 +67,8 @@ class Connection {
         this.sendMsg(docId, clock, changes)
         return
       }
+      if (!clock.equals(this._ourClock.get(docId, Map()))) this.sendMsg(docId, clock)
     }
-
-    if (!clock.equals(this._ourClock.get(docId, Map()))) this.sendMsg(docId, clock)
   }
 
   // Callback that is called by the docSet whenever a document is changed
