@@ -365,6 +365,52 @@ describe('Automerge.Text', () => {
     })
   })
 
+  describe.only('cursors', () => {
+    let s1
+    beforeEach(() => {
+      s1 = Automerge.change(Automerge.init(), doc => {
+        doc.text = new Automerge.Text('hello world')
+        doc.cursor = doc.text.getCursorAt(2)
+      })
+    })
+
+    it('can retrieve the initial index on the cursor', () => {
+      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), 2)
+    })
+
+    it('updates the cursor index when text is updated', () => {
+      s1 = Automerge.change(s1, doc => {
+        doc.text.insertAt(0, 'a', 'b', 'c')
+      }) 
+
+      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), 5)      
+    })
+
+    it('throws an error if a non-cursor is passed in', () => {
+      s1 = Automerge.change(s1, doc => {
+        doc.value = "random string"
+      }) 
+
+      assert.throws(() => s1.text.findCursorIndex(s1.value), /Invalid cursor object/) 
+    })
+
+    it('throws an error if the cursor was created on a different text object', () => {
+      s1 = Automerge.change(s1, doc => {
+        doc.text = new Automerge.Text('another text object')
+      }) 
+
+      assert.throws(() => s1.text.findCursorIndex(s1.cursor), /Cursor was initialized with a different text object/) 
+    })
+
+    it('handles the case where the cursor character was deleted', () => {
+      s1 = Automerge.change(s1, doc => {
+        doc.text.deleteAt(2)
+      })  
+
+      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), -1) 
+    })
+  })
+
   describe('non-textual control characters', () => {
     let s1
     beforeEach(() => {

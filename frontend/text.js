@@ -28,6 +28,36 @@ class Text {
   }
 
   /**
+   * Returns a cursor that points to a specific point in the text.
+   * For now, represented by a plain object.
+   */
+  getCursorAt (index) {
+    return {
+      // todo: are there any points in the lifecycle where the Text object doesn't have an ID?
+      textId: this[OBJECT_ID], 
+      elemId: this.getElemId(index)
+    }
+  }
+
+  /**
+   * Finds the latest integer index of a cursor object.
+   * If the character was deleted, returns -1.
+   * 
+   * todos:
+   * - consider returning the closest character if deleted
+   * - consider optimizing the linear search
+   */
+  findCursorIndex (cursor) {
+    if(cursor.textId === undefined || cursor.elemId === undefined) {
+      throw new TypeError('Invalid cursor object')
+    }
+    if(cursor.textId !== this[OBJECT_ID]) {
+      throw new TypeError('Cursor was initialized with a different text object')
+    }
+    return this.elems.findIndex(e => e.elemId === cursor.elemId)
+  }
+
+  /**
    * Iterates over the text elements character by character, including any
    * inline objects.
    */
