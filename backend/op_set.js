@@ -141,6 +141,22 @@ function patchList(opSet, objectId, index, elemId, action, ops) {
   return [opSet, [edit]]
 }
 
+// find the index of the closest preceding list element
+function findClosestListIndex(opSet, objectId, elemId) {
+  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+
+  let prevId = elemId
+  while (true) {
+    index = -1
+    prevId = getPrevious(opSet, objectId, prevId)
+    if (!prevId) break
+    index = elemIds.indexOf(prevId)
+    if (index >= 0) break
+  }
+
+  return index
+}
+
 function updateListElement(opSet, objectId, elemId) {
   const ops = getFieldOps(opSet, objectId, elemId)
   const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -155,17 +171,7 @@ function updateListElement(opSet, objectId, elemId) {
 
   } else {
     if (ops.isEmpty()) return [opSet, []] // deleting a non-existent element = no-op
-
-    // find the index of the closest preceding list element
-    let prevId = elemId
-    while (true) {
-      index = -1
-      prevId = getPrevious(opSet, objectId, prevId)
-      if (!prevId) break
-      index = elemIds.indexOf(prevId)
-      if (index >= 0) break
-    }
-
+    index = findClosestListIndex(opSet, objectId, elemId)
     return patchList(opSet, objectId, index + 1, elemId, 'insert', ops)
   }
 }
@@ -569,5 +575,5 @@ function listIterator(opSet, listId, context) {
 module.exports = {
   init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
   getObjectFields, getObjectField, getObjectConflicts, getFieldOps,
-  listElemByIndex, listLength, listIterator, ROOT_ID
+  listElemByIndex, listLength, listIterator, findClosestListIndex, ROOT_ID
 }
