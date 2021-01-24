@@ -3,6 +3,7 @@ const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
+const { findClosestListIndex } = require('../backend/op_set')
 const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
@@ -366,9 +367,33 @@ function getElementIds(list) {
   }
 }
 
+/**
+ * Finds the latest integer index of a cursor object.
+ * If the character was deleted, returns -1.
+ * 
+ * todos:
+ * - consider returning the closest character if deleted
+ * - consider optimizing the linear search
+ */
+function findCursorIndex (cursor, doc, findClosest) {
+  if(cursor.textId === undefined || cursor.elemId === undefined) {
+    throw new TypeError('Invalid cursor object')
+  }
+
+  const backend = getBackendState(doc)
+  const elemIds = backend.getIn(['opSet', 'byObject', cursor.textId, '_elemIds'])
+  let index = elemIds.indexOf(cursor.elemId)
+
+  if (index === -1 && findClosest) {
+    index = findClosestListIndex(backend.getIn(['opSet']), cursor.textId, cursor.elemId)
+  }
+
+  return index
+}
+
 module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
-  getBackendState, getElementIds,
+  getBackendState, getElementIds, findCursorIndex,
   Text, Table, Counter
 }

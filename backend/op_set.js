@@ -71,6 +71,22 @@ function applyInsert(opSet, op) {
     .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
+// find the index of the closest preceding list element
+function findClosestListIndex(opSet, objectId, elemId) {
+  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+
+  let prevId = elemId, index
+  while (true) {
+    index = -1
+    prevId = getPrevious(opSet, objectId, prevId)
+    if (!prevId) break
+    index = elemIds.indexOf(prevId)
+    if (index >= 0) break
+  }
+
+  return index
+}
+
 function updateListElement(opSet, objectId, elemId, patch) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -90,18 +106,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
   } else {
     if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
-
-    // find the index of the closest preceding list element
-    let prevId = elemId
-    while (true) {
-      index = -1
-      prevId = getPrevious(opSet, objectId, prevId)
-      if (!prevId) break
-      index = elemIds.indexOf(prevId)
-      if (index >= 0) break
-    }
-
-    index += 1
+    index = findClosestListIndex(opSet, objectId, elemId) + 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
     if (patch) patch.edits.push({action: 'insert', index, elemId})
   }
@@ -631,5 +636,5 @@ function constructObject(opSet, objectId) {
 
 module.exports = {
   init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
-  constructObject, getFieldOps, getOperationKey, finalizePatch
+  constructObject, getFieldOps, getOperationKey, finalizePatch, findClosestListIndex
 }

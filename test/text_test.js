@@ -363,7 +363,7 @@ describe('Automerge.Text', () => {
     })
   })
 
-  describe.only('cursors', () => {
+  describe('cursors', () => {
     let s1
     beforeEach(() => {
       s1 = Automerge.change(Automerge.init(), doc => {
@@ -373,7 +373,7 @@ describe('Automerge.Text', () => {
     })
 
     it('can retrieve the initial index on the cursor', () => {
-      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), 2)
+      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), 2)
     })
 
     it('updates the cursor index when text is updated', () => {
@@ -381,7 +381,7 @@ describe('Automerge.Text', () => {
         doc.text.insertAt(0, 'a', 'b', 'c')
       }) 
 
-      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), 5)      
+      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), 5)   
     })
 
     it('throws an error if a non-cursor is passed in', () => {
@@ -389,23 +389,23 @@ describe('Automerge.Text', () => {
         doc.value = "random string"
       }) 
 
-      assert.throws(() => s1.text.findCursorIndex(s1.value), /Invalid cursor object/) 
+      assert.throws(() => Automerge.Frontend.findCursorIndex(s1.value, s1), /Invalid cursor object/) 
     })
 
-    it('throws an error if the cursor was created on a different text object', () => {
-      s1 = Automerge.change(s1, doc => {
-        doc.text = new Automerge.Text('another text object')
-      }) 
-
-      assert.throws(() => s1.text.findCursorIndex(s1.cursor), /Cursor was initialized with a different text object/) 
-    })
-
-    it('handles the case where the cursor character was deleted', () => {
+    it('returns -1 by default if character was deleted', () => {
       s1 = Automerge.change(s1, doc => {
         doc.text.deleteAt(2)
       })  
 
-      assert.deepStrictEqual(s1.text.findCursorIndex(s1.cursor), -1) 
+      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), -1) 
+    })
+
+    it('returns closest index if character was deleted and findClosest is set to true', () => {
+      s1 = Automerge.change(s1, doc => {
+        doc.text.deleteAt(2)
+      })  
+
+      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1, true), 1) 
     })
   })
 
