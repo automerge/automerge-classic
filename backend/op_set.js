@@ -49,7 +49,7 @@ function getPath(opSet, objectId) {
     const objType = opSet.getIn(['byObject', objectId, '_init', 'action'])
 
     if (objType === 'makeList' || objType === 'makeText') {
-      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(ref.get('key'))
+      const index = getListIndex(opSet, objectId, ref.get('key'))
       if (index < 0) return null
       path.unshift(index)
     } else {
@@ -141,8 +141,15 @@ function patchList(opSet, objectId, index, elemId, action, ops) {
   return [opSet, [edit]]
 }
 
-// find the index of the closest preceding list element
-function findClosestListIndex(opSet, objectId, elemId) {
+// Finds the index of the list element with a given ID.
+// Returns -1 if the element does not exist or has been deleted.
+function getListIndex(opSet, objectId, elemId) {
+  return opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
+}
+
+// Find the index of the closest visible list element that precedes the given element ID.
+// Returns -1 if there is no such element.
+function getPrecedingListIndex(opSet, objectId, elemId) {
   const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
 
   let prevId = elemId, index
@@ -159,8 +166,7 @@ function findClosestListIndex(opSet, objectId, elemId) {
 
 function updateListElement(opSet, objectId, elemId) {
   const ops = getFieldOps(opSet, objectId, elemId)
-  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
-  let index = elemIds.indexOf(elemId)
+  let index = getListIndex(opSet, objectId, elemId)
 
   if (index >= 0) {
     if (ops.isEmpty()) {
@@ -168,10 +174,9 @@ function updateListElement(opSet, objectId, elemId) {
     } else {
       return patchList(opSet, objectId, index, elemId, 'set', ops)
     }
-
   } else {
     if (ops.isEmpty()) return [opSet, []] // deleting a non-existent element = no-op
-    index = findClosestListIndex(opSet, objectId, elemId)
+    index = getPrecedingListIndex(opSet, objectId, elemId)
     return patchList(opSet, objectId, index + 1, elemId, 'insert', ops)
   }
 }
@@ -575,5 +580,5 @@ function listIterator(opSet, listId, context) {
 module.exports = {
   init, addChange, getMissingChanges, getChangesForActor, getMissingDeps,
   getObjectFields, getObjectField, getObjectConflicts, getFieldOps,
-  listElemByIndex, listLength, listIterator, findClosestListIndex, ROOT_ID
+  listElemByIndex, listLength, listIterator, getListIndex, getPrecedingListIndex, ROOT_ID
 }

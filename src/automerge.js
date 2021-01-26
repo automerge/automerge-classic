@@ -133,10 +133,33 @@ function getHistory(doc) {
   }).toArray()
 }
 
+/**
+ * Finds the latest integer index of a cursor object.
+ * If the character was deleted, returns -1.
+ *
+ * todos:
+ * - consider returning the closest character if deleted
+ * - consider optimizing the linear search
+ */
+function getCursorIndex(doc, cursor, findClosest = false) {
+  if (cursor.objectId === undefined || cursor.elemId === undefined) {
+    throw new TypeError('Invalid cursor object')
+  }
+
+  const backend = Frontend.getBackendState(doc)
+  let index = Backend.getListIndex(backend, cursor.objectId, cursor.elemId)
+
+  if (index === -1 && findClosest) {
+    index = Backend.getPrecedingListIndex(backend, cursor.objectId, cursor.elemId)
+  }
+  return index
+}
+
+
 module.exports = {
   init, from, change, emptyChange, undo, redo,
   load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
-  equals, getHistory, uuid,
+  equals, getHistory, getCursorIndex, uuid,
   Frontend, Backend,
   DocSet: require('./doc_set'),
   WatchableDoc: require('./watchable_doc'),

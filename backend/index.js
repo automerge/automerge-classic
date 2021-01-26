@@ -248,6 +248,14 @@ function merge(local, remote) {
   return applyChanges(local, changes)
 }
 
+function getListIndex(state, objectId, elemId) {
+  return OpSet.getListIndex(state.get('opSet'), objectId, elemId)
+}
+
+function getPrecedingListIndex(state, objectId, elemId) {
+  return OpSet.getPrecedingListIndex(state.get('opSet'), objectId, elemId)
+}
+
 /**
  * Undoes the last change by the local user in the node state `state`. The
  * `request` object contains all parts of the change except the operations;
@@ -317,5 +325,6 @@ function redo(state, request) {
 
 module.exports = {
   init, applyChanges, applyLocalChange, getPatch,
-  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge
+  getChanges, getChangesForActor, getMissingChanges, getMissingDeps, merge,
+  getListIndex, getPrecedingListIndex
 }
