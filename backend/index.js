@@ -267,7 +267,17 @@ function getMissingDeps(backend) {
   }
 }
 
+function getListIndex(backend, objectId, elemId) {
+  const opSet = backendState(backend).get('opSet')
+  return OpSet.getListIndex(opSet, objectId, elemId)
+}
+
+function getPrecedingListIndex(backend, objectId, elemId) {
+  const opSet = backendState(backend).get('opSet')
+  return OpSet.getPrecedingListIndex(opSet, objectId, elemId)
+}
+
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getHeads, getChanges, getMissingDeps
+  getHeads, getChanges, getMissingDeps, getListIndex, getPrecedingListIndex
 }

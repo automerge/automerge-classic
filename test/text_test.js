@@ -373,7 +373,7 @@ describe('Automerge.Text', () => {
     })
 
     it('can retrieve the initial index on the cursor', () => {
-      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), 2)
+      assert.deepStrictEqual(Automerge.getCursorIndex(s1, s1.cursor), 2)
     })
 
     it('updates the cursor index when text is updated', () => {
@@ -381,7 +381,7 @@ describe('Automerge.Text', () => {
         doc.text.insertAt(0, 'a', 'b', 'c')
       })
 
-      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), 5)
+      assert.deepStrictEqual(Automerge.getCursorIndex(s1, s1.cursor), 5)
     })
 
     it('throws an error if a non-cursor is passed in', () => {
@@ -389,7 +389,7 @@ describe('Automerge.Text', () => {
         doc.value = "random string"
       })
 
-      assert.throws(() => Automerge.Frontend.findCursorIndex(s1.value, s1), /Invalid cursor object/)
+      assert.throws(() => Automerge.getCursorIndex(s1, s1.value), /Invalid cursor object/)
     })
 
     it('returns -1 by default if character was deleted', () => {
@@ -397,7 +397,7 @@ describe('Automerge.Text', () => {
         doc.text.deleteAt(2)
       })
 
-      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1), -1)
+      assert.deepStrictEqual(Automerge.getCursorIndex(s1, s1.cursor), -1)
     })
 
     it('returns closest index if character was deleted and findClosest is set to true', () => {
@@ -405,7 +405,7 @@ describe('Automerge.Text', () => {
         doc.text.deleteAt(2)
       })
 
-      assert.deepStrictEqual(Automerge.Frontend.findCursorIndex(s1.cursor, s1, true), 1)
+      assert.deepStrictEqual(Automerge.getCursorIndex(s1, s1.cursor, true), 1)
     })
   })
 

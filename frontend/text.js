@@ -34,7 +34,7 @@ class Text {
   getCursorAt (index) {
     return {
       // todo: are there any points in the lifecycle where the Text object doesn't have an ID?
-      textId: this[OBJECT_ID], 
+      objectId: this[OBJECT_ID],
       elemId: this.getElemId(index)
     }
   }

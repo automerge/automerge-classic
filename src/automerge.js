@@ -123,10 +123,33 @@ function setDefaultBackend(newBackend) {
   backend = newBackend
 }
 
+/**
+ * Finds the latest integer index of a cursor object.
+ * If the character was deleted, returns -1.
+ *
+ * todos:
+ * - consider returning the closest character if deleted
+ * - consider optimizing the linear search
+ */
+function getCursorIndex(doc, cursor, findClosest = false) {
+  if (cursor.objectId === undefined || cursor.elemId === undefined) {
+    throw new TypeError('Invalid cursor object')
+  }
+
+  const state = Frontend.getBackendState(doc)
+  let index = backend.getListIndex(state, cursor.objectId, cursor.elemId)
+
+  if (index === -1 && findClosest) {
+    index = backend.getPrecedingListIndex(state, cursor.objectId, cursor.elemId)
+  }
+  return index
+}
+
+
 module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
-  encodeChange, decodeChange, equals, getHistory, uuid,
+  encodeChange, decodeChange, equals, getHistory, getCursorIndex, uuid,
   Frontend, setDefaultBackend,
   get Backend() { return backend }
 }
