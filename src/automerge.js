@@ -134,12 +134,11 @@ function getHistory(doc) {
 }
 
 /**
- * Finds the latest integer index of a cursor object.
- * If the character was deleted, returns -1.
+ * Returns the updated integer index of a cursor pointing into a text object.
  *
- * todos:
- * - consider returning the closest character if deleted
- * - consider optimizing the linear search
+ * If the character has been deleted:
+ * - By default, returns -1
+ * - If findClosest parameter is true, returns closest preceding index.
  */
 function getCursorIndex(doc, cursor, findClosest = false) {
   if (cursor.objectId === undefined || cursor.elemId === undefined) {
