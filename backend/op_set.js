@@ -145,7 +145,7 @@ function patchList(opSet, objectId, index, elemId, action, ops) {
 function findClosestListIndex(opSet, objectId, elemId) {
   const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
 
-  let prevId = elemId
+  let prevId = elemId, index
   while (true) {
     index = -1
     prevId = getPrevious(opSet, objectId, prevId)
