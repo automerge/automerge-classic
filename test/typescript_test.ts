@@ -379,6 +379,19 @@ describe('TypeScript support', () => {
         assert.deepStrictEqual(elemIds, [`2@${Automerge.getActorId(doc)}`, `3@${Automerge.getActorId(doc)}`])
       })
     })
+
+    describe('cursors API', () => {
+      beforeEach(() => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b'))
+      })
+
+      it('should convert between cursor and index', () => {
+        const cursor = doc.text.getCursorAt(1)
+        assert.strictEqual(cursor.objectId, Automerge.getObjectId(doc.text))
+        assert.strictEqual(cursor.elemId, `3@${Automerge.getActorId(doc)}`)
+        assert.strictEqual(Automerge.getCursorIndex(doc, cursor), 1)
+      })
+    })
   })
 
   describe('Automerge.Table', () => {
