@@ -39,6 +39,7 @@ declare module 'automerge' {
   function getAllChanges<T>(doc: Doc<T>): Change[]
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
+  function getCursorIndex<T>(doc: Doc<T>, cursor: Cursor, findClosest?: boolean): number
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Clock
   function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
@@ -77,6 +78,7 @@ declare module 'automerge' {
   class Text extends List<string> {
     constructor(objectId?: UUID, elems?: string[], maxElem?: number)
     get(index: number): string
+    getCursorAt(index: number): Cursor
     getElemId(index: number): string
     toSpans<T>(): (string | T)[]
   }
@@ -94,6 +96,11 @@ declare module 'automerge' {
     toString(): string
     valueOf(): number
     value: number
+  }
+
+  interface Cursor {
+    objectId: string
+    elemId: string
   }
 
   // Readonly variants

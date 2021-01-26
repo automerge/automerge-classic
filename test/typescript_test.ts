@@ -431,6 +431,19 @@ describe('TypeScript support', () => {
       it('supports `concat`', () => assert.strictEqual(doc.text.concat(['j']).length, 10))
       it('supports `includes`', () => assert.strictEqual(doc.text.includes('q'), false))
     })
+
+    describe('cursors API', () => {
+      beforeEach(() => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b'))
+      })
+
+      it('should convert between cursor and index', () => {
+        const cursor = doc.text.getCursorAt(1)
+        assert.strictEqual(cursor.objectId, Automerge.getObjectId(doc.text))
+        assert.strictEqual(cursor.elemId, `${Automerge.getActorId(doc)}:2`)
+        assert.strictEqual(Automerge.getCursorIndex(doc, cursor), 1)
+      })
+    })
   })
 
   describe('Automerge.Table', () => {
