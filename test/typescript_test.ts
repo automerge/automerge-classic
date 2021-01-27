@@ -381,6 +381,14 @@ describe('TypeScript support', () => {
     })
 
     describe('cursors API', () => {
+      interface CursorPerUser {
+        [userName: string]: Automerge.Cursor
+      }
+      interface TextDocWithCursors {
+        text: Automerge.Text
+        cursors: CursorPerUser
+      }
+  
       beforeEach(() => {
         doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b'))
       })
@@ -390,6 +398,20 @@ describe('TypeScript support', () => {
         assert.strictEqual(cursor.objectId, Automerge.getObjectId(doc.text))
         assert.strictEqual(cursor.elemId, `3@${Automerge.getActorId(doc)}`)
         assert.strictEqual(Automerge.getCursorIndex(doc, cursor), 1)
+      })
+
+      it('should allow cursors to be stored in a document', () => {
+        let doc = Automerge.from<TextDocWithCursors>({
+          text: new Automerge.Text(),
+          cursors: {}
+        })
+        doc = Automerge.change(doc, doc => {
+          doc.text.insertAt(0, 'a', 'b', 'c')
+          doc.cursors['user1'] = doc.text.getCursorAt(1)
+        })
+        assert.strictEqual(doc.cursors.user1.objectId, Automerge.getObjectId(doc.text))
+        assert.strictEqual(doc.cursors.user1.elemId, `4@${Automerge.getActorId(doc)}`)
+        assert.strictEqual(Automerge.getCursorIndex(doc, doc.cursors.user1, true), 1)
       })
     })
   })
