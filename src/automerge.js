@@ -1,5 +1,6 @@
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
+const { OPTIONS } = require('../frontend/constants')
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
@@ -49,9 +50,14 @@ function free(doc) {
 function load(data, options) {
   const state = backend.load(data)
   const patch = backend.getPatch(state)
-  if (options && options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = state
-  return Frontend.applyPatch(init(options), patch)
+  const doc = Frontend.applyPatch(init(options), patch)
+
+  if (doc[OPTIONS].patchCallback) {
+    delete patch.state
+    doc[OPTIONS].patchCallback(patch, {}, doc, false)
+  }
+  return doc
 }
 
 function save(doc) {
@@ -79,9 +85,15 @@ function getAllChanges(doc) {
 function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = backend.applyChanges(oldState, changes)
-  if (options.patchCallback) options.patchCallback(Object.assign({}, patch))
   patch.state = newState
-  return Frontend.applyPatch(doc, patch)
+  const newDoc = Frontend.applyPatch(doc, patch)
+
+  const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
+  if (patchCallback) {
+    delete patch.state
+    patchCallback(patch, doc, newDoc, false)
+  }
+  return newDoc
 }
 
 function getMissingDeps(doc) {
