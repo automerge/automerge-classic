@@ -146,6 +146,7 @@ module.exports = {
 }
 
 for (let name of ['getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'getLastLocalChange', 'Text', 'Table', 'Counter']) {
+     'setActorId', 'getConflicts', 'getLastLocalChange',
+     'Text', 'Table', 'Counter', 'Observable']) {
   module.exports[name] = Frontend[name]
 }

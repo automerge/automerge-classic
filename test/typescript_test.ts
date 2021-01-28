@@ -553,4 +553,26 @@ describe('TypeScript support', () => {
       })
     })
   })
+
+  describe('Automerge.Observable', () => {
+    interface TextDoc {
+      text: Automerge.Text
+    }
+
+    it('should call a callback when a document changes', () => {
+      let observable = new Automerge.Observable(), callbackCalled = false
+      let doc = Automerge.from({text: new Automerge.Text()}, {observable})
+      let actor = Automerge.getActorId(doc)
+      observable.observe(doc.text, (diff, before, after, local) => {
+        callbackCalled = true
+        assert.deepStrictEqual(diff.edits, [{action: 'insert', index: 0, elemId: `2@${actor}`}])
+        assert.deepStrictEqual(diff.props, {0: {[`2@${actor}`]: {value: 'a'}}})
+        assert.deepStrictEqual(before.toString(), '')
+        assert.deepStrictEqual(after.toString(), 'a')
+        assert.deepStrictEqual(local, true)
+      })
+      doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a'))
+      assert.strictEqual(callbackCalled, true)
+    })
+  })
 })

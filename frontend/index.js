@@ -7,6 +7,7 @@ const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
+const { Observable } = require('./observable')
 
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
@@ -162,6 +163,14 @@ function init(options) {
       options.actorId = uuid()
     }
     checkActorId(options.actorId)
+  }
+
+  if (options.observable) {
+    const patchCallback = options.patchCallback, observable = options.observable
+    options.patchCallback = (patch, before, after, local) => {
+      if (patchCallback) patchCallback(patch, before, after, local)
+      observable.patchCallback(patch, before, after, local)
+    }
   }
 
   const root = {}, cache = {_root: root}
@@ -373,5 +382,5 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter
+  Text, Table, Counter, Observable
 }
