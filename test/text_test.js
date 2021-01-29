@@ -387,6 +387,14 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.toString(), 'a')
     })
 
+    it('should allow control characters to be updated', () => {
+      const s2 = Automerge.change(s1, doc => doc.text.get(1).attribute = 'italic')
+      const s3 = Automerge.load(Automerge.save(s2))
+      assert.strictEqual(s1.text.get(1).attribute, 'bold')
+      assert.strictEqual(s2.text.get(1).attribute, 'italic')
+      assert.strictEqual(s3.text.get(1).attribute, 'italic')
+    })
+
     describe('spans interface to Text', () => {
       it('should return a simple string as a single span', () =>{
         let s1 = Automerge.change(Automerge.init(), doc => {
