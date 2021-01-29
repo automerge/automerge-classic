@@ -64,4 +64,108 @@ describe('Automerge.Observable', () => {
     local = Automerge.applyChanges(local, Automerge.getAllChanges(remote))
     assert.strictEqual(callbackCalled, true)
   })
+
+  it('should observe objects nested inside list elements', () => {
+    let observable = new Automerge.Observable(), callbackCalled = false
+    let doc = Automerge.from({todos: [{title: 'Buy milk', done: false}]}, {observable})
+    const actor = Automerge.getActorId(doc)
+    observable.observe(doc.todos[0], (diff, before, after, local) => {
+      callbackCalled = true
+      assert.deepStrictEqual(diff, {
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+      })
+      assert.deepStrictEqual(before, {title: 'Buy milk', done: false})
+      assert.deepStrictEqual(after, {title: 'Buy milk', done: true})
+      assert.strictEqual(local, true)
+    })
+    doc = Automerge.change(doc, doc => doc.todos[0].done = true)
+    assert.strictEqual(callbackCalled, true)
+  })
+
+  it('should not provide a "before" state if list indexes changed', () => {
+    let observable = new Automerge.Observable(), callbackCalled = false
+    let doc = Automerge.from({todos: [{title: 'Buy milk', done: false}]}, {observable})
+    const actor = Automerge.getActorId(doc)
+    observable.observe(doc.todos[0], (diff, before, after, local) => {
+      callbackCalled = true
+      assert.deepStrictEqual(diff, {
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+      })
+      assert.strictEqual(before, undefined)
+      assert.deepStrictEqual(after, {title: 'Buy milk', done: true})
+      assert.strictEqual(local, true)
+    })
+    doc = Automerge.change(doc, doc => {
+      doc.todos[0].done = true
+      doc.todos.unshift({title: 'Water plants', done: false})
+    })
+    assert.strictEqual(callbackCalled, true)
+  })
+
+  it('should observe rows inside tables', () => {
+    let observable = new Automerge.Observable(), callbackCalled = false
+    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc), rowId
+    doc = Automerge.change(doc, doc => {
+      doc.todos = new Automerge.Table()
+      rowId = doc.todos.add({title: 'Buy milk', done: false})
+    })
+    observable.observe(doc.todos.byId(rowId), (diff, before, after, local) => {
+      callbackCalled = true
+      assert.deepStrictEqual(diff, {
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+      })
+      assert.deepStrictEqual(before, {id: rowId, title: 'Buy milk', done: false})
+      assert.deepStrictEqual(after, {id: rowId, title: 'Buy milk', done: true})
+      assert.strictEqual(local, true)
+    })
+    doc = Automerge.change(doc, doc => doc.todos.byId(rowId).done = true)
+    assert.strictEqual(callbackCalled, true)
+  })
+
+  it('should observe nested objects inside text', () => {
+    let observable = new Automerge.Observable(), callbackCalled = false
+    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc), rowId
+    doc = Automerge.change(doc, doc => {
+      doc.text = new Automerge.Text()
+      doc.text.insertAt(0, 'a', 'b', {start: 'bold'}, 'c', {end: 'bold'})
+    })
+    observable.observe(doc, (patch, before, after) => {
+      console.log(JSON.stringify(patch, null, 4))
+      console.log('before =', before.text.elems)
+      console.log('after =', after.text.elems)
+    })
+    observable.observe(doc.text.get(2), (diff, before, after, local) => {
+      callbackCalled = true
+      assert.deepStrictEqual(diff, {
+        objectId: `4@${actor}`, type: 'map', props: {start: {[`9@${actor}`]: {value: 'italic'}}}
+      })
+      assert.deepStrictEqual(before, {start: 'bold'})
+      assert.deepStrictEqual(after, {start: 'italic'})
+      assert.strictEqual(local, true)
+    })
+    doc = Automerge.change(doc, doc => doc.text.get(2).start = 'italic')
+    assert.strictEqual(callbackCalled, true)
+  })
+
+  it('should not allow observers on non-document objects', () => {
+    let observable = new Automerge.Observable(), callbackCalled = false
+    let doc = Automerge.init({observable})
+    assert.throws(() => {
+      Automerge.change(doc, doc => {
+        const text = new Automerge.Text()
+        doc.text = text
+        observable.observe(text, () => {})
+      })
+    }, /The observed object must be part of an Automerge document/)
+  })
+
+  it('should allow multiple observers', () => {
+    let observable = new Automerge.Observable(), called1 = false, called2 = false
+    let doc = Automerge.init({observable})
+    observable.observe(doc, patch => { called1 = true })
+    observable.observe(doc, patch => { called2 = true })
+    Automerge.change(doc, doc => doc.foo = 'bar')
+    assert.strictEqual(called1, true)
+    assert.strictEqual(called2, true)
+  })
 })
