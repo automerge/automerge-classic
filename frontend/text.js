@@ -1,4 +1,5 @@
 const { OBJECT_ID } = require('./constants')
+const { isObject } = require('../src/common')
 
 class Text {
   constructor (text) {
@@ -20,7 +21,14 @@ class Text {
   }
 
   get (index) {
-    return this.elems[index].value
+    const value = this.elems[index].value
+    if (this.context && isObject(value)) {
+      const objectId = value[OBJECT_ID]
+      const path = this.path.concat([{key: index, objectId}])
+      return this.context.instantiateObject(path, objectId)
+    } else {
+      return value
+    }
   }
 
   getElemId (index) {

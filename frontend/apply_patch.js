@@ -264,8 +264,11 @@ function updateTextObject(patch, obj, updated) {
     const opId = pred.sort(lamportCompare).reverse()[0]
     if (!opId) throw new RangeError(`No default value at index ${key}`)
 
-    elems[key].value = getValue(patch.props[key][opId], elems[key].value, updated)
-    elems[key].pred = pred
+    elems[key] = {
+      elemId: elems[key].elemId,
+      pred,
+      value: getValue(patch.props[key][opId], elems[key].value, updated)
+    }
   }
 
   updated[objectId] = instantiateText(objectId, elems)

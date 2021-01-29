@@ -76,13 +76,13 @@ class Context {
     if (object instanceof Table) {
       // Table objects don't have conflicts, since rows are identified by their unique objectId
       const value = object.byId(key)
-      if (value) {
-        return {[key]: this.getValueDescription(value)}
-      } else {
-        return {}
-      }
+      return value ? {[key]: this.getValueDescription(value)} : {}
+    } else if (object instanceof Text) {
+      // Text objects don't support conflicts
+      const value = object.get(key)
+      return value ? {[key]: this.getValueDescription(value)} : {}
     } else {
-      // Map, list, or text objects
+      // Map or list objects
       const conflicts = object[CONFLICTS][key], values = {}
       if (!conflicts) {
         throw new RangeError(`No children at key ${key} of path ${JSON.stringify(path)}`)
@@ -101,6 +101,8 @@ class Context {
   getPropertyValue(object, key, opId) {
     if (object instanceof Table) {
       return object.byId(key)
+    } else if (object instanceof Text) {
+      return object.get(key)
     } else {
       return object[CONFLICTS][key][opId]
     }
