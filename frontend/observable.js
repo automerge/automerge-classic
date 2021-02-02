@@ -74,10 +74,11 @@ class Observable {
 
   /**
    * Call this to register a callback that will get called whenever a particular
-   * object in a document changes. The callback is passed four arguments: the
+   * object in a document changes. The callback is passed five arguments: the
    * part of the patch describing the update to that object, the old state of
-   * the object, the new state of the object, and a boolean that is true if the
-   * change is the result of calling `Automerge.change()` locally.
+   * the object, the new state of the object, a boolean that is true if the
+   * change is the result of calling `Automerge.change()` locally, and the array
+   * of binary changes applied to the document.
    */
   observe(object, callback) {
     const objectId = object[OBJECT_ID]
