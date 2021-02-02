@@ -33,7 +33,7 @@ const VALUE_TYPE = {
 }
 
 // make* actions must be at even-numbered indexes in this list
-const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable', 'link']
+const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTable']
 
 const OBJECT_TYPE = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
 
@@ -49,8 +49,8 @@ const COMMON_COLUMNS = {
   action:    4 << 3 | COLUMN_TYPE.INT_RLE,
   valLen:    5 << 3 | COLUMN_TYPE.VALUE_LEN,
   valRaw:    5 << 3 | COLUMN_TYPE.VALUE_RAW,
-  chldActor: 6 << 3 | COLUMN_TYPE.ACTOR_ID,
-  chldCtr:   6 << 3 | COLUMN_TYPE.INT_DELTA
+  refActor:  6 << 3 | COLUMN_TYPE.ACTOR_ID,
+  refCtr:    6 << 3 | COLUMN_TYPE.INT_DELTA
 }
 
 const CHANGE_COLUMNS = Object.assign({
@@ -129,11 +129,11 @@ function parseAllOpIds(changes, single) {
       op = copyObject(op)
       if (op.obj !== '_root') op.obj = parseOpId(op.obj)
       if (op.elemId && op.elemId !== '_head') op.elemId = parseOpId(op.elemId)
-      if (op.child) op.child = parseOpId(op.child)
+      if (op.ref) op.ref = parseOpId(op.ref)
       if (op.pred) op.pred = op.pred.map(parseOpId)
       if (op.obj.actorId) actors[op.obj.actorId] = true
       if (op.elemId && op.elemId.actorId) actors[op.elemId.actorId] = true
-      if (op.child && op.child.actorId) actors[op.child.actorId] = true
+      if (op.ref && op.ref.actorId) actors[op.ref.actorId] = true
       for (let pred of op.pred) actors[pred.actorId] = true
       return op
     })
@@ -151,7 +151,7 @@ function parseAllOpIds(changes, single) {
       op.id = {counter: change.startOp + i, actorNum: change.actorNum, actorId: change.actor}
       op.obj = actorIdToActorNum(op.obj, actorIds)
       op.elemId = actorIdToActorNum(op.elemId, actorIds)
-      op.child = actorIdToActorNum(op.child, actorIds)
+      op.ref = actorIdToActorNum(op.ref, actorIds)
       op.pred = op.pred.map(pred => actorIdToActorNum(pred, actorIds))
     }
   }
@@ -366,8 +366,8 @@ function encodeOps(ops, forDocument) {
     action    : new RLEEncoder('uint'),
     valLen    : new RLEEncoder('uint'),
     valRaw    : new Encoder(),
-    chldActor : new RLEEncoder('uint'),
-    chldCtr   : new DeltaEncoder()
+    refActor  : new RLEEncoder('uint'),
+    refCtr    : new DeltaEncoder()
   }
 
   if (forDocument) {
@@ -389,12 +389,12 @@ function encodeOps(ops, forDocument) {
     encodeOperationAction(op, columns)
     encodeValue(op, columns)
 
-    if (op.child && op.child.counter) {
-      columns.chldActor.appendValue(op.child.actorNum)
-      columns.chldCtr.appendValue(op.child.counter)
+    if (op.ref && op.ref.counter) {
+      columns.refActor.appendValue(op.ref.actorNum)
+      columns.refCtr.appendValue(op.ref.counter)
     } else {
-      columns.chldActor.appendValue(null)
-      columns.chldCtr.appendValue(null)
+      columns.refActor.appendValue(null)
+      columns.refCtr.appendValue(null)
     }
 
     if (forDocument) {
@@ -439,10 +439,10 @@ function decodeOps(ops, forDocument) {
       newOp.value = op.valLen
       if (op.valLen_datatype) newOp.datatype = op.valLen_datatype
     }
-    if (!!op.chldCtr !== !!op.chldActor) {
-      throw new RangeError(`Mismatched child columns: ${op.chldCtr} and ${op.chldActor}`)
+    if (!!op.refCtr !== !!op.refActor) {
+      throw new RangeError(`Mismatched ref columns: ${op.refCtr} and ${op.refActor}`)
     }
-    if (op.chldCtr !== null) newOp.child = `${op.chldCtr}@${op.chldActor}`
+    if (op.refCtr !== null) newOp.ref = `${op.refCtr}@${op.refActor}`
     if (forDocument) {
       newOp.id = `${op.idCtr}@${op.idActor}`
       newOp.succ = op.succNum.map(succ => `${succ.succCtr}@${succ.succActor}`)
@@ -1079,12 +1079,6 @@ function addPatchProperty(objects, property) {
         values[op.opId] = objects[op.opId]
       } else if (op.actionName === 'set') {
         values[op.opId] = op.value
-      } else if (op.actionName === 'link') {
-        // NB. This assumes that the ID of the child object is greater than the ID of the current
-        // object. This is true as long as link operations are only used to redo undone make*
-        // operations, but it will cease to be true once subtree moves are allowed.
-        if (!op.childId) throw new RangeError(`link operation ${op.opId} without a childId`)
-        values[op.opId] = objects[op.childId]
       } else {
         throw new RangeError(`Unexpected action type: ${op.actionName}`)
       }
@@ -1137,8 +1131,8 @@ function constructPatch(documentBuffer) {
 
     const keyActor = col.keyActor.readValue(), keyCtr = col.keyCtr.readValue()
     const keyStr = col.keyStr.readValue(), insert = !!col.insert.readValue()
-    const chldActor = col.chldActor.readValue(), chldCtr = col.chldCtr.readValue()
-    const childId = chldActor === null ? null : `${chldCtr}@${actorIds[chldActor]}`
+    const refActor = col.refActor.readValue(), refCtr = col.refCtr.readValue()
+    const ref = refActor === null ? null : `${refCtr}@${actorIds[refActor]}`
     const sizeTag = col.valLen.readValue()
     const rawValue = col.valRaw.readRawBytes(sizeTag >> 4)
     const value = decodeValue(sizeTag, rawValue)
@@ -1167,7 +1161,7 @@ function constructPatch(documentBuffer) {
       if (property) addPatchProperty(objects, property)
       property = {objId, key, ops: []}
     }
-    property.ops.push({opId, actionName, value, childId, succ})
+    property.ops.push({opId, actionName, value, ref, succ})
   }
 
   if (property) addPatchProperty(objects, property)
@@ -1185,7 +1179,7 @@ function constructPatch(documentBuffer) {
 function seekToOp(ops, docCols, actorIds) {
   const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action, consecutiveOps } = ops
   const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD,
-    valLenD, valRawD, chldActorD, chldCtrD, succNumD] = docCols.map(col => col.decoder)
+    valLenD, valRawD, refActorD, refCtrD, succNumD] = docCols.map(col => col.decoder)
   let skipCount = 0, visibleCount = 0, elemVisible = false, nextObjActor = null, nextObjCtr = null
   let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null, nextSuccNum = 0
 
@@ -2020,7 +2014,7 @@ class BackendDoc {
   getAllColumns(changeCols) {
     const expectedCols = [
       'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
-      'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr'
+      'action', 'valLen', 'valRaw', 'refActor', 'refCtr', 'predNum', 'predActor', 'predCtr'
     ]
     let allCols = {}
     for (let i = 0; i < expectedCols.length; i++) {

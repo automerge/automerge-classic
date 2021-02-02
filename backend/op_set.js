@@ -112,8 +112,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
  * Returns true if the operation `op` introduces a child object.
  */
 function isChildOp(op) {
-  const action = op.get('action')
-  return action.startsWith('make') || action === 'link'
+  return op.get('action').startsWith('make')
 }
 
 /**
@@ -136,7 +135,7 @@ function getOperationKey(op) {
 }
 
 /**
- * Processes a 'set', 'del', 'make*', 'link', or 'inc' operation. Mutates `patch`
+ * Processes a 'set', 'del', 'make*', or 'inc' operation. Mutates `patch`
  * to describe the change and returns an updated `opSet`.
  */
 function applyAssign(opSet, op, patch) {
@@ -169,9 +168,6 @@ function applyAssign(opSet, op, patch) {
     } else {
       opSet = applyMake(opSet, op)
     }
-  }
-  if (action === 'link' && patch) {
-    patch.props[key][op.get('opId')] = constructObject(opSet, getChildId(op))
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -320,7 +316,7 @@ function applyOps(opSet, change, patch) {
   let newObjects = Set()
   change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
-    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
+    if (!['set', 'del', 'inc', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
       throw new RangeError(`Unknown operation action: ${action}`)
     }
     if (!op.get('pred')) {
