@@ -29,7 +29,8 @@ const COLUMN_TYPE = {
 
 const VALUE_TYPE = {
   NULL: 0, FALSE: 1, TRUE: 2, LEB128_UINT: 3, LEB128_INT: 4, IEEE754: 5,
-  UTF8: 6, BYTES: 7, COUNTER: 8, TIMESTAMP: 9, MIN_UNKNOWN: 10, MAX_UNKNOWN: 15
+  UTF8: 6, BYTES: 7, COUNTER: 8, TIMESTAMP: 9, CURSOR: 10,
+  MIN_UNKNOWN: 11, MAX_UNKNOWN: 15
 }
 
 // make* actions must be at even-numbered indexes in this list
@@ -50,7 +51,7 @@ const COMMON_COLUMNS = {
   valLen:    5 << 3 | COLUMN_TYPE.VALUE_LEN,
   valRaw:    5 << 3 | COLUMN_TYPE.VALUE_RAW,
   refActor:  6 << 3 | COLUMN_TYPE.ACTOR_ID,
-  refCtr:    6 << 3 | COLUMN_TYPE.INT_DELTA
+  refCtr:    6 << 3 | COLUMN_TYPE.INT_RLE
 }
 
 const CHANGE_COLUMNS = Object.assign({
@@ -239,9 +240,6 @@ function encodeValue(op, columns) {
     columns.valLen.appendValue(VALUE_TYPE.FALSE)
   } else if (op.value === true) {
     columns.valLen.appendValue(VALUE_TYPE.TRUE)
-  } else if (typeof op.value === 'string') {
-    const numBytes = columns.valRaw.appendRawString(op.value)
-    columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.UTF8)
   } else if (ArrayBuffer.isView(op.value)) {
     const numBytes = columns.valRaw.appendRawBytes(new Uint8Array(op.value.buffer))
     columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.BYTES)
@@ -249,6 +247,11 @@ function encodeValue(op, columns) {
     encodeInteger(op.value, VALUE_TYPE.COUNTER, columns)
   } else if (op.datatype === 'timestamp' && typeof op.value === 'number') {
     encodeInteger(op.value, VALUE_TYPE.TIMESTAMP, columns)
+  } else if (op.datatype === 'cursor') {
+    columns.valLen.appendValue(VALUE_TYPE.CURSOR) // cursor's elemId is stored in the ref columns
+  } else if (typeof op.value === 'string') {
+    const numBytes = columns.valRaw.appendRawString(op.value)
+    columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.UTF8)
   } else if (typeof op.datatype === 'number' && op.datatype >= VALUE_TYPE.MIN_UNKNOWN &&
              op.datatype <= VALUE_TYPE.MAX_UNKNOWN && op.value instanceof Uint8Array) {
     const numBytes = columns.valRaw.appendRawBytes(op.value)
@@ -310,6 +313,8 @@ function decodeValue(sizeTag, bytes) {
       return {value: new Decoder(bytes).readInt53(), datatype: 'counter'}
     } else if (sizeTag % 16 === VALUE_TYPE.TIMESTAMP) {
       return {value: new Decoder(bytes).readInt53(), datatype: 'timestamp'}
+    } else if (sizeTag === VALUE_TYPE.CURSOR) {
+      return {value: '', datatype: 'cursor'}
     } else {
       return {value: bytes, datatype: sizeTag % 16}
     }
@@ -1075,7 +1080,9 @@ function addPatchProperty(objects, property) {
       for (let succId of op.succ) counter.succ[succId] = true
 
     } else if (op.succ.length === 0) { // Ignore any ops that have been overwritten
-      if (op.actionName.startsWith('make')) {
+      if (op.actionName === 'set' && op.value.datatype === 'cursor') {
+        values[op.opId] = {elemId: op.ref, datatype: 'cursor'}
+      } else if (op.actionName.startsWith('make')) {
         values[op.opId] = objects[op.opId]
       } else if (op.actionName === 'set') {
         values[op.opId] = op.value

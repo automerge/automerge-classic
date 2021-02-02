@@ -1,5 +1,6 @@
 const { OBJECT_ID } = require('./constants')
 const { isObject } = require('../src/common')
+const { Cursor } = require('./cursor')
 
 class Text {
   constructor (text) {
@@ -33,6 +34,10 @@ class Text {
 
   getElemId (index) {
     return this.elems[index].elemId
+  }
+
+  getCursorAt (index) {
+    return new Cursor(this, index)
   }
 
   /**

@@ -1,4 +1,4 @@
-const { OBJECT_ID, CHANGE, STATE } = require('./constants')
+const { OBJECT_ID, CHANGE, STATE, ELEM_IDS } = require('./constants')
 const { Counter } = require('./counter')
 const { Text } = require('./text')
 const { Table } = require('./table')
@@ -148,6 +148,7 @@ const ListHandler = {
     if (key === Symbol.iterator) return context.getObject(objectId)[Symbol.iterator]
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
+    if (key === ELEM_IDS) return context.getObject(objectId)[ELEM_IDS]
     if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return context.getObjectField(path, objectId, parseListIndex(key))

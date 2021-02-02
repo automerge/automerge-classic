@@ -254,6 +254,27 @@ describe('Automerge.Backend', () => {
         }}}}
       })
     })
+
+    it('should support Cursor objects', () => {
+      const actor = uuid()
+      const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'list', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'fish', pred: []},
+        {action: 'set', obj: '_root', key: 'cursor', ref: `2@${actor}`, datatype: 'cursor', pred: []}
+      ]}
+      const [s1, patch] = Backend.applyChanges(Backend.init(), [encodeChange(change)])
+      assert.deepStrictEqual(patch, {
+        clock: {[actor]: 1}, deps: [hash(change)], maxOp: 3,
+        diffs: {objectId: '_root', type: 'map', props: {
+          list: {[`1@${actor}`]: {
+            objectId: `1@${actor}`, type: 'list',
+            edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+            props: {0: {[`2@${actor}`]: {value: 'fish'}}}
+          }},
+          cursor: {[`3@${actor}`]: {elemId: `2@${actor}`, datatype: 'cursor'}}
+        }}
+      })
+    })
   })
 
   describe('applyLocalChange()', () => {
@@ -628,6 +649,27 @@ describe('Automerge.Backend', () => {
           edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
           props: {0: {[`2@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}}
         }}}}
+      })
+    })
+
+    it('should include Cursor objects', () => {
+      const actor = uuid()
+      const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'list', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head', insert: true, value: 'fish', pred: []},
+        {action: 'set', obj: '_root', key: 'cursor', ref: `2@${actor}`, datatype: 'cursor', pred: []}
+      ]}
+      const [s1, patch] = Backend.applyChanges(Backend.init(), [encodeChange(change)])
+      assert.deepStrictEqual(patch, {
+        clock: {[actor]: 1}, deps: [hash(change)], maxOp: 3,
+        diffs: {objectId: '_root', type: 'map', props: {
+          list: {[`1@${actor}`]: {
+            objectId: `1@${actor}`, type: 'list',
+            edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+            props: {0: {[`2@${actor}`]: {value: 'fish'}}}
+          }},
+          cursor: {[`3@${actor}`]: {elemId: `2@${actor}`, datatype: 'cursor'}}
+        }}
       })
     })
   })

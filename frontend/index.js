@@ -7,6 +7,7 @@ const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
+const { Cursor } = require('./cursor')
 
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
@@ -370,5 +371,5 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter
+  Text, Table, Counter, Cursor
 }

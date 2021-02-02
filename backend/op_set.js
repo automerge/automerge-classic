@@ -255,9 +255,13 @@ function setPatchProps(opSet, objectId, key, patch) {
     ops[opId] = true
 
     if (op.get('action') === 'set') {
-      patch.props[key][opId] = {value: op.get('value')}
-      if (op.get('datatype')) {
-        patch.props[key][opId].datatype = op.get('datatype')
+      if (op.get('datatype') === 'cursor') {
+        patch.props[key][opId] = {elemId: op.get('ref'), datatype: 'cursor'}
+      } else {
+        patch.props[key][opId] = {value: op.get('value')}
+        if (op.get('datatype')) {
+          patch.props[key][opId].datatype = op.get('datatype')
+        }
       }
     } else if (isChildOp(op)) {
       if (!patch.props[key][opId]) {
