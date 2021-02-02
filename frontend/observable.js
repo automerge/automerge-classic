@@ -14,21 +14,22 @@ class Observable {
    * Called by an Automerge document when `patch` is applied. `before` is the
    * state of the document before the patch, and `after` is the state after
    * applying it. `local` is true if the update is a result of locally calling
-   * `Automerge.change()`, and false otherwise.
+   * `Automerge.change()`, and false otherwise. `changes` is an array of
+   * changes that were applied to the document (as Uint8Arrays).
    */
-  patchCallback(patch, before, after, local) {
-    this._objectUpdate(patch.diffs, before, after, local)
+  patchCallback(patch, before, after, local, changes) {
+    this._objectUpdate(patch.diffs, before, after, local, changes)
   }
 
   /**
    * Recursively walks a patch and calls the callbacks for all objects that
    * appear in the patch.
    */
-  _objectUpdate(diff, before, after, local) {
+  _objectUpdate(diff, before, after, local, changes) {
     if (!diff.objectId) return
     if (this.observers[diff.objectId]) {
       for (let callback of this.observers[diff.objectId]) {
-        callback(diff, before, after, local)
+        callback(diff, before, after, local, changes)
       }
     }
 
@@ -66,7 +67,7 @@ class Observable {
           childAfter = after && after.get(index)
         }
 
-        this._objectUpdate(childDiff, childBefore, childAfter, local)
+        this._objectUpdate(childDiff, childBefore, childAfter, local, changes)
       }
     }
   }

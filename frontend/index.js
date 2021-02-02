@@ -103,7 +103,7 @@ function makeChange(doc, context, options) {
     // Should we change this?
     const newDoc = applyPatchToDoc(doc, patch, state, true)
     const patchCallback = options && options.patchCallback || doc[OPTIONS].patchCallback
-    if (patchCallback) patchCallback(patch, doc, newDoc, true)
+    if (patchCallback) patchCallback(patch, doc, newDoc, true, [binaryChange])
     return [newDoc, change]
 
   } else {
@@ -167,9 +167,9 @@ function init(options) {
 
   if (options.observable) {
     const patchCallback = options.patchCallback, observable = options.observable
-    options.patchCallback = (patch, before, after, local) => {
-      if (patchCallback) patchCallback(patch, before, after, local)
-      observable.patchCallback(patch, before, after, local)
+    options.patchCallback = (patch, before, after, local, changes) => {
+      if (patchCallback) patchCallback(patch, before, after, local, changes)
+      observable.patchCallback(patch, before, after, local, changes)
     }
   }
 

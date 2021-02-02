@@ -55,7 +55,7 @@ function load(data, options) {
 
   if (doc[OPTIONS].patchCallback) {
     delete patch.state
-    doc[OPTIONS].patchCallback(patch, {}, doc, false)
+    doc[OPTIONS].patchCallback(patch, {}, doc, false, [data])
   }
   return doc
 }
@@ -91,7 +91,7 @@ function applyChanges(doc, changes, options = {}) {
   const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
   if (patchCallback) {
     delete patch.state
-    patchCallback(patch, doc, newDoc, false)
+    patchCallback(patch, doc, newDoc, false, changes)
   }
   return newDoc
 }

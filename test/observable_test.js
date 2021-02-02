@@ -3,19 +3,22 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 
 describe('Automerge.Observable', () => {
   it('allows registering a callback on the root object', () => {
-    let observable = new Automerge.Observable(), callbackCalled = false
+    let observable = new Automerge.Observable(), callbackChanges
     let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc)
-    observable.observe(doc, (diff, before, after, local) => {
-      callbackCalled = true
+    observable.observe(doc, (diff, before, after, local, changes) => {
+      callbackChanges = changes
       assert.deepStrictEqual(diff, {
         objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {value: 'Goldfinch'}}}
       })
       assert.deepStrictEqual(before, {})
       assert.deepStrictEqual(after, {bird: 'Goldfinch'})
-      assert.deepStrictEqual(local, true)
+      assert.strictEqual(local, true)
+      assert.strictEqual(changes.length, 1)
     })
     doc = Automerge.change(doc, doc => doc.bird = 'Goldfinch')
-    assert.strictEqual(callbackCalled, true)
+    assert.strictEqual(callbackChanges.length, 1)
+    assert.ok(callbackChanges[0] instanceof Uint8Array)
+    assert.strictEqual(callbackChanges[0], Automerge.getLastLocalChange(doc))
   })
 
   it('allows registering a callback on a text object', () => {
@@ -44,12 +47,12 @@ describe('Automerge.Observable', () => {
   })
 
   it('should call the callback when applying remote changes', () => {
-    let observable = new Automerge.Observable(), callbackCalled = false
+    let observable = new Automerge.Observable(), callbackChanges
     let local = Automerge.from({text: new Automerge.Text()}, {observable})
     let remote = Automerge.init()
     const localId = Automerge.getActorId(local), remoteId = Automerge.getActorId(remote)
-    observable.observe(local.text, (diff, before, after, local) => {
-      callbackCalled = true
+    observable.observe(local.text, (diff, before, after, local, changes) => {
+      callbackChanges = changes
       assert.deepStrictEqual(diff, {
         objectId: `1@${localId}`, type: 'text',
         edits: [{action: 'insert', index: 0, elemId: `2@${remoteId}`}],
@@ -61,8 +64,9 @@ describe('Automerge.Observable', () => {
     })
     remote = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
     remote = Automerge.change(remote, doc => doc.text.insertAt(0, 'a'))
-    local = Automerge.applyChanges(local, Automerge.getAllChanges(remote))
-    assert.strictEqual(callbackCalled, true)
+    const allChanges = Automerge.getAllChanges(remote)
+    local = Automerge.applyChanges(local, allChanges)
+    assert.strictEqual(callbackChanges, allChanges)
   })
 
   it('should observe objects nested inside list elements', () => {
