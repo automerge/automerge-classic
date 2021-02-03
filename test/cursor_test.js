@@ -38,6 +38,19 @@ describe('Automerge.Cursor', () => {
     assert.strictEqual(s2.cursor.index, 2)
   })
 
+  it('should ensure that the referenced object is part of the document', () => {
+    assert.throws(() => {
+      Automerge.change(Automerge.init(), doc => {
+        doc.cursor = new Automerge.Text(['a', 'b', 'c']).getCursorAt(2)
+      })
+    }, /must be part of a document/)
+    assert.throws(() => {
+      Automerge.change(Automerge.init(), doc => {
+        doc.cursor = new Automerge.Cursor([1, 2, 3], 2)
+      })
+    }, /must be part of a document/)
+  })
+
   it('should not allow an index beyond the length of the list', () => {
     assert.throws(() => {
       Automerge.change(Automerge.init(), doc => {
