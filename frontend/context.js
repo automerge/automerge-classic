@@ -54,7 +54,12 @@ class Context {
         return {value: value.value, datatype: 'counter'}
 
       } else if (value instanceof Cursor) {
-        return {elemId: value.elemId, datatype: 'cursor'}
+        return {
+          refObjectId: value.objectId,
+          elemId: value.elemId,
+          index: value.index,
+          datatype: 'cursor'
+        }
 
       } else {
         // Nested object (map, list, text, or table)

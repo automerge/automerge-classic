@@ -22,7 +22,7 @@ function getValue(patch, object, updated) {
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
   } else if (patch.datatype === 'cursor') {
-    return new Cursor('', patch.index, patch.elemId)
+    return new Cursor(patch.refObjectId, patch.index, patch.elemId)
   } else if (patch.datatype !== undefined) {
     throw new TypeError(`Unknown datatype: ${patch.datatype}`)
   } else {

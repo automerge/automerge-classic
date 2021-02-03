@@ -271,7 +271,7 @@ describe('Automerge.Backend', () => {
             edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
             props: {0: {[`2@${actor}`]: {value: 'fish'}}}
           }},
-          cursor: {[`3@${actor}`]: {elemId: `2@${actor}`, datatype: 'cursor'}}
+          cursor: {[`3@${actor}`]: {refObjectId: `1@${actor}`, elemId: `2@${actor}`, index: 0, datatype: 'cursor'}}
         }}
       })
     })
@@ -668,7 +668,7 @@ describe('Automerge.Backend', () => {
             edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
             props: {0: {[`2@${actor}`]: {value: 'fish'}}}
           }},
-          cursor: {[`3@${actor}`]: {elemId: `2@${actor}`, datatype: 'cursor'}}
+          cursor: {[`3@${actor}`]: {refObjectId: `1@${actor}`, elemId: `2@${actor}`, index: 0, datatype: 'cursor'}}
         }}
       })
     })

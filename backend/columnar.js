@@ -372,7 +372,7 @@ function encodeOps(ops, forDocument) {
     valLen    : new RLEEncoder('uint'),
     valRaw    : new Encoder(),
     refActor  : new RLEEncoder('uint'),
-    refCtr    : new DeltaEncoder()
+    refCtr    : new RLEEncoder('uint')
   }
 
   if (forDocument) {

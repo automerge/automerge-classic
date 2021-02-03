@@ -17,7 +17,7 @@ class Cursor {
       this.objectId = object[OBJECT_ID]
       this.elemId = object.getElemId(index)
       this.index = index
-    } else if (typeof object == 'string' && /*typeof index === 'number' &&*/ typeof elemId === 'string') {
+    } else if (typeof object == 'string' && typeof index === 'number' && typeof elemId === 'string') {
       this.objectId = object
       this.elemId = elemId
       this.index = index
