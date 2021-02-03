@@ -39,4 +39,19 @@ describe('Automerge.Cursor', () => {
     assert.ok(s3.cursor instanceof Automerge.Cursor)
     assert.strictEqual(s3.cursor.elemId, `4@${Automerge.getActorId(s1)}`)
   })
+
+  it('should not allow an index beyond the length of the list', () => {
+    assert.throws(() => {
+      Automerge.change(Automerge.init(), doc => {
+        doc.list = [1]
+        doc.cursor = new Automerge.Cursor(doc.list, 1)
+      })
+    }, /index out of bounds/)
+    assert.throws(() => {
+      Automerge.change(Automerge.init(), doc => {
+        doc.text = new Automerge.Text('a')
+        doc.cursor = doc.text.getCursorAt(1)
+      })
+    }, /index out of bounds/)
+  })
 })

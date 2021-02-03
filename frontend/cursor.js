@@ -9,6 +9,7 @@ const { isObject } = require('../src/common')
 class Cursor {
   constructor(object, index, elemId = undefined) {
     if (Array.isArray(object) && object[ELEM_IDS] && typeof index === 'number') {
+      if (index < 0 || index >= object[ELEM_IDS].length) throw new RangeError('list index out of bounds')
       this.objectId = object[OBJECT_ID]
       this.elemId = object[ELEM_IDS][index]
       this.index = index

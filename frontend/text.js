@@ -33,6 +33,7 @@ class Text {
   }
 
   getElemId (index) {
+    if (index < 0 || index >= this.elems.length) throw new RangeError('text index out of bounds')
     return this.elems[index].elemId
   }
 
