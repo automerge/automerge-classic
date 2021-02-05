@@ -7,6 +7,7 @@ const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
+const { Observable } = require('./observable')
 
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
@@ -100,7 +101,10 @@ function makeChange(doc, context, options) {
     // (after a round-trip through the backend). This is perhaps more robust, as changes only take
     // effect in the form processed by the backend, but the downside is a performance cost.
     // Should we change this?
-    return [applyPatchToDoc(doc, patch, state, true), change]
+    const newDoc = applyPatchToDoc(doc, patch, state, true)
+    const patchCallback = options && options.patchCallback || doc[OPTIONS].patchCallback
+    if (patchCallback) patchCallback(patch, doc, newDoc, true, [binaryChange])
+    return [newDoc, change]
 
   } else {
     const queuedRequest = {actor, seq: change.seq, before: doc}
@@ -159,6 +163,14 @@ function init(options) {
       options.actorId = uuid()
     }
     checkActorId(options.actorId)
+  }
+
+  if (options.observable) {
+    const patchCallback = options.patchCallback, observable = options.observable
+    options.patchCallback = (patch, before, after, local, changes) => {
+      if (patchCallback) patchCallback(patch, before, after, local, changes)
+      observable.patchCallback(patch, before, after, local, changes)
+    }
   }
 
   const root = {}, cache = {_root: root}
@@ -370,5 +382,5 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter
+  Text, Table, Counter, Observable
 }

@@ -1,5 +1,6 @@
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
+const { OPTIONS } = require('../frontend/constants')
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
@@ -50,7 +51,13 @@ function load(data, options) {
   const state = backend.load(data)
   const patch = backend.getPatch(state)
   patch.state = state
-  return Frontend.applyPatch(init(options), patch)
+  const doc = Frontend.applyPatch(init(options), patch)
+
+  if (doc[OPTIONS].patchCallback) {
+    delete patch.state
+    doc[OPTIONS].patchCallback(patch, {}, doc, false, [data])
+  }
+  return doc
 }
 
 function save(doc) {
@@ -75,11 +82,18 @@ function getAllChanges(doc) {
   return backend.getChanges(Frontend.getBackendState(doc), [])
 }
 
-function applyChanges(doc, changes) {
+function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = backend.applyChanges(oldState, changes)
   patch.state = newState
-  return Frontend.applyPatch(doc, patch)
+  const newDoc = Frontend.applyPatch(doc, patch)
+
+  const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
+  if (patchCallback) {
+    delete patch.state
+    patchCallback(patch, doc, newDoc, false, changes)
+  }
+  return newDoc
 }
 
 function getMissingDeps(doc) {
@@ -132,6 +146,7 @@ module.exports = {
 }
 
 for (let name of ['getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'getLastLocalChange', 'Text', 'Table', 'Counter']) {
+     'setActorId', 'getConflicts', 'getLastLocalChange',
+     'Text', 'Table', 'Counter', 'Observable']) {
   module.exports[name] = Frontend[name]
 }
