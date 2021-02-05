@@ -1,5 +1,6 @@
 const { OBJECT_ID } = require('./constants')
 const { isObject } = require('../src/common')
+const { Cursor } = require('./cursor')
 
 class Text {
   constructor (text) {
@@ -32,7 +33,12 @@ class Text {
   }
 
   getElemId (index) {
+    if (index < 0 || index >= this.elems.length) throw new RangeError('text index out of bounds')
     return this.elems[index].elemId
+  }
+
+  getCursorAt (index) {
+    return new Cursor(this, index)
   }
 
   /**

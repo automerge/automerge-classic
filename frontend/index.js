@@ -7,6 +7,7 @@ const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
+const { Cursor } = require('./cursor')
 const { Observable } = require('./observable')
 
 /**
@@ -382,5 +383,5 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter, Observable
+  Text, Table, Counter, Cursor, Observable
 }

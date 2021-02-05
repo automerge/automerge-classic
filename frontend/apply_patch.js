@@ -3,6 +3,7 @@ const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
 const { Text, instantiateText } = require('./text')
 const { Table, instantiateTable } = require('./table')
 const { Counter } = require('./counter')
+const { Cursor } = require('./cursor')
 
 /**
  * Reconstructs the value from the patch object `patch`.
@@ -20,6 +21,8 @@ function getValue(patch, object, updated) {
     return new Date(patch.value)
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
+  } else if (patch.datatype === 'cursor') {
+    return new Cursor(patch.refObjectId, patch.index, patch.elemId)
   } else if (patch.datatype !== undefined) {
     throw new TypeError(`Unknown datatype: ${patch.datatype}`)
   } else {

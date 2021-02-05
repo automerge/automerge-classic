@@ -3,6 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
+const { Cursor } = require('./cursor')
 const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -50,8 +51,15 @@ class Context {
         return {value: value.getTime(), datatype: 'timestamp'}
 
       } else if (value instanceof Counter) {
-        // Counter object
         return {value: value.value, datatype: 'counter'}
+
+      } else if (value instanceof Cursor) {
+        return {
+          refObjectId: value.objectId,
+          elemId: value.elemId,
+          index: value.index,
+          datatype: 'cursor'
+        }
 
       } else {
         // Nested object (map, list, text, or table)
@@ -175,6 +183,9 @@ class Context {
     if (object[key] instanceof Counter) {
       return getWriteableCounter(object[key].value, this, path, objectId, key)
 
+    } else if (object[key] instanceof Cursor) {
+      return object[key].getWriteable(context, path)
+
     } else if (isObject(object[key])) {
       const childId = object[key][OBJECT_ID]
       const subpath = path.concat([{key, objectId: childId}])
@@ -264,16 +275,24 @@ class Context {
       throw new RangeError('The key of a map entry must not be an empty string')
     }
 
-    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
-      // Nested object (map, list, text, or table)
-      return this.createNestedObjects(objectId, key, value, insert, pred, elemId)
-    } else {
-      // Date or counter object, or primitive value (number, string, boolean, or null)
+    if (!isObject(value) || value instanceof Date || value instanceof Counter || value instanceof Cursor) {
+      // Date/counter/cursor object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
       const op = elemId ? {action: 'set', obj: objectId, elemId, insert, pred}
                         : {action: 'set', obj: objectId, key, insert, pred}
-      this.addOp(Object.assign(op, description))
+
+      if (description.datatype === 'cursor') {
+        op.ref = description.elemId
+        op.datatype = 'cursor'
+      } else {
+        op.value = description.value
+        if (description.datatype) op.datatype = description.datatype
+      }
+      this.addOp(op)
       return description
+    } else {
+      // Nested object (map, list, text, or table)
+      return this.createNestedObjects(objectId, key, value, insert, pred, elemId)
     }
   }
 

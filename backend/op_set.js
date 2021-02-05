@@ -71,6 +71,32 @@ function applyInsert(opSet, op) {
     .setIn(['byObject', objectId, '_insertion', opId], op)
 }
 
+// Find the index of the closest visible list element that precedes the given element ID.
+// Returns -1 if there is no such element.
+function getPrecedingListIndex(opSet, objectId, elemId) {
+  const elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
+
+  let prevId = elemId, index
+  while (true) {
+    index = -1
+    prevId = getPrevious(opSet, objectId, prevId)
+    if (!prevId) break
+    index = elemIds.indexOf(prevId)
+    if (index >= 0) break
+  }
+
+  return index
+}
+
+// Finds the index of the list element with a given ID. If that list element is not visible
+// (typically because it has been deleted), returns the index of the closest visible preceding
+// element. Returns -1 if there is no such preceding element.
+function getListIndex(opSet, objectId, elemId) {
+  const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(elemId)
+  if (index >= 0) return index
+  return getPrecedingListIndex(opSet, objectId, elemId)
+}
+
 function updateListElement(opSet, objectId, elemId, patch) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
@@ -87,21 +113,9 @@ function updateListElement(opSet, objectId, elemId, patch) {
     } else {
       elemIds = elemIds.setValue(elemId, ops.first().get('value'))
     }
-
   } else {
     if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
-
-    // find the index of the closest preceding list element
-    let prevId = elemId
-    while (true) {
-      index = -1
-      prevId = getPrevious(opSet, objectId, prevId)
-      if (!prevId) break
-      index = elemIds.indexOf(prevId)
-      if (index >= 0) break
-    }
-
-    index += 1
+    index = getPrecedingListIndex(opSet, objectId, elemId) + 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
     if (patch) patch.edits.push({action: 'insert', index, elemId})
   }
@@ -112,8 +126,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
  * Returns true if the operation `op` introduces a child object.
  */
 function isChildOp(op) {
-  const action = op.get('action')
-  return action.startsWith('make') || action === 'link'
+  return op.get('action').startsWith('make')
 }
 
 /**
@@ -136,30 +149,14 @@ function getOperationKey(op) {
 }
 
 /**
- * Processes a 'set', 'del', 'make*', 'link', or 'inc' operation. Mutates `patch`
+ * Processes a 'set', 'del', 'make*', or 'inc' operation. Mutates `patch`
  * to describe the change and returns an updated `opSet`.
  */
 function applyAssign(opSet, op, patch) {
   const objectId = op.get('obj'), action = op.get('action'), key = getOperationKey(op)
   if (!opSet.get('byObject').has(objectId)) throw new RangeError(`Modification of unknown object ${objectId}`)
-  const type = getObjectType(opSet, objectId)
-
-  if (patch) {
-    patch.objectId = patch.objectId || objectId
-    if (patch.objectId !== objectId) {
-      throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
-    }
-    if (patch.props === undefined) {
-      patch.props = {}
-    }
-    if (patch.props[key] === undefined) {
-      patch.props[key] = {}
-    }
-
-    patch.type = patch.type || type
-    if (patch.type !== type) {
-      throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
-    }
+  if (patch && patch.props[key] === undefined) {
+    patch.props[key] = {}
   }
 
   if (action.startsWith('make')) {
@@ -169,9 +166,6 @@ function applyAssign(opSet, op, patch) {
     } else {
       opSet = applyMake(opSet, op)
     }
-  }
-  if (action === 'link' && patch) {
-    patch.props[key][op.get('opId')] = constructObject(opSet, getChildId(op))
   }
 
   const ops = getFieldOps(opSet, objectId, key)
@@ -198,6 +192,21 @@ function applyAssign(opSet, op, patch) {
     opSet = opSet.updateIn(['byObject', getChildId(old), '_inbound'], ops => ops.remove(old))
   }
 
+  // Add any new cursors, and remove any overwritten cursors
+  for (let oldCursor of overwritten.filter(op => op.get('datatype') === 'cursor')) {
+    opSet = opSet.update('cursors', cursors => cursors.remove(oldCursor.get('opId')))
+  }
+  if (op.get('datatype') === 'cursor') {
+    // Find the list/text object that the cursor points to by iterating over all objects
+    let refObjectId
+    for (let [listId, listObj] of opSet.get('byObject').entries()) {
+      if (listObj.hasIn(['_insertion', op.get('ref')])) refObjectId = listId
+    }
+    if (!refObjectId) throw new RangeError(`Cursor points at unknown list element ${op.get('ref')}`)
+    op = op.set('refObjectId', refObjectId)
+    opSet = opSet.setIn(['cursors', op.get('opId')], op)
+  }
+
   if (isChildOp(op)) {
     opSet = opSet.updateIn(['byObject', getChildId(op), '_inbound'], Set(), ops => ops.add(op))
   }
@@ -208,6 +217,7 @@ function applyAssign(opSet, op, patch) {
   opSet = opSet.setIn(['byObject', objectId, '_keys', key], remaining)
   setPatchProps(opSet, objectId, key, patch)
 
+  const type = getObjectType(opSet, objectId)
   if (type === 'list' || type === 'text') {
     opSet = updateListElement(opSet, objectId, key, patch)
   }
@@ -215,13 +225,9 @@ function applyAssign(opSet, op, patch) {
 }
 
 /**
- * Updates `patch` with the fields required in a patch. `pathOp` is an operation
- * along the path from the root to the object being modified, as returned by
- * `getPath()`. Returns the sub-object representing the child identified by this
- * operation.
+ * Mutates `patch` to contain updates for the object with ID `objectId`.
  */
-function initializePatch(opSet, pathOp, patch) {
-  const objectId = pathOp.get('obj'), opId = pathOp.get('opId'), key = getOperationKey(pathOp)
+function initializePatchObject(opSet, objectId, patch) {
   const type = getObjectType(opSet, objectId)
   patch.objectId = patch.objectId || objectId
   patch.type     = patch.type     || type
@@ -232,12 +238,26 @@ function initializePatch(opSet, pathOp, patch) {
   if (patch.type !== type) {
     throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
   }
-  setPatchProps(opSet, objectId, key, patch)
+}
 
-  if (patch.props[key][opId] === undefined) {
-    throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
+/**
+ * Mutates `patch` to contain the object with ID `updatedObjectId`, and the path
+ * from the root to that object. Returns the subpatch for that object.
+ */
+function initializePatch(opSet, updatedObjectId, patch) {
+  for (let pathOp of getPath(opSet, updatedObjectId)) {
+    const objectId = pathOp.get('obj'), opId = pathOp.get('opId'), key = getOperationKey(pathOp)
+    initializePatchObject(opSet, objectId, patch)
+    setPatchProps(opSet, objectId, key, patch)
+    if (patch.props[key][opId] === undefined) {
+      throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
+    }
+    patch = patch.props[key][opId]
   }
-  return patch.props[key][opId]
+
+  initializePatchObject(opSet, updatedObjectId, patch)
+  if (patch.props === undefined) patch.props = {}
+  return patch
 }
 
 /**
@@ -259,9 +279,15 @@ function setPatchProps(opSet, objectId, key, patch) {
     ops[opId] = true
 
     if (op.get('action') === 'set') {
-      patch.props[key][opId] = {value: op.get('value')}
-      if (op.get('datatype')) {
-        patch.props[key][opId].datatype = op.get('datatype')
+      if (op.get('datatype') === 'cursor') {
+        const refObjectId = op.get('refObjectId'), elemId = op.get('ref')
+        const index = getListIndex(opSet, refObjectId, elemId)
+        patch.props[key][opId] = {refObjectId, elemId, index, datatype: 'cursor'}
+      } else {
+        patch.props[key][opId] = {value: op.get('value')}
+        if (op.get('datatype')) {
+          patch.props[key][opId].datatype = op.get('datatype')
+        }
       }
     } else if (isChildOp(op)) {
       if (!patch.props[key][opId]) {
@@ -320,20 +346,14 @@ function applyOps(opSet, change, patch) {
   let newObjects = Set()
   change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
-    if (!['set', 'del', 'inc', 'link', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
+    if (!['set', 'del', 'inc', 'makeMap', 'makeList', 'makeText', 'makeTable'].includes(action)) {
       throw new RangeError(`Unknown operation action: ${action}`)
     }
     if (!op.get('pred')) {
       throw new RangeError(`Missing 'pred' field in operation ${op}`)
     }
 
-    let localPatch = patch
-    if (patch) {
-      for (let pathOp of getPath(opSet, obj)) {
-        localPatch = initializePatch(opSet, pathOp, localPatch)
-      }
-    }
-
+    const localPatch = patch && initializePatch(opSet, obj, patch)
     const opWithId = op.merge({opId: `${startOp + index}@${actor}`})
     if (insert) {
       opSet = applyInsert(opSet, opWithId)
@@ -343,6 +363,19 @@ function applyOps(opSet, change, patch) {
     }
     opSet = applyAssign(opSet, opWithId, localPatch)
   })
+
+  // Recompute cursor indexes. This could perhaps be made more efficient by only recomputing if we
+  // updated the list that the cursor references; for now we just recompute them all.
+  if (patch) {
+    for (let cursor of opSet.get('cursors').values()) {
+      const index = getListIndex(opSet, cursor.get('refObjectId'), cursor.get('ref'))
+      if (index !== cursor.get('index')) {
+        opSet = opSet.setIn(['cursors', cursor.get('opId'), 'index'], index)
+        const localPatch = initializePatch(opSet, cursor.get('obj'), patch)
+        setPatchProps(opSet, cursor.get('obj'), getOperationKey(cursor), localPatch)
+      }
+    }
+  }
   return opSet
 }
 
@@ -428,6 +461,7 @@ function init() {
     .set('states',   Map())
     .set('history',  List())
     .set('byObject', Map().set('_root', Map().set('_keys', Map())))
+    .set('cursors',  Map())
     .set('hashes',   Map())
     .set('deps',     Set())
     .set('maxOp',     0)
