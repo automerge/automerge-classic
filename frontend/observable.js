@@ -4,6 +4,8 @@ const { isObject } = require('../src/common')
 /**
  * Allows an application to register a callback when a particular object in
  * a document changes.
+ *
+ * NOTE: This API is experimental and may change without warning in minor releases.
  */
 class Observable {
   constructor() {

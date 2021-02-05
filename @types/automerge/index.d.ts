@@ -30,8 +30,8 @@ declare module 'automerge' {
       observable?: Observable
     }
 
-  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean) => void
-  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean) => void
+  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
+  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
 
   class Observable {
     observe<T>(object: T, callback: ObserverCallback<T>): void

@@ -1,7 +1,8 @@
 # Changelog
 
 Automerge adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) for assigning
-version numbers.
+version numbers. However, any feature that is not documented or labelled as "experimental" may
+change without warning in a minor release.
 
 All notable changes to Automerge will be documented in this file, which
 is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
@@ -50,6 +51,8 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - **Removed**: `Automerge.Connection`, `Automerge.DocSet`, and `Automerge.WatchableDoc` have been
   moved to a separate [automerge-connection](https://github.com/automerge/automerge-connection)
   repository.
+- **Added** [#308]: Experimental `Automerge.Observable` API allows an application to receive
+a callback whenever a document (or some object within a document) changes ([@ept])
 
 ## [Unreleased]
 
@@ -308,6 +311,7 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 [0.4.0]: https://github.com/automerge/automerge/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/automerge/automerge/compare/v0.2.0...v0.3.0
 
+[#308]: https://github.com/automerge/automerge/pull/308
 [#243]: https://github.com/automerge/automerge/pull/243
 [#242]: https://github.com/automerge/automerge/pull/242
 [#241]: https://github.com/automerge/automerge/pull/241
