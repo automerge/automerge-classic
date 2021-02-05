@@ -15,18 +15,27 @@ declare module 'automerge' {
 
   // Automerge.* functions
 
-  function init<T>(options?: InitOptions): Doc<T>
-  function from<T>(initialState: T | Doc<T>, options?: InitOptions): Doc<T>
+  function init<T>(options?: InitOptions<T>): Doc<T>
+  function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): Doc<T>
   function clone<T>(doc: Doc<T>): Doc<T>
   function free<T>(doc: Doc<T>): void
 
-  type InitOptions =
+  type InitOptions<T> =
     | string // = actorId
     | { 
       actorId?: string
       deferActorId?: boolean
-      freeze?: boolean 
+      freeze?: boolean
+      patchCallback?: PatchCallback<T>
+      observable?: Observable
     }
+
+  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
+  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
+
+  class Observable {
+    observe<T>(object: T, callback: ObserverCallback<T>): void
+  }
 
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
@@ -105,7 +114,7 @@ declare module 'automerge' {
     function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
-    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
@@ -113,7 +122,7 @@ declare module 'automerge' {
     function getLastLocalChange<T>(doc: Doc<T>): Uint8Array
     function getObjectById<T>(doc: Doc<T>, objectId: OpId): Doc<T>
     function getObjectId<T>(doc: Doc<T>): OpId
-    function init<T>(options?: InitOptions): Doc<T>
+    function init<T>(options?: InitOptions<T>): Doc<T>
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
   }
 

@@ -553,4 +553,48 @@ describe('TypeScript support', () => {
       })
     })
   })
+
+  describe('Automerge.Observable', () => {
+    interface TextDoc {
+      text: Automerge.Text
+    }
+
+    it('should call a patchCallback when a document changes', () => {
+      let callbackCalled = false, actor = ''
+      let doc = Automerge.init<TextDoc>({patchCallback: (patch, before, after, local, changes) => {
+        callbackCalled = true
+        assert.deepStrictEqual(patch.diffs.props.text[`1@${actor}`], {
+          objectId: `1@${actor}`, type: 'text',
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
+          props: {0: {[`2@${actor}`]: {value: 'a'}}}
+        })
+        assert.deepStrictEqual(before, {})
+        assert.strictEqual(after.text.toString(), 'a')
+        assert.strictEqual(local, true)
+        assert.strictEqual(changes.length, 1)
+        assert.ok(changes[0] instanceof Uint8Array)
+      }})
+      actor = Automerge.getActorId(doc)
+      doc = Automerge.change(doc, doc => doc.text = new Automerge.Text('a'))
+      assert.strictEqual(callbackCalled, true)
+    })
+
+    it('should call an observer when a document changes', () => {
+      let observable = new Automerge.Observable(), callbackCalled = false
+      let doc = Automerge.from({text: new Automerge.Text()}, {observable})
+      let actor = Automerge.getActorId(doc)
+      observable.observe(doc.text, (diff, before, after, local, changes) => {
+        callbackCalled = true
+        assert.deepStrictEqual(diff.edits, [{action: 'insert', index: 0, elemId: `2@${actor}`}])
+        assert.deepStrictEqual(diff.props, {0: {[`2@${actor}`]: {value: 'a'}}})
+        assert.strictEqual(before.toString(), '')
+        assert.strictEqual(after.toString(), 'a')
+        assert.strictEqual(local, true)
+        assert.strictEqual(changes.length, 1)
+        assert.ok(changes[0] instanceof Uint8Array)
+      })
+      doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a'))
+      assert.strictEqual(callbackCalled, true)
+    })
+  })
 })
