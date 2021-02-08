@@ -20,18 +20,18 @@ class Observable {
    * changes that were applied to the document (as Uint8Arrays).
    */
   patchCallback(patch, before, after, local, changes) {
-    this._objectUpdate(patch.diffs, before, after, local, changes)
+    this._objectUpdate(patch.diffs, before, after, local, changes, [])
   }
 
   /**
    * Recursively walks a patch and calls the callbacks for all objects that
    * appear in the patch.
    */
-  _objectUpdate(diff, before, after, local, changes) {
+  _objectUpdate(diff, before, after, local, changes, path) {
     if (!diff.objectId) return
     if (this.observers[diff.objectId]) {
       for (let callback of this.observers[diff.objectId]) {
-        callback(diff, before, after, local, changes)
+        callback(diff, before, after, local, changes, path)
       }
     }
 
@@ -39,6 +39,7 @@ class Observable {
     for (let propName of Object.keys(diff.props)) {
       for (let opId of Object.keys(diff.props[propName])) {
         let childDiff = diff.props[propName][opId], childBefore, childAfter
+        let pathElem = propName
 
         if (diff.type === 'map') {
           childBefore = before && before[CONFLICTS] && before[CONFLICTS][propName] &&
@@ -59,6 +60,7 @@ class Observable {
           }
           childAfter = after && after[CONFLICTS] && after[CONFLICTS][index] &&
             after[CONFLICTS][index][opId]
+          pathElem = index
 
         } else if (diff.type === 'text') {
           const index = parseInt(propName)
@@ -67,9 +69,10 @@ class Observable {
             childBefore = before && before.get(index)
           }
           childAfter = after && after.get(index)
+          pathElem = index
         }
 
-        this._objectUpdate(childDiff, childBefore, childAfter, local, changes)
+        this._objectUpdate(childDiff, childBefore, childAfter, local, changes, path.concat([pathElem]))
       }
     }
   }
