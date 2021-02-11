@@ -470,6 +470,24 @@ describe('Automerge.Backend', () => {
     })
   })
 
+  describe('save() and load()', () => {
+    it('should reconstruct changes that resolve conflicts', () => {
+      const actor1 = '8765', actor2 = '1234'
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'magpie', pred: []}
+      ]}
+      const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'blackbird', pred: []}
+      ]}
+      const change3 = {actor: actor1, seq: 2, startOp: 2, time: 0, deps: [hash(change1), hash(change2)], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'robin', pred: [`1@${actor1}`, `1@${actor2}`]}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
+      const s2 = Backend.load(Backend.save(s1))
+      assert.deepStrictEqual(Backend.getHeads(s2), [hash(change3)])
+    })
+  })
+
   describe('getPatch()', () => {
     it('should include the most recent value for a key', () => {
       const actor = uuid()

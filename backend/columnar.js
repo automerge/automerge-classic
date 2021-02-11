@@ -110,6 +110,19 @@ function actorIdToActorNum(opId, actorIds) {
 }
 
 /**
+ * Comparison function to pass to Array.sort(), which compares two opIds in the
+ * form produced by `actorIdToActorNum` so that they are sorted in increasing
+ * Lamport timestamp order (sorted first by counter, then by actorId).
+ */
+function compareParsedOpIds(id1, id2) {
+  if (id1.counter < id2.counter) return -1
+  if (id1.counter > id2.counter) return +1
+  if (id1.actorId < id2.actorId) return -1
+  if (id1.actorId > id2.actorId) return +1
+  return 0
+}
+
+/**
  * Takes `changes`, an array of changes (represented as JS objects). Returns an
  * object `{changes, actorIds}`, where `changes` is a copy of the argument in
  * which all string opIds have been replaced with `{counter, actorNum}` objects,
@@ -401,12 +414,14 @@ function encodeOps(ops, forDocument) {
       columns.idActor.appendValue(op.id.actorNum)
       columns.idCtr.appendValue(op.id.counter)
       columns.succNum.appendValue(op.succ.length)
+      op.succ.sort(compareParsedOpIds)
       for (let i = 0; i < op.succ.length; i++) {
         columns.succActor.appendValue(op.succ[i].actorNum)
         columns.succCtr.appendValue(op.succ[i].counter)
       }
     } else {
       columns.predNum.appendValue(op.pred.length)
+      op.pred.sort(compareParsedOpIds)
       for (let i = 0; i < op.pred.length; i++) {
         columns.predActor.appendValue(op.pred[i].actorNum)
         columns.predCtr.appendValue(op.pred[i].counter)
