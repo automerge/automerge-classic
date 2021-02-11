@@ -15,13 +15,14 @@ function causallyReady(opSet, change) {
 /**
  * Returns the path from the root object to the given objectId, as an array of
  * operations describing the objects and keys traversed. If there are several
- * paths to the same object, returns one of the paths arbitrarily.
+ * paths to the same object, returns one of the paths arbitrarily. Returns
+ * null if there is no path (e.g. if the object has been deleted).
  */
 function getPath(opSet, objectId) {
   let path = []
   while (objectId !== '_root') {
     const ref = opSet.getIn(['byObject', objectId, '_inbound'], Set()).first()
-    if (!ref) throw new RangeError(`No path found to object ${objectId}`)
+    if (!ref) return null
     path.unshift(ref)
     objectId = ref.get('obj')
   }
@@ -327,10 +328,12 @@ function applyOps(opSet, change, patch) {
       throw new RangeError(`Missing 'pred' field in operation ${op}`)
     }
 
-    let localPatch = patch
+    let localPatch
     if (patch) {
-      for (let pathOp of getPath(opSet, obj)) {
-        localPatch = initializePatch(opSet, pathOp, localPatch)
+      const path = getPath(opSet, obj)
+      if (path !== null) {
+        localPatch = patch
+        for (let pathOp of path) localPatch = initializePatch(opSet, pathOp, localPatch)
       }
     }
 

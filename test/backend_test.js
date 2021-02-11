@@ -254,6 +254,29 @@ describe('Automerge.Backend', () => {
         }}}}
       })
     })
+
+    it('should handle updates to an object that has been deleted', () => {
+      const actor1 = uuid(), actor2 = uuid()
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor1}`, key: 'blackbirds', value: 2, pred: []}
+      ]}
+      const change2 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'del', obj: '_root', key: 'birds', pred: [`1@${actor1}`]}
+      ]}
+      const change3 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor1}`, key: 'blackbirds', value: 2, pred: []}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
+      const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(change3)])
+      assert.deepStrictEqual(patch3, {
+        clock: {[actor1]: 2, [actor2]: 1}, maxOp: 3,
+        deps: [hash(change2), hash(change3)].sort(),
+        diffs: {objectId: '_root', type: 'map'}
+      })
+    })
   })
 
   describe('applyLocalChange()', () => {

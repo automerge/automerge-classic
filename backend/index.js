@@ -77,7 +77,7 @@ function makePatch(state, diffs, request, isIncremental) {
  * `loadChanges()`.
  */
 function apply(state, changes, request, isIncremental) {
-  let diffs = isIncremental ? {} : null
+  let diffs = isIncremental ? {objectId: '_root', type: 'map'} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
     for (let chunk of splitContainers(change)) {

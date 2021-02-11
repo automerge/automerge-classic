@@ -989,6 +989,15 @@ describe('Automerge', () => {
       assert.deepStrictEqual(s3.animals, {mammals: ['badger']})
     })
 
+    it('should handle updates of concurrently deleted objects', () => {
+      s1 = Automerge.change(s1, doc => doc.birds = {blackbird: {feathers: 'black'}})
+      s2 = Automerge.merge(s2, s1)
+      s1 = Automerge.change(s1, doc => delete doc.birds.blackbird)
+      s2 = Automerge.change(s2, doc => doc.birds.blackbird.beak = 'orange')
+      s3 = Automerge.merge(s1, s2)
+      assert.deepStrictEqual(s1, {birds: {}})
+    })
+
     it('should not interleave sequence insertions at the same position', () => {
       s1 = Automerge.change(s1, doc => doc.wisdom = [])
       s2 = Automerge.merge(s2, s1)
