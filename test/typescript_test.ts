@@ -583,7 +583,7 @@ describe('TypeScript support', () => {
       let observable = new Automerge.Observable(), callbackCalled = false
       let doc = Automerge.from({text: new Automerge.Text()}, {observable})
       let actor = Automerge.getActorId(doc)
-      observable.observe(doc.text, (diff, before, after, local, changes) => {
+      observable.observe(doc.text, (diff, before, after, local, changes, path) => {
         callbackCalled = true
         assert.deepStrictEqual(diff.edits, [{action: 'insert', index: 0, elemId: `2@${actor}`}])
         assert.deepStrictEqual(diff.props, {0: {[`2@${actor}`]: {value: 'a'}}})
@@ -592,6 +592,7 @@ describe('TypeScript support', () => {
         assert.strictEqual(local, true)
         assert.strictEqual(changes.length, 1)
         assert.ok(changes[0] instanceof Uint8Array)
+        assert.deepStrictEqual(path, ['text'])
       })
       doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a'))
       assert.strictEqual(callbackCalled, true)
