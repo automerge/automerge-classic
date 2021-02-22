@@ -1,4 +1,5 @@
 var path = require('path');
+const TerserPlugin = require('terser-webpack-plugin')
 
 module.exports = {
   entry: './src/automerge.js',
@@ -16,5 +17,9 @@ module.exports = {
     rules: [
       { test: /\.js$/, exclude: /node_modules/, loader: "babel-loader" }
     ]
+  },
+  optimization: {
+    minimize: true,
+    minimizer: [new TerserPlugin()]
   }
 }
