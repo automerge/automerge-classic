@@ -131,6 +131,7 @@ declare module 'automerge' {
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
+    function getAllChanges(state: BackendState): Uint8Array[]
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
     function getHeads(state: BackendState): Hash[]
     function getMissingDeps(state: BackendState): Hash[]

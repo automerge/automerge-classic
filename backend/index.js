@@ -177,7 +177,7 @@ function save(backend) {
   if (USE_NEW_BACKEND) {
     return backendState(backend).save()
   } else {
-    return encodeDocument(getChanges(backend, []))
+    return encodeDocument(getAllChanges(backend))
   }
 }
 
@@ -245,6 +245,10 @@ function getHeads(backend) {
   return backend.heads
 }
 
+function getAllChanges(backend) {
+  return getChanges(backend, [])
+}
+
 function getChanges(backend, haveDeps) {
   if (!Array.isArray(haveDeps)) {
     throw new TypeError('Pass an array of hashes to Backend.getChanges()')
@@ -269,5 +273,5 @@ function getMissingDeps(backend) {
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getHeads, getChanges, getMissingDeps
+  getHeads, getAllChanges, getChanges, getMissingDeps
 }

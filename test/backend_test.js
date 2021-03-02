@@ -286,7 +286,7 @@ describe('Automerge.Backend', () => {
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)
-      const changes01 = Backend.getChanges(s1, []).map(decodeChange)
+      const changes01 = Backend.getAllChanges(s1).map(decodeChange)
       assert.deepStrictEqual(patch1, {
         actor: '111111', seq: 1, clock: {'111111': 1}, deps: [], maxOp: 1,
         diffs: {objectId: '_root', type: 'map', props: {
@@ -328,29 +328,23 @@ describe('Automerge.Backend', () => {
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
-      const changes01 = Backend.getChanges(s1, []).map(decodeChange)
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(remote1)])
-      const changes12 = Backend.getChanges(s2, [changes01[0].hash]).map(decodeChange)
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
-      const changes23 = Backend.getChanges(s3, [changes01[0].hash, changes12[0].hash]).map(decodeChange)
-      assert.deepStrictEqual(changes01, [{
-        hash: '6fc48e6635e2bab050a340119fff7a559679ed4f26734623c2b4738815f48371',
+      const changes = Backend.getAllChanges(s3).map(decodeChange)
+      assert.deepStrictEqual(changes, [
+        {hash: '6fc48e6635e2bab050a340119fff7a559679ed4f26734623c2b4738815f48371',
         actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'magpie', pred: []}
-        ]
-      }])
-      assert.deepStrictEqual(changes12, [{
-        hash: 'aca4a51a8d538f2b16b6f9b923cf6dd5a4bb5ad550b6e618aa529a036b45ea1f',
+        ]},
+        {hash: 'aca4a51a8d538f2b16b6f9b923cf6dd5a4bb5ad550b6e618aa529a036b45ea1f',
         actor: '222222', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
           {action: 'set', obj: '_root', key: 'fish', insert: false, value: 'goldfish', pred: []}
-        ]
-      }])
-      assert.deepStrictEqual(changes23, [{
-        hash: '1caeeaf4fb120b8bed4c6c92311f679264f070637b5531979e95ec8249499f5a',
-        actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes01[0].hash], ops: [
+        ]},
+        {hash: '1caeeaf4fb120b8bed4c6c92311f679264f070637b5531979e95ec8249499f5a',
+        actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
-        ]
-      }])
+        ]}
+      ])
     })
 
     it('should detect conflicts based on the frontend version', () => {
@@ -367,24 +361,22 @@ describe('Automerge.Backend', () => {
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
-      const changes01 = Backend.getChanges(s1, []).map(decodeChange)
-      remote1.deps.push(changes01[0].hash)
+      remote1.deps.push(Backend.getAllChanges(s1).map(decodeChange)[0].hash)
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(remote1)])
-      const changes12 = Backend.getChanges(s2, [changes01[0].hash]).map(decodeChange)
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
-      const changes23 = Backend.getChanges(s3, [changes12[0].hash]).map(decodeChange)
+      const changes = Backend.getAllChanges(s3).map(decodeChange)
       assert.deepStrictEqual(patch3, {
         actor: '111111', seq: 2, clock: {'111111': 2, '222222': 1}, deps: [hash(remote1)], maxOp: 2,
         diffs: {objectId: '_root', type: 'map', props: {
           bird: {'2@222222': {value: 'magpie'}, '2@111111': {value: 'jay'}}
         }}
       })
-      assert.deepStrictEqual(changes23, [{
+      assert.deepStrictEqual(changes[2], {
         hash: 'b6f22ff5606622a9b8f4efed87a5202128bc5e35021d09e04529b9076ec98d0e',
-        actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes01[0].hash], ops: [
+        actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
         ]
-      }])
+      })
     })
 
     it('should transform list indexes into element IDs', () => {
@@ -407,32 +399,30 @@ describe('Automerge.Backend', () => {
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(remote1)])
       const [s2, patch2] = Backend.applyLocalChange(s1, local1)
-      const changes12 = Backend.getChanges(s2, [hash(remote1)]).map(decodeChange)
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(remote2)])
       const [s4, patch4] = Backend.applyLocalChange(s3, local2)
-      const changes34 = Backend.getChanges(s4, [hash(remote2), changes12[0].hash]).map(decodeChange)
       const [s5, patch5] = Backend.applyLocalChange(s4, local3)
-      const changes45 = Backend.getChanges(s5, [hash(remote2), changes34[0].hash]).map(decodeChange)
-      assert.deepStrictEqual(changes12, [{
+      const changes = Backend.getAllChanges(s5).map(decodeChange)
+      assert.deepStrictEqual(changes[1], {
         hash: '96db9a3bb6471912a2acbe3948365d202b89145816efa37bd0ccaa3be8ebee14',
         actor: '111111', seq: 1, startOp: 2, time: 0, message: '', deps: [hash(remote1)], ops: [
           {obj: '1@222222', action: 'set', elemId: '_head', insert: true, value: 'goldfinch', pred: []}
         ]
-      }])
-      assert.deepStrictEqual(changes34, [{
+      })
+      assert.deepStrictEqual(changes[3], {
         hash: '57e8ec00028e0a0a1ae325ad2c86dd4d8f63ace7c3ccb67a351682f0f6879cfd',
-        actor: '111111', seq: 2, startOp: 3, time: 0, message: '', deps: [changes12[0].hash], ops: [
+        actor: '111111', seq: 2, startOp: 3, time: 0, message: '', deps: [changes[1].hash], ops: [
           {obj: '1@222222', action: 'set', elemId: '2@111111', insert: true, value: 'wagtail', pred: []}
         ]
-      }])
-      assert.deepStrictEqual(changes45, [{
+      })
+      assert.deepStrictEqual(changes[4], {
         hash: 'd999eeeb5f69689f65b0e47b1f4dcc69c29b4b3ccaca69884425e5a6443e8d5d',
         actor: '111111', seq: 3, startOp: 4, time: 0, message: '',
-        deps: [hash(remote2), changes34[0].hash].sort(), ops: [
+        deps: [hash(remote2), changes[3].hash].sort(), ops: [
           {obj: '1@222222', action: 'set', elemId: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
           {obj: '1@222222', action: 'set', elemId: '2@111111', insert: false, value: 'Goldfinch', pred: ['2@111111']}
         ]
-      }])
+      })
     })
 
     it('should handle list element insertion and deletion in the same change', () => {
@@ -446,7 +436,7 @@ describe('Automerge.Backend', () => {
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, local1)
       const [s2, patch2] = Backend.applyLocalChange(s1, local2)
-      const changes = Backend.getChanges(s2, []).map(decodeChange)
+      const changes = Backend.getAllChanges(s2).map(decodeChange)
       assert.deepStrictEqual(patch2, {
         actor: '111111', seq: 2, clock: {'111111': 2}, deps: [], maxOp: 3,
         diffs: {objectId: '_root', type: 'map', props: {

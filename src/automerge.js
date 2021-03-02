@@ -79,7 +79,7 @@ function getChanges(oldDoc, newDoc) {
 }
 
 function getAllChanges(doc) {
-  return backend.getChanges(Frontend.getBackendState(doc), [])
+  return backend.getAllChanges(Frontend.getBackendState(doc))
 }
 
 function applyChanges(doc, changes, options = {}) {
