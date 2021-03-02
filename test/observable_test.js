@@ -133,11 +133,6 @@ describe('Automerge.Observable', () => {
       doc.text = new Automerge.Text()
       doc.text.insertAt(0, 'a', 'b', {start: 'bold'}, 'c', {end: 'bold'})
     })
-    observable.observe(doc, (patch, before, after) => {
-      console.log(JSON.stringify(patch, null, 4))
-      console.log('before =', before.text.elems)
-      console.log('after =', after.text.elems)
-    })
     observable.observe(doc.text.get(2), (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
