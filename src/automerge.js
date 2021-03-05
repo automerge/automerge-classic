@@ -100,6 +100,39 @@ function getMissingDeps(doc) {
   return backend.getMissingDeps(Frontend.getBackendState(doc))
 }
 
+/**
+ * Returns a byte array that uniquely identifies the current state of the document.
+ * Any two documents that have applied the same set of changes (even in a different order)
+ * will return the same value from this function.
+ */
+function getCurrentVersion(doc) {
+  return backend.getCurrentVersion(Frontend.getBackendState(doc))
+}
+
+/**
+ * Establishes a sync session with another peer. If the local peer is the initiator
+ * of the session, `initState` should be the document version (as returned by
+ * `getCurrentVersion`) of the last time we synced with that particular peer, or
+ * undefined if this is the first time we are syncing with this peer. If the
+ * remote peer initiated the session by sending us a message, `initState` is this
+ * message received from the other peer.
+ *
+ * Returns a `Sync` object that handles sending and receiving messages.
+ */
+function startSync(doc, initState) {
+  return backend.startSync(Frontend.getBackendState(doc), initState)
+}
+
+/**
+ * Updates the backend state with the data received from another peer in the
+ * course of a completed sync session. `sync` is the object previously returned
+ * by `startSync()`.
+ */
+function finishSync(doc, sync, options = {}) {
+  if (!sync.isFinished) throw new Error('sync is not yet finished')
+  return applyChanges(doc, sync.receivedChanges, options)
+}
+
 function equals(val1, val2) {
   if (!isObject(val1) || !isObject(val2)) return val1 === val2
   const keys1 = Object.keys(val1).sort(), keys2 = Object.keys(val2).sort()
@@ -140,6 +173,7 @@ function setDefaultBackend(newBackend) {
 module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
+  getCurrentVersion, startSync, finishSync,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend,
   get Backend() { return backend }

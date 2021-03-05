@@ -471,12 +471,8 @@ function getHeads(opSet) {
  * strings) of the heads that the other replica has. Those changes in `haveDeps`
  * and any of their transitive dependencies will not be returned; any changes
  * later than or concurrent to the hashes in `haveDeps` will be returned.
- * If `haveDeps` is an empty list, all changes are returned.
- *
- * NOTE: This function throws an exception if any of the given hashes are not
- * known to this replica. This means that if the other replica is ahead of us,
- * this function cannot be used directly to find the changes to send.
- * TODO need to fix this.
+ * If `haveDeps` is an empty list, all changes are returned. Throws an exception
+ * if any of the given hashes are not known to this replica.
  */
 function getMissingChanges(opSet, haveDeps) {
   let stack = haveDeps, seenHashes = {}
@@ -494,6 +490,31 @@ function getMissingChanges(opSet, haveDeps) {
     .toJSON()
 }
 
+/**
+ * Given an array of hashes, returns the binary-encoded changes for those hashes,
+ * and also the binary changes for any later changes that depend on them.
+ * The order in which changes are returned is undefined.
+ */
+function getChangesAndDependents(opSet, hashes) {
+  let hashSeen = {}, stack = hashes.slice()
+  for (let hash of hashes) hashSeen[hash] = true
+
+  while (stack.length > 0) {
+    for (let hash of opSet.getIn(['hashes', stack.pop(), 'depsFuture'], Set())) {
+      if (!hashSeen[hash]) {
+        hashSeen[hash] = true
+        stack.push(hash)
+      }
+    }
+  }
+
+  return Object.keys(hashSeen).map(hash => opSet.getIn(['hashes', hash, 'change']))
+}
+
+/**
+ * Returns the hashes of any changes that are missing dependencies, i.e. where
+ * we have applied a change that has a dependency on a change we have not seen.
+ */
 function getMissingDeps(opSet) {
   let missing = {}, inQueue = {}
   for (let binaryChange of opSet.get('queue')) {
@@ -633,6 +654,6 @@ function constructObject(opSet, objectId) {
 }
 
 module.exports = {
-  init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
+  init, addChange, addLocalChange, getHeads, getMissingChanges, getChangesAndDependents, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch
 }

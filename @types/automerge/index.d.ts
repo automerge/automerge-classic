@@ -59,13 +59,22 @@ declare module 'automerge' {
   function getAllChanges<T>(doc: Doc<T>): Uint8Array[]
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
+  function getCurrentVersion<T>(doc: Doc<T>): Uint8Array
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getMissingDeps<T>(doc: Doc<T>): Hash[]
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
+  function startSync<T>(doc: Doc<T>, initState?: Uint8Array): Sync
+  function finishSync<T>(doc: Doc<T>, sync: Sync, options?: ChangeOptions<T>): Doc<T>
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
+
+  class Sync {
+    readonly messageToSend: Uint8Array | undefined
+    readonly isFinished: boolean
+    processMessage(message: Uint8Array): Uint8Array | undefined
+  }
 
   // custom CRDT types
 
@@ -141,6 +150,7 @@ declare module 'automerge' {
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
+    function getCurrentVersion(state: BackendState): Uint8Array[]
     function getHeads(state: BackendState): Hash[]
     function getMissingDeps(state: BackendState): Hash[]
     function getPatch(state: BackendState): Patch
@@ -148,6 +158,7 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
+    function startSync(state: BackendState, initState?: Uint8Array): Sync
   }
 
   // Internals

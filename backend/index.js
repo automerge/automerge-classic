@@ -3,6 +3,7 @@ const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
+const { encodeCurrentVersion, Sync } = require('./sync')
 
 // Feature flag: false uses old Immutable.js-based backend data structures, true uses new
 // byte-array-based data structures. New data structures are not yet fully working.
@@ -245,10 +246,41 @@ function getHeads(backend) {
   return backend.heads
 }
 
+/**
+ * Returns a byte array that uniquely identifies the current state of the document.
+ * Any two documents that have applied the same set of changes (even in a different order)
+ * will return the same value from this function.
+ */
+function getCurrentVersion(backend) {
+  return encodeCurrentVersion(backend.heads)
+}
+
+/**
+ * Establishes a sync session with another peer. If the local peer is the initiator
+ * of the session, `initState` should be the document version (as returned by
+ * `getCurrentVersion`) of the last time we synced with that particular peer, or
+ * undefined if this is the first time we are syncing with this peer. If the
+ * remote peer initiated the session by sending us a message, `initState` is this
+ * message received from the other peer.
+ *
+ * Returns a `Sync` object that handles sending and receiving messages.
+ */
+function startSync(backend, initState) {
+  return new Sync(backendState(backend).get('opSet'), initState)
+}
+
+/**
+ * Returns the full history of changes that have been applied to a document.
+ */
 function getAllChanges(backend) {
   return getChanges(backend, [])
 }
 
+/**
+ * Returns all changes that are newer than or concurrent to the changes
+ * identified by the hashes in `haveDeps`. If `haveDeps` is an empty array, all
+ * changes are returned. Throws an exception if any of the given hashes is unknown.
+ */
 function getChanges(backend, haveDeps) {
   if (!Array.isArray(haveDeps)) {
     throw new TypeError('Pass an array of hashes to Backend.getChanges()')
@@ -262,6 +294,10 @@ function getChanges(backend, haveDeps) {
   }
 }
 
+/**
+ * Returns the hashes of any changes that are missing dependencies, i.e. where
+ * we have applied a change that has a dependency on a change we have not seen.
+ */
 function getMissingDeps(backend) {
   const state = backendState(backend)
   if (USE_NEW_BACKEND) {
@@ -273,5 +309,5 @@ function getMissingDeps(backend) {
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getHeads, getAllChanges, getChanges, getMissingDeps
+  getHeads, getCurrentVersion, startSync, getAllChanges, getChanges, getMissingDeps
 }
