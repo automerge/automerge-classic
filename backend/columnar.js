@@ -22,6 +22,9 @@ const { Hash } = require('fast-sha256')
 // These bytes don't mean anything, they were generated randomly
 const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
 
+const CHUNK_TYPE_DOCUMENT = 0
+const CHUNK_TYPE_CHANGE = 1
+
 const COLUMN_TYPE = {
   GROUP_CARD: 0, ACTOR_ID: 1, INT_RLE: 2, INT_DELTA: 3, BOOLEAN: 4,
   STRING_RLE: 5, VALUE_LEN: 6, VALUE_RAW: 7
@@ -604,13 +607,7 @@ function encodeContainer(chunkType, encodeContentsCallback) {
 
   const bodyBuf = body.buffer
   const header = new Encoder()
-  if (chunkType === 'document') {
-    header.appendByte(0)
-  } else if (chunkType === 'change') {
-    header.appendByte(1)
-  } else {
-    throw new RangeError(`Unsupported chunk type: ${chunkType}`)
-  }
+  header.appendByte(chunkType)
   header.appendUint53(bodyBuf.byteLength - HEADER_SPACE)
 
   // Compute the hash over chunkType, length, and body
@@ -653,7 +650,7 @@ function encodeChange(changeObj) {
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
 
-  const { hash, bytes } = encodeContainer('change', encoder => {
+  const { hash, bytes } = encodeContainer(CHUNK_TYPE_CHANGE, encoder => {
     if (!Array.isArray(change.deps)) throw new TypeError('deps is not an array')
     encoder.appendUint53(change.deps.length)
     for (let hash of change.deps.slice().sort()) {
@@ -685,7 +682,7 @@ function decodeChangeColumns(buffer) {
   const header = decodeContainerHeader(decoder, true)
   const chunkDecoder = new Decoder(header.chunkData)
   if (!decoder.done) throw new RangeError('Encoded change has trailing data')
-  if (header.chunkType !== 1) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  if (header.chunkType !== CHUNK_TYPE_CHANGE) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
   const change = decodeChangeHeader(chunkDecoder)
   const columns = decodeColumnInfo(chunkDecoder)
@@ -720,7 +717,7 @@ function decodeChange(buffer) {
  */
 function decodeChangeMeta(buffer, computeHash) {
   const header = decodeContainerHeader(new Decoder(buffer), computeHash)
-  if (header.chunkType !== 1) {
+  if (header.chunkType !== CHUNK_TYPE_CHANGE) {
     throw new RangeError('Buffer chunk type is not a change')
   }
   const meta = decodeChangeHeader(new Decoder(header.chunkData))
@@ -750,9 +747,9 @@ function decodeChanges(binaryChanges) {
   let decoded = []
   for (let binaryChange of binaryChanges) {
     for (let chunk of splitContainers(binaryChange)) {
-      if (chunk[8] === 0) {
+      if (chunk[8] === CHUNK_TYPE_DOCUMENT) {
         decoded = decoded.concat(decodeDocument(chunk))
-      } else if (chunk[8] === 1) {
+      } else if (chunk[8] === CHUNK_TYPE_CHANGE) {
         decoded.push(decodeChange(chunk))
       } else {
         // ignoring chunk of unknown type
@@ -1015,7 +1012,7 @@ function encodeDocument(binaryChanges) {
   const { changesColumns, heads } = encodeDocumentChanges(changes)
   const opsColumns = encodeOps(groupDocumentOps(changes), true)
 
-  return encodeContainer('document', encoder => {
+  return encodeContainer(CHUNK_TYPE_DOCUMENT, encoder => {
     encoder.appendUint53(actorIds.length)
     for (let actor of actorIds) {
       encoder.appendHexString(actor)
@@ -1036,7 +1033,7 @@ function decodeDocumentHeader(buffer) {
   const header = decodeContainerHeader(documentDecoder, true)
   const decoder = new Decoder(header.chunkData)
   if (!documentDecoder.done) throw new RangeError('Encoded document has trailing data')
-  if (header.chunkType !== 0) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  if (header.chunkType !== CHUNK_TYPE_DOCUMENT) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
 
   const actorIds = [], numActors = decoder.readUint53()
   for (let i = 0; i < numActors; i++) {
