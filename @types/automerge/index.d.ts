@@ -30,6 +30,14 @@ declare module 'automerge' {
       observable?: Observable
     }
 
+  type ChangeOptions<T> =
+    | string // = message
+    | {
+      message?: string
+      time?: number
+      patchCallback?: PatchCallback<T>
+    }
+
   type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
   type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
 
@@ -39,9 +47,9 @@ declare module 'automerge' {
 
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
-  function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
+  function change<D, T = Proxy<D>>(doc: D, options: ChangeOptions<T>, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
-  function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
+  function emptyChange<D extends Doc<any>>(doc: D, options?: ChangeOptions<D>): D
   function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): Doc<T>
   function equals<T>(val1: T, val2: T): boolean
   function encodeChange(change: Change): Uint8Array

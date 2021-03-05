@@ -87,7 +87,8 @@ function makeChange(doc, context, options) {
     seq: state.seq,
     startOp: state.maxOp + 1,
     deps: state.deps,
-    time:  Math.round(new Date().getTime() / 1000),
+    time: (options && typeof options.time === 'number') ? options.time :
+          Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
     ops: context.ops
   }
