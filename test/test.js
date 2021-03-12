@@ -279,8 +279,7 @@ describe('Automerge', () => {
           actor, seq: 1, maxOp: 2, deps: [], clock: {[actor]: 1}, pendingChanges: 0,
           diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
             objectId: `1@${actor}`, type: 'list',
-            edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-            props: {0: {[`2@${actor}`]: {value: 'Goldfinch'}}}
+            edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {'type': 'value', value: 'Goldfinch'}}],
           }}}}
         })
         assert.strictEqual(callbacks[0].before, s1)
@@ -298,7 +297,7 @@ describe('Automerge', () => {
         assert.strictEqual(callbacks.length, 1)
         assert.deepStrictEqual(callbacks[0].patch, {
           actor, seq: 1, maxOp: 1, deps: [], clock: {[actor]: 1}, pendingChanges: 0,
-          diffs: {objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {value: 'Goldfinch'}}}}
+          diffs: {objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {type: 'value', value: 'Goldfinch'}}}}
         })
         assert.strictEqual(callbacks[0].before, s1)
         assert.strictEqual(callbacks[0].after, s2)
@@ -1138,12 +1137,8 @@ describe('Automerge', () => {
         maxOp: 3, deps: [decodeChange(Automerge.getAllChanges(s2)[1]).hash], clock: {[actor]: 2}, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`},
-            {action: 'insert', index: 1, elemId: `3@${actor}`}
-          ], props: {
-            0: {[`2@${actor}`]: {value: 'Goldfinch'}},
-            1: {[`3@${actor}`]: {value: 'Chaffinch'}}
-          }
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['Goldfinch', 'Chaffinch']}
+          ]
         }}}}
       })
       assert.deepStrictEqual(callbacks[0].before, {})
@@ -1277,8 +1272,7 @@ describe('Automerge', () => {
         maxOp: 2, deps: [decodeChange(Automerge.getAllChanges(s1)[0]).hash], clock: {[actor]: 1}, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: 'Goldfinch'}}}
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: 'Goldfinch'}}],
         }}}}
       })
       assert.strictEqual(callbacks[0].patch, patch)
@@ -1297,12 +1291,8 @@ describe('Automerge', () => {
         maxOp: 3, deps: [decodeChange(Automerge.getAllChanges(s2)[1]).hash], clock: {[actor]: 2}, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`},
-            {action: 'insert', index: 1, elemId: `3@${actor}`}
-          ], props: {
-            0: {[`2@${actor}`]: {value: 'Goldfinch'}},
-            1: {[`3@${actor}`]: {value: 'Chaffinch'}}
-          }
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['Goldfinch', 'Chaffinch']}
+          ]
         }}}}
       }])
     })
@@ -1314,7 +1304,7 @@ describe('Automerge', () => {
       Automerge.applyChanges(before, Automerge.getAllChanges(s1))
       assert.deepStrictEqual(patches, [{
         maxOp: 1, deps: [decodeChange(Automerge.getAllChanges(s1)[0]).hash], clock: {[actor]: 1}, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {value: 'Goldfinch'}}}}
+        diffs: {objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {type: 'value', value: 'Goldfinch'}}}}
       }])
     })
   })
