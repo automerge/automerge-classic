@@ -109,10 +109,22 @@ function makeChange(doc, context, options) {
   } else {
     const queuedRequest = {actor, seq: change.seq, before: doc}
     state.requests = state.requests.concat([queuedRequest])
-    state.maxOp = state.maxOp + change.ops.length
+    state.maxOp = state.maxOp + countOps(change.ops)
     state.deps = []
     return [updateRootObject(doc, context ? context.updated : {}, state), change]
   }
+}
+
+function countOps(ops) {
+  count = 0
+  for (const op of ops) {
+    if (op.action === 'set' && op.values) {
+      count += op.values.length
+    } else {
+      count += 1
+    }
+  }
+  return count
 }
 
 /**

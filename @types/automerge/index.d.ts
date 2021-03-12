@@ -31,7 +31,7 @@ declare module 'automerge' {
     }
 
   type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
-  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
+  type ObserverCallback<T> = (diff: MapDiff | ListDiff | ValueDiff | UnchangedDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
 
   class Observable {
     observe<T>(object: T, callback: ObserverCallback<T>): void
@@ -185,6 +185,8 @@ declare module 'automerge' {
     value?: number | boolean | string | null
     datatype?: DataType
     pred?: OpId[]
+    values?: (number | boolean | string | null)[]
+    multiOp?: number
   }
 
   interface Patch {
@@ -192,25 +194,82 @@ declare module 'automerge' {
     seq?: number
     clock: Clock
     deps: Hash[]
-    diffs: ObjectDiff
+    diffs: MapDiff
   }
 
-  interface ObjectDiff {
-    objectId: OpId
-    type: CollectionType
-    edits?: Edit[]
-    props?: {[propName: string]: {[opId: string]: ObjectDiff | ValueDiff}}
+  // Describes changes to a map (in which case propName represents a key in the
+  // map) or a table object (in which case propName is the primary key of a row).
+  interface MapDiff {
+    objectId: OpId        // ID of object being updated
+    type: 'map' | 'table' // type of object being updated
+    // For each key/property that is changing, props contains one entry
+    // (properties that are not changing are not listed). The nested object is
+    // empty if the property is being deleted, contains one opId if it is set to
+    // a single value, and contains multiple opIds if there is a conflict.
+    props: {[propName: string]: {[opId: string]: MapDiff | ListDiff | ValueDiff | UnchangedDiff }}
   }
 
+  // Describes changes to a list or Automerge.Text object, in which each element
+  // is identified by its index.
+  interface ListDiff {
+    objectId: OpId        // ID of object being updated
+    type: 'list' | 'text' // type of objct being updated
+    // This array contains edits in the order they should be applied.
+    edits: (SingleInsertEdit | MultiInsertEdit | UpdateEdit | RemoveEdit)[]
+  }
+
+  // Describes the insertion of a single element into a list or text object.
+  // The element can be a nested object.
+  interface SingleInsertEdit {
+    action: 'insert'
+    index: number   // the list index at which to insert the new element
+    elemId: OpId    // the unique element ID of the new list element
+    value: MapDiff | ListDiff | ValueDiff | UnchangedDiff
+  }
+
+  // Describes the insertion of a consecutive sequence of primitive values into
+  // a list or text object. In the case of text, the values are strings (each
+  // character as a separate string value). Each inserted value is given a
+  // consecutive element ID: starting with `elemId` for the first value, the
+  // subsequent values are given elemIds with the same actor ID and incrementing
+  // counters. To insert non-primitive values, use SingleInsertEdit.
+  interface MultiInsertEdit {
+    action: 'multi-insert'
+    index: number   // the list index at which to insert the first value
+    elemId: OpId    // the unique ID of the first inserted element
+    values: (number | boolean | string | null)[] // list of values to insert
+  }
+
+  // Describes the update of the value or nested object at a particular index
+  // of a list or text object. In the case where there are multiple conflicted
+  // values at the same list index, multiple UpdateEdits with the same index
+  // (but different opIds) appear in the edits array of ListDiff.
+  interface UpdateEdit {
+    action: 'update'
+    index: number   // the list index to update
+    opId: OpId      // ID of the operation that performed this update
+    value: MapDiff | ListDiff | ValueDiff | UnchangedDiff
+  }
+
+  // Describes the deletion of one or more consecutive elements from a list or
+  // text object.
+  interface RemoveEdit {
+    action: 'remove'
+    index: number   // index of the first list element to remove
+    count: number   // number of list elements to remove
+  }
+
+  // Describes a primitive value, optionally tagged with a datatype that
+  // indicates how the value should be interpreted.
   interface ValueDiff {
+    type: 'value'
     value: number | boolean | string | null
     datatype?: DataType
   }
 
-  interface Edit {
-    action: 'insert' | 'remove'
-    index: number
-    elemId: OpId
+  interface UnchangedDiff {
+    type: 'unchanged'
+    objectId: string
   }
 
   type OpAction =

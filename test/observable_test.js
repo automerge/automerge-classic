@@ -141,7 +141,7 @@ describe('Automerge.Observable', () => {
     observable.observe(doc.text.get(2), (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
-        objectId: `4@${actor}`, type: 'map', props: {start: {[`9@${actor}`]: {value: 'italic'}}}
+        objectId: `4@${actor}`, type: 'map', props: {start: {[`9@${actor}`]: {type: 'value', value: 'italic'}}}
       })
       assert.deepStrictEqual(before, {start: 'bold'})
       assert.deepStrictEqual(after, {start: 'italic'})

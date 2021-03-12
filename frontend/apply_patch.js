@@ -214,22 +214,61 @@ function updateListObject(patch, obj, updated) {
   }
 
   const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
+  const oldConflicts = conflicts.slice()
+  const elemIdsInthisPatch = new Set()
 
-  iterateEdits(patch.edits,
-    (index, newElems) => { // insertion
-      const blanks = new Array(newElems.length)
-      elemIds  .splice(index, 0, ...newElems)
-      list     .splice(index, 0, ...blanks)
-      conflicts.splice(index, 0, ...blanks)
-    },
-    (index, count) => { // deletion
-      elemIds  .splice(index, count)
-      list     .splice(index, count)
-      conflicts.splice(index, count)
+  for (const edit of patch.edits) {
+    if (edit.action === 'insert') {
+      let value = getValue(edit.value, undefined, updated)
+      elemIds.splice(edit.index, 0, edit.elemId)
+      list.splice(edit.index, 0, value)
+      conflicts.splice(edit.index, 0, {[edit.elemId]: value})
+      oldConflicts.splice(edit.index, 0, undefined)
+      elemIdsInthisPatch.add(edit.elemId)
+    } else if (edit.action === 'multi-insert') {
+      let startOpId = parseOpId(edit.elemId)
+      let newElems = []
+      let newValues = []
+      let newConflicts = []
+      edit.values.forEach((value, index) => {
+        let counter = startOpId.counter + index
+        let opid = `${counter}@${startOpId.actorId}`
+        newElems.push(opid)
+        newConflicts.push({[opid]: {value, type: 'value'}})
+        newValues.push(value)
+        elemIdsInthisPatch.add(opid)
+      })
+      list.splice(edit.index, 0, ...newValues)
+      conflicts.splice(edit.index, 0, ...newConflicts)
+      oldConflicts.splice(edit.index, 0, Array(edit.count))
+      elemIds.splice(edit.index, 0, ...newElems)
+    } else if (edit.action === 'update') {
+      elemIdsInthisPatch.add(edit.opId)
+      let elemConflicts = conflicts[edit.index]
+      let oldElemConflicts = oldConflicts[edit.index] || {}
+      oldConflicts[edit.index] = oldElemConflicts
+      const currentValue = elemConflicts[edit.opId] || oldElemConflicts[edit.opId] || undefined
+      const value = getValue(edit.value, currentValue, updated)
+
+      let newConflicts = {}
+      for (const opId of Object.keys(elemConflicts)) {
+        if (elemIdsInthisPatch.has(opId)) {
+          newConflicts[opId] = elemConflicts[opId]
+        }
+      }
+      newConflicts[edit.opId] = value
+
+      const opIds = Object.keys(newConflicts).sort(lamportCompare).reverse()
+      conflicts[edit.index] = newConflicts
+      list[edit.index] = newConflicts[opIds[0]]
+    } else if (edit.action === 'remove') {
+      elemIds.splice(edit.index, edit.count)
+      list.splice(edit.index, edit.count)
+      conflicts.splice(edit.index, edit.count)
+      oldConflicts.splice(edit.index, edit.count)
     }
-  )
+  }
 
-  applyProperties(patch.props, list, conflicts, updated)
   return list
 }
 
@@ -249,25 +288,60 @@ function updateTextObject(patch, obj, updated) {
     elems = []
   }
 
-  iterateEdits(patch.edits,
-    (index, elemIds) => { // insertion
-      const blanks = elemIds.map(elemId => ({elemId}))
-      elems.splice(index, 0, ...blanks)
-    },
-    (index, deletions) => { // deletion
-      elems.splice(index, deletions)
-    }
-  )
+  const updatedElemIds = new Set()
 
-  for (let key of Object.keys(patch.props || {})) {
-    const pred = Object.keys(patch.props[key])
-    const opId = pred.sort(lamportCompare).reverse()[0]
-    if (!opId) throw new RangeError(`No default value at index ${key}`)
-
-    elems[key] = {
-      elemId: elems[key].elemId,
-      pred,
-      value: getValue(patch.props[key][opId], elems[key].value, updated)
+  for (const edit of patch.edits) {
+    if (edit.action === 'insert') {
+      let value 
+      if (edit.value.type === 'value') {
+        value = edit.value.value
+      } else {
+        value = getValue(edit.value, undefined, updated)
+      }
+      let elem = {
+        elemId: edit.elemId,
+        pred: [edit.elemId],
+        value,
+      }
+      updatedElemIds.add(edit.elemId)
+      elems.splice(edit.index, 0, elem)
+    } else if (edit.action === 'multi-insert') {
+      let startOpId = parseOpId(edit.elemId)
+      let newElems = []
+      edit.values.forEach((value, index) => {
+        let counter = startOpId.counter + index
+        let elemId = `${counter}@${startOpId.actorId}`
+        let elem = {
+          elemId,
+          pred: [elemId],
+          value,
+        }
+        newElems.push(elem)
+        updatedElemIds.add(elemId)
+      })
+      elems.splice(edit.index, 0, ...newElems)
+    } else if (edit.action === 'update') {
+      let current = elems[edit.index]
+      if (lamportCompare(current.elemId, edit.opId) >= 0){
+        if (updatedElemIds.has(current.elemId)) {
+          continue
+        }
+      }
+      let value 
+      if (edit.value.type === 'value') {
+        value = edit.value.value
+      } else {
+        value = getValue(edit.value, elems[edit.index].value, updated)
+      }
+      let newElem = {
+        elemId: edit.opId,
+        pred: [edit.opId],
+        value,
+      }
+      updatedElemIds.add(newElem.elemId)
+      elems[edit.index] = newElem
+    } else if (edit.action === 'remove') {
+      elems.splice(edit.index, edit.count)
     }
   }
 
@@ -294,6 +368,8 @@ function interpretPatch(patch, obj, updated) {
     return updateListObject(patch, obj, updated)
   } else if (patch.type === 'text') {
     return updateTextObject(patch, obj, updated)
+  } else if (patch.type === 'unchanged') {
+    return obj
   } else {
     throw new TypeError(`Unknown object type: ${patch.type}`)
   }
@@ -307,6 +383,20 @@ function cloneRootObject(root) {
     throw new RangeError(`Not the root object: ${root[OBJECT_ID]}`)
   }
   return cloneMapObject(root, '_root')
+}
+
+function printObject(obj) {
+  if (obj === undefined) {
+    return "undefined"
+  }
+  let toPrint = {}
+  for (const prop in obj) {
+    toPrint[prop] = obj[prop]
+  }
+  for (const prop of Object.getOwnPropertySymbols(obj)) {
+    toPrint[prop.toString()] = obj[prop]
+  }
+  return toPrint
 }
 
 module.exports = {

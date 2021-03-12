@@ -1,4 +1,4 @@
-const { copyObject, parseOpId, equalBytes } = require('../src/common')
+const { copyObject, parseOpId, equalBytes, appendEdit } = require('../src/common')
 const {
   utf8ToString, hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
@@ -138,6 +138,7 @@ function parseAllOpIds(changes, single) {
   for (let change of changes) {
     change = copyObject(change)
     actors[change.actor] = true
+    change.ops = expandMultiOps(change.ops, change.startOp, change.actor)
     change.ops = change.ops.map(op => {
       op = copyObject(op)
       if (op.obj !== '_root') op.obj = parseOpId(op.obj)
@@ -434,6 +435,44 @@ function encodeOps(ops, forDocument) {
     if (columns[name]) columnList.push({id, name, encoder: columns[name]})
   }
   return columnList.sort((a, b) => a.id - b.id)
+}
+
+function expandMultiOps(ops, startOp, actor) {
+  let opNum = startOp
+  let expandedOps = []
+  for (const op of ops) {
+    if (op.action === 'set' && op.values && op.insert) {
+      let lastElemId = op.elemId
+      for (const value of op.values) {
+        expandedOps.push({
+          action: 'set',
+          obj: op.obj,
+          elemId: lastElemId,
+          value,
+          pred: op.pred,
+          insert: true,
+        })
+        lastElemId = `${opNum}@${actor}`
+        opNum += 1
+      }
+    } else if (op.action === 'del' && op.multiOp) {
+      let startElemId = parseOpId(op.elemId)
+      for (i = 0; i < op.multiOp; i++){
+        let elemId = `${startElemId.counter + i}@${startElemId.actorId}`
+        expandedOps.push({
+          action: 'del',
+          obj: op.obj,
+          elemId,
+          pred: op.pred,
+        })
+        opNum += 1
+      }
+    } else {
+      expandedOps.push(op)
+      opNum += 1
+    }
+  }
+  return expandedOps
 }
 
 /**
@@ -1093,7 +1132,10 @@ function addPatchProperty(objects, property) {
       if (op.actionName.startsWith('make')) {
         values[op.opId] = objects[op.opId]
       } else if (op.actionName === 'set') {
-        values[op.opId] = op.value
+        values[op.opId] = {value: op.value.value, type: 'value'}
+        if (op.value.datatype) {
+          values[op.opId].datatype = op.value.datatype
+        }
       } else if (op.actionName === 'link') {
         // NB. This assumes that the ID of the child object is greater than the ID of the current
         // object. This is true as long as link operations are only used to redo undone make*
@@ -1114,13 +1156,51 @@ function addPatchProperty(objects, property) {
 
   if (Object.keys(values).length > 0) {
     let obj = objects[property.objId]
-    if (!obj.props) obj.props = {}
     if (obj.type === 'map' || obj.type === 'table') {
+      if (!obj.props) obj.props = {}
       obj.props[property.key] = values
     } else if (obj.type === 'list' || obj.type === 'text') {
-      if (!obj.edits) obj.edits = []
-      obj.props[obj.edits.length] = values
-      obj.edits.push({action: 'insert', index: obj.edits.length, elemId: property.key})
+      makeListEdits(obj, values)
+    }
+  }
+}
+
+function makeListEdits(list, values) {
+  if (!list.edits) list.edits = []
+  const index = list.edits.length
+  const edits = []
+  for (const opId of Object.keys(values)) {
+    const value = values[opId]
+    if (edits.length === 0){
+      edits.push({
+        action: 'insert',
+        value: value,
+        elemId: opId,
+        index,
+      })
+    } else {
+      edits.push({
+        action: 'update',
+        value: value,
+        opId,
+        index,
+      })
+    }
+  }
+  list.edits.push(...edits)
+}
+
+function condenseEdits(diff) {
+  if ((diff.type === 'list' || diff.type === 'text') && diff.edits) {
+    diff.edits.forEach(e => condenseEdits(e.value))
+    let newEdits = diff.edits
+    diff.edits = []
+    for (const edit of newEdits) appendEdit(diff.edits, edit)
+  } else if ((diff.type === 'map' || diff.type === 'table') && diff.props) {
+    for (const prop of Object.keys(diff.props)) {
+      for (const opId of Object.keys(diff.props[prop])) {
+        condenseEdits(diff.props[prop][opId])
+      }
     }
   }
 }
@@ -1142,7 +1222,12 @@ function constructPatch(documentBuffer) {
     const opId = `${col.idCtr.readValue()}@${actorIds[col.idActor.readValue()]}`
     const action = col.action.readValue(), actionName = ACTIONS[action]
     if (action % 2 === 0) { // even-numbered actions are object creation
-      objects[opId] = {objectId: opId, type: OBJECT_TYPE[actionName] || 'unknown'}
+      const type = OBJECT_TYPE[actionName] || 'unknown'
+      objects[opId] = {objectId: opId, type}
+      if (['list', 'text'].includes(type)) {
+        objects[opId].edits = []
+      }
+
     }
 
     const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
@@ -1186,6 +1271,7 @@ function constructPatch(documentBuffer) {
   }
 
   if (property) addPatchProperty(objects, property)
+  condenseEdits(objects._root)
   return objects._root
 }
 

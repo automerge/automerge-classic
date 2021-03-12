@@ -1,5 +1,5 @@
 const { OBJECT_ID, CONFLICTS } = require('./constants')
-const { isObject } = require('../src/common')
+const { isObject, parseOpId } = require('../src/common')
 
 /**
  * Allows an application to register a callback when a particular object in
@@ -35,9 +35,42 @@ class Observable {
       }
     }
 
-    if (!diff.props) return
-    for (let propName of Object.keys(diff.props)) {
-      for (let opId of Object.keys(diff.props[propName])) {
+    let changedProps = {}
+    if (diff.props) {
+      changedProps = diff.props
+    } else if (diff.edits) {
+      const elemDiffs = Array(before[CONFLICTS].length)
+      for (const edit of diff.edits) {
+        if (edit.action === 'update') {
+          const elemDiff = elemDiffs[edit.index]
+          if (!elemDiff) elemDiff = {}
+          elemDiff[edit.opId] = edit.value
+          elemDiffs[edit.index] = elemDiff
+        } else if (edit.action === 'multi-insert') {
+          for (i = 0; i < edit.count; i++) {
+            let startOpId = parseOpId(edit.elemId)
+            let counter = startOpId.counter + index
+            let opid = `${counter}@${startOpId.actorId}`
+            let index = edit.index + i
+            elemDiffs[index] = {[opid]: {value: edit.values[i], type: 'value'}}
+          }
+        } else if (edit.action === 'insert') {
+          const elemDiff = elemDiffs[edit.index]
+          if (!elemDiff) elemDiff = {}
+          elemDiff[edit.elemId] = edit.value
+        } else if (edit.action === 'remove') {
+          elemDiffs.splice(edit.index, edit.count)
+        }
+      }
+      for (i = 0; i < elemDiffs.lenght; i++) {
+        let elemDiff = elemDiffs[i]
+        if (elemDiff) {
+          changedProps[i] = elemDiff
+        }
+      }
+    }
+    for (let propName of Object.keys(changedProps)) {
+      for (let opId of Object.keys(changedProps[propName])) {
         let childDiff = diff.props[propName][opId], childBefore, childAfter
 
         if (diff.type === 'map') {

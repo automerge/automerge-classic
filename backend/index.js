@@ -89,7 +89,6 @@ function apply(state, changes, request, isIncremental) {
     }
   }
 
-  OpSet.finalizePatch(opSet, diffs)
   state = state.set('opSet', opSet)
 
   return [state, isIncremental ? makePatch(state, diffs, request, true) : null]
