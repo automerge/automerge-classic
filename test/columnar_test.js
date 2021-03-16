@@ -27,14 +27,14 @@ describe('change encoding', () => {
     ]}
     checkEncoded(encodeChange(change1), [
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0xcf, 0xc7, 0x77, 0xe2, // checksum
+      0xe2, 0xbd, 0xfb, 0xf5, // checksum
       1, 94, 0, 2, 0xaa, 0xaa, // chunkType: change, length, deps, actor 'aaaa'
       1, 1, 9, 0, 0, // seq, startOp, time, message, actor list
-      12, 1, 4, 2, 4, // column count, objActor, objCtr
-      9, 8, 11, 7, 13, 8, // keyActor, keyCtr, keyStr
-      28, 4, 34, 6, // insert, action
-      46, 6, 47, 3, // valLen, valRaw
-      56, 6, 57, 2, 59, 2, // predNum, predActor, predCtr
+      12, 0x01, 4, 0x02, 4, // column count, objActor, objCtr
+      0x11, 8, 0x13, 7, 0x15, 8, // keyActor, keyCtr, keyStr
+      0x34, 4, 0x42, 6, // insert, action
+      0x56, 6, 0x57, 3, // valLen, valRaw
+      0x70, 6, 0x71, 2, 0x73, 2, // predNum, predActor, predCtr
       0, 1, 4, 0, // objActor column: null, 0, 0, 0, 0
       0, 1, 4, 1, // objCtr column: null, 1, 1, 1, 1
       0, 2, 0x7f, 0, 0, 1, 0x7f, 0, // keyActor column: null, null, 0, null, 0
@@ -55,13 +55,13 @@ describe('change encoding', () => {
   describe('with trailing bytes', () => {
     let change = Uint8Array.from([
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
-      0x15, 0x72, 0xa6, 0x6c, // checksum
+      0xb2, 0x98, 0x9e, 0xa9, // checksum
       1, 61, 0, 2, 0x12, 0x34, // chunkType: change, length, deps, actor '1234'
       1, 1, 252, 250, 220, 255, 5, // seq, startOp, time
       14, 73, 110, 105, 116, 105, 97, 108, 105, 122, 97, 116, 105, 111, 110, // message: 'Initialization'
       0, 6, // actor list, column count
-      13, 3, 28, 1, 34, 2, // keyStr, insert, action
-      46, 2, 47, 1, 56, 2, // valLen, valRaw, predNum
+      0x15, 3, 0x34, 1, 0x42, 2, // keyStr, insert, action
+      0x56, 2, 0x57, 1, 0x70, 2, // valLen, valRaw, predNum
       0x7f, 1, 0x78, // keyStr: 'x'
       1, // insert: false
       0x7f, 1, // action: set

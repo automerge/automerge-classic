@@ -294,7 +294,7 @@ describe('Automerge.Backend', () => {
         }}
       })
       assert.deepStrictEqual(changes01, [{
-        hash: '6fc48e6635e2bab050a340119fff7a559679ed4f26734623c2b4738815f48371',
+        hash: '2c2845859ce4336936f56410f9161a09ba269f48aee5826782f1c389ec01d054',
         actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'magpie', pred: []}
         ]
@@ -332,15 +332,15 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyLocalChange(s2, local2)
       const changes = Backend.getAllChanges(s3).map(decodeChange)
       assert.deepStrictEqual(changes, [
-        {hash: '6fc48e6635e2bab050a340119fff7a559679ed4f26734623c2b4738815f48371',
+        {hash: '2c2845859ce4336936f56410f9161a09ba269f48aee5826782f1c389ec01d054',
         actor: '111111', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'magpie', pred: []}
         ]},
-        {hash: 'aca4a51a8d538f2b16b6f9b923cf6dd5a4bb5ad550b6e618aa529a036b45ea1f',
+        {hash: 'efc7e9b1b809364fb1b7029d2838dd3c7cf539eea595b22f9ae665505187f6c4',
         actor: '222222', seq: 1, startOp: 1, time: 0, message: '', deps: [], ops: [
           {action: 'set', obj: '_root', key: 'fish', insert: false, value: 'goldfish', pred: []}
         ]},
-        {hash: '1caeeaf4fb120b8bed4c6c92311f679264f070637b5531979e95ec8249499f5a',
+        {hash: 'e7ed7a790432aba39fe7ad75fa9e02a9fc8d8e9ee4ec8c81dcc93da15a561f8a',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
         ]}
@@ -372,7 +372,7 @@ describe('Automerge.Backend', () => {
         }}
       })
       assert.deepStrictEqual(changes[2], {
-        hash: 'b6f22ff5606622a9b8f4efed87a5202128bc5e35021d09e04529b9076ec98d0e',
+        hash: '7a00e28d7fbf179708a1b0045c7f9bad93366c0e69f9af15e830dae9970a9d19',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {action: 'set', obj: '_root', key: 'bird', insert: false, value: 'jay', pred: ['1@111111']}
         ]
@@ -404,19 +404,19 @@ describe('Automerge.Backend', () => {
       const [s5, patch5] = Backend.applyLocalChange(s4, local3)
       const changes = Backend.getAllChanges(s5).map(decodeChange)
       assert.deepStrictEqual(changes[1], {
-        hash: '96db9a3bb6471912a2acbe3948365d202b89145816efa37bd0ccaa3be8ebee14',
+        hash: '06392148c4a0dfff8b346ad58a3261cc15187cbf8a58779f78d54251126d4ccc',
         actor: '111111', seq: 1, startOp: 2, time: 0, message: '', deps: [hash(remote1)], ops: [
           {obj: '1@222222', action: 'set', elemId: '_head', insert: true, value: 'goldfinch', pred: []}
         ]
       })
       assert.deepStrictEqual(changes[3], {
-        hash: '57e8ec00028e0a0a1ae325ad2c86dd4d8f63ace7c3ccb67a351682f0f6879cfd',
+        hash: '2801c386ec2a140376f3bef285a6e6d294a2d8fb7a180da4fbb6e2bc4f550dd9',
         actor: '111111', seq: 2, startOp: 3, time: 0, message: '', deps: [changes[1].hash], ops: [
           {obj: '1@222222', action: 'set', elemId: '2@111111', insert: true, value: 'wagtail', pred: []}
         ]
       })
       assert.deepStrictEqual(changes[4], {
-        hash: 'd999eeeb5f69689f65b0e47b1f4dcc69c29b4b3ccaca69884425e5a6443e8d5d',
+        hash: '734f1dad5fb2f10970bae2baa6ce100c3b85b43072b3799d8f2e15bcd21297fc',
         actor: '111111', seq: 3, startOp: 4, time: 0, message: '',
         deps: [hash(remote2), changes[3].hash].sort(), ops: [
           {obj: '1@222222', action: 'set', elemId: '2@222222', insert: false, value: 'Magpie',    pred: ['2@222222']},
@@ -451,7 +451,7 @@ describe('Automerge.Backend', () => {
           {obj: '_root', action: 'makeList', key: 'birds', insert: false, pred: []}
         ]
       }, {
-        hash: 'd96f0023f949581eb10459c2ad8467148857f1d230abc0f0fd446ab95fdbf7ea',
+        hash: 'deef4c9b9ca378844144c4bbc5d82a52f30c95a8624f13f243fe8f1214e8e833',
         actor: '111111', seq: 2, startOp: 2, time: 0, message: '', deps: [changes[0].hash], ops: [
           {obj: '1@111111', action: 'set', elemId: '_head', insert: true, value: 'magpie', pred: []},
           {obj: '1@111111', action: 'del', elemId: '2@111111', insert: false, pred: ['2@111111']}
@@ -493,6 +493,23 @@ describe('Automerge.Backend', () => {
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
       const s2 = Backend.load(Backend.save(s1))
       assert.deepStrictEqual(Backend.getHeads(s2), [hash(change3)])
+    })
+
+    it('should compress columns with DEFLATE', () => {
+      let longString = ''
+      for (let i = 0; i < 1024; i++) longString += 'a'
+      const change1 = {actor: '111111', seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'longString', value: longString, pred: []}
+      ]}
+      const doc = Backend.save(Backend.loadChanges(Backend.init(), [encodeChange(change1)]))
+      const patch = Backend.getPatch(Backend.load(doc))
+      assert.ok(doc.byteLength < 200)
+      assert.deepStrictEqual(patch, {
+        clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1,
+        diffs: {objectId: '_root', type: 'map', props: {
+          longString: {['1@111111']: {value: longString}}
+        }}
+      })
     })
   })
 
