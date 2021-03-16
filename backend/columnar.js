@@ -1,3 +1,4 @@
+const pako = require('pako')
 const { copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
   utf8ToString, hexStringToBytes, bytesToHexString,
@@ -24,6 +25,11 @@ const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
 
 const CHUNK_TYPE_DOCUMENT = 0
 const CHUNK_TYPE_CHANGE = 1
+const CHUNK_TYPE_DEFLATE = 2 // like CHUNK_TYPE_CHANGE but with DEFLATE compression
+
+// Minimum number of bytes in a value before we enable DEFLATE compression (there is no point
+// compressing very short values since compression may actually make them bigger)
+const DEFLATE_MIN_SIZE = 256
 
 const COLUMN_TYPE = {
   GROUP_CARD: 0, ACTOR_ID: 1, INT_RLE: 2, INT_DELTA: 3, BOOLEAN: 4,
@@ -674,7 +680,7 @@ function encodeChange(changeObj) {
   if (changeObj.hash && changeObj.hash !== hexHash) {
     throw new RangeError(`Change hash does not match encoding: ${changeObj.hash} != ${hexHash}`)
   }
-  return bytes
+  return (bytes.byteLength >= DEFLATE_MIN_SIZE) ? deflateChange(bytes) : bytes
 }
 
 function decodeChangeColumns(buffer) {
@@ -703,6 +709,7 @@ function decodeChangeColumns(buffer) {
  * Decodes one change in binary format into its JS object representation.
  */
 function decodeChange(buffer) {
+  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const change = decodeChangeColumns(buffer)
   change.ops = decodeOps(decodeColumns(change.columns, change.actorIds, CHANGE_COLUMNS), false)
   delete change.actorIds
@@ -716,6 +723,7 @@ function decodeChange(buffer) {
  * computes the hash of the change if `computeHash` is true.
  */
 function decodeChangeMeta(buffer, computeHash) {
+  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const header = decodeContainerHeader(new Decoder(buffer), computeHash)
   if (header.chunkType !== CHUNK_TYPE_CHANGE) {
     throw new RangeError('Buffer chunk type is not a change')
@@ -723,6 +731,36 @@ function decodeChangeMeta(buffer, computeHash) {
   const meta = decodeChangeHeader(new Decoder(header.chunkData))
   if (computeHash) meta.hash = header.hash
   return meta
+}
+
+/**
+ * Compresses a binary change using DEFLATE.
+ */
+function deflateChange(buffer) {
+  const header = decodeContainerHeader(new Decoder(buffer), false)
+  if (header.chunkType !== CHUNK_TYPE_CHANGE) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  const compressed = pako.deflateRaw(header.chunkData)
+  const encoder = new Encoder()
+  encoder.appendRawBytes(buffer.subarray(0, 8)) // copy MAGIC_BYTES and checksum
+  encoder.appendByte(CHUNK_TYPE_DEFLATE)
+  encoder.appendUint53(compressed.byteLength)
+  encoder.appendRawBytes(compressed)
+  return encoder.buffer
+}
+
+/**
+ * Decompresses a binary change that has been compressed with DEFLATE.
+ */
+function inflateChange(buffer) {
+  const header = decodeContainerHeader(new Decoder(buffer), false)
+  if (header.chunkType !== CHUNK_TYPE_DEFLATE) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  const decompressed = pako.inflateRaw(header.chunkData)
+  const encoder = new Encoder()
+  encoder.appendRawBytes(buffer.subarray(0, 8)) // copy MAGIC_BYTES and checksum
+  encoder.appendByte(CHUNK_TYPE_CHANGE)
+  encoder.appendUint53(decompressed.byteLength)
+  encoder.appendRawBytes(decompressed)
+  return encoder.buffer
 }
 
 /**
@@ -749,7 +787,7 @@ function decodeChanges(binaryChanges) {
     for (let chunk of splitContainers(binaryChange)) {
       if (chunk[8] === CHUNK_TYPE_DOCUMENT) {
         decoded = decoded.concat(decodeDocument(chunk))
-      } else if (chunk[8] === CHUNK_TYPE_CHANGE) {
+      } else if (chunk[8] === CHUNK_TYPE_CHANGE || chunk[8] === CHUNK_TYPE_DEFLATE) {
         decoded.push(decodeChange(chunk))
       } else {
         // ignoring chunk of unknown type

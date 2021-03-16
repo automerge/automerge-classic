@@ -458,6 +458,24 @@ describe('Automerge.Backend', () => {
         ]
       }])
     })
+
+    it('should compress changes with DEFLATE', () => {
+      let longString = ''
+      for (let i = 0; i < 1024; i++) longString += 'a'
+      const change1 = {actor: '111111', seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'longString', value: longString, pred: []}
+      ]}
+      const [s1, patch1] = Backend.applyLocalChange(Backend.init(), change1)
+      const changes = Backend.getAllChanges(s1)
+      const [s2, patch2] = Backend.applyChanges(Backend.init(), changes)
+      assert.ok(changes[0].byteLength < 100)
+      assert.deepStrictEqual(patch2, {
+        clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1,
+        diffs: {objectId: '_root', type: 'map', props: {
+          longString: {['1@111111']: {value: longString}}
+        }}
+      })
+    })
   })
 
   describe('save() and load()', () => {
