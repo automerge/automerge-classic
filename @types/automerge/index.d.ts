@@ -60,7 +60,7 @@ declare module 'automerge' {
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
-  function getMissingDeps<T>(doc: Doc<T>): Hash[]
+  function getMissingDeps<T>(doc: Doc<T>, changes?: Uint8Array[], heads?: Hash[]): Hash[]
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
@@ -138,16 +138,21 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
+    function decodeSyncMessage(bytes: Uint8Array): SyncMessage
+    function encodeSyncMessage(message: SyncMessage): Uint8Array
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
+    function getChangeByHash(state: BackendState, hash: Hash): Uint8Array
     function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
     function getHeads(state: BackendState): Hash[]
-    function getMissingDeps(state: BackendState): Hash[]
+    function getMissingDeps(state: BackendState, changes?: Uint8Array[], heads?: Hash[]): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
+    function syncStart(state: BackendState, lastSync?: Hash[]): SyncMessage
+    function syncResponse(state: BackendState, message: SyncMessage): [SyncMessage, Uint8Array[]]
   }
 
   // Internals
@@ -174,6 +179,17 @@ declare module 'automerge' {
 
   interface BackendState {
     // no public methods or properties
+  }
+
+  interface SyncMessage {
+    heads: Hash[]
+    need: Hash[]
+    have: SyncHave[]
+  }
+
+  interface SyncHave {
+    lastSync: Hash[]
+    bloom: Uint8Array
   }
 
   interface Change {

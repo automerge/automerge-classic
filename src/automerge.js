@@ -96,8 +96,8 @@ function applyChanges(doc, changes, options = {}) {
   return newDoc
 }
 
-function getMissingDeps(doc) {
-  return backend.getMissingDeps(Frontend.getBackendState(doc))
+function getMissingDeps(doc, changes = [], heads = []) {
+  return backend.getMissingDeps(Frontend.getBackendState(doc), changes, heads)
 }
 
 function equals(val1, val2) {
