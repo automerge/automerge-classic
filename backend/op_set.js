@@ -466,17 +466,23 @@ function getHeads(opSet) {
 }
 
 /**
+ * If `opSet` has applied a change with the given `hash` (given as a hexadecimal
+ * string), returns that change (as a byte array). Returns undefined if no
+ * change with that hash has been applied. A change with missing dependencies
+ * does not count as having been applied.
+ */
+function getChangeByHash(opSet, hash) {
+  return opSet.getIn(['hashes', hash, 'change'])
+}
+
+/**
  * Returns all the changes in `opSet` that need to be sent to another replica.
  * `haveDeps` is an Immutable.js List object containing the hashes (as hex
  * strings) of the heads that the other replica has. Those changes in `haveDeps`
  * and any of their transitive dependencies will not be returned; any changes
  * later than or concurrent to the hashes in `haveDeps` will be returned.
- * If `haveDeps` is an empty list, all changes are returned.
- *
- * NOTE: This function throws an exception if any of the given hashes are not
- * known to this replica. This means that if the other replica is ahead of us,
- * this function cannot be used directly to find the changes to send.
- * TODO need to fix this.
+ * If `haveDeps` is an empty list, all changes are returned. Throws an exception
+ * if any of the given hashes are not known to this replica.
  */
 function getMissingChanges(opSet, haveDeps) {
   let stack = haveDeps, seenHashes = {}
@@ -490,18 +496,34 @@ function getMissingChanges(opSet, haveDeps) {
 
   return opSet.get('history')
     .filter(hash => !seenHashes[hash])
-    .map(hash => opSet.getIn(['hashes', hash, 'change']))
+    .map(hash => getChangeByHash(opSet, hash))
     .toJSON()
 }
 
-function getMissingDeps(opSet) {
+/**
+ * Returns the hashes of any missing dependencies, i.e. where we have applied a
+ * change that has a dependency on a change we have not seen. If the argument
+ * `changes` is given (an array of binary changes), also returns the hashes of
+ * any dependencies that would be missing if we applied those changes. Does not
+ * actually apply any changes that are given.
+ *
+ * If the argument `heads` is given (an array of hexadecimal strings representing
+ * hashes as returned by `getHeads()`), this function also ensures that all of
+ * those hashes resolve to either a change that has been applied to the document,
+ * or a change included in the `changes` array. Any missing heads hashes are
+ * included in the returned array.
+ */
+function getMissingDeps(opSet, changes = [], heads = []) {
   let missing = {}, inQueue = {}
-  for (let binaryChange of opSet.get('queue')) {
+  for (let binaryChange of opSet.get('queue').toArray().concat(changes)) {
     const change = decodeChangeMeta(binaryChange, true)
     inQueue[change.hash] = true
     for (let depHash of change.deps) {
       if (!opSet.hasIn(['hashes', depHash])) missing[depHash] = true
     }
+  }
+  for (let head of heads) {
+    if (!opSet.hasIn(['hashes', head])) missing[head] = true
   }
   return Object.keys(missing).filter(hash => !inQueue[hash]).sort()
 }
@@ -633,6 +655,7 @@ function constructObject(opSet, objectId) {
 }
 
 module.exports = {
-  init, addChange, addLocalChange, getHeads, getMissingChanges, getMissingDeps,
+  init, addChange, addLocalChange, getHeads,
+  getChangeByHash, getMissingChanges, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch
 }

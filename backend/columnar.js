@@ -721,6 +721,7 @@ function decodeChangeMeta(buffer, computeHash) {
     throw new RangeError('Buffer chunk type is not a change')
   }
   const meta = decodeChangeHeader(new Decoder(header.chunkData))
+  meta.change = buffer
   if (computeHash) meta.hash = header.hash
   return meta
 }
