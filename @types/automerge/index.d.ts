@@ -17,7 +17,7 @@ declare module 'automerge' {
 
   function init<T>(options?: InitOptions<T>): Doc<T>
   function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): Doc<T>
-  function clone<T>(doc: Doc<T>): Doc<T>
+  function clone<T>(doc: Doc<T>, options?: InitOptions<T>): Doc<T>
   function free<T>(doc: Doc<T>): void
 
   type InitOptions<T> =
