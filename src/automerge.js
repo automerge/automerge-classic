@@ -36,11 +36,11 @@ function emptyChange(doc, options) {
   return newDoc
 }
 
-function clone(doc) {
+function clone(doc, options = {}) {
   const state = backend.clone(Frontend.getBackendState(doc))
   const patch = backend.getPatch(state)
   patch.state = state
-  return Frontend.applyPatch(init(), patch)
+  return Frontend.applyPatch(init(options), patch)
 }
 
 function free(doc) {
