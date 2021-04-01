@@ -151,8 +151,9 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function syncStart(state: BackendState, lastSync?: Hash[]): SyncMessage
-    function syncResponse(state: BackendState, message: SyncMessage): [SyncMessage, Uint8Array[]]
+    function generateSyncMessage(backend: BackendState, peerState: PeerState, changes?: Change[]): [PeerState, SyncMessage?]
+    function receiveSyncMessage(backend: BackendState, message: SyncMessage, peerState: PeerState): [BackendState, PeerState, Patch?]
+    function emptyPeerState(): PeerState
   }
 
   // Internals
@@ -181,10 +182,19 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
+  type BinaryChange = Uint8Array 
+  export interface PeerState {
+    sharedHeads: Hash[]
+    theirNeed: Hash[]
+    ourNeed: Hash[]
+    have: SyncHave[]
+    unappliedChanges: BinaryChange[]
+  }
   interface SyncMessage {
     heads: Hash[]
     need: Hash[]
     have: SyncHave[]
+    changes: Uint8Array[] // todo
   }
 
   interface SyncHave {
