@@ -4,7 +4,7 @@ const { isObject } = require('../src/common')
 class Text {
   constructor (text) {
     if (typeof text === 'string') {
-      const elems = text.split('').map(value => ({value}))
+      const elems = [...text].map(value => ({value}))
       return instantiateText(undefined, elems)
     } else if (Array.isArray(text)) {
       const elems = text.map(value => ({value}))
