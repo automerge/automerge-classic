@@ -17,9 +17,9 @@
  */
 
 const { List } = require('immutable')
-const OpSet = require('./op_set')
-const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
-const { decodeChangeMeta } = require('./columnar')
+const OpSet = require('automerge/backend/op_set')
+const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('automerge/backend/encoding')
+const { decodeChangeMeta } = require('automerge/backend/columnar')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
@@ -206,16 +206,16 @@ function makeBloomFilter(backend, lastSync) {
  * changes that we need to send to the other node in response. Returns an array of changes (as
  * byte arrays).
  */
-function getChangesToSend(backend, message) {
+function getChangesToSend(backend, have, need) {
   const opSet = backend.get('opSet')
-  if (message.have.length === 0) {
-    return message.need.map(hash => OpSet.getChangeByHash(opSet, hash))
+  if (have.length === 0) {
+    return need.map(hash => OpSet.getChangeByHash(opSet, hash))
   }
 
   let lastSyncHashes = {}, bloomFilters = []
-  for (let have of message.have) {
-    for (let hash of have.lastSync) lastSyncHashes[hash] = true
-    bloomFilters.push(new BloomFilter(have.bloom))
+  for (let h of have) {
+    for (let hash of h.lastSync) lastSyncHashes[hash] = true
+    bloomFilters.push(new BloomFilter(h.bloom))
   }
 
   // Get all changes that were added since the last sync
@@ -254,7 +254,7 @@ function getChangesToSend(backend, message) {
 
   // Include any explicitly requested changes
   let changesToSend = []
-  for (let hash of message.need) {
+  for (let hash of need) {
     hashesToSend[hash] = true
     if (!changeHashes[hash]) { // Change is not among those returned by getMissingChanges()?
       const change = OpSet.getChangeByHash(opSet, hash)
@@ -269,4 +269,5 @@ function getChangesToSend(backend, message) {
   return changesToSend
 }
 
-module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage, makeBloomFilter, getChangesToSend }
+const { receiveSyncMessage, generateSyncMessage } = require('automerge/backend/protocol')
+module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage, receiveSyncMessage, generateSyncMessage }
