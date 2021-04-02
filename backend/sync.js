@@ -269,5 +269,5 @@ function getChangesToSend(backend, have, need) {
   return changesToSend
 }
 
-const { receiveSyncMessage, generateSyncMessage } = require('automerge/backend/protocol')
-module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage, receiveSyncMessage, generateSyncMessage }
+const { receiveSyncMessage, generateSyncMessage } = require('./protocol')
+module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage }

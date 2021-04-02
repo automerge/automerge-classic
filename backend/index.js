@@ -3,8 +3,8 @@ const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
-const { encodeSyncMessage, decodeSyncMessage, makeBloomFilter, getChangesToSend } = require('./sync')
 const { generateSyncMessage, receiveSyncMessage, emptyPeerState } = require('./protocol')
+const { encodeSyncMessage, decodeSyncMessage } = require('./sync')
 
 // Feature flag: false uses old Immutable.js-based backend data structures, true uses new
 // byte-array-based data structures. New data structures are not yet fully working.

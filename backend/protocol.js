@@ -1,8 +1,6 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 exports.receiveSyncMessage = exports.generateSyncMessage = exports.emptyPeerState = void 0;
-const automerge_1 = require("automerge");
-const sync_1 = require("automerge/backend/sync");
+
+const sync_1 = require("./sync");
 function emptyPeerState() {
     return {
         sharedHeads: [],
@@ -13,6 +11,7 @@ function emptyPeerState() {
     };
 }
 exports.emptyPeerState = emptyPeerState;
+
 function compareArrays(a, b) {
     return (a.length === b.length) && a.every((v, i) => v === b[i]);
 }
@@ -84,6 +83,7 @@ function generateSyncMessage(backend, peerState, changes) {
     return [peerState, syncMessage];
 }
 exports.generateSyncMessage = generateSyncMessage;
+
 /* try this if for some reason we suspect advanceHeads is wrong. it should just result in fat bloom filters
 function shittyAdvanceHeads(myOldHeads: Hash[], myNewHeads: Hash[], ourOldSharedHeads: Hash[]): Hash[] {
   const ourNewSharedHeads: Hash[] = []
