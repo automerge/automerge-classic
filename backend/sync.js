@@ -17,9 +17,9 @@
  */
 
 const { List } = require('immutable')
-const OpSet = require('automerge/backend/op_set')
-const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('automerge/backend/encoding')
-const { decodeChangeMeta } = require('automerge/backend/columnar')
+const OpSet = require('./op_set')
+const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
+const { decodeChangeMeta } = require('./columnar')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
@@ -269,5 +269,4 @@ function getChangesToSend(backend, have, need) {
   return changesToSend
 }
 
-const { receiveSyncMessage, generateSyncMessage } = require('automerge/backend/protocol')
-module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage, receiveSyncMessage, generateSyncMessage }
+module.exports = { makeBloomFilter, BloomFilter, encodeSyncMessage, decodeSyncMessage, getChangesToSend }
