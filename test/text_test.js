@@ -688,4 +688,11 @@ describe('Automerge.Text', () => {
       })
     })
   })
+
+  it('should support unicode when creating text', () => {
+    s1 = Automerge.from({
+      text: new Automerge.Frontend.Text('🐦')
+    })
+    assert.strictEqual(s1.text.get(0), '🐦')
+  })
 })
