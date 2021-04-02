@@ -2,7 +2,8 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { checkEncoded } = require('./helpers')
 const { equalBytes } = require('../src/common')
-const { BloomFilter } = require('../backend/sync')
+const { generateSyncMessage, BloomFilter } = require('../backend')
+const Frontend = require("../frontend")
 
 function getHeads(doc) {
   return Automerge.Backend.getHeads(Automerge.Frontend.getBackendState(doc))
@@ -97,22 +98,17 @@ describe('Data sync protocol', () => {
   describe('with docs already in sync', () => {
     it('should handle an empty document', () => {
       let n1 = Automerge.init(), n2 = Automerge.init()
-      const s1 = new SyncPeer(n1, undefined), s2 = new SyncPeer(n2, undefined, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync')
-      assert.strictEqual(s2.sendMessage().type, 'sync')
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
+      let s1 = generateSyncMessage(Frontend.getBackendState(n1)), s2 = generateSyncMessage(Frontend.getBackendState(n2));
+      assert.deepStrictEqual(s1, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
+      assert.deepStrictEqual(s2, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
     })
 
-    it('should work without prior sync state', () => {
+    it.only('should work without prior sync state', () => {
       let n1 = Automerge.init(), n2 = Automerge.init()
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
       n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      const s1 = new SyncPeer(n1, undefined), s2 = new SyncPeer(n2, undefined, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync')
-      assert.strictEqual(s2.sendMessage().type, 'sync')
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
+      let s1 = generateSyncMessage(Frontend.getBackendState(n1)), s2 = generateSyncMessage(Frontend.getBackendState(n2));
+      assert.deepStrictEqual(s1, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
     })
 
     it('should work with prior sync state', () => {
