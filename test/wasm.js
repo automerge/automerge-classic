@@ -224,4 +224,62 @@ function interopTests(sourceBackend, destBackend) {
       }}
     })
   })
+
+  it('should support DEFLATE-compressed changes', () => {
+    let longString = '', actor = uuid()
+    for (let i = 0; i < 1024; i++) longString += 'a'
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+      actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'longString', value: longString, pred: []}
+      ]
+    })
+    assert.ok(change1.byteLength < 100)
+    const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
+    assert.deepStrictEqual(patch1, {
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      diffs: {objectId: '_root', type: 'map', props: {
+        longString: {[`1@${actor}`]: {value: longString}}
+      }}
+    })
+  })
+
+  describe('save() and load()', () => {
+    it('should work for a simple document', () => {
+      const actor = uuid()
+      const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+        actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
+          {action: 'set', obj: '_root', key: 'bird', value: 'magpie', pred: []}
+        ]
+      })
+      const dest1 = destBackend.load(sourceBackend.save(source1))
+      const patch = destBackend.getPatch(dest1)
+      assert.deepStrictEqual(patch, {
+        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+        diffs: {objectId: '_root', type: 'map', props: {
+          bird: {[`1@${actor}`]: {value: 'magpie'}}
+        }}
+      })
+    })
+
+    it('should allow DEFLATE-compressed columns', () => {
+      let longString = '', actor = uuid()
+      for (let i = 0; i < 1024; i++) longString += 'a'
+      const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
+        actor, seq: 1, time: 0, startOp: 1, deps: [], ops: [
+          {action: 'set', obj: '_root', key: 'longString', value: longString, pred: []}
+        ]
+      })
+      const compressedDoc = sourceBackend.save(source1)
+      assert.ok(compressedDoc.byteLength < 200)
+      const patch = destBackend.getPatch(destBackend.load(compressedDoc))
+      assert.deepStrictEqual(patch, {
+        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+        diffs: {objectId: '_root', type: 'map', props: {
+          longString: {[`1@${actor}`]: {value: longString}}
+        }}
+      })
+    })
+
+    // TODO need more tests for save() and load()
+  })
 }

@@ -1,3 +1,4 @@
+const pako = require('pako')
 const { copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
   utf8ToString, hexStringToBytes, bytesToHexString,
@@ -24,12 +25,24 @@ const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
 
 const CHUNK_TYPE_DOCUMENT = 0
 const CHUNK_TYPE_CHANGE = 1
+const CHUNK_TYPE_DEFLATE = 2 // like CHUNK_TYPE_CHANGE but with DEFLATE compression
 
+// Minimum number of bytes in a value before we enable DEFLATE compression (there is no point
+// compressing very short values since compression may actually make them bigger)
+const DEFLATE_MIN_SIZE = 256
+
+// The least-significant 3 bits of a columnId indicate its datatype
 const COLUMN_TYPE = {
   GROUP_CARD: 0, ACTOR_ID: 1, INT_RLE: 2, INT_DELTA: 3, BOOLEAN: 4,
   STRING_RLE: 5, VALUE_LEN: 6, VALUE_RAW: 7
 }
 
+// The 4th-least-significant bit of a columnId is set if the column is DEFLATE-compressed
+const COLUMN_TYPE_DEFLATE = 8
+
+// In the values in a column of type VALUE_LEN, the bottom four bits indicate the type of the value,
+// one of the following types in VALUE_TYPE. The higher bits indicate the length of the value in the
+// associated VALUE_RAW column (in bytes).
 const VALUE_TYPE = {
   NULL: 0, FALSE: 1, TRUE: 2, LEB128_UINT: 3, LEB128_INT: 4, IEEE754: 5,
   UTF8: 6, BYTES: 7, COUNTER: 8, TIMESTAMP: 9, MIN_UNKNOWN: 10, MAX_UNKNOWN: 15
@@ -41,46 +54,46 @@ const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTa
 const OBJECT_TYPE = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
 
 const COMMON_COLUMNS = {
-  objActor:  0 << 3 | COLUMN_TYPE.ACTOR_ID,
-  objCtr:    0 << 3 | COLUMN_TYPE.INT_RLE,
-  keyActor:  1 << 3 | COLUMN_TYPE.ACTOR_ID,
-  keyCtr:    1 << 3 | COLUMN_TYPE.INT_DELTA,
-  keyStr:    1 << 3 | COLUMN_TYPE.STRING_RLE,
-  idActor:   2 << 3 | COLUMN_TYPE.ACTOR_ID,
-  idCtr:     2 << 3 | COLUMN_TYPE.INT_DELTA,
-  insert:    3 << 3 | COLUMN_TYPE.BOOLEAN,
-  action:    4 << 3 | COLUMN_TYPE.INT_RLE,
-  valLen:    5 << 3 | COLUMN_TYPE.VALUE_LEN,
-  valRaw:    5 << 3 | COLUMN_TYPE.VALUE_RAW,
-  chldActor: 6 << 3 | COLUMN_TYPE.ACTOR_ID,
-  chldCtr:   6 << 3 | COLUMN_TYPE.INT_DELTA
+  objActor:  0 << 4 | COLUMN_TYPE.ACTOR_ID,
+  objCtr:    0 << 4 | COLUMN_TYPE.INT_RLE,
+  keyActor:  1 << 4 | COLUMN_TYPE.ACTOR_ID,
+  keyCtr:    1 << 4 | COLUMN_TYPE.INT_DELTA,
+  keyStr:    1 << 4 | COLUMN_TYPE.STRING_RLE,
+  idActor:   2 << 4 | COLUMN_TYPE.ACTOR_ID,
+  idCtr:     2 << 4 | COLUMN_TYPE.INT_DELTA,
+  insert:    3 << 4 | COLUMN_TYPE.BOOLEAN,
+  action:    4 << 4 | COLUMN_TYPE.INT_RLE,
+  valLen:    5 << 4 | COLUMN_TYPE.VALUE_LEN,
+  valRaw:    5 << 4 | COLUMN_TYPE.VALUE_RAW,
+  chldActor: 6 << 4 | COLUMN_TYPE.ACTOR_ID,
+  chldCtr:   6 << 4 | COLUMN_TYPE.INT_DELTA
 }
 
 const CHANGE_COLUMNS = Object.assign({
-  predNum:   7 << 3 | COLUMN_TYPE.GROUP_CARD,
-  predActor: 7 << 3 | COLUMN_TYPE.ACTOR_ID,
-  predCtr:   7 << 3 | COLUMN_TYPE.INT_DELTA
+  predNum:   7 << 4 | COLUMN_TYPE.GROUP_CARD,
+  predActor: 7 << 4 | COLUMN_TYPE.ACTOR_ID,
+  predCtr:   7 << 4 | COLUMN_TYPE.INT_DELTA
 }, COMMON_COLUMNS)
 
 const DOC_OPS_COLUMNS = Object.assign({
-  succNum:   8 << 3 | COLUMN_TYPE.GROUP_CARD,
-  succActor: 8 << 3 | COLUMN_TYPE.ACTOR_ID,
-  succCtr:   8 << 3 | COLUMN_TYPE.INT_DELTA
+  succNum:   8 << 4 | COLUMN_TYPE.GROUP_CARD,
+  succActor: 8 << 4 | COLUMN_TYPE.ACTOR_ID,
+  succCtr:   8 << 4 | COLUMN_TYPE.INT_DELTA
 }, COMMON_COLUMNS)
 
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
   .reduce((acc, [k, v]) => {acc[v] = k; return acc}, [])
 
 const DOCUMENT_COLUMNS = {
-  actor:     0 << 3 | COLUMN_TYPE.ACTOR_ID,
-  seq:       0 << 3 | COLUMN_TYPE.INT_DELTA,
-  maxOp:     1 << 3 | COLUMN_TYPE.INT_DELTA,
-  time:      2 << 3 | COLUMN_TYPE.INT_DELTA,
-  message:   3 << 3 | COLUMN_TYPE.STRING_RLE,
-  depsNum:   4 << 3 | COLUMN_TYPE.GROUP_CARD,
-  depsIndex: 4 << 3 | COLUMN_TYPE.INT_DELTA,
-  extraLen:  5 << 3 | COLUMN_TYPE.VALUE_LEN,
-  extraRaw:  5 << 3 | COLUMN_TYPE.VALUE_RAW
+  actor:     0 << 4 | COLUMN_TYPE.ACTOR_ID,
+  seq:       0 << 4 | COLUMN_TYPE.INT_DELTA,
+  maxOp:     1 << 4 | COLUMN_TYPE.INT_DELTA,
+  time:      2 << 4 | COLUMN_TYPE.INT_DELTA,
+  message:   3 << 4 | COLUMN_TYPE.STRING_RLE,
+  depsNum:   4 << 4 | COLUMN_TYPE.GROUP_CARD,
+  depsIndex: 4 << 4 | COLUMN_TYPE.INT_DELTA,
+  extraLen:  5 << 4 | COLUMN_TYPE.VALUE_LEN,
+  extraRaw:  5 << 4 | COLUMN_TYPE.VALUE_RAW
 }
 
 /**
@@ -526,8 +539,8 @@ function decodeColumns(columns, actorIds, columnSpec) {
     let row = {}, col = 0
     while (col < columns.length) {
       const columnId = columns[col].columnId
-      let groupId = columnId >> 3, groupCols = 1
-      while (col + groupCols < columns.length && columns[col + groupCols].columnId >> 3 === groupId) {
+      let groupId = columnId >> 4, groupCols = 1
+      while (col + groupCols < columns.length && columns[col + groupCols].columnId >> 4 === groupId) {
         groupCols++
       }
 
@@ -674,7 +687,7 @@ function encodeChange(changeObj) {
   if (changeObj.hash && changeObj.hash !== hexHash) {
     throw new RangeError(`Change hash does not match encoding: ${changeObj.hash} != ${hexHash}`)
   }
-  return bytes
+  return (bytes.byteLength >= DEFLATE_MIN_SIZE) ? deflateChange(bytes) : bytes
 }
 
 function decodeChangeColumns(buffer) {
@@ -687,6 +700,9 @@ function decodeChangeColumns(buffer) {
   const change = decodeChangeHeader(chunkDecoder)
   const columns = decodeColumnInfo(chunkDecoder)
   for (let i = 0; i < columns.length; i++) {
+    if ((columns[i].columnId & COLUMN_TYPE_DEFLATE) !== 0) {
+      throw new RangeError('change must not contain deflated columns')
+    }
     columns[i].buffer = chunkDecoder.readRawBytes(columns[i].bufferLen)
   }
   if (!chunkDecoder.done) {
@@ -703,6 +719,7 @@ function decodeChangeColumns(buffer) {
  * Decodes one change in binary format into its JS object representation.
  */
 function decodeChange(buffer) {
+  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const change = decodeChangeColumns(buffer)
   change.ops = decodeOps(decodeColumns(change.columns, change.actorIds, CHANGE_COLUMNS), false)
   delete change.actorIds
@@ -716,6 +733,7 @@ function decodeChange(buffer) {
  * computes the hash of the change if `computeHash` is true.
  */
 function decodeChangeMeta(buffer, computeHash) {
+  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const header = decodeContainerHeader(new Decoder(buffer), computeHash)
   if (header.chunkType !== CHUNK_TYPE_CHANGE) {
     throw new RangeError('Buffer chunk type is not a change')
@@ -723,6 +741,36 @@ function decodeChangeMeta(buffer, computeHash) {
   const meta = decodeChangeHeader(new Decoder(header.chunkData))
   if (computeHash) meta.hash = header.hash
   return meta
+}
+
+/**
+ * Compresses a binary change using DEFLATE.
+ */
+function deflateChange(buffer) {
+  const header = decodeContainerHeader(new Decoder(buffer), false)
+  if (header.chunkType !== CHUNK_TYPE_CHANGE) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  const compressed = pako.deflateRaw(header.chunkData)
+  const encoder = new Encoder()
+  encoder.appendRawBytes(buffer.subarray(0, 8)) // copy MAGIC_BYTES and checksum
+  encoder.appendByte(CHUNK_TYPE_DEFLATE)
+  encoder.appendUint53(compressed.byteLength)
+  encoder.appendRawBytes(compressed)
+  return encoder.buffer
+}
+
+/**
+ * Decompresses a binary change that has been compressed with DEFLATE.
+ */
+function inflateChange(buffer) {
+  const header = decodeContainerHeader(new Decoder(buffer), false)
+  if (header.chunkType !== CHUNK_TYPE_DEFLATE) throw new RangeError(`Unexpected chunk type: ${header.chunkType}`)
+  const decompressed = pako.inflateRaw(header.chunkData)
+  const encoder = new Encoder()
+  encoder.appendRawBytes(buffer.subarray(0, 8)) // copy MAGIC_BYTES and checksum
+  encoder.appendByte(CHUNK_TYPE_CHANGE)
+  encoder.appendUint53(decompressed.byteLength)
+  encoder.appendRawBytes(decompressed)
+  return encoder.buffer
 }
 
 /**
@@ -749,7 +797,7 @@ function decodeChanges(binaryChanges) {
     for (let chunk of splitContainers(binaryChange)) {
       if (chunk[8] === CHUNK_TYPE_DOCUMENT) {
         decoded = decoded.concat(decodeDocument(chunk))
-      } else if (chunk[8] === CHUNK_TYPE_CHANGE) {
+      } else if (chunk[8] === CHUNK_TYPE_CHANGE || chunk[8] === CHUNK_TYPE_DEFLATE) {
         decoded.push(decodeChange(chunk))
       } else {
         // ignoring chunk of unknown type
@@ -1011,6 +1059,8 @@ function encodeDocument(binaryChanges) {
   const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
   const { changesColumns, heads } = encodeDocumentChanges(changes)
   const opsColumns = encodeOps(groupDocumentOps(changes), true)
+  for (let column of changesColumns) deflateColumn(column)
+  for (let column of opsColumns) deflateColumn(column)
 
   return encodeContainer(CHUNK_TYPE_DOCUMENT, encoder => {
     encoder.appendUint53(actorIds.length)
@@ -1048,9 +1098,11 @@ function decodeDocumentHeader(buffer) {
   const opsColumns = decodeColumnInfo(decoder)
   for (let i = 0; i < changesColumns.length; i++) {
     changesColumns[i].buffer = decoder.readRawBytes(changesColumns[i].bufferLen)
+    inflateColumn(changesColumns[i])
   }
   for (let i = 0; i < opsColumns.length; i++) {
     opsColumns[i].buffer = decoder.readRawBytes(opsColumns[i].bufferLen)
+    inflateColumn(opsColumns[i])
   }
 
   const extraBytes = decoder.readRawBytes(decoder.buf.byteLength - decoder.offset)
@@ -1064,6 +1116,26 @@ function decodeDocument(buffer) {
   groupChangeOps(changes, ops)
   decodeDocumentChanges(changes, heads)
   return changes
+}
+
+/**
+ * DEFLATE-compresses the given column if it is large enough to make the compression worthwhile.
+ */
+function deflateColumn(column) {
+  if (column.encoder.buffer.byteLength >= DEFLATE_MIN_SIZE) {
+    column.encoder = {buffer: pako.deflateRaw(column.encoder.buffer)}
+    column.id |= COLUMN_TYPE_DEFLATE
+  }
+}
+
+/**
+ * Decompresses the given column if it is DEFLATE-compressed.
+ */
+function inflateColumn(column) {
+  if ((column.columnId & COLUMN_TYPE_DEFLATE) !== 0) {
+    column.buffer = pako.inflateRaw(column.buffer)
+    column.columnId ^= COLUMN_TYPE_DEFLATE
+  }
 }
 
 /**
@@ -1352,10 +1424,10 @@ function copyColumns(outCols, inCols, count) {
         inCols[inIndex].decoder.buf.byteLength > 0) {
       inCol = inCols[inIndex].decoder
     }
-    const colCount = (outCol.columnId >> 3 === lastGroup) ? lastCardinality : count
+    const colCount = (outCol.columnId >> 4 === lastGroup) ? lastCardinality : count
 
     if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
-      lastGroup = outCol.columnId >> 3
+      lastGroup = outCol.columnId >> 4
       if (inCol) {
         lastCardinality = outCol.encoder.copyFrom(inCol, {count, sumValues: true}).sum
       } else {
@@ -1406,10 +1478,10 @@ function readOperation(columns, actorTable) {
       if (col.columnId !== valueColumn) throw new RangeError('unexpected VALUE_RAW column')
       colValue = col.decoder.readRawBytes(valueBytes)
     } else if (col.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
-      lastGroup = col.columnId >> 3
+      lastGroup = col.columnId >> 4
       lastCardinality = col.decoder.readValue() || 0
       colValue = lastCardinality
-    } else if (col.columnId >> 3 === lastGroup) {
+    } else if (col.columnId >> 4 === lastGroup) {
       colValue = []
       if (col.columnId % 8 === COLUMN_TYPE.VALUE_LEN) {
         valueColumn = col.columnId + 1
@@ -1454,10 +1526,10 @@ function appendOperation(outCols, inCols, operation) {
     if (inIndex < inCols.length && inCols[inIndex].columnId === outCol.columnId) {
       const colValue = operation[inIndex]
       if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
-        lastGroup = outCol.columnId >> 3
+        lastGroup = outCol.columnId >> 4
         lastCardinality = colValue
         outCol.encoder.appendValue(colValue)
-      } else if (outCol.columnId >> 3 === lastGroup) {
+      } else if (outCol.columnId >> 4 === lastGroup) {
         if (!Array.isArray(colValue) || colValue.length !== lastCardinality) {
           throw new RangeError('bad group value')
         }
@@ -1468,11 +1540,11 @@ function appendOperation(outCols, inCols, operation) {
         outCol.encoder.appendValue(colValue)
       }
     } else if (outCol.columnId % 8 === COLUMN_TYPE.GROUP_CARD) {
-      lastGroup = outCol.columnId >> 3
+      lastGroup = outCol.columnId >> 4
       lastCardinality = 0
       outCol.encoder.appendValue(0)
     } else if (outCol.columnId % 8 !== COLUMN_TYPE.VALUE_RAW) {
-      const count = (outCol.columnId >> 3 === lastGroup) ? lastCardinality : 1
+      const count = (outCol.columnId >> 4 === lastGroup) ? lastCardinality : 1
       let blankValue = null
       if (outCol.columnId % 8 === COLUMN_TYPE.BOOLEAN) blankValue = false
       if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_LEN) blankValue = 0
