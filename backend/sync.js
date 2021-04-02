@@ -269,5 +269,4 @@ function getChangesToSend(backend, have, need) {
   return changesToSend
 }
 
-const { receiveSyncMessage, generateSyncMessage } = require('./protocol')
-module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage }
+module.exports = { BloomFilter, encodeSyncMessage, decodeSyncMessage, makeBloomFilter, getChangesToSend }
