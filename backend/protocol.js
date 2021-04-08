@@ -1,5 +1,30 @@
 const Backend = require("./backend");
 const { makeBloomFilter, BloomFilter, getChangesToSend } = require("./sync");
+const { backendState } = require('./util')
+
+/****
+
+  export interface PeerState {
+      sharedHeads: Hash[]
+      theirNeed: Hash[]
+      ourNeed: Hash[]
+      have: SyncHave[]
+      unappliedChanges: BinaryChange[]
+  }
+
+  interface SyncMessage {
+      heads: Hash[]
+      need: Hash[]
+      have: SyncHave[]
+      changes: Uint8Array[] // todo
+  }
+
+  interface SyncHave {
+      lastSync: Hash[]
+      bloom: Uint8Array
+  }
+
+*****/
 
 function emptyPeerState() {
     return {
@@ -36,13 +61,12 @@ function compareArrays(a, b) {
   return a peerState & syncMessage and a peer state
 */
 function generateSyncMessage(backend, peerState, changes) {
-    console.log("Backend", Backend);
     peerState = peerState || emptyPeerState()
     changes = changes || []
 
     const { sharedHeads, ourNeed, theirNeed, have: theirHave, unappliedChanges } = peerState;
-    // FIXME: fix the backend.state bits using the safer backendState() function
-    const ourHeads = Backend.getHeads(backend), state = backend.state;
+    const ourHeads = Backend.getHeads(backend)
+    const state = backendState(backend)
     // if we need some particular keys, sending the bloom filter will cause retransmission
     // of data (since the bloom filter doesn't include data waiting to be applied)
     // also, we could be using other peers' have messages to reduce any risk of resending data
@@ -67,7 +91,7 @@ function generateSyncMessage(backend, peerState, changes) {
     // failed to persist changes that the other node already sent us.
     if (theirHave.length > 0) {
         const lastSync = theirHave[0].lastSync;
-        if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
+        if (!lastSync.every(hash => Backend.getChangeByHash(state, hash))) {
             // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
             const dummySync = { heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: [] };
             return [peerState, dummySync];
@@ -102,6 +126,7 @@ function advanceHeads(myOldHeads, myNewHeads, ourOldSharedHeads) {
 
 function receiveSyncMessage(backend, message, oldPeerState) {
     let patch = null;
+    oldPeerState = oldPeerState || emptyPeerState()
     let { unappliedChanges, ourNeed, theirNeed, sharedHeads } = oldPeerState;
     const { heads, changes } = message;
     const beforeHeads = Backend.getHeads(backend);
@@ -115,12 +140,15 @@ function receiveSyncMessage(backend, message, oldPeerState) {
             sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads);
         }
     }
-    const nextPeerState = {
-        sharedHeads, ourNeed,
-        have: message.have, theirNeed: message.need,
+    const peerState2 = {
+        sharedHeads,
+        ourNeed,
+        have: message.have,
+        theirNeed: message.need,
         unappliedChanges
     };
-    return [backend, nextPeerState, patch];
+    const [ peerState3, nextMessage ] = generateSyncMessage(backend, peerState2)
+    return [backend, peerState3, nextMessage, patch];
 }
 
 module.exports = { receiveSyncMessage, generateSyncMessage };

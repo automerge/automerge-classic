@@ -103,12 +103,18 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(s2, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
     })
 
-    it.only('should work without prior sync state', () => {
+    it.only('repos with equal heads do not need a reply message', () => {
+      let m1 = null, m2 = null
+      let peer1 = null, peer2 = null
       let n1 = Automerge.init(), n2 = Automerge.init()
-      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+      n1 = Automerge.change(n1, doc => doc.n = [])
+      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
       n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      let s1 = generateSyncMessage(Frontend.getBackendState(n1)), s2 = generateSyncMessage(Frontend.getBackendState(n2));
-      assert.deepStrictEqual(s1, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
+      assert.deepStrictEqual(n1,n2)
+      ;[peer1,m1] = Automerge.generateSyncMessage(n1)
+      // heads are equal so this message should be null
+      ;[n2, peer2, m2] = Automerge.receiveSyncMessage(n2,m1)
+      assert.strictEqual(m2, null)
     })
 
     it('should work with prior sync state', () => {

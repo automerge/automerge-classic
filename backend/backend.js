@@ -3,21 +3,11 @@ const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
 const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
+const { backendState } = require('./util')
 
 // Feature flag: false uses old Immutable.js-based backend data structures, true uses new
 // byte-array-based data structures. New data structures are not yet fully working.
 const USE_NEW_BACKEND = false
-
-function backendState(backend) {
-  if (backend.frozen) {
-    throw new Error(
-      'Attempting to use an outdated Automerge document that has already been updated. ' +
-      'Please use the latest document state, or call Automerge.clone() if you really ' +
-      'need to use this old document state.'
-    )
-  }
-  return backend.state
-}
 
 function hashesByActor(state, actorId) {
   if (USE_NEW_BACKEND) {
