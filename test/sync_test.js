@@ -95,40 +95,106 @@ class SyncPeer {
 }
 
 describe('Data sync protocol', () => {
+  const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}] // FIXME: why is there a bloom filter here? we don't "have" anything
+  const anUnknownPeerState = { sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
+  const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [] }
+  const expectedEmptyDocSyncMessage = { 
+    changes: [],
+    have: emptyDocBloomFilter, 
+    heads: [],
+    need: []
+  }
   describe('with docs already in sync', () => {
-    it('should handle an empty document', () => {
-      let n1 = Automerge.init(), n2 = Automerge.init()
-      let s1 = generateSyncMessage(Frontend.getBackendState(n1)), s2 = generateSyncMessage(Frontend.getBackendState(n2));
-      assert.deepStrictEqual(s1, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
-      assert.deepStrictEqual(s2, [ { sharedHeads: [], have: [], ourNeed: [], theirNeed: [], unappliedChanges: [] }, null ])
+    describe('an empty local doc', () => {
+      
+      it('should send a sync message implying no local data', () => {
+        let n1 = Automerge.init()
+        
+        let p1, m1
+        ;[p1, m1] = Automerge.generateSyncMessage(n1)
+        assert.deepStrictEqual(p1, anUnknownPeerState)
+        assert.deepStrictEqual(m1, expectedEmptyDocSyncMessage)
+      })
+      
+      it('should not reply if we have no data as well', () => {
+        const n1 = Automerge.init()
+        let n2 = Automerge.init()
+        const [p1, m1] = Automerge.generateSyncMessage(n1)
+        let p2, m2
+        ;[n2, p2] = Automerge.receiveSyncMessage(n2, m1)
+        ;[p2, m2] = Automerge.generateSyncMessage(n2, p2)
+
+        assert.deepStrictEqual(p2, anEmptyPeerState)
+        assert.deepStrictEqual(m2, null)
+      })
     })
 
-    it.only('repos with equal heads do not need a reply message', () => {
-      let m1 = null, m2 = null
-      let peer1 = null, peer2 = null
-      let n1 = Automerge.init(), n2 = Automerge.init()
-      n1 = Automerge.change(n1, doc => doc.n = [])
-      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      assert.deepStrictEqual(n1,n2)
-      ;[peer1,m1] = Automerge.generateSyncMessage(n1)
-      // heads are equal so this message should be null
-      ;[n2, peer2] = Automerge.receiveSyncMessage(n2,m1)
-      ;[peer2, m2] = Automerge.generateSyncMessage(n2, peer2)
-      assert.strictEqual(m2, null)
-    })
+    describe('documents with data', () => {
+      it('repos with equal heads do not need a reply message', () => {
+        let m1 = null, m2 = null
+        let peer1 = null, peer2 = null
+        let n1 = Automerge.init(), n2 = Automerge.init()
+        // make two nodes with the same changes
+        n1 = Automerge.change(n1, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
+        assert.deepStrictEqual(n1,n2)
 
-    it('should work with prior sync state', () => {
-      let n1 = Automerge.init(), n2 = Automerge.init()
-      for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
-      const lastSync = getHeads(n1)
-      for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync')
-      assert.strictEqual(s2.sendMessage().type, 'sync')
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
+        // generate a naive sync message
+        ;[peer1,m1] = Automerge.generateSyncMessage(n1)
+        assert.deepStrictEqual(peer1, anUnknownPeerState)
+
+        // heads are equal so this message should be null
+        ;[n2, peer2] = Automerge.receiveSyncMessage(n2,m1)
+        ;[peer2, m2] = Automerge.generateSyncMessage(n2, peer2)
+        assert.strictEqual(m2, null)
+      })
+
+      it.only('n1 should offer all changes to n2 when starting from nothing', () => {
+        let m1 = null, m2 = null
+        let peer1 = null, peer2 = null
+        let n1 = Automerge.init(), n2 = Automerge.init()
+        // make changes for n1 that n2 should request
+        n1 = Automerge.change(n1, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        
+        // generate a naive sync message
+        ;[peer1,m1] = Automerge.generateSyncMessage(n1)
+        assert.deepStrictEqual(peer1, anUnknownPeerState)
+
+        // there should be no changes offered by m2 here because n2 has nothing yet 
+        ;[n2, peer2] = Automerge.receiveSyncMessage(n2, m1)
+        ;[peer2, m2] = Automerge.generateSyncMessage(n2, peer2)
+        assert.deepStrictEqual(m2.changes, [])
+
+        // we should now offer all our changes back to n2 
+        ;[n1, peer1] = Automerge.receiveSyncMessage(n1, m2)
+        ;[peer1, m1] = Automerge.generateSyncMessage(n1, peer1)
+        console.log(m1)
+        assert.notDeepStrictEqual(m1.changes, [])
+        
+        // we should apply those changes (this test assumes we don't have bloom filter false positives) 
+        ;[n2, peer2] = Automerge.receiveSyncMessage(n2, m1)
+        ;[peer2, m2] = Automerge.generateSyncMessage(n2, peer2)
+        
+        // the nodes should now be in sync!
+        assert.deepStrictEqual(n1, n2)
+        
+      })
+      it('should sync peers that have diverged')
+
+      it('should work with prior sync state', () => {
+        let n1 = Automerge.init(), n2 = Automerge.init()
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        const lastSync = getHeads(n1)
+        for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
+        const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
+        assert.strictEqual(s1.sendMessage().type, 'sync')
+        assert.strictEqual(s2.sendMessage().type, 'sync')
+        assert.strictEqual(s1.sendMessage(), undefined)
+        assert.strictEqual(s2.sendMessage(), undefined)
+      })
     })
   })
 

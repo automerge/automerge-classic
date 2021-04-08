@@ -95,14 +95,14 @@ function generateSyncMessage(backend, peerState, changes) {
         }
     }
     
+    // FIXME: we currently ignore passed-in changes (local changes will fail)
+    const changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
     const heads = Backend.getHeads(backend)
-    // const changes = getChangesToSend(state, theirHave, theirNeed)
-    // this breaks things
     const syncMessage = {
         heads,
         have,
         need: ourNeed,
-        changes
+        changes: changesToSend
     };
 
     // Regular response to a sync message: send any changes that the other node
