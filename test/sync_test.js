@@ -113,7 +113,8 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(n1,n2)
       ;[peer1,m1] = Automerge.generateSyncMessage(n1)
       // heads are equal so this message should be null
-      ;[n2, peer2, m2] = Automerge.receiveSyncMessage(n2,m1)
+      ;[n2, peer2] = Automerge.receiveSyncMessage(n2,m1)
+      ;[peer2, m2] = Automerge.generateSyncMessage(n2, peer2)
       assert.strictEqual(m2, null)
     })
 
