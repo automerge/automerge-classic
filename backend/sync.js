@@ -17,6 +17,7 @@
  */
 
 const { List } = require('immutable')
+const { backendState } = require('./util')
 const OpSet = require('./op_set')
 const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
 const { decodeChangeMeta } = require('./columnar')

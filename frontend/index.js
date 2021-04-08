@@ -263,6 +263,25 @@ function emptyChange(doc, options) {
   return makeChange(doc, new Context(doc, actorId), options)
 }
 
+function generateSyncMessage(doc, peerState, changes) {
+  if (doc[OPTIONS].backend) {
+    return doc[OPTIONS].backend.generateSyncMessage(doc[STATE].backendState, peerState, changes)
+  } else {
+    throw new Error('generateSyncMessage requires backend')
+  }
+}
+
+function receiveSyncMessage(doc, message, oldPeerState) {
+    if (doc[OPTIONS].backend) {
+      const [ newState, nextPeerState, nextMessage, patch] = doc[OPTIONS].backend.receiveSyncMessage(doc[STATE].backendState, message, oldPeerState)
+      console.log("receive sync message - patch", patch)
+      const doc2 = patch ? applyPatchToDoc(doc, patch, newState, true) : doc
+      return [ doc2, nextPeerState, nextMessage ]
+    } else {
+      throw new Error('receiveSyncMessage requires backend')
+    }
+}
+
 /**
  * Applies `patch` to the document root object `doc`. This patch must come
  * from the backend; it may be the result of a local change or a remote change.
@@ -383,5 +402,6 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter, Observable
+  Text, Table, Counter, Observable,
+  generateSyncMessage, receiveSyncMessage
 }
