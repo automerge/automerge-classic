@@ -170,7 +170,7 @@ describe('Data sync protocol', () => {
         // we should now offer all our changes back to n2 
         ;[n1, peer1] = Automerge.receiveSyncMessage(n1, m2)
         ;[peer1, m1] = Automerge.generateSyncMessage(n1, peer1)
-        console.log(m1)
+        //console.log(m1)
         assert.notDeepStrictEqual(m1.changes, [])
         
         // we should apply those changes (this test assumes we don't have bloom filter false positives) 
