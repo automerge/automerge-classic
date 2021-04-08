@@ -95,6 +95,30 @@ class SyncPeer {
 }
 
 describe('Data sync protocol', () => {
+  const syncTwoNodes = (n1, n2, c = 10) => {
+    console.log('start', n1, n2, c)
+    let sender = n1
+    let receiver = n2
+
+    // these peer states are what the named party thinks about the other peer which is maybe surprising
+    let senderPeerState = null 
+    let receiverPeerState = null
+    let message = null
+    for (i = 0; i < c; i++) {
+      ;[senderPeerState, message] = Automerge.generateSyncMessage(sender, senderPeerState)
+      if (!message) { 
+        // we're synced
+        return [sender, receiver, i]
+      }
+      ;[receiver, receiverPeerState] = Automerge.receiveSyncMessage(receiver, message, receiverPeerState)
+      
+      // swap roles
+      ;[sender, receiver] = [receiver, sender]
+      ;[senderPeerState, receiverPeerState] = [receiverPeerState, senderPeerState]
+    }
+    throw new Exception(`Could not synchronize within the expected ${c} iterations.`)
+  }
+
   const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}] // FIXME: why is there a bloom filter here? we don't "have" anything
   const anUnknownPeerState = { sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
   const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [] }
@@ -150,7 +174,7 @@ describe('Data sync protocol', () => {
         assert.strictEqual(m2, null)
       })
 
-      it.only('n1 should offer all changes to n2 when starting from nothing', () => {
+      it('n1 should offer all changes to n2 when starting from nothing', () => {
         let m1 = null, m2 = null
         let peer1 = null, peer2 = null
         let n1 = Automerge.init(), n2 = Automerge.init()
@@ -170,7 +194,6 @@ describe('Data sync protocol', () => {
         // we should now offer all our changes back to n2 
         ;[n1, peer1] = Automerge.receiveSyncMessage(n1, m2)
         ;[peer1, m1] = Automerge.generateSyncMessage(n1, peer1)
-        //console.log(m1)
         assert.notDeepStrictEqual(m1.changes, [])
         
         // we should apply those changes (this test assumes we don't have bloom filter false positives) 
@@ -181,7 +204,17 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(n1, n2)
         
       })
-      it('should sync peers that have diverged')
+      it.only('should sync peers that have diverged', () => {
+        let n1 = Automerge.init(), n2 = Automerge.init()
+        
+        // make changes for n1 that n2 should request
+        n1 = Automerge.change(n1, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        
+        assert.notDeepStrictEqual(n1, n2)
+        const [after1, after2, count] = syncTwoNodes(n1, n2)
+        assert.deepStrictEqual(after1, after2)
+      })
 
       it('should work with prior sync state', () => {
         let n1 = Automerge.init(), n2 = Automerge.init()
