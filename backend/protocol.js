@@ -136,7 +136,7 @@ function receiveSyncMessage(backend, message, oldPeerState) {
         unappliedChanges = [...unappliedChanges, ...changes];
         ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads);
         if (ourNeed.length === 0) {
-            [backend, patch] = Backend.applyChanges(backend, unappliedChanges);
+            ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges);
             unappliedChanges = [];
             sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads);
         }
