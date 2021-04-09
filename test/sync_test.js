@@ -95,31 +95,24 @@ class SyncPeer {
 }
 
 describe('Data sync protocol', () => {
-  const syncTwoNodes = (sender, receiver, senderPeerState = null, receiverPeerState = null) => {
-    // XXX: it's a bit confusing doing this -- can we keep sender/receiver consistent more elegantly?
-    
-    const MAX_ITER = 10 // number of iterations allowed for convergence
+  const syncTwoNodes = (a, b, aPeerState = null, bPeerState = null) => {
+    const MAX_ITER = 10 
+    let msg = null
+    let i = 0
+    do {
+      ;[aPeerState, msg] = Automerge.generateSyncMessage(a, aPeerState)
+      if (msg) { [b, bPeerState] = Automerge.receiveSyncMessage(b, msg, bPeerState) }
 
-    let message = null
-    for (i = 0; i < MAX_ITER; i++) {
-      ;[senderPeerState, message] = Automerge.generateSyncMessage(sender, senderPeerState)
-      if (message) { 
-        ;[receiver, receiverPeerState] = Automerge.receiveSyncMessage(receiver, message, receiverPeerState)
-      }
       // we need to give both sender and receiver a chance to start the synchronization
-      else if (i > 0) {
-        if (i % 2 == 1) { // preserve consistent return order
-          ;[sender, receiver] = [receiver, sender]
-          ;[senderPeerState, receiverPeerState] = [receiverPeerState, senderPeerState]
-        }
-        return [sender, receiver, senderPeerState, receiverPeerState]
-      }
-      
-      // swap roles
-      ;[sender, receiver] = [receiver, sender]
-      ;[senderPeerState, receiverPeerState] = [receiverPeerState, senderPeerState]
-    }
-    throw new Exception(`Could not synchronize within the expected ${c} iterations.`)
+      if (!msg && i != 0) { break }
+
+      ;[bPeerState, msg] = Automerge.generateSyncMessage(b, bPeerState)
+      if (msg) { [a, aPeerState] = Automerge.receiveSyncMessage(a, msg, aPeerState) }
+
+      if (i++ > MAX_ITER) { throw new Error(`Did not synchronize within ${MAX_ITER} iterations. Do you have a bug causing an infinite loop?`) }
+    } while (msg)
+    
+    return [a, b, aPeerState, bPeerState]
   }
 
   const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}] // FIXME: why is there a bloom filter here? we don't "have" anything
