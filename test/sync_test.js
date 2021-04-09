@@ -96,17 +96,24 @@ class SyncPeer {
 
 describe('Data sync protocol', () => {
   const syncTwoNodes = (sender, receiver, senderPeerState = null, receiverPeerState = null) => {
-    const c = 10 // number of iterations allowed for convergence
+    // XXX: it's a bit confusing doing this -- can we keep sender/receiver consistent more elegantly?
+    
+    const MAX_ITER = 10 // number of iterations allowed for convergence
 
     let message = null
-    for (i = 0; i < c; i++) {
-      console.log("genmsg", sender, senderPeerState)
+    for (i = 0; i < MAX_ITER; i++) {
       ;[senderPeerState, message] = Automerge.generateSyncMessage(sender, senderPeerState)
-      if (!message) { 
-        // we're synced
+      if (message) { 
+        ;[receiver, receiverPeerState] = Automerge.receiveSyncMessage(receiver, message, receiverPeerState)
+      }
+      // we need to give both sender and receiver a chance to start the synchronization
+      else if (i > 0) {
+        if (i % 2 == 1) { // preserve consistent return order
+          ;[sender, receiver] = [receiver, sender]
+          ;[senderPeerState, receiverPeerState] = [receiverPeerState, senderPeerState]
+        }
         return [sender, receiver, senderPeerState, receiverPeerState]
       }
-      ;[receiver, receiverPeerState] = Automerge.receiveSyncMessage(receiver, message, receiverPeerState)
       
       // swap roles
       ;[sender, receiver] = [receiver, sender]
@@ -170,8 +177,6 @@ describe('Data sync protocol', () => {
       })
 
       it('n1 should offer all changes to n2 when starting from nothing', () => {
-        let m1 = null, m2 = null
-        let peer1 = null, peer2 = null
         let n1 = Automerge.init(), n2 = Automerge.init()
         // make changes for n1 that n2 should request
         n1 = Automerge.change(n1, doc => doc.n = [])
@@ -225,7 +230,7 @@ describe('Data sync protocol', () => {
   })
 
   describe('with diverged documents', () => {
-    it.only('should work without prior sync state', () => {
+    it('should work without prior sync state', () => {
       // Scenario:                                                            ,-- c10 <-- c11 <-- c12 <-- c13 <-- c14
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- c15 <-- c16 <-- c17
@@ -235,41 +240,37 @@ describe('Data sync protocol', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       
+      ;[n1, n2] = syncTwoNodes(n1, n2)
+
+      for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
+
+      assert.notDeepStrictEqual(n1, n2)
+      ;[n1, n2] = syncTwoNodes(n1, n2)
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(n1, n2)
+    })
+
+    it.only('should work with prior sync state', () => {
+      // Scenario:                                                            ,-- c10 <-- c11 <-- c12 <-- c13 <-- c14
+      // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
+      //                                                                      `-- c15 <-- c16 <-- c17
+      // lastSync is c9.      
+      
+      // create two peers both with divergent commits 
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      
       let n1PeerState = null, n2PeerState = null
       ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
 
-      // for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
 
       assert.notDeepStrictEqual(n1, n2)
       ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
-    })
-
-    it('should work with prior sync state', () => {
-      // Scenario:                                                            ,-- c10 <-- c11 <-- c12 <-- c13 <-- c14
-      // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
-      //                                                                      `-- c15 <-- c16 <-- c17
-      // lastSync is c9.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
-      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      const lastSync = getHeads(n1)
-      for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
-      const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
-      for (let i = 0; i < 5; i++) assert.strictEqual(s1.sendMessage().type, 'change') // changes in response to m2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m3: response to m2
-      for (let i = 0; i < 3; i++) assert.strictEqual(s2.sendMessage().type, 'change') // changes in response to m1
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m4: response to m1
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m5: response to m4
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m6: response to m3
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
-      assert.deepStrictEqual(getHeads(s1.doc), getHeads(s2.doc))
     })
 
     it('should re-sync after one node crashed with data loss', () => {
