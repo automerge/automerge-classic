@@ -251,7 +251,7 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(n1, n2)
     })
 
-    it.only('should work with prior sync state', () => {
+    it('should work with prior sync state', () => {
       // Scenario:                                                            ,-- c10 <-- c11 <-- c12 <-- c13 <-- c14
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- c15 <-- c16 <-- c17
@@ -273,30 +273,38 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(n1, n2)
     })
 
-    it('should re-sync after one node crashed with data loss', () => {
+    it.only('should re-sync after one node crashed with data loss', () => {
       // Scenario:
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
       // n2 has changes {c0, c1, c2}, s1's lastSync is c5, and s2's lastSync is c2.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')      
+      let n1PeerState = null, n2PeerState = null
+      
+      // n1 makes three changes, which we sync to n2
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      const lastSync2 = getHeads(n1)
+      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      
+      // save a copy of n2 as "r" to simulate recovering from crash
+      let r, rPeerState
+      ;[r, rPeerState] = [Automerge.clone(n2), n2PeerState]
+
+      // sync another few commits
       for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      const lastSync1 = getHeads(n1)
+      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      // everyone should be on the same page here
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(n1, n2)
+
+      // now make a few more changes, then attempt to sync the fully-up-to-date n1 with the confused r
       for (let i = 6; i < 9; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      const s1 = new SyncPeer(n1, lastSync1), s2 = new SyncPeer(n2, lastSync2, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
-      assert.deepStrictEqual(s2.sendMessage(), {type: 'sync', heads: lastSync2, need: getHeads(n1),
-                                                have: [{lastSync: [], bloom: Uint8Array.of()}]}) // m3: response to m1
-      for (let i = 0; i < 6; i++) assert.strictEqual(s1.sendMessage().type, 'change') // changes in response to m2
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: [], have: []}) // m4: response to m2
-      for (let i = 0; i < 3; i++) assert.strictEqual(s1.sendMessage().type, 'change') // changes in response to m3
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: [], have: []}) // m5: response to m3
-      assert.deepStrictEqual(s2.sendMessage().heads, getHeads(n1)) // m6: response to n1's changes and m4
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
-      assert.deepStrictEqual(getHeads(s1.doc), getHeads(s2.doc))
+
+      assert.notDeepStrictEqual(getHeads(n1), getHeads(r))
+      assert.notDeepStrictEqual(n1, r)
+      assert.deepStrictEqual(n1, { x: 8 })
+      assert.deepStrictEqual(r, { x: 2 })
+      ;[n1, r, n1PeerState, rPeerState] = syncTwoNodes(n1, r, n1PeerState, rPeerState)
+      assert.deepStrictEqual(getHeads(n1), getHeads(r))
+      assert.deepStrictEqual(n1, r)
     })
 
     it('should re-sync after both nodes crashed with data loss', () => {
