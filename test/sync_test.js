@@ -266,7 +266,7 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(n1, n2)
     })
 
-    it.only('should re-sync after one node crashed with data loss', () => {
+    it('should re-sync after one node crashed with data loss', () => {
       // Scenario:
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
       // n2 has changes {c0, c1, c2}, s1's lastSync is c5, and s2's lastSync is c2.
