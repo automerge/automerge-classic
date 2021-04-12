@@ -11,8 +11,9 @@ function getHeads(doc) {
 }
 
 describe('Data sync protocol', () => {
-  const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}] // FIXME: why is there a bloom filter here? we don't "have" anything
-  const anUnknownPeerState = { sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
+  // FIXME: why is there a bloom filter here? we don't "have" anything
+  const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}]
+  const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
   const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [] }
   const expectedEmptyDocSyncMessage = { 
     changes: [],
@@ -274,15 +275,13 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
     })
 
-    it('should handle a false-positive dependency', () => {
+    it.skip('should handle a false-positive dependency', () => {
       // Scenario:                                                            ,-- n1c1 <-- n1c2
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- n2c1 <-- n2c2
       // where n2c1 is a false positive in the Bloom filter containing {n1c1, n1c2}.
       // lastSync is c9.
-      /* pvh: I don't really understand the scenario this tests well enough to reimplement it :/ */
       
-      /*
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
@@ -317,7 +316,6 @@ describe('Data sync protocol', () => {
       assert.strictEqual(s2.sendMessage(), undefined)
       assert.deepStrictEqual(getHeads(s1.doc), bothHeads)
       assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
-      */
     })
 
     // 4
