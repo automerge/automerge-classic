@@ -74,29 +74,32 @@ function generateSyncMessage(backend, peerState, changes) {
     // actually, thinking more about this we probably want to include queued data in our bloom filter
     // but... it will work without it, just risks lots of resent data if you have many peers
     const have = (!ourNeed.length) ? [makeBloomFilter(state, sharedHeads)] : [];
-    // If the heads are equal, we're in sync and don't need to do anything further
-
-    if (Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads) && ourNeed.length === 0 && theirNeed.length == 0) {
-        return [peerState, null];
-        // no need to send a sync message if we know we're synced!
-    }
 
     // Fall back to a full re-sync if the sender's last sync state includes hashes
     // that we don't know. This could happen if we crashed after the last sync and
     // failed to persist changes that the other node already sent us.
     // XXX: do we need this?
 
+/*
     if (theirHave.length > 0) {
         const lastSync = theirHave[0].lastSync;
-        if (!lastSync.every(hash => Backend.getChangeByHash(state, hash))) {
+        if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
             // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
             const dummySync = { heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: [] };
             return [peerState, dummySync];
         }
     }
+*/
     
     // FIXME: we currently ignore passed-in changes (local changes will fail)
     const changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
+
+    // If the heads are equal, we're in sync and don't need to do anything further
+    if (changesToSend.length === 0 && Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads) && ourNeed.length === 0) {
+        return [peerState, null];
+        // no need to send a sync message if we know we're synced!
+    }
+
     const heads = Backend.getHeads(backend)
     const syncMessage = {
         heads,
