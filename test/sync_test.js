@@ -95,6 +95,7 @@ class SyncPeer {
 }
 
 describe('Data sync protocol', () => {
+/*
   const syncTwoNodes = (a, b, aPeerState = null, bPeerState = null) => {
     const MAX_ITER = 10 
     let msg = null
@@ -114,6 +115,7 @@ describe('Data sync protocol', () => {
     
     return [a, b, aPeerState, bPeerState]
   }
+*/
 
   const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}] // FIXME: why is there a bloom filter here? we don't "have" anything
   const anUnknownPeerState = { sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
@@ -176,7 +178,7 @@ describe('Data sync protocol', () => {
         for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
                 
         assert.notDeepStrictEqual(n1, n2)
-        const [after1, after2] = syncTwoNodes(n1, n2)
+        const [after1, after2] = Automerge.sync(n1, n2)
         assert.deepStrictEqual(after1, after2)
       })
 
@@ -188,7 +190,7 @@ describe('Data sync protocol', () => {
         for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
         
         assert.notDeepStrictEqual(n1, n2)
-        ;[n1, n2] = syncTwoNodes(n1, n2)
+        ;[n1, n2] = Automerge.sync(n1, n2)
         assert.deepStrictEqual(n1, n2)
       })
 
@@ -196,13 +198,13 @@ describe('Data sync protocol', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init()
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
-        ;[n1, n2, senderPeerState, receiverPeerState] = syncTwoNodes(n1, n2)
+        ;[n1, n2, senderPeerState, receiverPeerState] = Automerge.sync(n1, n2)
 
         // modify the first node further
         for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
 
         assert.notDeepStrictEqual(n1, n2)
-        ;[n1, n2, senderPeerState, receiverPeerState] = syncTwoNodes(n1, n2, senderPeerState, receiverPeerState)
+        ;[n1, n2, senderPeerState, receiverPeerState] = Automerge.sync(n1, n2, senderPeerState, receiverPeerState)
         assert.deepStrictEqual(n1, n2)
       })
       
@@ -210,13 +212,13 @@ describe('Data sync protocol', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init()
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
-        ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2)
+        ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2)
 
         // modify the first node further
         for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
 
         assert.notDeepStrictEqual(n1, n2)
-        ;[n2, n1, n2PeerState, n1PeerState] = syncTwoNodes(n2, n1, n2PeerState, n1PeerState)
+        ;[n2, n1, n2PeerState, n1PeerState] = Automerge.sync(n2, n1, n2PeerState, n1PeerState)
         assert.deepStrictEqual(n1, n2)
       })
     })
@@ -233,13 +235,13 @@ describe('Data sync protocol', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       
-      ;[n1, n2] = syncTwoNodes(n1, n2)
+      ;[n1, n2] = Automerge.sync(n1, n2)
 
       for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
 
       assert.notDeepStrictEqual(n1, n2)
-      ;[n1, n2] = syncTwoNodes(n1, n2)
+      ;[n1, n2] = Automerge.sync(n1, n2)
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
     })
@@ -255,13 +257,13 @@ describe('Data sync protocol', () => {
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       
       let n1PeerState = null, n2PeerState = null
-      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
 
       for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
 
       assert.notDeepStrictEqual(n1, n2)
-      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
     })
@@ -275,7 +277,7 @@ describe('Data sync protocol', () => {
       
       // n1 makes three changes, which we sync to n2
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
       
       // save a copy of n2 as "r" to simulate recovering from crash
       let r, rPeerState
@@ -283,7 +285,7 @@ describe('Data sync protocol', () => {
 
       // sync another few commits
       for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      ;[n1, n2, n1PeerState, n2PeerState] = syncTwoNodes(n1, n2, n1PeerState, n2PeerState)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
       // everyone should be on the same page here
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
@@ -295,7 +297,7 @@ describe('Data sync protocol', () => {
       assert.notDeepStrictEqual(n1, r)
       assert.deepStrictEqual(n1, { x: 8 })
       assert.deepStrictEqual(r, { x: 2 })
-      ;[n1, r, n1PeerState, rPeerState] = syncTwoNodes(n1, r, n1PeerState, rPeerState)
+      ;[n1, r, n1PeerState, rPeerState] = Automerge.sync(n1, r, n1PeerState, rPeerState)
       assert.deepStrictEqual(getHeads(n1), getHeads(r))
       assert.deepStrictEqual(n1, r)
     })
@@ -593,12 +595,13 @@ describe('Data sync protocol', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
+      let peer1 = null, peer2 = null, message = null;
       const lastSync = getHeads(n1)
-      const sync1 = Automerge.Backend.syncStart(Automerge.Frontend.getBackendState(n1), lastSync)
-      sync1.need = ['0000000000000000000000000000000000000000000000000000000000000000']
-      const sync1a = Automerge.Backend.decodeSyncMessage(Automerge.Backend.encodeSyncMessage(sync1))
-      const [response, changes] = Automerge.Backend.syncResponse(Automerge.Frontend.getBackendState(n2), sync1a)
-      assert.strictEqual(changes.length, 0)
+      ;[peer1, message] = Automerge.generateSyncMessage(n1)
+      message.need = ['0000000000000000000000000000000000000000000000000000000000000000']
+      ;[n2, peer2] = Automerge.receiveSyncMessage(n2, message)
+      ;[peer2, message] = Automerge.generateSyncMessage(n2,peer2)
+      assert.strictEqual(message, null)
     })
   })
 })
