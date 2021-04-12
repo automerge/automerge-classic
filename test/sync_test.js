@@ -555,10 +555,12 @@ describe('Data sync protocol', () => {
       // n2 has {c0, c1, c2, n1c1, n1c2, n2c1, n2c2, n2c3};
       // n3 has {c0, c1, c2, n3c1, n3c2, n3c3}.
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
+      let p13, p12, p21, p32, p31, p23, message
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      n3 = Automerge.applyChanges(n3, Automerge.getAllChanges(n1))
-      const lastSync = getHeads(n1)
+      // sync all 3 nodes
+      ;[n1, n2, p12, p21] = Automerge.sync(n1,n2);
+      ;[n1, n3, p13, p31] = Automerge.sync(n1,n3);
+      ;[n3, n2, p32, p23] = Automerge.sync(n3,n2);
       for (let i = 0; i < 2; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `${i} @ n1`)
       for (let i = 0; i < 2; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `${i} @ n2`)
       n1 = Automerge.applyChanges(n1, Automerge.getAllChanges(n2))
@@ -566,15 +568,16 @@ describe('Data sync protocol', () => {
       n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `3 @ n1`)
       n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `3 @ n2`)
       for (let i = 0; i < 3; i++) n3 = Automerge.change(n3, {time: 0}, doc => doc.x = `${i} @ n3`)
-      const sync1 = Automerge.Backend.syncStart(Automerge.Frontend.getBackendState(n1), lastSync)
-      const sync2 = Automerge.Backend.syncStart(Automerge.Frontend.getBackendState(n2), lastSync)
-      const sync3 = Automerge.Backend.syncStart(Automerge.Frontend.getBackendState(n3), lastSync)
+      // node 1 tells 3 what it has
+      ;[p13, message1] = Automerge.generateSyncMessage(n1, p13)
+      // node3 tells 2 what it has
+      ;[p32, message3] = Automerge.generateSyncMessage(n3, p32)
       // Copy the Bloom filter received from n1 into the message sent from n3 to n2
-      sync3.have.push(sync1.have[0])
-      const sync3a = Automerge.Backend.decodeSyncMessage(Automerge.Backend.encodeSyncMessage(sync3))
-      const [response, changes] = Automerge.Backend.syncResponse(Automerge.Frontend.getBackendState(n2), sync3a)
-      assert.strictEqual(changes.length, 1)
-      assert.strictEqual(Automerge.decodeChange(changes[0]).hash, getHeads(n2)[0])
+      message3.have.push(message1.have[0])
+      ;[n2, p23] = Automerge.receiveSyncMessage(n2,message3)
+      ;[p23, message2] = Automerge.generateSyncMessage(n2, p23)
+      assert.strictEqual(message2.changes.length, 1)
+      assert.strictEqual(Automerge.decodeChange(message2.changes[0]).hash, getHeads(n2)[0])
     })
 
     it('should allow any change to be requested', () => {
