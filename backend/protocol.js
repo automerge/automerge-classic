@@ -76,7 +76,7 @@ function generateSyncMessage(backend, peerState, changes) {
     const have = (!ourNeed.length) ? [makeBloomFilter(state, sharedHeads)] : [];
     // If the heads are equal, we're in sync and don't need to do anything further
 
-    if (Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads) && ourNeed.length === 0) {
+    if (Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads) && ourNeed.length === 0 && theirNeed.length == 0) {
         return [peerState, null];
         // no need to send a sync message if we know we're synced!
     }
