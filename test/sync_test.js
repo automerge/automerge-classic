@@ -582,13 +582,14 @@ describe('Data sync protocol', () => {
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       const lastSync = getHeads(n1)
       for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      const sync1 = Automerge.Backend.syncStart(Automerge.Frontend.getBackendState(n1), lastSync)
-      sync1.need = lastSync // re-request change 2
-      const sync1a = Automerge.Backend.decodeSyncMessage(Automerge.Backend.encodeSyncMessage(sync1))
-      const [response, changes] = Automerge.Backend.syncResponse(Automerge.Frontend.getBackendState(n2), sync1a)
-      assert.strictEqual(changes.length, 1)
-      assert.strictEqual(Automerge.decodeChange(changes[0]).hash, lastSync[0])
+      let message, peer1, peer2;
+      ;[n1,n2,peer1,peer2] = Automerge.sync(n1,n2);
+      ;[peer1, message] = Automerge.generateSyncMessage(n1, peer1)
+      message.need = lastSync // re-request change 2
+      ;[n2, peer2] = Automerge.receiveSyncMessage(n2, message, peer2)
+      ;[peer1, message] = Automerge.generateSyncMessage(n2, peer2)
+      assert.strictEqual(message.changes.length, 1)
+      assert.strictEqual(Automerge.decodeChange(message.changes[0]).hash, lastSync[0])
     })
 
     it('should ignore requests for a nonexistent change', () => {
