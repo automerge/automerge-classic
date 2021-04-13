@@ -143,15 +143,13 @@ function sync(a, b, aPeerState = null, bPeerState = null) {
   let i = 0 
   do {
     ;[aPeerState, msg] = Frontend.generateSyncMessage(a, aPeerState)
-
-    if (msg) { [b, bPeerState] = Frontend.receiveSyncMessage(b, backend.decodeSyncMessage(backend.encodeSyncMessage(msg)), bPeerState) } 
+    if (msg) { [b, bPeerState] = Frontend.receiveSyncMessage(b, msg, bPeerState) } 
 
     // we need to give both sender and receiver a chance to start the synchronization
     if (!msg && i != 0) { break }
     
     ;[bPeerState, msg] = Frontend.generateSyncMessage(b, bPeerState)
-
-    if (msg) { [a, aPeerState] = Frontend.receiveSyncMessage(a, backend.decodeSyncMessage(backend.encodeSyncMessage(msg)), aPeerState) } 
+    if (msg) { [a, aPeerState] = Frontend.receiveSyncMessage(a, msg, aPeerState) } 
 
     if (i++ > MAX_ITER) { throw new Error(`Did not synchronize within ${MAX_ITER} iterations. Do you have a bug causing an infinite loop?`) }
   } while (msg)

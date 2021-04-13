@@ -3,7 +3,7 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 const { checkEncoded } = require('./helpers')
 const { equalBytes } = require('../src/common')
 const { generateSyncMessage } = require('../backend')
-const { BloomFilter } = require('../backend/sync')
+const { BloomFilter, decodeSyncMessage, encodeSyncMessage } = require('../backend/sync')
 const Frontend = require("../frontend")
 
 function getHeads(doc) {
@@ -29,7 +29,7 @@ describe('Data sync protocol', () => {
         let p1, m1
         ;[p1, m1] = Automerge.generateSyncMessage(n1)
         assert.deepStrictEqual(p1, anUnknownPeerState)
-        assert.deepStrictEqual(m1, expectedEmptyDocSyncMessage)
+        assert.deepStrictEqual(decodeSyncMessage(m1), expectedEmptyDocSyncMessage)
       })
       
       it('should not reply if we have no data as well', () => {
@@ -485,11 +485,12 @@ describe('Data sync protocol', () => {
       // node3 tells 2 what it has
       ;[p32, message3] = Automerge.generateSyncMessage(n3, p32)
       // Copy the Bloom filter received from n1 into the message sent from n3 to n2
-      message3.have.push(message1.have[0])
-      ;[n2, p23] = Automerge.receiveSyncMessage(n2,message3)
+      const modifiedMessage = decodeSyncMessage(message3)
+      modifiedMessage.have.push(decodeSyncMessage(message1).have[0])
+      ;[n2, p23] = Automerge.receiveSyncMessage(n2,encodeSyncMessage(modifiedMessage))
       ;[p23, message2] = Automerge.generateSyncMessage(n2, p23)
-      assert.strictEqual(message2.changes.length, 1)
-      assert.strictEqual(Automerge.decodeChange(message2.changes[0]).hash, getHeads(n2)[0])
+      assert.strictEqual(decodeSyncMessage(message2).changes.length, 1)
+      assert.strictEqual(Automerge.decodeChange(decodeSyncMessage(message2).changes[0]).hash, getHeads(n2)[0])
     })
 
     it('should allow any change to be requested', () => {
@@ -500,11 +501,12 @@ describe('Data sync protocol', () => {
       let message, peer1, peer2;
       ;[n1,n2,peer1,peer2] = Automerge.sync(n1,n2);
       ;[peer1, message] = Automerge.generateSyncMessage(n1, peer1)
-      message.need = lastSync // re-request change 2
-      ;[n2, peer2] = Automerge.receiveSyncMessage(n2, message, peer2)
+      const modMsg = decodeSyncMessage(message)
+      modMsg.need = lastSync // re-request change 2
+      ;[n2, peer2] = Automerge.receiveSyncMessage(n2, encodeSyncMessage(modMsg), peer2)
       ;[peer1, message] = Automerge.generateSyncMessage(n2, peer2)
-      assert.strictEqual(message.changes.length, 1)
-      assert.strictEqual(Automerge.decodeChange(message.changes[0]).hash, lastSync[0])
+      assert.strictEqual(decodeSyncMessage(message).changes.length, 1)
+      assert.strictEqual(Automerge.decodeChange(decodeSyncMessage(message).changes[0]).hash, lastSync[0])
     })
 
     it('should ignore requests for a nonexistent change', () => {
