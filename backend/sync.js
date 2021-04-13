@@ -163,6 +163,11 @@ function encodeSyncMessage(message) {
     encodeHashes(encoder, have.lastSync)
     encoder.appendPrefixedBytes(have.bloom)
   }
+  const changes = message.changes || []
+  encoder.appendUint32(message.changes.length)
+  for (let change of message.changes) {  
+    encoder.appendPrefixedBytes(change)
+  }
   return encoder.buffer
 }
 
@@ -178,11 +183,16 @@ function decodeSyncMessage(bytes) {
   const heads = decodeHashes(decoder)
   const need = decodeHashes(decoder)
   const haveCount = decoder.readUint32()
-  let message = {heads, need, have: []}
+  let message = {heads, need, have: [], changes: []}
   for (let i = 0; i < haveCount; i++) {
     const lastSync = decodeHashes(decoder)
     const bloom = decoder.readPrefixedBytes(decoder)
     message.have.push({lastSync, bloom})
+  }
+  const changeCount = decoder.readUint32()
+  for (let i = 0; i < changeCount; i++) {
+    const change = decoder.readPrefixedBytes()
+    message.changes.push(change)
   }
   // Ignore any trailing bytes -- they can be used for extensions by future versions of the protocol
   return message
