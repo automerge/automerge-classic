@@ -138,8 +138,8 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
-    function decodeSyncMessage(bytes: Uint8Array): SyncMessage
-    function encodeSyncMessage(message: SyncMessage): Uint8Array
+    function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
+    function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
     function getChangeByHash(state: BackendState, hash: Hash): Uint8Array
