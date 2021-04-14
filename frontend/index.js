@@ -272,17 +272,17 @@ function generateSyncMessage(doc, peerState, changes) {
 }
 
 function receiveSyncMessage(doc, message, oldPeerState) {
-    if (doc[OPTIONS].backend) {
-      const state = copyObject(doc[STATE])
-      const [ newBackendState, nextPeerState, patch] = doc[OPTIONS].backend.receiveSyncMessage(state.backendState, message, oldPeerState)
-      state.backendState = newBackendState
-      if (patch) {
-        doc = applyPatchToDoc(doc, patch, state, true)
-      }
-      return [ doc, nextPeerState ]
-    } else {
-      throw new Error('receiveSyncMessage requires backend')
+  if (doc[OPTIONS].backend) {
+    const state = copyObject(doc[STATE])
+    const [newBackendState, nextPeerState, patch] = doc[OPTIONS].backend.receiveSyncMessage(state.backendState, message, oldPeerState)
+    state.backendState = newBackendState
+    if (patch) {
+      doc = applyPatchToDoc(doc, patch, state, true)
     }
+    return [doc, nextPeerState]
+  } else {
+    throw new Error('receiveSyncMessage requires backend')
+  }
 }
 
 /**
