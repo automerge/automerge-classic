@@ -103,6 +103,24 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(n1, n2)
       })
 
+      it('after syncing, both sides should not generate messages', () => {
+        // create & synchronize two nodes
+        let n1 = Automerge.init(), n2 = Automerge.init()
+        let p1, p2, message
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
+        for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, doc => doc.y = i)        
+
+        ;[n1, n2, p1, p2] = Automerge.sync(n2, n1)
+
+        ;[p1, message] = Automerge.generateSyncMessage(n1,p1)
+
+        assert.deepStrictEqual(message, null)
+
+        ;[p2, message] = Automerge.generateSyncMessage(n2,p2)
+
+        assert.deepStrictEqual(message, null)
+      })
+
       it('should assume sent changes were recieved until we hear otherwise', () => {
         let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
         let p1 = null, p2 = null, message = null
