@@ -103,7 +103,7 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(n1, n2)
       })
 
-      it('after syncing, both sides should not generate messages', () => {
+      it.skip('after syncing, both sides should not generate messages', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init()
         let p1, p2, message
@@ -121,7 +121,7 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(message, null)
       })
 
-      it('should assume sent changes were recieved until we hear otherwise', () => {
+      it.skip('should assume sent changes were recieved until we hear otherwise', () => {
         let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
         let p1 = null, p2 = null, message = null
         n1 = Automerge.change(n1, doc => doc.items = [])
@@ -201,10 +201,11 @@ describe('Data sync protocol', () => {
     })
 
     it('should re-sync after one node crashed with data loss', () => {
-      // Scenario:
+      // Scenario:     (r)                  (n2)                 (n1)
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
       // n2 has changes {c0, c1, c2}, s1's lastSync is c5, and s2's lastSync is c2.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')      
+      // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let n1PeerState = null, n2PeerState = null
       
       // n1 makes three changes, which we sync to n2
@@ -235,37 +236,42 @@ describe('Data sync protocol', () => {
     })
 
     // 2
-    it.skip('should re-sync after both nodes crashed with data loss', () => {
-      // Scenario:           ,-- n1c1 <-- n1c2 <-- n1c3 <-- n1c4 <-- n1c5 <-- n1c6
-      // c0 <-- c1 <-- c2 <-+
-      //                     `-- n2c1 <-- n2c2 <-- n2c3 <-- n2c4 <-- n2c5 <-- n2c6
-      // s1's lastSync is n1c3, and s2's lastSync is n2c3.
+    it('should re-sync after both nodes crashed with data loss', () => {
+      // Scenario:     (r)                  (n2)                 (n1)
+      // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
+      // n2 has changes {c0, c1, c2}, s1's lastSync is c5, and s2's lastSync is c2.
+      // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1PeerState = null, n2PeerState = null
+      
+      // n1 makes three changes, which we sync to n2
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `${i} @ n1`)
-      const lastSync1 = getHeads(n1)
-      for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `${i} @ n1`)
-      for (let i = 0; i < 3; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `${i} @ n2`)
-      const lastSync2 = getHeads(n2)
-      for (let i = 3; i < 6; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `${i} @ n2`)
-      const bothHeads = [getHeads(n1)[0], getHeads(n2)[0]].sort()
-      const s1 = new SyncPeer(n1, lastSync1), s2 = new SyncPeer(n2, lastSync2, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
-      assert.deepStrictEqual(s2.sendMessage(), {type: 'sync', heads: getHeads(n2), need: getHeads(n1),
-                                                have: [{lastSync: [], bloom: Uint8Array.of()}]}) // m3: response to m1
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: getHeads(n2),
-                                                have: [{lastSync: [], bloom: Uint8Array.of()}]}) // m4: response to m2
-      for (let i = 0; i < 9; i++) assert.strictEqual(s1.sendMessage().type, 'change') // changes in response to m3
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: getHeads(n2), have: []}) // m5: response to m3
-      for (let i = 0; i < 9; i++) assert.strictEqual(s2.sendMessage().type, 'change') // changes in response to m4
-      assert.deepStrictEqual(s2.sendMessage(), {type: 'sync', heads: getHeads(n2), need: getHeads(n1), have: []}) // m6: response to m4
-      assert.deepStrictEqual(s2.sendMessage().heads, bothHeads) // m7: response to m5
-      assert.deepStrictEqual(s1.sendMessage().heads, bothHeads) // m8: response to m6
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
-      assert.deepStrictEqual(getHeads(s1.doc), getHeads(s2.doc))
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
+      
+      // save a copy of n2 as "r" to simulate recovering from crash
+      let r, rPeerState
+      ;[r, rPeerState] = [Automerge.clone(n2), n2PeerState]
+
+      // sync another few commits
+      for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
+      // everyone should be on the same page here
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(n1, n2)
+
+      // now make a few more changes, then attempt to sync the fully-up-to-date n1 with the confused r
+      for (let i = 6; i < 9; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+
+      // let's add some extra changes to R as well for this test
+      for (let i = 0; i < 3; i++) r = Automerge.change(r, {time: 0}, doc => doc.r = i)
+
+      assert.notDeepStrictEqual(getHeads(n1), getHeads(r))
+      assert.notDeepStrictEqual(n1, r)
+      assert.deepStrictEqual(n1, { x: 8 })
+      assert.deepStrictEqual(r, { x: 2, r: 2 })
+      ;[n1, r, n1PeerState, rPeerState] = Automerge.sync(n1, r, n1PeerState, rPeerState)
+      assert.deepStrictEqual(getHeads(n1), getHeads(r))
+      assert.deepStrictEqual(n1, r)
     })
   })
 
