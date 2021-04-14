@@ -91,15 +91,15 @@ describe('Data sync protocol', () => {
 
       it('should work with prior sync state', () => {
         // create & synchronize two nodes
-        let n1 = Automerge.init(), n2 = Automerge.init()
+        let n1 = Automerge.init(), n2 = Automerge.init(), n1PeerState, n2PeerState
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
-        ;[n1, n2, senderPeerState, receiverPeerState] = Automerge.sync(n1, n2)
+        ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2)
 
         // modify the first node further
         for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
 
         assert.notDeepStrictEqual(n1, n2)
-        ;[n1, n2, senderPeerState, receiverPeerState] = Automerge.sync(n1, n2, senderPeerState, receiverPeerState)
+        ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
         assert.deepStrictEqual(n1, n2)
       })
 
@@ -142,7 +142,7 @@ describe('Data sync protocol', () => {
 
       it('should work regardless of who initiates the exchange', () => {
         // create & synchronize two nodes
-        let n1 = Automerge.init(), n2 = Automerge.init()
+        let n1 = Automerge.init(), n2 = Automerge.init(), n1PeerState, n2PeerState
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
         ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2)
 
@@ -510,7 +510,7 @@ describe('Data sync protocol', () => {
       // n2 has {c0, c1, c2, n1c1, n1c2, n2c1, n2c2, n2c3};
       // n3 has {c0, c1, c2, n3c1, n3c2, n3c3}.
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
-      let p13, p12, p21, p32, p31, p23, message
+      let p13, p12, p21, p32, p31, p23, message1, message2, message3
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       // sync all 3 nodes
       ;[n1, n2, p12, p21] = Automerge.sync(n1,n2);
