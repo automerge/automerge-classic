@@ -13,8 +13,8 @@ function getHeads(doc) {
 describe('Data sync protocol', () => {
   // FIXME: why is there a bloom filter here? we don't "have" anything
   const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}]
-  const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [] }
-  const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [] }
+  const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [], lastSentHeads: [] }
+  const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [], lastSentHeads: [] }
   const expectedEmptyDocSyncMessage = { 
     changes: [],
     have: emptyDocBloomFilter, 
@@ -58,7 +58,7 @@ describe('Data sync protocol', () => {
 
         // generate a naive sync message
         ;[peer1,m1] = Automerge.generateSyncMessage(n1)
-        assert.deepStrictEqual(peer1, anUnknownPeerState)
+        assert.deepStrictEqual(peer1, {...anUnknownPeerState, lastSentHeads: getHeads(n1)})
 
         // heads are equal so this message should be null
         ;[n2, peer2] = Automerge.receiveSyncMessage(n2,m1)
@@ -198,6 +198,17 @@ describe('Data sync protocol', () => {
       ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
+    })
+
+    it('should ensure non-empty state after sync', () => {
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1PeerState = null, n2PeerState = null
+
+      for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
+
+      assert.deepStrictEqual(n1PeerState.theirHeads, getHeads(n1))
+      assert.deepStrictEqual(n2PeerState.theirHeads, getHeads(n1))
     })
 
     it('should re-sync after one node crashed with data loss', () => {
@@ -543,6 +554,7 @@ describe('Data sync protocol', () => {
       for (let i = 3; i < 6; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       let message, peer1, peer2;
       ;[n1,n2,peer1,peer2] = Automerge.sync(n1,n2);
+      peer1.lastSentHeads = [] // force generateSyncMessage to return a message even though nothing changed
       ;[peer1, message] = Automerge.generateSyncMessage(n1, peer1)
       const modMsg = decodeSyncMessage(message)
       modMsg.need = lastSync // re-request change 2
