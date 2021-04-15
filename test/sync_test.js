@@ -242,8 +242,8 @@ describe('Data sync protocol', () => {
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
 
-      assert.deepStrictEqual(n1PeerState.theirHeads, getHeads(n1))
-      assert.deepStrictEqual(n2PeerState.theirHeads, getHeads(n1))
+      assert.deepStrictEqual(n1PeerState.sharedHeads, getHeads(n1))
+      assert.deepStrictEqual(n2PeerState.sharedHeads, getHeads(n1))
     })
 
     it('should re-sync after one node crashed with data loss', () => {
