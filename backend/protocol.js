@@ -61,20 +61,17 @@ function generateSyncMessage(backend, peerState) {
     // but... it will work without it, just risks lots of resent data if you have many peers
     const have = (!ourNeed.length) ? [makeBloomFilter(state, sharedHeads)] : [];
 
-    // XXX: this feature is currently disabled / not working
     // Fall back to a full re-sync if the sender's last sync state includes hashes
     // that we don't know. This could happen if we crashed after the last sync and
     // failed to persist changes that the other node already sent us.
-/*
     if (theirHave.length > 0) {
         const lastSync = theirHave[0].lastSync;
         if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
             // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
-            const dummySync = { heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: [] };
-            return [peerState, dummySync];
+            const resetMsg = { heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: [] };
+            return [peerState, encodeSyncMessage(resetMsg)];
         }
     }
-*/
 
     // XXX: we should limit ourselves to only sending a subset of all the messages, probably limited by a total message size
     //      these changes should ideally be RLE encoded but we haven't implemented that yet.
