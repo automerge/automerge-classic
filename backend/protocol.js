@@ -139,6 +139,12 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
         lastSentHeads = heads
     }
 
+    // If all of the remote heads are known to us, that means either our heads are equal, or we are
+    // ahead of the remote peer. In this case, take the remote heads to be our shared heads.
+    if (heads.every(head => Backend.getChangeByHash(backend, head))) {
+        sharedHeads = heads
+    }
+
     const newPeerState = {
         sharedHeads, // what we have in common to generate an efficient bloom filter
         lastSentHeads,
