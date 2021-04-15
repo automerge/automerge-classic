@@ -103,21 +103,57 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(n1, n2)
       })
 
-      it.skip('after syncing, both sides should not generate messages', () => {
+      it('should not generate messages once synced', () => {
         // create & synchronize two nodes
-        let n1 = Automerge.init(), n2 = Automerge.init()
-        let p1, p2, message
+        let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
+        let p1, p2, message, patch
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
         for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, doc => doc.y = i)        
 
-        ;[n1, n2, p1, p2] = Automerge.sync(n2, n1)
+        A = Automerge.Backend
+        n1 = Automerge.Frontend.getBackendState(n1)
+        n2 = Automerge.Frontend.getBackendState(n2)
 
-        ;[p1, message] = Automerge.generateSyncMessage(n1,p1)
+        // NB: This test assumes there are no false positives in the bloom filter,
+        //     which is coincidentally the case with the given IDs, but might not be at some point in the future.
+        //     (There's a 1% chance a format change could cause a false positive.)
 
+        // n1 reports what it has 
+        ;[p1, message] = A.generateSyncMessage(n1,p1)
+
+        // n2 receives that message and sends changes along with what it has
+        ;[n2, p2, patch] = A.receiveSyncMessage(n2, message)
+        ;[p2, message] = A.generateSyncMessage(n2,p2)
+        assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
+        assert.deepStrictEqual(patch, null) // no changes arrived
+
+        // n1 receives the changes and replies with the changes it now knows n2 needs
+        ;[n1, p1, patch] = A.receiveSyncMessage(n1, message)
+        ;[p1, message] = A.generateSyncMessage(n1,p1)
+        assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
+        // assert.deepStrictEqual(n1, {x: 4, y: 4})
+        assert.notDeepStrictEqual(patch, null) // changes arrived
+
+        // n2 applies the changes and sends confirmation ending the exchange
+        ;[n2, p2, patch] = A.receiveSyncMessage(n2, message)
+        ;[p2, message] = A.generateSyncMessage(n2,p2)
+        // assert.deepStrictEqual(n2, {x: 4, y: 4})
+        assert.notDeepStrictEqual(patch, null) // changes arrived
+
+        // n1 receives the message and has nothing more to say
+        ;[n1, p1, patch] = A.receiveSyncMessage(n1, message)
+        ;[p1, message] = A.generateSyncMessage(n1,p1)
+        assert.deepStrictEqual(message, null)
+        assert.deepStrictEqual(patch, null) // no changes arrived
+
+        // n2 also has nothing left to say
+        ;[p2, message] = A.generateSyncMessage(n2,p2)
         assert.deepStrictEqual(message, null)
 
-        ;[p2, message] = Automerge.generateSyncMessage(n2,p2)
+        ;[p1, message] = A.generateSyncMessage(n1,p1)
+        assert.deepStrictEqual(message, null)
 
+        ;[p2, message] = A.generateSyncMessage(n2,p2)
         assert.deepStrictEqual(message, null)
       })
 
