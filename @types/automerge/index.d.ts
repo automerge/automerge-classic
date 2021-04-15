@@ -67,6 +67,9 @@ declare module 'automerge' {
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
 
+  function generateSyncMessage<T>(doc: Doc<T>, peerState: PeerState): [PeerState, BinarySyncMessage?]
+  function receiveSyncMessage<T>(doc: Doc<T>, message: BinarySyncMessage, peerState: PeerState): [Doc<T>, PeerState]
+
   // custom CRDT types
 
   class TableRow {
@@ -151,7 +154,7 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(backend: BackendState, peerState: PeerState, changes?: Change[]): [PeerState, BinarySyncMessage?]
+    function generateSyncMessage(backend: BackendState, peerState: PeerState): [PeerState, BinarySyncMessage?]
     function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState: PeerState): [BackendState, PeerState, Patch?]
     function emptyPeerState(): PeerState
   }

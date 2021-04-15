@@ -38,26 +38,16 @@ function emptyChange(doc, options) {
 
 function clone(doc, options = {}) {
   const state = backend.clone(Frontend.getBackendState(doc))
-  const patch = backend.getPatch(state)
-  patch.state = state
-  return Frontend.applyPatch(init(options), patch)
+  return applyPatch(init(options), backend.getPatch(state), state, [], options)
 }
 
 function free(doc) {
   backend.free(Frontend.getBackendState(doc))
 }
 
-function load(data, options) {
+function load(data, options = {}) {
   const state = backend.load(data)
-  const patch = backend.getPatch(state)
-  patch.state = state
-  const doc = Frontend.applyPatch(init(options), patch)
-
-  if (doc[OPTIONS].patchCallback) {
-    delete patch.state
-    doc[OPTIONS].patchCallback(patch, {}, doc, false, [data])
-  }
-  return doc
+  return applyPatch(init(options), backend.getPatch(state), state, [data], options)
 }
 
 function save(doc) {
@@ -82,10 +72,8 @@ function getAllChanges(doc) {
   return backend.getAllChanges(Frontend.getBackendState(doc))
 }
 
-function applyChanges(doc, changes, options = {}) {
-  const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = backend.applyChanges(oldState, changes)
-  patch.state = newState
+function applyPatch(doc, patch, backendState, changes, options) {
+  patch.state = backendState
   const newDoc = Frontend.applyPatch(doc, patch)
 
   const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
@@ -94,6 +82,12 @@ function applyChanges(doc, changes, options = {}) {
     patchCallback(patch, doc, newDoc, false, changes)
   }
   return newDoc
+}
+
+function applyChanges(doc, changes, options = {}) {
+  const oldState = Frontend.getBackendState(doc)
+  const [newState, patch] = backend.applyChanges(oldState, changes)
+  return applyPatch(doc, patch, newState, changes, options)
 }
 
 function getMissingDeps(doc, changes = [], heads = []) {
@@ -129,6 +123,23 @@ function getHistory(doc) {
   })
 }
 
+function generateSyncMessage(doc, peerState) {
+  return backend.generateSyncMessage(Frontend.getBackendState(doc), peerState)
+}
+
+function receiveSyncMessage(doc, message, oldPeerState) {
+  const [backendState, peerState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), message, oldPeerState)
+  if (!patch) return [doc, peerState]
+
+  // The patchCallback is passed as argument all changes that are applied.
+  // We get those from the sync message if a patchCallback is present.
+  let changes = null
+  if (doc[OPTIONS].patchCallback) {
+    changes = backend.decodeSyncMessage(message).changes
+  }
+  return [applyPatch(doc, patch, backendState, changes, {}), peerState]
+}
+
 /**
  * Replaces the default backend implementation with a different one.
  * This allows you to switch to using the Rust/WebAssembly implementation.
@@ -141,17 +152,17 @@ function sync(a, b, aPeerState = null, bPeerState = null) {
   const MAX_ITER = 10
   let msg = null, i = 0
   do {
-    ;[aPeerState, msg] = Frontend.generateSyncMessage(a, aPeerState)
+    ;[aPeerState, msg] = generateSyncMessage(a, aPeerState)
     if (msg) {
-      ;[b, bPeerState] = Frontend.receiveSyncMessage(b, msg, bPeerState)
+      ;[b, bPeerState] = receiveSyncMessage(b, msg, bPeerState)
     }
 
     // we need to give both sender and receiver a chance to start the synchronization
     if (!msg && i > 0) break
 
-    ;[bPeerState, msg] = Frontend.generateSyncMessage(b, bPeerState)
+    ;[bPeerState, msg] = generateSyncMessage(b, bPeerState)
     if (msg) {
-      ;[a, aPeerState] = Frontend.receiveSyncMessage(a, msg, aPeerState)
+      ;[a, aPeerState] = receiveSyncMessage(a, msg, aPeerState)
     }
 
     if (i++ > MAX_ITER) {
@@ -166,13 +177,12 @@ module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend, sync,
+  Frontend, setDefaultBackend, sync, generateSyncMessage, receiveSyncMessage,
   get Backend() { return backend }
 }
 
 for (let name of ['getObjectId', 'getObjectById', 'getActorId',
      'setActorId', 'getConflicts', 'getLastLocalChange',
-     'Text', 'Table', 'Counter', 'Observable',
-     'generateSyncMessage', 'receiveSyncMessage']) {
+     'Text', 'Table', 'Counter', 'Observable']) {
   module.exports[name] = Frontend[name]
 }
