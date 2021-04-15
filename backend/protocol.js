@@ -47,7 +47,7 @@ function compareArrays(a, b) {
     given a backend and what we believe to be the state of our peer,
     generate a message which tells them about we have and includes any changes we believe they need
 */
-function generateSyncMessage(backend, peerState) {
+function generateSyncMessage(backend, peerState, fetch = false) {
     peerState = peerState || emptyPeerState()
 
     const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave, unappliedChanges } = peerState;
@@ -75,7 +75,7 @@ function generateSyncMessage(backend, peerState) {
 
     // XXX: we should limit ourselves to only sending a subset of all the messages, probably limited by a total message size
     //      these changes should ideally be RLE encoded but we haven't implemented that yet.
-    const changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
+    const changesToSend = !fetch && Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
     const heads = Backend.getHeads(backend)
 
     // If the heads are equal, we're in sync and don't need to do anything further
