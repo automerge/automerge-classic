@@ -30,6 +30,7 @@ const { backendState } = require('./util')
 function emptyPeerState() {
     return {
         sharedHeads: [],
+        lastSentHeads: [],
         theirHeads: null,
         theirNeed: null,
         ourNeed: [],
@@ -125,7 +126,7 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
     const { heads, changes } = message;
     const beforeHeads = Backend.getHeads(backend);
     // when we receive a sync message, first we apply any changes they sent us
-    if (changes.length) {
+    if (changes.length > 0) {
         unappliedChanges = [...unappliedChanges, ...changes];
         ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads);
         if (ourNeed.length === 0) {
