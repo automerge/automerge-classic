@@ -66,6 +66,7 @@ class BloomFilter {
    * Returns the Bloom filter state, encoded as a byte array.
    */
   get bytes() {
+    if (this.numEntries === 0) return Uint8Array.of()
     const encoder = new Encoder()
     encoder.appendUint32(this.numEntries)
     encoder.appendUint32(this.numBitsPerEntry)

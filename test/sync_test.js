@@ -11,8 +11,7 @@ function getHeads(doc) {
 }
 
 describe('Data sync protocol', () => {
-  // FIXME: why is there a bloom filter here? we don't "have" anything
-  const emptyDocBloomFilter = [ { bloom: new Uint8Array([0, 10, 7]), lastSync: []}]
+  const emptyDocBloomFilter = [ { bloom: Uint8Array.of(), lastSync: []}]
   const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [], lastSentHeads: [] }
   const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [], lastSentHeads: [] }
   const expectedEmptyDocSyncMessage = { 
@@ -110,7 +109,7 @@ describe('Data sync protocol', () => {
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
         for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, doc => doc.y = i)        
 
-        A = Automerge.Backend
+        const A = Automerge.Backend
         n1 = Automerge.Frontend.getBackendState(n1)
         n2 = Automerge.Frontend.getBackendState(n2)
 
