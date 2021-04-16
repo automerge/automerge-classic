@@ -156,8 +156,8 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(backend: BackendState, peerState: PeerState): [PeerState, BinarySyncMessage?]
-    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState: PeerState): [BackendState, PeerState, Patch?]
+    function generateSyncMessage(backend: BackendState, peerState?: PeerState): [PeerState, BinarySyncMessage?]
+    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState?: PeerState): [BackendState, PeerState, Patch?]
     function emptyPeerState(): PeerState
   }
 
