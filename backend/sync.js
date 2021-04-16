@@ -21,6 +21,7 @@ const { backendState } = require('./util')
 const OpSet = require('./op_set')
 const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
 const { decodeChangeMeta } = require('./columnar')
+const { change } = require('../frontend')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
@@ -165,10 +166,16 @@ function encodeSyncMessage(message) {
     encodeHashes(encoder, have.lastSync)
     encoder.appendPrefixedBytes(have.bloom)
   }
-  const changes = message.changes || []
-  encoder.appendUint32(message.changes.length)
-  for (let change of message.changes) {  
-    encoder.appendPrefixedBytes(change)
+  const changes = message.changes
+  if (Array.isArray(changes)) {
+    encoder.appendByte(1) // changes follow
+    encoder.appendUint32(message.changes.length)
+    for (let change of message.changes) {  
+      encoder.appendPrefixedBytes(change)
+    }
+  }
+  else {
+    encoder.appendByte(0) // no changes follow
   }
   return encoder.buffer
 }
@@ -191,11 +198,15 @@ function decodeSyncMessage(bytes) {
     const bloom = decoder.readPrefixedBytes(decoder)
     message.have.push({lastSync, bloom})
   }
-  const changeCount = decoder.readUint32()
-  for (let i = 0; i < changeCount; i++) {
-    const change = decoder.readPrefixedBytes()
-    message.changes.push(change)
+  const changesFollow = decoder.readByte()
+  if (changesFollow) {
+    const changeCount = decoder.readUint32()
+    for (let i = 0; i < changeCount; i++) {
+      const change = decoder.readPrefixedBytes()
+      message.changes.push(change)
+    }
   }
+  else { message.changes = null }
   // Ignore any trailing bytes -- they can be used for extensions by future versions of the protocol
   return message
 }

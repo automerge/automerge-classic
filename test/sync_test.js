@@ -33,58 +33,12 @@ function sync(a, b, aPeerState = null, bPeerState = null) {
   return [a, b, aPeerState, bPeerState]
 }
 
-
-function sync(a, b, aPeerState = null, bPeerState = null) {
-  const MAX_ITER = 10
-  let aToBmsg = null, bToAmsg = null, i = 0
-  do {
-    ;[aPeerState, aToBmsg] = Automerge.generateSyncMessage(a, aPeerState)
-    ;[bPeerState, bToAmsg] = Automerge.generateSyncMessage(b, bPeerState)
-
-    if (aToBmsg) {
-      ;[b, bPeerState] = Automerge.receiveSyncMessage(b, aToBmsg, bPeerState)
-    }
-    if (bToAmsg) {
-      ;[a, aPeerState] = Automerge.receiveSyncMessage(a, bToAmsg, aPeerState)
-    }
-
-    if (i++ > MAX_ITER) {
-      throw new Error(`Did not synchronize within ${MAX_ITER} iterations. Do you have a bug causing an infinite loop?`)
-    }
-  } while (aToBmsg || bToAmsg)
-
-  return [a, b, aPeerState, bPeerState]
-}
-
-function nsync(backends) {
-  // [[peer1, [sync2state, sync3state, ...], [peer2, [sync1state, sync3state, ...], ...]
-  const MAX_ITER = 10
-  let aToBmsg = null, bToAmsg = null, i = 0
-  do {
-    ;[aPeerState, aToBmsg] = Automerge.generateSyncMessage(a, aPeerState)
-    ;[bPeerState, bToAmsg] = Automerge.generateSyncMessage(b, bPeerState)
-
-    if (aToBmsg) {
-      ;[b, bPeerState] = Automerge.receiveSyncMessage(b, aToBmsg, bPeerState)
-    }
-    if (bToAmsg) {
-      ;[a, aPeerState] = Automerge.receiveSyncMessage(a, bToAmsg, aPeerState)
-    }
-
-    if (i++ > MAX_ITER) {
-      throw new Error(`Did not synchronize within ${MAX_ITER} iterations. Do you have a bug causing an infinite loop?`)
-    }
-  } while (aToBmsg || bToAmsg)
-
-  return [a, b, aPeerState, bPeerState]
-}
-
 describe('Data sync protocol', () => {
   const emptyDocBloomFilter = [ { bloom: Uint8Array.of(), lastSync: []}]
   const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [], sentChanges: [], lastSentHeads: [] }
   const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [], sentChanges: [], lastSentHeads: [] }
   const expectedEmptyDocSyncMessage = { 
-    changes: [],
+    changes: null,
     have: emptyDocBloomFilter, 
     heads: [],
     need: []
@@ -194,11 +148,13 @@ describe('Data sync protocol', () => {
         ;[n2, p2, patch] = A.receiveSyncMessage(n2, message)
         ;[p2, message] = A.generateSyncMessage(n2,p2)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
+        assert.deepStrictEqual(decodeSyncMessage(message).need.length, 0)
         assert.deepStrictEqual(patch, null) // no changes arrived
 
         // n1 receives the changes and replies with the changes it now knows n2 needs
         ;[n1, p1, patch] = A.receiveSyncMessage(n1, message)
         ;[p1, message] = A.generateSyncMessage(n1,p1)
+        console.log(decodeSyncMessage(message))
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
         // assert.deepStrictEqual(n1, {x: 4, y: 4})
         assert.notDeepStrictEqual(patch, null) // changes arrived
@@ -254,9 +210,9 @@ describe('Data sync protocol', () => {
         ;[p1, b1tob2Message] = Backend.generateSyncMessage(b1, p1)
         ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2, p2)
 
-        assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes.length, 0)
+        assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes, null)
         assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync.length, 0)
-        assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 0)
+        assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes, null)
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).have[0].lastSync.length, 0)
 
         // n1 and n2 receives that message and update sync state but make no patch 
@@ -492,16 +448,16 @@ describe('Data sync protocol', () => {
     // pass because the loop will run until a false positive is found, but they will be slower.
 
     // 3
-    it.skip('should handle a false-positive head', () => {
+    it('should handle a false-positive head', () => {
       // Scenario:                                                            ,-- n1
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- n2
       // where n2 is a false positive in the Bloom filter containing {n1}.
-      // lastSync is c9.
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let s1, s2;
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      const lastSync = getHeads(n1)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
+      ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
+
       for (let i = 3; ; i++) { // search for false positive; see comment above
         const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
@@ -509,20 +465,46 @@ describe('Data sync protocol', () => {
           n1 = n1up; n2 = n2up; break
         }
       }
-      const bothHeads = [getHeads(n1)[0], getHeads(n2)[0]].sort()
-      const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m3: response to m1
-      assert.strictEqual(s1.sendMessage().hash, getHeads(n1)[0]) // change in response to m2
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: getHeads(n2), have: []}) // m4: response to m2
-      assert.deepStrictEqual(s2.sendMessage().hash, getHeads(n2)[0]) // change in response to m4
-      assert.deepStrictEqual(s2.sendMessage().heads, bothHeads) // m5: response to n1's change and m4
-      assert.deepStrictEqual(s1.sendMessage().heads, bothHeads) // m6: response to n2's change and m5
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
-      assert.deepStrictEqual(getHeads(s1.doc), bothHeads)
-      assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
+
+      // N1 creates a sync message for N2 with an ill-fated bloom 
+      // (n1 offers a change since it can tell from past sync our peer will want it)
+      ;[s1, message] = Automerge.generateSyncMessage(n1, s1);
+      assert.strictEqual(decodeSyncMessage(message).changes.length, 1)
+
+      // N2 receives it and DOESN'T send a change back
+      ;[n2, s2] = Automerge.receiveSyncMessage(n2, message, s2)
+      ;[s2, message] = Automerge.generateSyncMessage(n2, s2);
+      assert.strictEqual(decodeSyncMessage(message).changes.length, 0)
+
+      // n1 should now realize it's missing that commit and request it explicitly
+      ;[n1, s1] = Automerge.receiveSyncMessage(n1, message, s1)
+      ;[s1, message] = Automerge.generateSyncMessage(n1, s1);
+      assert.strictEqual(s1.ourNeed.length, 1)
+
+      // n2 should fulfill that request
+      ;[n2, s2] = Automerge.receiveSyncMessage(n2, message, s2)
+      ;[s2, message] = Automerge.generateSyncMessage(n2, s2);
+      assert.strictEqual(decodeSyncMessage(message).changes.length, 1)
+
+      // n1 should apply the change and the two should now be in sync
+      ;[n1, s1] = Automerge.receiveSyncMessage(n1, message, s1)
+      // XXX: another head mismatch bug...
+      // assert.strictEqual(getHeads(n1), getHeads(n2))
+
+      // const bothHeads = [getHeads(n1)[0], getHeads(n2)[0]].sort()
+      // const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
+      // assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
+      // assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
+      // assert.strictEqual(s2.sendMessage().type, 'sync') // m3: response to m1
+      // assert.strictEqual(s1.sendMessage().hash, getHeads(n1)[0]) // change in response to m2
+      // assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: getHeads(n1), need: getHeads(n2), have: []}) // m4: response to m2
+      // assert.deepStrictEqual(s2.sendMessage().hash, getHeads(n2)[0]) // change in response to m4
+      // assert.deepStrictEqual(s2.sendMessage().heads, bothHeads) // m5: response to n1's change and m4
+      // assert.deepStrictEqual(s1.sendMessage().heads, bothHeads) // m6: response to n2's change and m5
+      // assert.strictEqual(s1.sendMessage(), undefined)
+      // assert.strictEqual(s2.sendMessage(), undefined)
+      // assert.deepStrictEqual(getHeads(s1.doc), bothHeads)
+      // assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
     })
 
     it.skip('should handle a false-positive dependency', () => {

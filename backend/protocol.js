@@ -102,18 +102,18 @@ function generateSyncMessage(backend, peerState) {
 
     // XXX: we should limit ourselves to only sending a subset of all the messages, probably limited by a total message size
     //      these changes should ideally be RLE encoded but we haven't implemented that yet.
-    let changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
+    let changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : null
     const heads = Backend.getHeads(backend)
 
     // If the heads are equal, we're in sync and don't need to do anything further
     const headsUnchanged = Array.isArray(peerState.lastSentHeads) && compareArrays(heads, peerState.lastSentHeads)
     const headsEqual = Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads)
-    if (headsUnchanged && headsEqual && changesToSend.length === 0 && ourNeed.length === 0) {
+    if (headsUnchanged && headsEqual && Array.isArray(changesToSend) && changesToSend.length === 0 && ourNeed.length === 0) {
         return [peerState, null];
         // no need to send a sync message if we know we're synced!
     }
 
-    if (peerState.sentChanges.length > 0 && changesToSend.length > 0) {
+    if (peerState.sentChanges.length > 0 && Array.isArray(changesToSend) && changesToSend.length > 0) {
       changesToSend = deduplicateChanges(peerState.sentChanges, changesToSend)
     }
 
@@ -129,7 +129,7 @@ function generateSyncMessage(backend, peerState) {
     peerState = {
         ...peerState,
         lastSentHeads: heads,
-        sentChanges: peerState.sentChanges.concat(changesToSend)
+        sentChanges: peerState.sentChanges.concat(changesToSend || [])
     }
     return [peerState, encodeSyncMessage(syncMessage)];
 }
@@ -168,14 +168,15 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
 
     const { heads, changes } = message;
     const beforeHeads = Backend.getHeads(backend);
+
     // when we receive a sync message, first we apply any changes they sent us
-    if (changes.length > 0) {
+    if (changes != null) {
         unappliedChanges = [...unappliedChanges, ...changes];
         ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads);
 
         // If there are no missing dependencies, we can apply the changes we received and update
         // sharedHeads to include the changes we applied. This does not necessarily mean we have
-        // received all the changes necessar to bring us in sync with the remote peer's heads: the
+        // received all the changes necessary to bring us in sync with the remote peer's heads: the
         // set of changes in the message may be a prefix of the change log. If the only outstanding
         // needs are for heads, that implies there are no missing dependencies.
         if (ourNeed.every(hash => heads.includes(hash))) {
