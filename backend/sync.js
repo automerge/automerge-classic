@@ -24,6 +24,7 @@ const { decodeChangeMeta } = require('./columnar')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
+const PEER_STATE_TYPE = 0x43 // first byte of an encoded peer state, for identification
 
 // These constants correspond to a 1% false positive rate. The values can be changed without
 // breaking compatibility of the network protocol, since the parameters used for a particular
@@ -200,6 +201,43 @@ function decodeSyncMessage(bytes) {
 }
 
 /**
+ * Takes a PeerState and encodes as a byte array those parts of the state that should persist across
+ * an application restart or disconnect and reconnect. The ephemeral parts of the state that should
+ * be cleared on reconnect are not encoded.
+ */
+function encodePeerState(peerState) {
+  const encoder = new Encoder()
+  encoder.appendByte(PEER_STATE_TYPE)
+  encodeHashes(encoder, peerState.sharedHeads)
+  return encoder.buffer
+}
+
+/**
+ * Takes a persisted peer state as encoded by `encodePeerState` and decodes it into a PeerState
+ * object. The parts of the peer state that were not encoded are initialised with default values.
+ */
+function decodePeerState(bytes) {
+  const decoder = new Decoder(bytes)
+  const recordType = decoder.readByte()
+  if (recordType !== PEER_STATE_TYPE) {
+    throw new RangeError(`Unexpected record type: ${recordType}`)
+  }
+  const sharedHeads = decodeHashes(decoder)
+  // Ignore any trailing bytes -- they can be used for extensions by future versions
+  // TODO: this duplicates emptyPeerState() in protocol.js. Remove the duplication when we merge
+  // the content of that file into this one.
+  return {
+    sharedHeads,
+    lastSentHeads: [],
+    theirHeads: null,
+    theirNeed: null,
+    ourNeed: [],
+    have: [],
+    unappliedChanges: []
+  }
+}
+
+/**
  * Constructs a Bloom filter containing all changes that are not one of the hashes in
  * `lastSync` or its transitive dependencies. In other words, the filter contains those
  * changes that have been applied since the version identified by `lastSync`. Returns
@@ -281,4 +319,7 @@ function getChangesToSend(backend, have, need) {
   return changesToSend
 }
 
-module.exports = { makeBloomFilter, BloomFilter, encodeSyncMessage, decodeSyncMessage, getChangesToSend }
+module.exports = {
+  makeBloomFilter, BloomFilter, encodeSyncMessage, decodeSyncMessage,
+  encodePeerState, decodePeerState, getChangesToSend
+}

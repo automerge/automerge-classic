@@ -141,7 +141,9 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
+    function decodePeerState(bytes: BinaryPeerState): PeerState
     function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
+    function encodePeerState(peerState: PeerState): BinaryPeerState
     function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
@@ -185,7 +187,9 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
-  type BinaryChange = Uint8Array & { __binarySyncMessage: true }
+  type BinaryChange = Uint8Array & { __binaryChange: true }
+  type BinaryPeerState = Uint8Array & { __binaryPeerState: true }
+
   export interface PeerState {
     sharedHeads: Hash[]
     theirNeed: Hash[]
