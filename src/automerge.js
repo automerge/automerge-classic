@@ -73,12 +73,9 @@ function getAllChanges(doc) {
 }
 
 function applyPatch(doc, patch, backendState, changes, options) {
-  patch.state = backendState
-  const newDoc = Frontend.applyPatch(doc, patch)
-
+  const newDoc = Frontend.applyPatch(doc, patch, backendState)
   const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
   if (patchCallback) {
-    delete patch.state
     patchCallback(patch, doc, newDoc, false, changes)
   }
   return newDoc
@@ -115,9 +112,7 @@ function getHistory(doc) {
       },
       get snapshot () {
         const state = backend.loadChanges(backend.init(), history.slice(0, index + 1))
-        const patch = backend.getPatch(state)
-        patch.state = state
-        return Frontend.applyPatch(init(actor), patch)
+        return Frontend.applyPatch(init(actor), backend.getPatch(state), state)
       }
     }
   })
