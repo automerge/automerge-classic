@@ -3,7 +3,7 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 const { checkEncoded } = require('./helpers')
 const { equalBytes } = require('../src/common')
 const { generateSyncMessage } = require('../backend')
-const { BloomFilter, decodeSyncMessage, encodeSyncMessage } = require('../backend/sync')
+const { BloomFilter, decodeSyncMessage, encodeSyncMessage, decodePeerState, encodePeerState } = require('../backend/sync')
 const Frontend = require("../frontend")
 
 function getHeads(doc) {
@@ -308,6 +308,8 @@ describe('Data sync protocol', () => {
 
       for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       for (let i = 15; i < 18; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = i)
+      n1PeerState = decodePeerState(encodePeerState(n1PeerState))
+      n2PeerState = decodePeerState(encodePeerState(n2PeerState))
 
       assert.notDeepStrictEqual(n1, n2)
       ;[n1, n2, n1PeerState, n2PeerState] = Automerge.sync(n1, n2, n1PeerState, n2PeerState)
@@ -351,6 +353,8 @@ describe('Data sync protocol', () => {
 
       // now make a few more changes, then attempt to sync the fully-up-to-date n1 with the confused r
       for (let i = 6; i < 9; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      n1PeerState = decodePeerState(encodePeerState(n1PeerState))
+      rPeerState = decodePeerState(encodePeerState(rPeerState))
 
       assert.notDeepStrictEqual(getHeads(n1), getHeads(r))
       assert.notDeepStrictEqual(n1, r)
@@ -390,6 +394,8 @@ describe('Data sync protocol', () => {
 
       // let's add some extra changes to R as well for this test
       for (let i = 0; i < 3; i++) r = Automerge.change(r, {time: 0}, doc => doc.r = i)
+      n1PeerState = decodePeerState(encodePeerState(n1PeerState))
+      rPeerState = decodePeerState(encodePeerState(rPeerState))
 
       assert.notDeepStrictEqual(getHeads(n1), getHeads(r))
       assert.notDeepStrictEqual(n1, r)
