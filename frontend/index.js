@@ -269,14 +269,14 @@ function emptyChange(doc, options) {
  * If it is the result of a local change, the `seq` field from the change
  * request should be included in the patch, so that we can match them up here.
  */
-function applyPatch(doc, patch) {
+function applyPatch(doc, patch, backendState = undefined) {
   const state = copyObject(doc[STATE])
 
   if (doc[OPTIONS].backend) {
-    if (!patch.state) {
-      throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
+    if (!backendState) {
+      throw new RangeError('applyPatch must be called with the updated backend state')
     }
-    state.backendState = patch.state
+    state.backendState = backendState
     return applyPatchToDoc(doc, patch, state, true)
   }
 

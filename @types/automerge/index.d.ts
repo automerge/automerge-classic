@@ -121,7 +121,7 @@ declare module 'automerge' {
   // Front & back
 
   namespace Frontend {
-    function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
+    function applyPatch<T>(doc: Doc<T>, patch: Patch, backendState?: BackendState): Doc<T>
     function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
@@ -141,7 +141,9 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
+    function decodePeerState(bytes: BinaryPeerState): PeerState
     function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
+    function encodePeerState(peerState: PeerState): BinaryPeerState
     function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
@@ -154,8 +156,8 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(backend: BackendState, peerState: PeerState): [PeerState, BinarySyncMessage?]
-    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState: PeerState): [BackendState, PeerState, Patch?]
+    function generateSyncMessage(backend: BackendState, peerState?: PeerState): [PeerState, BinarySyncMessage?]
+    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState?: PeerState): [BackendState, PeerState, Patch?]
     function emptyPeerState(): PeerState
   }
 
@@ -185,13 +187,16 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
-  type BinaryChange = Uint8Array & { __binarySyncMessage: true }
+  type BinaryChange = Uint8Array & { __binaryChange: true }
+  type BinaryPeerState = Uint8Array & { __binaryPeerState: true }
+
   export interface PeerState {
     sharedHeads: Hash[]
     theirNeed: Hash[]
     ourNeed: Hash[]
     have: SyncHave[]
     unappliedChanges: BinaryChange[]
+    sentChanges: BinaryChange[]
   }
 
   type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
