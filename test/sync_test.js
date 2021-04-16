@@ -311,7 +311,7 @@ describe('Data sync protocol', () => {
 
       })
 
-      it.skip('should assume sent changes were recieved until we hear otherwise', () => {
+      it('should assume sent changes were recieved until we hear otherwise', () => {
         let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
         let p1 = null, p2 = null, message = null
         n1 = Automerge.change(n1, doc => doc.items = [])
@@ -319,15 +319,15 @@ describe('Data sync protocol', () => {
 
         n1 = Automerge.change(n1, doc => doc.items.push('x'))
         ;[p1, message ] = Automerge.generateSyncMessage(n1,p1)
-        assert.deepStrictEqual(message.changes.length, 1)
+        assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
 
         n1 = Automerge.change(n1, doc => doc.items.push('y'))
         ;[p1, message ] = Automerge.generateSyncMessage(n1,p1)
-        assert.deepStrictEqual(message.changes.length, 1)
+        assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
 
         n1 = Automerge.change(n1, doc => doc.items.push('z'))
         ;[p1, message ] = Automerge.generateSyncMessage(n1,p1)
-        assert.deepStrictEqual(message.changes.length, 1)
+        assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
       })
 
       it('should work regardless of who initiates the exchange', () => {
