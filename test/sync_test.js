@@ -697,5 +697,57 @@ describe('Data sync protocol', () => {
       ;[peer2, message] = Automerge.generateSyncMessage(n2,peer2)
       assert.strictEqual(message, null)
     })
+
+    it('should allow a subset of changes to be sent', () => {
+      //       ,-- c1 <-- c2
+      // c0 <-+
+      //       `-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 0)
+      n3 = Automerge.merge(n3, n1)
+      for (let i = 1; i <= 2; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i) // n1 has {c0, c1, c2}
+      for (let i = 3; i <= 4; i++) n3 = Automerge.change(n3, {time: 0}, doc => doc.x = i) // n3 has {c0, c3, c4}
+      const c2 = getHeads(n1)[0], c4 = getHeads(n3)[0]
+      n2 = Automerge.merge(n2, n3) // n2 has {c0, c3, c4}
+
+      // Sync n1 and n2, so their shared heads are {c2, c4}
+      let peerState1, peerState2, msg, decodedMsg
+      ;[n1, n2, peerState1, peerState2] = Automerge.sync(n1, n2)
+      peerState1 = decodePeerState(encodePeerState(peerState1))
+      peerState2 = decodePeerState(encodePeerState(peerState2))
+      assert.deepStrictEqual(peerState1.sharedHeads, [c2, c4].sort())
+      assert.deepStrictEqual(peerState2.sharedHeads, [c2, c4].sort())
+
+      // n2 and n3 apply {c5, c6, c7, c8}
+      n3 = Automerge.change(n3, {time: 0}, doc => doc.x = 5)
+      const change5 = Automerge.getLastLocalChange(n3)
+      n3 = Automerge.change(n3, {time: 0}, doc => doc.x = 6)
+      const change6 = Automerge.getLastLocalChange(n3), c6 = getHeads(n3)[0]
+      for (let i = 7; i <= 8; i++) n3 = Automerge.change(n3, {time: 0}, doc => doc.x = i)
+      const c8 = getHeads(n3)[0]
+      n2 = Automerge.merge(n2, n3)
+
+      // Now n1 initiates a sync with n2, and n2 replies with {c5, c6}. n2 does not send {c7, c8}
+      ;[peerState1, msg] = Automerge.generateSyncMessage(n1, peerState1)
+      ;[n2, peerState2] = Automerge.receiveSyncMessage(n2, msg, peerState2)
+      ;[peerState2, msg] = Automerge.generateSyncMessage(n2, peerState2)
+      decodedMsg = decodeSyncMessage(msg)
+      decodedMsg.changes = [change5, change6]
+      msg = encodeSyncMessage(decodedMsg)
+      ;[n1, peerState1] = Automerge.receiveSyncMessage(n1, msg, peerState1)
+      assert.deepStrictEqual(peerState1.sharedHeads, [c2, c6].sort())
+
+      // n1 replies, confirming the receipt of {c5, c6} and requesting the remaining changes
+      ;[peerState1, msg] = Automerge.generateSyncMessage(n1, peerState1)
+      ;[n2, peerState2] = Automerge.receiveSyncMessage(n2, msg, peerState2)
+      assert.deepStrictEqual(decodeSyncMessage(msg).need, [c8])
+      assert.deepStrictEqual(peerState2.sharedHeads, [c2, c6].sort())
+
+      // n2 sends the remaining changes {c7, c8}
+      ;[peerState2, msg] = Automerge.generateSyncMessage(n2, peerState2)
+      ;[n1, peerState1] = Automerge.receiveSyncMessage(n1, msg, peerState1)
+      //assert.strictEqual(decodeSyncMessage(msg).changes.length, 2) // FIXME: currently returns 1
+      //assert.deepStrictEqual(peerState1.sharedHeads, [c2, c8].sort())
+    })
   })
 })

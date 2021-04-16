@@ -99,11 +99,22 @@ function generateSyncMessage(backend, peerState, fetch = false) {
     return [{...peerState, lastSentHeads: heads}, encodeSyncMessage(syncMessage)];
 }
 
-/* note that these implementations are slow because heads should be few */
-/* to you, the future reader wondering why your code is slow: sorry about that */
+/**
+ * Computes the heads that we share with a peer after we have just received some changes from that
+ * peer and applied them. This may not be sufficient to bring our heads in sync with the other
+ * peer's heads, since they may have only sent us a subset of their outstanding changes.
+ *
+ * `myOldHeads` are the local heads before the most recent changes were applied, `myNewHeads` are
+ * the local heads after those changes were applied, and `ourOldSharedHeads` is the previous set of
+ * shared heads. Applying the changes will have replaced some heads with others, but some heads may
+ * have remained unchanged (because they are for branches on which no changes have been added). Any
+ * such unchanged heads remain in the sharedHeads. Any sharedHeads that were replaced by applying
+ * changes are also replaced as sharedHeads. This is safe because if we received some changes from
+ * another peer, that means that peer had those changes, and therefore we now both know about them.
+ */
 function advanceHeads(myOldHeads, myNewHeads, ourOldSharedHeads) {
     const newHeads = myNewHeads.filter((head) => !myOldHeads.includes(head));
-    const commonHeads = newHeads.filter((head) => myOldHeads.includes(head) && ourOldSharedHeads.includes(head));
+    const commonHeads = ourOldSharedHeads.filter((head) => myNewHeads.includes(head));
     const advancedHeads = [...new Set([...newHeads, ...commonHeads])].sort();
     return advancedHeads;
 }
@@ -126,7 +137,13 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
     if (changes.length > 0) {
         unappliedChanges = [...unappliedChanges, ...changes];
         ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads);
-        if (ourNeed.length === 0) {
+
+        // If there are no missing dependencies, we can apply the changes we received and update
+        // sharedHeads to include the changes we applied. This does not necessarily mean we have
+        // received all the changes necessar to bring us in sync with the remote peer's heads: the
+        // set of changes in the message may be a prefix of the change log. If the only outstanding
+        // needs are for heads, that implies there are no missing dependencies.
+        if (ourNeed.every(hash => heads.includes(hash))) {
             ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges);
             unappliedChanges = [];
             sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads);
