@@ -94,13 +94,13 @@ describe('Data sync protocol', () => {
     describe('an empty local doc', () => {
       it('should send a sync message implying no local data', () => {
         let n1 = Automerge.init()
-        
+
         let p1, m1
         ;[p1, m1] = Automerge.generateSyncMessage(n1)
         assert.deepStrictEqual(p1, anUnknownPeerState)
         assert.deepStrictEqual(decodeSyncMessage(m1), expectedEmptyDocSyncMessage)
       })
-      
+
       it('should not reply if we have no data as well', () => {
         const n1 = Automerge.init()
         let n2 = Automerge.init()
@@ -140,7 +140,7 @@ describe('Data sync protocol', () => {
         // make changes for n1 that n2 should request
         n1 = Automerge.change(n1, doc => doc.n = [])
         for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
-                
+
         assert.notDeepStrictEqual(n1, n2)
         const [after1, after2] = sync(n1, n2)
         assert.deepStrictEqual(after1, after2)
@@ -148,11 +148,11 @@ describe('Data sync protocol', () => {
 
       it('should sync peers where one has commits the other does not', () => {
         let n1 = Automerge.init(), n2 = Automerge.init()
-        
+
         // make changes for n1 that n2 should request
         n1 = Automerge.change(n1, doc => doc.n = [])
         for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
-        
+
         assert.notDeepStrictEqual(n1, n2)
         ;[n1, n2] = sync(n1, n2)
         assert.deepStrictEqual(n1, n2)
@@ -161,7 +161,7 @@ describe('Data sync protocol', () => {
       it('should work with prior sync state', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init(), n1PeerState, n2PeerState
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
         ;[n1, n2, n1PeerState, n2PeerState] = sync(n1, n2)
 
         // modify the first node further
@@ -176,8 +176,8 @@ describe('Data sync protocol', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
         let p1, p2, message, patch
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
-        for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, doc => doc.y = i)        
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, { time: 0 }, doc => doc.x = i)
+        for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, { time: 0 }, doc => doc.y = i)
 
         const A = Automerge.Backend
         n1 = Automerge.Frontend.getBackendState(n1)
@@ -225,7 +225,7 @@ describe('Data sync protocol', () => {
         ;[p2, message] = A.generateSyncMessage(n2,p2)
         assert.deepStrictEqual(message, null)
       })
-      
+
       it('should allow simultaneous messages during synchronization', () => {
         const Frontend = Automerge.Frontend
         const Backend = Automerge.Backend
@@ -236,12 +236,12 @@ describe('Data sync protocol', () => {
 
         let p1, p2, b1tob2Message, b2tob1Message, patch, change, pat1, pat2, c1, c2
         for (let i = 0; i < 5; i++) {
-          ;[f1, c1] = Automerge.Frontend.change(f1, doc => doc.x = i)
+          ;[f1, c1] = Automerge.Frontend.change(f1, { time: 0 }, doc => doc.x = i)
           ;[b1, pat1] = Automerge.Backend.applyLocalChange(b1, c1)
           f1 = Automerge.Frontend.applyPatch(f1, pat1)
         }
         for (let i = 0; i < 5; i++) {
-          ;[f2, c2] = Automerge.Frontend.change(f2, doc => doc.y = i)
+          ;[f2, c2] = Automerge.Frontend.change(f2, { time: 0 }, doc => doc.y = i)
           ;[b2, pat2] = Automerge.Backend.applyLocalChange(b2, c2)
           f2 = Automerge.Frontend.applyPatch(f2, pat2)
         }
@@ -272,7 +272,7 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes.length, 5)
         ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2,p2)
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 5)
-        
+
         // both should now apply the changes and update the frontend 
         ;[b1, p1, patch1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
         assert.deepStrictEqual(p1.unappliedChanges.length, 0)
@@ -291,12 +291,12 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes.length, 0)
         ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2,p2)
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 0)
-        
+
         // XXX: these heads aren't the same because we never update lastSync to include heads we made locally 
         // assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync, 
         //                        decodeSyncMessage(b2tob1Message).have[0].lastSync)
         // assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync.length, 2)
-        
+
         // n1 receives the changes and replies with the changes it now knows n2 needs
         ;[b1, p1, pat1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
         ;[b2, p2, pat2] = Backend.receiveSyncMessage(b2, b1tob2Message, p2)
@@ -308,7 +308,7 @@ describe('Data sync protocol', () => {
         ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2,p2)
         assert.deepStrictEqual(b1tob2Message, null)
         assert.deepStrictEqual(b2tob1Message, null)
-        
+
       })
 
       it.skip('should assume sent changes were recieved until we hear otherwise', () => {
@@ -333,7 +333,7 @@ describe('Data sync protocol', () => {
       it('should work regardless of who initiates the exchange', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init(), n1PeerState, n2PeerState
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)        
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
         ;[n1, n2, n1PeerState, n2PeerState] = sync(n1, n2)
 
         // modify the first node further
@@ -356,7 +356,7 @@ describe('Data sync protocol', () => {
       // create two peers both with divergent commits 
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      
+
       ;[n1, n2] = sync(n1, n2)
 
       for (let i = 10; i < 15; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
@@ -372,12 +372,12 @@ describe('Data sync protocol', () => {
       // Scenario:                                                            ,-- c10 <-- c11 <-- c12 <-- c13 <-- c14
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- c15 <-- c16 <-- c17
-      // lastSync is c9.      
-      
+      // lastSync is c9.
+
       // create two peers both with divergent commits 
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      
+
       let n1PeerState = null, n2PeerState = null
       ;[n1, n2, n1PeerState, n2PeerState] = sync(n1, n2, n1PeerState, n2PeerState)
 
@@ -410,11 +410,11 @@ describe('Data sync protocol', () => {
       // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let n1PeerState = null, n2PeerState = null
-      
+
       // n1 makes three changes, which we sync to n2
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, n1PeerState, n2PeerState] = sync(n1, n2, n1PeerState, n2PeerState)
-      
+
       // save a copy of n2 as "r" to simulate recovering from crash
       let r, rPeerState
       ;[r, rPeerState] = [Automerge.clone(n2), n2PeerState]
@@ -448,11 +448,11 @@ describe('Data sync protocol', () => {
       // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let n1PeerState = null, n2PeerState = null
-      
+
       // n1 makes three changes, which we sync to n2
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, n1PeerState, n2PeerState] = sync(n1, n2, n1PeerState, n2PeerState)
-      
+
       // save a copy of n2 as "r" to simulate recovering from crash
       let r, rPeerState
       ;[r, rPeerState] = [Automerge.clone(n2), n2PeerState]
@@ -531,7 +531,7 @@ describe('Data sync protocol', () => {
       //                                                                      `-- n2c1 <-- n2c2
       // where n2c1 is a false positive in the Bloom filter containing {n1c1, n1c2}.
       // lastSync is c9.
-      
+
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
@@ -672,10 +672,10 @@ describe('Data sync protocol', () => {
       // where n2 causes a false positive in the Bloom filter containing {n1}.
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let s1, s2, message;
-      
+
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1,n2,s1,s2] = sync(n1,n2);
-      
+
       for (let i = 3; ; i++) { // brute-force search for false positive; see comment above
         const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
