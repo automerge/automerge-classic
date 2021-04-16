@@ -233,7 +233,8 @@ function decodePeerState(bytes) {
     theirNeed: null,
     ourNeed: [],
     have: [],
-    unappliedChanges: []
+    unappliedChanges: [],
+    sentChanges: []
   }
 }
 

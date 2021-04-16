@@ -5,6 +5,7 @@ const { equalBytes } = require('../src/common')
 const { generateSyncMessage } = require('../backend')
 const { BloomFilter, decodeSyncMessage, encodeSyncMessage, decodePeerState, encodePeerState } = require('../backend/sync')
 const Frontend = require("../frontend")
+const { getChangeChecksum } = require('../backend/columnar')
 
 function getHeads(doc) {
   return Automerge.Backend.getHeads(Automerge.Frontend.getBackendState(doc))
@@ -12,8 +13,8 @@ function getHeads(doc) {
 
 describe('Data sync protocol', () => {
   const emptyDocBloomFilter = [ { bloom: Uint8Array.of(), lastSync: []}]
-  const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [], lastSentHeads: [] }
-  const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [], lastSentHeads: [] }
+  const anUnknownPeerState = {sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null, unappliedChanges: [], sentChanges: [], lastSentHeads: [] }
+  const anEmptyPeerState = { sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [], theirNeed: [], unappliedChanges: [], sentChanges: [], lastSentHeads: [] }
   const expectedEmptyDocSyncMessage = { 
     changes: [],
     have: emptyDocBloomFilter, 
@@ -156,7 +157,7 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(message, null)
       })
       
-      it.only('should allow simultaneous messages during synchronization', () => {
+      it('should allow simultaneous messages during synchronization', () => {
         const Frontend = Automerge.Frontend
         const Backend = Automerge.Backend
 
@@ -164,7 +165,7 @@ describe('Data sync protocol', () => {
         let f1 = Automerge.Frontend.init('abc123'), f2 = Automerge.Frontend.init('def456')
         let b1 = Automerge.Backend.init(), b2 = Automerge.Backend.init()
 
-        let p1, p2, b1tob2Message, b2tob1Message, patch, change, pat1, pat2
+        let p1, p2, b1tob2Message, b2tob1Message, patch, change, pat1, pat2, c1, c2
         for (let i = 0; i < 5; i++) {
           ;[f1, c1] = Automerge.Frontend.change(f1, doc => doc.x = i)
           ;[b1, pat1] = Automerge.Backend.applyLocalChange(b1, c1)
@@ -190,9 +191,10 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).have[0].lastSync.length, 0)
 
         // n1 and n2 receives that message and update sync state but make no patch 
-        ;[b1, p1, patch1] = Backend.receiveSyncMessage(b1, b2tob1Message)
+        let patch1, patch2
+        ;[b1, p1, patch1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
         assert.deepStrictEqual(patch1, null) // no changes arrived, so no patch
-        ;[b2, p2, patch2] = Backend.receiveSyncMessage(b2, b1tob2Message)
+        ;[b2, p2, patch2] = Backend.receiveSyncMessage(b2, b1tob2Message, p2)
         assert.deepStrictEqual(patch2, null) // no changes arrived, so no patch
 
         // now both reply with their local changes the other lacks
@@ -203,13 +205,13 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 5)
         
         // both should now apply the changes and update the frontend 
-        ;[b1, p1, patch1] = Backend.receiveSyncMessage(b1, b2tob1Message)
+        ;[b1, p1, patch1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
         assert.deepStrictEqual(p1.unappliedChanges.length, 0)
         assert.notDeepStrictEqual(patch1, null)
         f1 = Automerge.Frontend.applyPatch(f1, patch1)
         assert.deepStrictEqual(f1, {x: 4, y: 4})
 
-        ;[b2, p2, patch2] = Backend.receiveSyncMessage(b2, b1tob2Message)
+        ;[b2, p2, patch2] = Backend.receiveSyncMessage(b2, b1tob2Message, p2)
         assert.deepStrictEqual(p2.unappliedChanges.length, 0)
         assert.notDeepStrictEqual(patch2, null)
         f2 = Automerge.Frontend.applyPatch(f2, patch2)
@@ -217,12 +219,9 @@ describe('Data sync protocol', () => {
 
         // there should be no changes left to send and lastSync.heads should match
         ;[p1, b1tob2Message] = Backend.generateSyncMessage(b1,p1)
-        // XXX: this needs unconfirmed-change tracking to work,
-        //      we've already sent this data but we don't know the other side has it here
-        //assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes.length, 0)
+        assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).changes.length, 0)
         ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2,p2)
-        // XXX: same
-        //assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 0)
+        assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 0)
         
         // XXX: these heads aren't the same because we never update lastSync to include heads we made locally 
         // assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync.length, 1)
@@ -230,8 +229,8 @@ describe('Data sync protocol', () => {
         //                        decodeSyncMessage(b2tob1Message).have[0].lastSync)
  
         // n1 receives the changes and replies with the changes it now knows n2 needs
-        ;[b1, p1, pat1] = Backend.receiveSyncMessage(b1, b2tob1Message)
-        ;[b2, p2, pat2] = Backend.receiveSyncMessage(b2, b1tob2Message)
+        ;[b1, p1, pat1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
+        ;[b2, p2, pat2] = Backend.receiveSyncMessage(b2, b1tob2Message, p2)
         // XXX: i think sync should be done here, but i haven't given it enough thought.
         //      this test still needs to figure out whether any other steps are necessary to reach full sync
       })

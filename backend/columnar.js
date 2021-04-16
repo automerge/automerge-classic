@@ -659,6 +659,17 @@ function decodeContainerHeader(decoder, computeHash) {
   return header
 }
 
+/**
+ * Returns the checksum of a change (bytes 4 to 7) as a 32-bit unsigned integer.
+ */
+function getChangeChecksum(change) {
+  if (change[0] !== MAGIC_BYTES[0] || change[1] !== MAGIC_BYTES[1] ||
+      change[2] !== MAGIC_BYTES[2] || change[3] !== MAGIC_BYTES[3]) {
+    throw new RangeError('Data does not begin with magic bytes 85 6f 4a 83')
+  }
+  return ((change[4] << 24) | (change[5] << 16) | (change[6] << 8) | change[7]) >>> 0
+}
+
 function encodeChange(changeObj) {
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
@@ -2326,5 +2337,5 @@ class BackendDoc {
 module.exports = {
   COLUMN_TYPE, VALUE_TYPE, ACTIONS, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
-  constructPatch, BackendDoc
+  getChangeChecksum, constructPatch, BackendDoc
 }
