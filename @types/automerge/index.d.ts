@@ -196,6 +196,7 @@ declare module 'automerge' {
     ourNeed: Hash[]
     have: SyncHave[]
     unappliedChanges: BinaryChange[]
+    sentChanges: BinaryChange[]
   }
 
   type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
