@@ -121,7 +121,7 @@ declare module 'automerge' {
   // Front & back
 
   namespace Frontend {
-    function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
+    function applyPatch<T>(doc: Doc<T>, patch: Patch, backendState?: BackendState): Doc<T>
     function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
