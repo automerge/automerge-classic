@@ -143,36 +143,11 @@ function setDefaultBackend(newBackend) {
   backend = newBackend
 }
 
-function sync(a, b, aPeerState = null, bPeerState = null) {
-  const MAX_ITER = 10
-  let msg = null, i = 0
-  do {
-    ;[aPeerState, msg] = generateSyncMessage(a, aPeerState)
-    if (msg) {
-      ;[b, bPeerState] = receiveSyncMessage(b, msg, bPeerState)
-    }
-
-    // we need to give both sender and receiver a chance to start the synchronization
-    if (!msg && i > 0) break
-
-    ;[bPeerState, msg] = generateSyncMessage(b, bPeerState)
-    if (msg) {
-      ;[a, aPeerState] = receiveSyncMessage(a, msg, aPeerState)
-    }
-
-    if (i++ > MAX_ITER) {
-      throw new Error(`Did not synchronize within ${MAX_ITER} iterations. Do you have a bug causing an infinite loop?`)
-    }
-  } while (msg)
-
-  return [a, b, aPeerState, bPeerState]
-}
-
 module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend, sync, generateSyncMessage, receiveSyncMessage,
+  Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage,
   get Backend() { return backend }
 }
 
