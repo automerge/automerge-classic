@@ -224,15 +224,22 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(decodeSyncMessage(b2tob1Message).changes.length, 0)
         
         // XXX: these heads aren't the same because we never update lastSync to include heads we made locally 
-        // assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync.length, 1)
-        // assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync, 
-        //                        decodeSyncMessage(b2tob1Message).have[0].lastSync)
+        assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync.length, 1)
+        assert.deepStrictEqual(decodeSyncMessage(b1tob2Message).have[0].lastSync, 
+                               decodeSyncMessage(b2tob1Message).have[0].lastSync)
  
         // n1 receives the changes and replies with the changes it now knows n2 needs
         ;[b1, p1, pat1] = Backend.receiveSyncMessage(b1, b2tob1Message, p1)
         ;[b2, p2, pat2] = Backend.receiveSyncMessage(b2, b1tob2Message, p2)
-        // XXX: i think sync should be done here, but i haven't given it enough thought.
-        //      this test still needs to figure out whether any other steps are necessary to reach full sync
+
+        assert.deepStrictEqual(pat1, null)
+        assert.deepStrictEqual(pat2, null)
+
+        ;[p1, b1tob2Message] = Backend.generateSyncMessage(b1,p1)
+        ;[p2, b2tob1Message] = Backend.generateSyncMessage(b2,p2)
+        assert.deepStrictEqual(b1tob2Message, null)
+        assert.deepStrictEqual(b2tob1Message, null)
+        
       })
 
       it.skip('should assume sent changes were recieved until we hear otherwise', () => {
