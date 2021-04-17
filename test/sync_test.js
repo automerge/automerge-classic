@@ -120,8 +120,8 @@ describe('Data sync protocol', () => {
         let peer1 = null, peer2 = null
         let n1 = Automerge.init(), n2 = Automerge.init()
         // make two nodes with the same changes
-        n1 = Automerge.change(n1, doc => doc.n = [])
-        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.n.push(i))
         n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
         assert.deepStrictEqual(n1,n2)
 
@@ -138,8 +138,8 @@ describe('Data sync protocol', () => {
       it('n1 should offer all changes to n2 when starting from nothing', () => {
         let n1 = Automerge.init(), n2 = Automerge.init()
         // make changes for n1 that n2 should request
-        n1 = Automerge.change(n1, doc => doc.n = [])
-        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.n.push(i))
 
         assert.notDeepStrictEqual(n1, n2)
         const [after1, after2] = sync(n1, n2)
@@ -150,8 +150,8 @@ describe('Data sync protocol', () => {
         let n1 = Automerge.init(), n2 = Automerge.init()
 
         // make changes for n1 that n2 should request
-        n1 = Automerge.change(n1, doc => doc.n = [])
-        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, doc => doc.n.push(i))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.n = [])
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.n.push(i))
 
         assert.notDeepStrictEqual(n1, n2)
         ;[n1, n2] = sync(n1, n2)
@@ -161,11 +161,11 @@ describe('Data sync protocol', () => {
       it('should work with prior sync state', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init(), n1SyncState, n2SyncState
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
         ;[n1, n2, n1SyncState, n2SyncState] = sync(n1, n2)
 
         // modify the first node further
-        for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
 
         assert.notDeepStrictEqual(n1, n2)
         ;[n1, n2, n1SyncState, n2SyncState] = sync(n1, n2, n1SyncState, n2SyncState)
@@ -314,18 +314,18 @@ describe('Data sync protocol', () => {
       it('should assume sent changes were recieved until we hear otherwise', () => {
         let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
         let s1 = null, s2 = null, message = null
-        n1 = Automerge.change(n1, doc => doc.items = [])
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.items = [])
         ;[n1,n2,s1,s2] = sync(n1,n2)
 
-        n1 = Automerge.change(n1, doc => doc.items.push('x'))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.items.push('x'))
         ;[s1, message ] = Automerge.generateSyncMessage(n1,s1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
 
-        n1 = Automerge.change(n1, doc => doc.items.push('y'))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.items.push('y'))
         ;[s1, message ] = Automerge.generateSyncMessage(n1,s1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
 
-        n1 = Automerge.change(n1, doc => doc.items.push('z'))
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.items.push('z'))
         ;[s1, message ] = Automerge.generateSyncMessage(n1,s1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 1)
       })
@@ -333,11 +333,11 @@ describe('Data sync protocol', () => {
       it('should work regardless of who initiates the exchange', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init(), n2 = Automerge.init(), n1SyncState, n2SyncState
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
         ;[n1, n2, n1SyncState, n2SyncState] = sync(n1, n2)
 
         // modify the first node further
-        for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, doc => doc.x = i)
+        for (let i = 5; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
 
         assert.notDeepStrictEqual(n1, n2)
         ;[n2, n1, n2SyncState, n1SyncState] = sync(n2, n1, n2SyncState, n1SyncState)
