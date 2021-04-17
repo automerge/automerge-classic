@@ -67,8 +67,8 @@ declare module 'automerge' {
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
 
-  function generateSyncMessage<T>(doc: Doc<T>, peerState: PeerState): [PeerState, BinarySyncMessage?]
-  function receiveSyncMessage<T>(doc: Doc<T>, message: BinarySyncMessage, peerState: PeerState): [Doc<T>, PeerState]
+  function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
+  function receiveSyncMessage<T>(doc: Doc<T>, message: BinarySyncMessage, syncState: SyncState): [Doc<T>, SyncState]
 
   // custom CRDT types
 
@@ -141,9 +141,9 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
-    function decodePeerState(bytes: BinaryPeerState): PeerState
+    function decodeSyncState(bytes: BinarySyncState): SyncState
     function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
-    function encodePeerState(peerState: PeerState): BinaryPeerState
+    function encodeSyncState(syncState: SyncState): BinarySyncState
     function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
@@ -156,9 +156,9 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(backend: BackendState, peerState?: PeerState): [PeerState, BinarySyncMessage?]
-    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, peerState?: PeerState): [BackendState, PeerState, Patch?]
-    function emptyPeerState(): PeerState
+    function generateSyncMessage(backend: BackendState, syncState?: SyncState): [SyncState, BinarySyncMessage?]
+    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, syncState?: SyncState): [BackendState, SyncState, Patch?]
+    function emptySyncState(): SyncState
   }
 
   // Internals
@@ -188,9 +188,9 @@ declare module 'automerge' {
   }
 
   type BinaryChange = Uint8Array & { __binaryChange: true }
-  type BinaryPeerState = Uint8Array & { __binaryPeerState: true }
+  type BinarySyncState = Uint8Array & { __binarySyncState: true }
 
-  export interface PeerState {
+  export interface SyncState {
     sharedHeads: Hash[]
     theirNeed: Hash[]
     ourNeed: Hash[]
