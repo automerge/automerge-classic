@@ -201,22 +201,22 @@ function decodeSyncMessage(bytes) {
 }
 
 /**
- * Takes a PeerState and encodes as a byte array those parts of the state that should persist across
+ * Takes a SyncState and encodes as a byte array those parts of the state that should persist across
  * an application restart or disconnect and reconnect. The ephemeral parts of the state that should
  * be cleared on reconnect are not encoded.
  */
-function encodePeerState(peerState) {
+function encodeSyncState(syncState) {
   const encoder = new Encoder()
   encoder.appendByte(PEER_STATE_TYPE)
-  encodeHashes(encoder, peerState.sharedHeads)
+  encodeHashes(encoder, syncState.sharedHeads)
   return encoder.buffer
 }
 
 /**
- * Takes a persisted peer state as encoded by `encodePeerState` and decodes it into a PeerState
+ * Takes a persisted peer state as encoded by `encodeSyncState` and decodes it into a SyncState
  * object. The parts of the peer state that were not encoded are initialised with default values.
  */
-function decodePeerState(bytes) {
+function decodeSyncState(bytes) {
   const decoder = new Decoder(bytes)
   const recordType = decoder.readByte()
   if (recordType !== PEER_STATE_TYPE) {
@@ -224,7 +224,7 @@ function decodePeerState(bytes) {
   }
   const sharedHeads = decodeHashes(decoder)
   // Ignore any trailing bytes -- they can be used for extensions by future versions
-  // TODO: this duplicates emptyPeerState() in protocol.js. Remove the duplication when we merge
+  // TODO: this duplicates emptySyncState() in protocol.js. Remove the duplication when we merge
   // the content of that file into this one.
   return {
     sharedHeads,
@@ -322,5 +322,5 @@ function getChangesToSend(backend, have, need) {
 
 module.exports = {
   makeBloomFilter, BloomFilter, encodeSyncMessage, decodeSyncMessage,
-  encodePeerState, decodePeerState, getChangesToSend
+  encodeSyncState, decodeSyncState, getChangesToSend
 }

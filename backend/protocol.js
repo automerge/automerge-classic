@@ -6,7 +6,7 @@ const { equalBytes } = require('../src/common')
 
 /****
 
-  export interface PeerState {
+  export interface SyncState {
       sharedHeads: Hash[]
       theirNeed: Hash[]
       ourNeed: Hash[]
@@ -29,7 +29,7 @@ const { equalBytes } = require('../src/common')
 
 *****/
 
-function emptyPeerState() {
+function emptySyncState() {
     return {
         sharedHeads: [],
         lastSentHeads: [],
@@ -74,10 +74,10 @@ function deduplicateChanges(previousChanges, newChanges) {
     given a backend and what we believe to be the state of our peer,
     generate a message which tells them about we have and includes any changes we believe they need
 */
-function generateSyncMessage(backend, peerState) {
-    peerState = peerState || emptyPeerState()
+function generateSyncMessage(backend, syncState) {
+    syncState = syncState || emptySyncState()
 
-    const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave, unappliedChanges } = peerState;
+    const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave, unappliedChanges } = syncState;
     const ourHeads = Backend.getHeads(backend)
     const state = backendState(backend)
 
@@ -96,7 +96,7 @@ function generateSyncMessage(backend, peerState) {
         if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
             // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
             const resetMsg = { heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: [] };
-            return [peerState, encodeSyncMessage(resetMsg)];
+            return [syncState, encodeSyncMessage(resetMsg)];
         }
     }
 
@@ -106,15 +106,15 @@ function generateSyncMessage(backend, peerState) {
     const heads = Backend.getHeads(backend)
 
     // If the heads are equal, we're in sync and don't need to do anything further
-    const headsUnchanged = Array.isArray(peerState.lastSentHeads) && compareArrays(heads, peerState.lastSentHeads)
+    const headsUnchanged = Array.isArray(syncState.lastSentHeads) && compareArrays(heads, syncState.lastSentHeads)
     const headsEqual = Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads)
     if (headsUnchanged && headsEqual && changesToSend.length === 0 && ourNeed.length === 0) {
-        return [peerState, null];
+        return [syncState, null];
         // no need to send a sync message if we know we're synced!
     }
 
-    if (peerState.sentChanges.length > 0 && changesToSend.length > 0) {
-      changesToSend = deduplicateChanges(peerState.sentChanges, changesToSend)
+    if (syncState.sentChanges.length > 0 && changesToSend.length > 0) {
+      changesToSend = deduplicateChanges(syncState.sentChanges, changesToSend)
     }
 
     // Regular response to a sync message: send any changes that the other node
@@ -126,12 +126,12 @@ function generateSyncMessage(backend, peerState) {
         need: ourNeed,
         changes: changesToSend
     };
-    peerState = {
-        ...peerState,
+    syncState = {
+        ...syncState,
         lastSentHeads: heads,
-        sentChanges: peerState.sentChanges.concat(changesToSend)
+        sentChanges: syncState.sentChanges.concat(changesToSend)
     }
-    return [peerState, encodeSyncMessage(syncMessage)];
+    return [syncState, encodeSyncMessage(syncMessage)];
 }
 
 /**
@@ -160,10 +160,10 @@ function advanceHeads(myOldHeads, myNewHeads, ourOldSharedHeads) {
     apply any changes, update what we believe about the peer, 
     and (if there were applied changes) produce a patch for the frontend
 */
-function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
+function receiveSyncMessage(backend, binaryMessage, oldSyncState) {
     let patch = null;
-    oldPeerState = oldPeerState || emptyPeerState()
-    let { unappliedChanges, ourNeed, sharedHeads, lastSentHeads } = oldPeerState;
+    oldSyncState = oldSyncState || emptySyncState()
+    let { unappliedChanges, ourNeed, sharedHeads, lastSentHeads } = oldSyncState;
     const message = decodeSyncMessage(binaryMessage)
 
     const { heads, changes } = message;
@@ -194,7 +194,7 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
         sharedHeads = heads
     }
 
-    const newPeerState = {
+    const newSyncState = {
         sharedHeads, // what we have in common to generate an efficient bloom filter
         lastSentHeads,
         have: message.have, // the information we need to calculate the changes they need
@@ -202,9 +202,9 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
         theirNeed: message.need,
         ourNeed, // specifically missing change (bloom filter false positives)
         unappliedChanges, // the changes we can't use yet because of the above
-        sentChanges: oldPeerState.sentChanges
+        sentChanges: oldSyncState.sentChanges
     };
-    return [backend, newPeerState, patch];
+    return [backend, newSyncState, patch];
 }
 
 module.exports = { receiveSyncMessage, generateSyncMessage };
