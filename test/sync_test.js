@@ -557,17 +557,16 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
     })
 
-    // 4
-    it.skip('should not require an additional request when a false-positive depends on a true-negative', () => {
+    it('should not require an additional request when a false-positive depends on a true-negative', () => {
       // Scenario:                         ,-- n1c1 <-- n1c2 <-- n1c3
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-+
       //                                   `-- n2c1 <-- n2c2 <-- n2c3
       // where n2c2 is a false positive in the Bloom filter containing {n1c1, n1c2, n1c3}.
       // lastSync is c4.
+      let p1,p2;
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      n2 = Automerge.applyChanges(n2, Automerge.getAllChanges(n1))
-      let lastSync = getHeads(n1), n1hash1, n1hash2, n1hash3, n2hash1, n2hash2, n2hash3
+      ;[n1,n2,p1,p2] = sync(n1,n2)
       for (let i = 222; ; i++) { // search for false positive; see comment above
         const n1up1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2up1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
@@ -583,23 +582,9 @@ describe('Data sync protocol', () => {
         }
       }
       const bothHeads = [n1hash3, n2hash3].sort()
-      const s1 = new SyncPeer(n1, lastSync), s2 = new SyncPeer(n2, lastSync, s1); s1.remote = s2
-      assert.strictEqual(s1.sendMessage().type, 'sync') // m1: initial message
-      assert.strictEqual(s2.sendMessage().type, 'sync') // m2: initial message
-      assert.strictEqual(s1.sendMessage().hash, n1hash1) // change in response to m2
-      assert.strictEqual(s1.sendMessage().hash, n1hash2) // change in response to m2
-      assert.strictEqual(s1.sendMessage().hash, n1hash3) // change in response to m2
-      assert.deepStrictEqual(s1.sendMessage(), {type: 'sync', heads: [n1hash3], need: [n2hash3], have: []}) // m3: response to m2
-      assert.strictEqual(s2.sendMessage().hash, n2hash1) // change in response to m1
-      assert.strictEqual(s2.sendMessage().hash, n2hash2) // change in response to m1
-      assert.strictEqual(s2.sendMessage().hash, n2hash3) // change in response to m1
-      assert.deepStrictEqual(s2.sendMessage(), {type: 'sync', heads: [n2hash3], need: [n1hash3], have: []}) // m4: response to m1
-      assert.deepStrictEqual(s2.sendMessage().heads, bothHeads) // m5: response to n1's changes and m3
-      assert.deepStrictEqual(s1.sendMessage().heads, bothHeads) // m6: response to n2's changes and m4
-      assert.strictEqual(s1.sendMessage(), undefined)
-      assert.strictEqual(s2.sendMessage(), undefined)
-      assert.deepStrictEqual(getHeads(s1.doc), bothHeads)
-      assert.deepStrictEqual(getHeads(s2.doc), bothHeads)
+      ;[n1,n2,p1,p2] = sync(n1,n2,p1,p2)
+      assert.deepStrictEqual(getHeads(n1), bothHeads)
+      assert.deepStrictEqual(getHeads(n2), bothHeads)
     })
 
     it('should handle chains of false-positives', () => {
