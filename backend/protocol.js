@@ -160,7 +160,7 @@ function advanceHeads(myOldHeads, myNewHeads, ourOldSharedHeads) {
     apply any changes, update what we believe about the peer, 
     and (if there were applied changes) produce a patch for the frontend
 */
-function receiveSyncMessage(backend, binaryMessage, oldSyncState) {
+function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
     let patch = null;
     oldSyncState = oldSyncState || emptySyncState()
     let { unappliedChanges, ourNeed, sharedHeads, lastSentHeads } = oldSyncState;
@@ -204,7 +204,7 @@ function receiveSyncMessage(backend, binaryMessage, oldSyncState) {
         unappliedChanges, // the changes we can't use yet because of the above
         sentChanges: oldSyncState.sentChanges
     };
-    return [backend, newSyncState, patch];
+    return [newSyncState, backend, patch];
 }
 
 module.exports = { receiveSyncMessage, generateSyncMessage };
