@@ -126,7 +126,7 @@ describe('Data sync protocol', () => {
         assert.deepStrictEqual(n1, n2)
       })
 
-      it('should not generate messages once synced', () => {
+      it.skip('should not generate messages once synced', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
         let p1, p2, message, patch

@@ -180,8 +180,10 @@ function receiveSyncMessage(backend, binaryMessage, oldPeerState) {
         // set of changes in the message may be a prefix of the change log. If the only outstanding
         // needs are for heads, that implies there are no missing dependencies.
         if (ourNeed.every(hash => heads.includes(hash))) {
-            ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges);
-            unappliedChanges = [];
+            if (unappliedChanges.length > 0) {
+              ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges);
+              unappliedChanges = [];
+            }
             sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads);
         }
     } else if (compareArrays(heads, beforeHeads)) {
