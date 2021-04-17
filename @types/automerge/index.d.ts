@@ -67,8 +67,8 @@ declare module 'automerge' {
   function load<T>(data: Uint8Array, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): Uint8Array
 
-  function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
-  function receiveSyncMessage<T>(doc: Doc<T>, message: BinarySyncMessage, syncState: SyncState): [Doc<T>, SyncState]
+  function generateSyncMessage<T>(syncState: SyncState, doc: Doc<T>): [SyncState, BinarySyncMessage?]
+  function receiveSyncMessage<T>(syncState: SyncState, doc: Doc<T>, message: BinarySyncMessage): [SyncState, Doc<T>]
 
   // custom CRDT types
 
@@ -156,8 +156,8 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(backend: BackendState, syncState?: SyncState): [SyncState, BinarySyncMessage?]
-    function receiveSyncMessage(backend: BackendState, message: BinarySyncMessage, syncState?: SyncState): [BackendState, SyncState, Patch?]
+    function generateSyncMessage(syncState: SyncState, backend: BackendState): [SyncState, BinarySyncMessage?]
+    function receiveSyncMessage(syncState: SyncState, backend: BackendState, message: BinarySyncMessage): [SyncState, BackendState, Patch?]
     function emptySyncState(): SyncState
   }
 
