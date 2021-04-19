@@ -138,19 +138,19 @@ declare module 'automerge' {
   }
 
   namespace Backend {
-    function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
-    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
+    function applyChanges(state: BackendState, changes: BinaryChange[]): [BackendState, Patch]
+    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, BinaryChange]
     function clone(state: BackendState): BackendState
     function free(state: BackendState): void
-    function getAllChanges(state: BackendState): Uint8Array[]
-    function getChangeByHash(state: BackendState, hash: Hash): Uint8Array
-    function getChanges(state: BackendState, haveDeps: Hash[]): Uint8Array[]
+    function getAllChanges(state: BackendState): BinaryChange[]
+    function getChangeByHash(state: BackendState, hash: Hash): BinaryChange
+    function getChanges(state: BackendState, haveDeps: Hash[]): BinaryChange[]
     function getHeads(state: BackendState): Hash[]
-    function getMissingDeps(state: BackendState, changes?: Uint8Array[], heads?: Hash[]): Hash[]
+    function getMissingDeps(state: BackendState, changes?: BinaryChange[], heads?: Hash[]): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
     function load(data: Uint8Array): BackendState
-    function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
+    function loadChanges(state: BackendState, changes: BinaryChange[]): BackendState
     function save(state: BackendState): Uint8Array
     function generateSyncMessage(state: BackendState, syncState: SyncState): [SyncState, BinarySyncMessage?]
     function receiveSyncMessage(state: BackendState, syncState: SyncState, message: BinarySyncMessage): [BackendState, SyncState, Patch?]
