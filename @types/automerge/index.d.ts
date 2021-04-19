@@ -141,10 +141,6 @@ declare module 'automerge' {
     function applyChanges(state: BackendState, changes: Uint8Array[]): [BackendState, Patch]
     function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, Uint8Array]
     function clone(state: BackendState): BackendState
-    function decodeSyncState(bytes: BinarySyncState): SyncState
-    function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
-    function encodeSyncState(syncState: SyncState): BinarySyncState
-    function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
     function free(state: BackendState): void
     function getAllChanges(state: BackendState): Uint8Array[]
     function getChangeByHash(state: BackendState, hash: Hash): Uint8Array
@@ -156,9 +152,13 @@ declare module 'automerge' {
     function load(data: Uint8Array): BackendState
     function loadChanges(state: BackendState, changes: Uint8Array[]): BackendState
     function save(state: BackendState): Uint8Array
-    function generateSyncMessage(syncState: SyncState, backend: BackendState): [SyncState, BinarySyncMessage?]
-    function receiveSyncMessage(syncState: SyncState, backend: BackendState, message: BinarySyncMessage): [SyncState, BackendState, Patch?]
-    function emptySyncState(): SyncState
+    function generateSyncMessage(state: BackendState, syncState: SyncState): [SyncState, BinarySyncMessage?]
+    function receiveSyncMessage(state: BackendState, syncState: SyncState, message: BinarySyncMessage): [BackendState, SyncState, Patch?]
+    function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
+    function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
+    function initSyncState(): SyncState
+    function encodeSyncState(syncState: SyncState): BinarySyncState
+    function decodeSyncState(bytes: BinarySyncState): SyncState
   }
 
   // Internals

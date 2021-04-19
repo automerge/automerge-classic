@@ -118,13 +118,13 @@ function getHistory(doc) {
   })
 }
 
-function generateSyncMessage(syncState, doc) {
-  return backend.generateSyncMessage(syncState, Frontend.getBackendState(doc))
+function generateSyncMessage(doc, syncState) {
+  return backend.generateSyncMessage(Frontend.getBackendState(doc), syncState)
 }
 
-function receiveSyncMessage(oldSyncState, doc, message) {
-  const [syncState, backendState, patch] = backend.receiveSyncMessage(oldSyncState, Frontend.getBackendState(doc), message)
-  if (!patch) return [syncState, doc]
+function receiveSyncMessage(doc, oldSyncState, message) {
+  const [backendState, syncState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), oldSyncState, message)
+  if (!patch) return [doc, syncState]
 
   // The patchCallback is passed as argument all changes that are applied.
   // We get those from the sync message if a patchCallback is present.
@@ -132,7 +132,7 @@ function receiveSyncMessage(oldSyncState, doc, message) {
   if (doc[OPTIONS].patchCallback) {
     changes = backend.decodeSyncMessage(message).changes
   }
-  return [syncState, applyPatch(doc, patch, backendState, changes, {})]
+  return [applyPatch(doc, patch, backendState, changes, {}), syncState]
 }
 
 /**

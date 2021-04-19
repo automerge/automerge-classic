@@ -225,19 +225,7 @@ function decodeSyncState(bytes) {
     throw new RangeError(`Unexpected record type: ${recordType}`)
   }
   const sharedHeads = decodeHashes(decoder)
-  // Ignore any trailing bytes -- they can be used for extensions by future versions
-  // TODO: this duplicates emptySyncState() in protocol.js. Remove the duplication when we merge
-  // the content of that file into this one.
-  return {
-    sharedHeads,
-    lastSentHeads: [],
-    theirHeads: null,
-    theirNeed: null,
-    ourNeed: [],
-    have: [],
-    unappliedChanges: [],
-    sentChanges: []
-  }
+  return { ...initSyncState(), sharedHeads }
 }
 
 /**
@@ -322,7 +310,7 @@ function getChangesToSend(backend, have, need) {
   return changesToSend
 }
 
-function emptySyncState() {
+function initSyncState() {
   return {
     sharedHeads: [],
     lastSentHeads: [],
@@ -367,8 +355,13 @@ function deduplicateChanges(previousChanges, newChanges) {
  * Given a backend and what we believe to be the state of our peer, generate a message which tells
  * them about we have and includes any changes we believe they need
  */
-function generateSyncMessage(syncState, backend) {
-  syncState = syncState || emptySyncState()
+function generateSyncMessage(backend, syncState) {
+  if (!backend) {
+    throw new Error("generateSyncMessage called with no Automerge document")
+  }
+  if (!syncState) { 
+    throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
+  } 
 
   const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave, unappliedChanges } = syncState
   const ourHeads = Backend.getHeads(backend)
@@ -450,9 +443,15 @@ function advanceHeads(myOldHeads, myNewHeads, ourOldSharedHeads) {
  * Given a backend, a message message and the state of our peer, apply any changes, update what
  * we believe about the peer, and (if there were applied changes) produce a patch for the frontend
  */
-function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
+function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
+  if (!backend) {
+    throw new Error("generateSyncMessage called with no Automerge document")
+  }
+  if (!oldSyncState) { 
+    throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
+  } 
+
   let patch = null
-  oldSyncState = oldSyncState || emptySyncState()
   let { unappliedChanges, ourNeed, sharedHeads, lastSentHeads } = oldSyncState
   const message = decodeSyncMessage(binaryMessage)
 
@@ -494,7 +493,7 @@ function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
     sharedHeads = [...new Set(knownHeads.concat(sharedHeads))].sort()
   }
 
-  const newSyncState = {
+  const syncState = {
     sharedHeads, // what we have in common to generate an efficient bloom filter
     lastSentHeads,
     have: message.have, // the information we need to calculate the changes they need
@@ -504,12 +503,12 @@ function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
     unappliedChanges, // the changes we can't use yet because of the above
     sentChanges: oldSyncState.sentChanges
   }
-  return [newSyncState, backend, patch]
+  return [backend, syncState, patch]
 }
 
 module.exports = {
   receiveSyncMessage, generateSyncMessage,
   encodeSyncMessage, decodeSyncMessage,
-  encodeSyncState, decodeSyncState,
+  initSyncState, encodeSyncState, decodeSyncState,
   BloomFilter // BloomFilter is a private API, exported only for testing purposes
 }
