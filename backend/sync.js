@@ -374,12 +374,15 @@ function generateSyncMessage(syncState, backend) {
   const ourHeads = Backend.getHeads(backend)
   const state = backendState(backend)
 
-  // if we need some particular keys, sending the bloom filter will cause retransmission
-  // of data (since the bloom filter doesn't include data waiting to be applied)
-  // also, we could be using other peers' have messages to reduce any risk of resending data
-  // actually, thinking more about this we probably want to include queued data in our bloom filter
-  // but... it will work without it, just risks lots of resent data if you have many peers
-  const have = (!ourNeed.length) ? [makeBloomFilter(state, sharedHeads)] : []
+  // There are two reasons why ourNeed may be nonempty: 1. we might be missing dependencies due to
+  // Bloom filter false positives; 2. we might be missing heads that the other peer mentioned
+  // because they (intentionally) only sent us a subset of changes. In case 1, we leave the `have`
+  // field of the message empty because we just want to fill in the missing dependencies for now.
+  // In case 2, or if ourNeed is empty, we send a Bloom filter to request any unsent changes.
+  let have = []
+  if (ourNeed.every(hash => theirHeads.includes(hash))) {
+    have = [makeBloomFilter(state, sharedHeads)]
+  }
 
   // Fall back to a full re-sync if the sender's last sync state includes hashes
   // that we don't know. This could happen if we crashed after the last sync and
@@ -477,8 +480,15 @@ function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
 
   // If all of the remote heads are known to us, that means either our heads are equal, or we are
   // ahead of the remote peer. In this case, take the remote heads to be our shared heads.
-  if (heads.every(head => Backend.getChangeByHash(backend, head))) {
+  const knownHeads = heads.filter(head => Backend.getChangeByHash(backend, head))
+  if (knownHeads.length === heads.length) {
     sharedHeads = heads
+  } else {
+    // If some remote heads are unknown to us, we add all the remote heads we know to
+    // sharedHeads, but don't remove anything from sharedHeads. This might cause sharedHeads to
+    // contain some redundant hashes (where one hash is actually a transitive dependency of
+    // another), but this will be cleared up as soon as we know all the remote heads.
+    sharedHeads = [...new Set(knownHeads.concat(sharedHeads))].sort()
   }
 
   const newSyncState = {
