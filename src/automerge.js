@@ -135,7 +135,9 @@ function receiveSyncMessage(doc, oldSyncState, message) {
   return [applyPatch(doc, patch, backendState, changes, {}), syncState]
 }
 
-const initSyncState = backend.initSyncState
+function initSyncState() {
+  return backend.initSyncState()
+}
 
 /**
  * Replaces the default backend implementation with a different one.
