@@ -135,6 +135,8 @@ function receiveSyncMessage(doc, oldSyncState, message) {
   return [applyPatch(doc, patch, backendState, changes, {}), syncState]
 }
 
+const initSyncState = backend.initSyncState
+
 /**
  * Replaces the default backend implementation with a different one.
  * This allows you to switch to using the Rust/WebAssembly implementation.
