@@ -729,6 +729,7 @@ describe('Data sync protocol', () => {
       decodedMsg = decodeSyncMessage(msg)
       decodedMsg.changes = [change5, change6]
       msg = encodeSyncMessage(decodedMsg)
+      syncState2.sentChanges = [change5, change6]
       ;[syncState1, n1] = Automerge.receiveSyncMessage(syncState1, n1, msg)
       assert.deepStrictEqual(syncState1.sharedHeads, [c2, c6].sort())
 
@@ -736,13 +737,15 @@ describe('Data sync protocol', () => {
       ;[syncState1, msg] = Automerge.generateSyncMessage(syncState1, n1)
       ;[syncState2, n2] = Automerge.receiveSyncMessage(syncState2, n2, msg)
       assert.deepStrictEqual(decodeSyncMessage(msg).need, [c8])
+      assert.deepStrictEqual(decodeSyncMessage(msg).have[0].lastSync, [c2, c6].sort())
+      assert.deepStrictEqual(syncState1.sharedHeads, [c2, c6].sort())
       assert.deepStrictEqual(syncState2.sharedHeads, [c2, c6].sort())
 
       // n2 sends the remaining changes {c7, c8}
       ;[syncState2, msg] = Automerge.generateSyncMessage(syncState2, n2)
       ;[syncState1, n1] = Automerge.receiveSyncMessage(syncState1, n1, msg)
-      //assert.strictEqual(decodeSyncMessage(msg).changes.length, 2) // FIXME: currently returns 1
-      //assert.deepStrictEqual(syncState1.sharedHeads, [c2, c8].sort())
+      assert.strictEqual(decodeSyncMessage(msg).changes.length, 2)
+      assert.deepStrictEqual(syncState1.sharedHeads, [c2, c8].sort())
     })
   })
 })
