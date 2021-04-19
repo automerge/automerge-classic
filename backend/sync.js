@@ -458,23 +458,26 @@ function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
 
   const { heads, changes } = message
   const beforeHeads = Backend.getHeads(backend)
-  // when we receive a sync message, first we apply any changes they sent us
-  if (changes.length > 0) {
-    unappliedChanges = [...unappliedChanges, ...changes]
-    ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads)
 
-    // If there are no missing dependencies, we can apply the changes we received and update
-    // sharedHeads to include the changes we applied. This does not necessarily mean we have
-    // received all the changes necessar to bring us in sync with the remote peer's heads: the
-    // set of changes in the message may be a prefix of the change log. If the only outstanding
-    // needs are for heads, that implies there are no missing dependencies.
-    if (ourNeed.every(hash => heads.includes(hash))) {
-      ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges)
-      unappliedChanges = []
-      sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
-    }
-  } else if (compareArrays(heads, beforeHeads)) {
-    // If heads are equal, indicate we don't need to send a response message
+  if (changes.length > 0) unappliedChanges = unappliedChanges.concat(changes)
+
+  // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
+  // changes, and any of the remote peer's heads that we don't know about
+  ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads)
+
+  // If there are no missing dependencies, we can apply the changes we received and update
+  // sharedHeads to include the changes we applied. This does not necessarily mean we have
+  // received all the changes necessar to bring us in sync with the remote peer's heads: the
+  // set of changes in the message may be a prefix of the change log. If the only outstanding
+  // needs are for heads, that implies there are no missing dependencies.
+  if (changes.length > 0 && ourNeed.every(hash => heads.includes(hash))) {
+    ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges)
+    unappliedChanges = []
+    sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
+  }
+
+  // If heads are equal, indicate we don't need to send a response message
+  if (changes.length === 0 && compareArrays(heads, beforeHeads)) {
     lastSentHeads = heads
   }
 
