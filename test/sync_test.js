@@ -139,16 +139,12 @@ describe('Data sync protocol', () => {
         // create & synchronize two nodes
         let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
         let s1, s2, message, patch
-        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, { time: 0 }, doc => doc.x = i)
-        for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, { time: 0 }, doc => doc.y = i)
+        for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+        for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.y = i)
 
         const A = Automerge.Backend
         n1 = Automerge.Frontend.getBackendState(n1)
         n2 = Automerge.Frontend.getBackendState(n2)
-
-        // NB: This test assumes there are no false positives in the bloom filter,
-        //     which is coincidentally the case with the given IDs, but might not be at some point in the future.
-        //     (There's a 1% chance a format change could cause a false positive.)
 
         // n1 reports what it has
         ;[s1, message] = A.generateSyncMessage(s1, n1, s1)
@@ -163,14 +159,12 @@ describe('Data sync protocol', () => {
         ;[s1, n1, patch] = A.receiveSyncMessage(s1, n1, message)
         ;[s1, message] = A.generateSyncMessage(s1, n1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
-        // assert.deepStrictEqual(n1, {x: 4, y: 4})
-        assert.notDeepStrictEqual(patch, null) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {y: {'5@def456': {value: 4}}}) // changes arrived
 
         // n2 applies the changes and sends confirmation ending the exchange
         ;[s2, n2, patch] = A.receiveSyncMessage(s2, n2, message)
         ;[s2, message] = A.generateSyncMessage(s2, n2)
-        // assert.deepStrictEqual(n2, {x: 4, y: 4})
-        assert.notDeepStrictEqual(patch, null) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {x: {'5@abc123': {value: 4}}}) // changes arrived
 
         // n1 receives the message and has nothing more to say
         ;[s1, n1, patch] = A.receiveSyncMessage(s1, n1, message)
@@ -199,21 +193,17 @@ describe('Data sync protocol', () => {
 
         let s1, s2, b1tob2Message, b2tob1Message, patch, change, pat1, pat2, c1, c2
         for (let i = 0; i < 5; i++) {
-          ;[f1, c1] = Automerge.Frontend.change(f1, { time: 0 }, doc => doc.x = i)
+          ;[f1, c1] = Automerge.Frontend.change(f1, {time: 0}, doc => doc.x = i)
           ;[b1, pat1] = Automerge.Backend.applyLocalChange(b1, c1)
           f1 = Automerge.Frontend.applyPatch(f1, pat1)
         }
         for (let i = 0; i < 5; i++) {
-          ;[f2, c2] = Automerge.Frontend.change(f2, { time: 0 }, doc => doc.y = i)
+          ;[f2, c2] = Automerge.Frontend.change(f2, {time: 0}, doc => doc.y = i)
           ;[b2, pat2] = Automerge.Backend.applyLocalChange(b2, c2)
           f2 = Automerge.Frontend.applyPatch(f2, pat2)
         }
         const head1 = Automerge.Backend.getHeads(b1)[0]
         const head2 = Automerge.Backend.getHeads(b2)[0]
-
-        // NB: This test assumes there are no false positives in the bloom filter,
-        //     which is coincidentally the case with the given IDs, but might not be at some point in the future.
-        //     (There's a 1% chance a format change could cause a false positive.)
 
         // both sides report what they have but have no shared peer state
         ;[s1, b1tob2Message] = Backend.generateSyncMessage(s1, b1)
@@ -408,7 +398,6 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(n1, r)
     })
 
-    // 2
     it('should re-sync after both nodes crashed with data loss', () => {
       // Scenario:     (r)                  (n2)                 (n1)
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
@@ -573,7 +562,6 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n2), allHeads)
     })
 
-    // 6
     it('should allow the false-positive hash to be explicitly requested', () => {
       // Scenario:                                                            ,-- n1
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
@@ -627,7 +615,7 @@ describe('Data sync protocol', () => {
     })
   })
 
-  describe('syncResponse()', () => {
+  describe('protocol features', () => {
     it('should allow multiple Bloom filters', () => {
       // Scenario:           ,-- n1c1 <-- n1c2 <-- n1c3
       // c0 <-- c1 <-- c2 <-+--- n2c1 <-- n2c2 <-- n2c3
@@ -636,12 +624,12 @@ describe('Data sync protocol', () => {
       // n2 has {c0, c1, c2, n1c1, n1c2, n2c1, n2c2, n2c3};
       // n3 has {c0, c1, c2, n3c1, n3c2, n3c3}.
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
-      let s13, s12, s21, p32, p31, s23, message1, message2, message3
+      let s13, s12, s21, s32, s31, s23, message1, message2, message3
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       // sync all 3 nodes
       ;[n1, n2, s12, s21] = sync(n1, n2)
-      ;[n1, n3, s13, p31] = sync(n1, n3)
-      ;[n3, n2, p32, s23] = sync(n3, n2)
+      ;[n1, n3, s13, s31] = sync(n1, n3)
+      ;[n3, n2, s32, s23] = sync(n3, n2)
       for (let i = 0; i < 2; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `${i} @ n1`)
       for (let i = 0; i < 2; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `${i} @ n2`)
       n1 = Automerge.applyChanges(n1, Automerge.getAllChanges(n2))
@@ -652,7 +640,7 @@ describe('Data sync protocol', () => {
       // node 1 tells 3 what it has
       ;[s13, message1] = Automerge.generateSyncMessage(s13, n1)
       // node3 tells 2 what it has
-      ;[p32, message3] = Automerge.generateSyncMessage(p32, n3)
+      ;[s32, message3] = Automerge.generateSyncMessage(s32, n3)
       // Copy the Bloom filter received from n1 into the message sent from n3 to n2
       const modifiedMessage = decodeSyncMessage(message3)
       modifiedMessage.have.push(decodeSyncMessage(message1).have[0])
