@@ -528,6 +528,6 @@ function receiveSyncMessage(oldSyncState, backend, binaryMessage) {
 module.exports = {
   receiveSyncMessage, generateSyncMessage,
   encodeSyncMessage, decodeSyncMessage,
-  makeBloomFilter, BloomFilter, 
-  encodeSyncState, decodeSyncState, getChangesToSend
+  encodeSyncState, decodeSyncState,
+  BloomFilter // BloomFilter is a private API, exported only for testing purposes
 }
