@@ -147,7 +147,7 @@ module.exports = {
   init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage,
+  Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState
   get Backend() { return backend }
 }
 
