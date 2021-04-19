@@ -572,6 +572,8 @@ describe('Data sync protocol', () => {
 
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
+      s1 = decodeSyncState(encodeSyncState(s1))
+      s2 = decodeSyncState(encodeSyncState(s2))
 
       for (let i = 3; ; i++) { // brute-force search for false positive; see comment above
         const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
@@ -583,25 +585,19 @@ describe('Data sync protocol', () => {
         }
       }
 
-      // N1 creates a sync message for N2 with an ill-fated bloom
-      // (n1 offers a change since it can tell from past sync our peer will want it)
+      // n1 creates a sync message for n2 with an ill-fated bloom
       ;[s1, message] = Automerge.generateSyncMessage(s1, n1)
-      assert.strictEqual(decodeSyncMessage(message).changes.length, 1)
+      assert.strictEqual(decodeSyncMessage(message).changes.length, 0)
 
-      // N2 receives it and DOESN'T send a change back
+      // n2 receives it and DOESN'T send a change back
       ;[s2, n2] = Automerge.receiveSyncMessage(s2, n2, message)
       ;[s2, message] = Automerge.generateSyncMessage(s2, n2)
       assert.strictEqual(decodeSyncMessage(message).changes.length, 0)
 
-      // n1 should now realize it's missing that commit and request it explicitly
+      // n1 should now realize it's missing that change and request it explicitly
       ;[s1, n1] = Automerge.receiveSyncMessage(s1, n1, message)
       ;[s1, message] = Automerge.generateSyncMessage(s1, n1)
-
-      // hack the need into the message... because that's what the test wants
-      // XXX: martin, shouldn't this happen on its own?
-      const edited = decodeSyncMessage(message)
-      edited.need = [getHeads(n2)[0]]
-      message = encodeSyncMessage( edited )
+      assert.deepStrictEqual(decodeSyncMessage(message).need, getHeads(n2))
 
       // n2 should fulfill that request
       ;[s2, n2] = Automerge.receiveSyncMessage(s2, n2, message)
@@ -610,8 +606,7 @@ describe('Data sync protocol', () => {
 
       // n1 should apply the change and the two should now be in sync
       ;[s1, n1] = Automerge.receiveSyncMessage(s1, n1, message)
-      // XXX: another head mismatch bug...
-      // assert.strictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
     })
   })
 
