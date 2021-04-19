@@ -1,6 +1,6 @@
 
 const { init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch, getHeads, getAllChanges, getChanges, getChangeByHash, getMissingDeps } = require("./backend")
-const { receiveSyncMessage, generateSyncMessage, encodeSyncMessage, decodeSyncMessage, encodeSyncState, decodeSyncState, makeBloomFilter, getChangesToSend } = require('./sync')
+const { receiveSyncMessage, generateSyncMessage, encodeSyncMessage, decodeSyncMessage, encodeSyncState, decodeSyncState } = require('./sync')
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
