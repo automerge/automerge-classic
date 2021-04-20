@@ -236,6 +236,7 @@ declare module 'automerge' {
   interface Patch {
     actor?: string
     seq?: number
+    pendingChanges: number
     clock: Clock
     deps: Hash[]
     diffs: ObjectDiff
