@@ -316,7 +316,7 @@ function initSyncState() {
     lastSentHeads: [],
     theirHeads: null,
     theirNeed: null,
-    have: [],
+    theirHave: null,
     sentChanges: []
   }
 }
@@ -361,7 +361,7 @@ function generateSyncMessage(backend, syncState) {
     throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
   }
 
-  const { sharedHeads, theirHeads, theirNeed, have: theirHave } = syncState
+  const { sharedHeads, theirHeads, theirNeed, theirHave } = syncState
   const ourHeads = Backend.getHeads(backend)
   const state = backendState(backend)
 
@@ -382,7 +382,7 @@ function generateSyncMessage(backend, syncState) {
   // Fall back to a full re-sync if the sender's last sync state includes hashes
   // that we don't know. This could happen if we crashed after the last sync and
   // failed to persist changes that the other node already sent us.
-  if (theirHave.length > 0) {
+  if (theirHave && theirHave.length > 0) {
     const lastSync = theirHave[0].lastSync
     if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
       // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
@@ -490,7 +490,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   const syncState = {
     sharedHeads, // what we have in common to generate an efficient bloom filter
     lastSentHeads,
-    have: message.have, // the information we need to calculate the changes they need
+    theirHave: message.have, // the information we need to calculate the changes they need
     theirHeads: message.heads,
     theirNeed: message.need,
     sentChanges: oldSyncState.sentChanges
