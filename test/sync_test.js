@@ -37,12 +37,12 @@ describe('Data sync protocol', () => {
   const emptyDocBloomFilter = [{bloom: Uint8Array.of(), lastSync: []}]
 
   const anUnknownSyncState = {
-    sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null,
+    sharedHeads: [], have: [], theirHeads: null, theirNeed: null,
     sentChanges: [], lastSentHeads: []
   }
 
   const anEmptySyncState = {
-    sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [],
+    sharedHeads: [], have: emptyDocBloomFilter, theirHeads: [],
     theirNeed: [], sentChanges: [], lastSentHeads: []
   }
 
