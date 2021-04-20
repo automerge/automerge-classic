@@ -318,7 +318,6 @@ function initSyncState() {
     theirNeed: null,
     ourNeed: [],
     have: [],
-    unappliedChanges: [],
     sentChanges: []
   }
 }
@@ -363,7 +362,7 @@ function generateSyncMessage(backend, syncState) {
     throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
   } 
 
-  const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave, unappliedChanges } = syncState
+  const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave } = syncState
   const ourHeads = Backend.getHeads(backend)
   const state = backendState(backend)
 
@@ -452,28 +451,24 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   } 
 
   let patch = null
-  let { unappliedChanges, ourNeed, sharedHeads, lastSentHeads } = oldSyncState
+  let { sharedHeads, lastSentHeads } = oldSyncState
   const message = decodeSyncMessage(binaryMessage)
 
   const { heads, changes } = message
   const beforeHeads = Backend.getHeads(backend)
 
-  if (changes.length > 0) unappliedChanges = unappliedChanges.concat(changes)
+  // If we received changes, we try to apply them to the document. There may still be missing
+  // dependencies due to Bloom filter false positives, in which case the backend will enqueue the
+  // changes without applying them. The set of changes may also be incomplete if the sender decided
+  // to break a large set of changes into chunks.
+  if (changes.length > 0) {
+    ;[backend, patch] = Backend.applyChanges(backend, changes)
+    sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
+  }
 
   // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
   // changes, and any of the remote peer's heads that we don't know about
-  ourNeed = Backend.getMissingDeps(backend, unappliedChanges, heads)
-
-  // If there are no missing dependencies, we can apply the changes we received and update
-  // sharedHeads to include the changes we applied. This does not necessarily mean we have
-  // received all the changes necessar to bring us in sync with the remote peer's heads: the
-  // set of changes in the message may be a prefix of the change log. If the only outstanding
-  // needs are for heads, that implies there are no missing dependencies.
-  if (changes.length > 0 && ourNeed.every(hash => heads.includes(hash))) {
-    ;[backend, patch] = Backend.applyChanges(backend, unappliedChanges)
-    unappliedChanges = []
-    sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
-  }
+  const ourNeed = Backend.getMissingDeps(backend, heads)
 
   // If heads are equal, indicate we don't need to send a response message
   if (changes.length === 0 && compareArrays(heads, beforeHeads)) {
@@ -500,7 +495,6 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     theirHeads: message.heads,
     theirNeed: message.need,
     ourNeed, // specifically missing change (bloom filter false positives)
-    unappliedChanges, // the changes we can't use yet because of the above
     sentChanges: oldSyncState.sentChanges
   }
   return [backend, syncState, patch]

@@ -278,22 +278,24 @@ function getChangeByHash(backend, hash) {
 
 /**
  * Returns the hashes of any missing dependencies, i.e. where we have applied a
- * change that has a dependency on a change we have not seen. If the argument
- * `changes` is given (an array of binary changes), also returns the hashes of
- * any dependencies that would be missing if we applied those changes. Does not
- * actually apply any changes that are given.
+ * change that has a dependency on a change we have not seen.
+ *
+ * If the argument `heads` is given (an array of hexadecimal strings representing
+ * hashes as returned by `getHeads()`), this function also ensures that all of
+ * those hashes resolve to either a change that has been applied to the document,
+ * or that has been enqueued for later application once missing dependencies have
+ * arrived. Any missing heads hashes are included in the returned array.
  */
-function getMissingDeps(backend, changes = [], heads = []) {
+function getMissingDeps(backend, heads = []) {
   const state = backendState(backend)
   if (USE_NEW_BACKEND) {
-    return state.getMissingDeps(changes, heads)
+    return state.getMissingDeps(heads)
   } else {
-    return OpSet.getMissingDeps(state.get('opSet'), changes, heads)
+    return OpSet.getMissingDeps(state.get('opSet'), heads)
   }
 }
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getHeads,
-  getAllChanges, getChanges, getChangeByHash, getMissingDeps,
+  getHeads, getAllChanges, getChanges, getChangeByHash, getMissingDeps
 }
