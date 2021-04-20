@@ -267,7 +267,7 @@ describe('TypeScript support', () => {
       s1 = Automerge.change(s1, doc => (doc.birds = []))
       let s2 = Automerge.change(s1, doc => doc.birds.push('goldfinch'))
       const changes = Automerge.getAllChanges(s2)
-      let s3 = Automerge.applyChanges(Automerge.init<BirdList>(), changes)
+      let [s3, patch] = Automerge.applyChanges(Automerge.init<BirdList>(), changes)
       assert.deepStrictEqual(s3.birds, ['goldfinch'])
     })
 

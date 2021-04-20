@@ -317,7 +317,7 @@ describe('Automerge.Text', () => {
       const s1 = Automerge.from({text: new Automerge.Text('init')})
       const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
-      const s2 = Automerge.applyChanges(Automerge.init(), changes)
+      const [s2, patch] = Automerge.applyChanges(Automerge.init(), changes)
       assert.strictEqual(s2.text instanceof Automerge.Text, true)
       assert.strictEqual(s2.text.toString(), 'init')
       assert.strictEqual(s2.text.join(''), 'init')

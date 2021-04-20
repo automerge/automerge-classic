@@ -50,7 +50,7 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, options: ChangeOptions<T>, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, options?: ChangeOptions<D>): D
-  function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): Doc<T>
+  function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): [Doc<T>, Patch]
   function equals<T>(val1: T, val2: T): boolean
   function encodeChange(change: Change): Uint8Array
   function decodeChange(binaryChange: Uint8Array): Change
@@ -60,7 +60,6 @@ declare module 'automerge' {
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
-  function getMissingDeps<T>(doc: Doc<T>, changes?: Uint8Array[], heads?: Hash[]): Hash[]
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
