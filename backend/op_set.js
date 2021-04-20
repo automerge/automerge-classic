@@ -502,20 +502,17 @@ function getMissingChanges(opSet, haveDeps) {
 
 /**
  * Returns the hashes of any missing dependencies, i.e. where we have applied a
- * change that has a dependency on a change we have not seen. If the argument
- * `changes` is given (an array of binary changes), also returns the hashes of
- * any dependencies that would be missing if we applied those changes. Does not
- * actually apply any changes that are given.
+ * change that has a dependency on a change we have not seen.
  *
  * If the argument `heads` is given (an array of hexadecimal strings representing
  * hashes as returned by `getHeads()`), this function also ensures that all of
  * those hashes resolve to either a change that has been applied to the document,
- * or a change included in the `changes` array. Any missing heads hashes are
- * included in the returned array.
+ * or that has been enqueued for later application once missing dependencies have
+ * arrived. Any missing heads hashes are included in the returned array.
  */
-function getMissingDeps(opSet, changes = [], heads = []) {
+function getMissingDeps(opSet, heads = []) {
   let missing = {}, inQueue = {}
-  for (let binaryChange of opSet.get('queue').toArray().concat(changes)) {
+  for (let binaryChange of opSet.get('queue')) {
     const change = decodeChangeMeta(binaryChange, true)
     inQueue[change.hash] = true
     for (let depHash of change.deps) {

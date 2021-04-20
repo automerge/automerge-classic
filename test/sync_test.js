@@ -37,12 +37,12 @@ describe('Data sync protocol', () => {
 
   const anUnknownSyncState = {
     sharedHeads: [], have: [], ourNeed: [], theirHeads: null, theirNeed: null,
-    unappliedChanges: [], sentChanges: [], lastSentHeads: []
+    sentChanges: [], lastSentHeads: []
   }
 
   const anEmptySyncState = {
     sharedHeads: [], have: emptyDocBloomFilter, ourNeed: [], theirHeads: [],
-    theirNeed: [], unappliedChanges: [], sentChanges: [], lastSentHeads: []
+    theirNeed: [], sentChanges: [], lastSentHeads: []
   }
 
   const expectedEmptyDocSyncMessage = {
@@ -236,13 +236,13 @@ describe('Data sync protocol', () => {
 
         // both should now apply the changes and update the frontend
         ;[b1, s1, patch1] = Backend.receiveSyncMessage(b1, s1, b2tob1Message)
-        assert.deepStrictEqual(s1.unappliedChanges.length, 0)
+        assert.deepStrictEqual(Backend.getMissingDeps(b1), [])
         assert.notDeepStrictEqual(patch1, null)
         f1 = Automerge.Frontend.applyPatch(f1, patch1)
         assert.deepStrictEqual(f1, {x: 4, y: 4})
 
         ;[b2, s2, patch2] = Backend.receiveSyncMessage(b2, s2, b1tob2Message)
-        assert.deepStrictEqual(s2.unappliedChanges.length, 0)
+        assert.deepStrictEqual(Backend.getMissingDeps(b2), [])
         assert.notDeepStrictEqual(patch2, null)
         f2 = Automerge.Frontend.applyPatch(f2, patch2)
         assert.deepStrictEqual(f2, {x: 4, y: 4})
@@ -652,18 +652,40 @@ describe('Data sync protocol', () => {
       n1 = Automerge.change(n1, {time: 0}, doc => doc.x = `3 @ n1`)
       n2 = Automerge.change(n2, {time: 0}, doc => doc.x = `3 @ n2`)
       for (let i = 0; i < 3; i++) n3 = Automerge.change(n3, {time: 0}, doc => doc.x = `${i} @ n3`)
-      // node 1 tells 3 what it has
-      ;[s13, message1] = Automerge.generateSyncMessage(n1, s13)
-      // node3 tells 2 what it has
-      ;[s32, message3] = Automerge.generateSyncMessage(n3, s32)
-      // Copy the Bloom filter received from n1 into the message sent from n3 to n2
+      const n1c3 = getHeads(n1)[0], n2c3 = getHeads(n2)[0], n3c3 = getHeads(n3)[0]
+      s13 = decodeSyncState(encodeSyncState(s13))
+      s31 = decodeSyncState(encodeSyncState(s31))
+      s23 = decodeSyncState(encodeSyncState(s23))
+      s32 = decodeSyncState(encodeSyncState(s32))
+
+      // Now n3 concurrently syncs with n1 and n2. Doing this naively would result in n3 receiving
+      // changes {n1c1, n1c2, n2c1, n2c2} twice (those are the changes that both n1 and n2 have, but
+      // that n3 does not have). We want to prevent this duplication.
+      ;[s13, message1] = Automerge.generateSyncMessage(n1, s13) // message from n1 to n3
+      assert.strictEqual(decodeSyncMessage(message1).changes.length, 0)
+      ;[n3, s31] = Automerge.receiveSyncMessage(n3, s31, message1)
+      ;[s31, message3] = Automerge.generateSyncMessage(n3, s31) // message from n3 to n1
+      assert.strictEqual(decodeSyncMessage(message3).changes.length, 3) // {n3c1, n3c2, n3c3}
+      ;[n1, s13] = Automerge.receiveSyncMessage(n1, s13, message3)
+
+      // Copy the Bloom filter received from n1 into the message sent from n3 to n2. This Bloom
+      // filter indicates what changes n3 is going to receive from n1.
+      ;[s32, message3] = Automerge.generateSyncMessage(n3, s32) // message from n3 to n2
       const modifiedMessage = decodeSyncMessage(message3)
       modifiedMessage.have.push(decodeSyncMessage(message1).have[0])
+      assert.strictEqual(modifiedMessage.changes.length, 0)
       ;[n2, s23] = Automerge.receiveSyncMessage(n2, s23, encodeSyncMessage(modifiedMessage))
+
+      // n2 replies to n3, sending only n2c3 (the one change that n2 has but n1 doesn't)
       ;[s23, message2] = Automerge.generateSyncMessage(n2, s23)
-      assert.strictEqual(decodeSyncMessage(message2).changes.length, 1)
-      // XXX: another head mismatch bug...
-      // assert.strictEqual(Automerge.decodeChange(decodeSyncMessage(message2).changes[0]).hash, getHeads(n2)[0])
+      assert.strictEqual(decodeSyncMessage(message2).changes.length, 1) // {n2c3}
+      ;[n3, s32] = Automerge.receiveSyncMessage(n3, s32, message2)
+
+      // n1 replies to n3
+      ;[s13, message1] = Automerge.generateSyncMessage(n1, s13)
+      assert.strictEqual(decodeSyncMessage(message1).changes.length, 5) // {n1c1, n1c2, n1c3, n2c1, n2c2}
+      ;[n3, s31] = Automerge.receiveSyncMessage(n3, s31, message1)
+      assert.deepStrictEqual(getHeads(n3), [n1c3, n2c3, n3c3].sort())
     })
 
     it('should allow any change to be requested', () => {
