@@ -49,7 +49,7 @@ describe('Automerge.Observable', () => {
   it('should call the callback when applying remote changes', () => {
     let observable = new Automerge.Observable(), callbackChanges
     let local = Automerge.from({text: new Automerge.Text()}, {observable})
-    let remote = Automerge.init()
+    let remote = Automerge.init(), patch
     const localId = Automerge.getActorId(local), remoteId = Automerge.getActorId(remote)
     observable.observe(local.text, (diff, before, after, local, changes) => {
       callbackChanges = changes
@@ -62,10 +62,10 @@ describe('Automerge.Observable', () => {
       assert.deepStrictEqual(after.toString(), 'a')
       assert.deepStrictEqual(local, false)
     })
-    remote = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
+    ;[remote, patch] = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
     remote = Automerge.change(remote, doc => doc.text.insertAt(0, 'a'))
     const allChanges = Automerge.getAllChanges(remote)
-    local = Automerge.applyChanges(local, allChanges)
+    ;[local, patch] = Automerge.applyChanges(local, allChanges)
     assert.strictEqual(callbackChanges, allChanges)
   })
 

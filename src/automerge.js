@@ -59,7 +59,8 @@ function merge(localDoc, remoteDoc) {
     throw new RangeError('Cannot merge an actor with itself')
   }
   // Just copy all changes from the remote doc; any duplicates will be ignored
-  return applyChanges(localDoc, getAllChanges(remoteDoc))
+  const [updatedDoc, patch] = applyChanges(localDoc, getAllChanges(remoteDoc))
+  return updatedDoc
 }
 
 function getChanges(oldDoc, newDoc) {
@@ -84,11 +85,7 @@ function applyPatch(doc, patch, backendState, changes, options) {
 function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
   const [newState, patch] = backend.applyChanges(oldState, changes)
-  return applyPatch(doc, patch, newState, changes, options)
-}
-
-function getMissingDeps(doc, changes = [], heads = []) {
-  return backend.getMissingDeps(Frontend.getBackendState(doc), changes, heads)
+  return [applyPatch(doc, patch, newState, changes, options), patch]
 }
 
 function equals(val1, val2) {
@@ -149,7 +146,7 @@ function setDefaultBackend(newBackend) {
 
 module.exports = {
   init, from, change, emptyChange, clone, free,
-  load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
+  load, save, merge, getChanges, getAllChanges, applyChanges,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState,
   get Backend() { return backend }
