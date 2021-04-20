@@ -38,8 +38,8 @@ declare module 'automerge' {
       patchCallback?: PatchCallback<T>
     }
 
-  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
-  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: Uint8Array[]) => void
+  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: BinaryChange[]) => void
+  type ObserverCallback<T> = (diff: ObjectDiff, before: T, after: T, local: boolean, changes: BinaryChange[]) => void
 
   class Observable {
     observe<T>(object: T, callback: ObserverCallback<T>): void
@@ -50,21 +50,21 @@ declare module 'automerge' {
   function change<D, T = Proxy<D>>(doc: D, options: ChangeOptions<T>, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
   function emptyChange<D extends Doc<any>>(doc: D, options?: ChangeOptions<D>): D
-  function applyChanges<T>(doc: Doc<T>, changes: Uint8Array[]): [Doc<T>, Patch]
+  function applyChanges<T>(doc: Doc<T>, changes: BinaryChange[]): [Doc<T>, Patch]
   function equals<T>(val1: T, val2: T): boolean
-  function encodeChange(change: Change): Uint8Array
-  function decodeChange(binaryChange: Uint8Array): Change
+  function encodeChange(change: Change): BinaryChange
+  function decodeChange(binaryChange: BinaryChange): Change
 
   function getActorId<T>(doc: Doc<T>): string
-  function getAllChanges<T>(doc: Doc<T>): Uint8Array[]
-  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Uint8Array[]
+  function getAllChanges<T>(doc: Doc<T>): BinaryChange[]
+  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): BinaryChange[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
-  function load<T>(data: Uint8Array, options?: any): Doc<T>
-  function save<T>(doc: Doc<T>): Uint8Array
+  function load<T>(data: BinaryDocument, options?: any): Doc<T>
+  function save<T>(doc: Doc<T>): BinaryDocument
 
   function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
   function receiveSyncMessage<T>(doc: Doc<T>, syncState: SyncState, message: BinarySyncMessage): [Doc<T>, SyncState]
@@ -130,7 +130,7 @@ declare module 'automerge' {
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
-    function getLastLocalChange<T>(doc: Doc<T>): Uint8Array
+    function getLastLocalChange<T>(doc: Doc<T>): BinaryChange
     function getObjectById<T>(doc: Doc<T>, objectId: OpId): Doc<T>
     function getObjectId<T>(doc: Doc<T>): OpId
     function init<T>(options?: InitOptions<T>): Doc<T>
@@ -149,9 +149,9 @@ declare module 'automerge' {
     function getMissingDeps(state: BackendState, heads?: Hash[]): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
-    function load(data: Uint8Array): BackendState
+    function load(data: BinaryDocument): BackendState
     function loadChanges(state: BackendState, changes: BinaryChange[]): BackendState
-    function save(state: BackendState): Uint8Array
+    function save(state: BackendState): BinaryDocument
     function generateSyncMessage(state: BackendState, syncState: SyncState): [SyncState, BinarySyncMessage?]
     function receiveSyncMessage(state: BackendState, syncState: SyncState, message: BinarySyncMessage): [BackendState, SyncState, Patch?]
     function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
@@ -188,7 +188,9 @@ declare module 'automerge' {
   }
 
   type BinaryChange = Uint8Array & { __binaryChange: true }
+  type BinaryDocument = Uint8Array & { __binaryDocument: true }
   type BinarySyncState = Uint8Array & { __binarySyncState: true }
+  type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
 
   export interface SyncState {
     sharedHeads: Hash[]
@@ -199,12 +201,11 @@ declare module 'automerge' {
     sentChanges: BinaryChange[]
   }
 
-  type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
   interface SyncMessage {
     heads: Hash[]
     need: Hash[]
     have: SyncHave[]
-    changes: Uint8Array[] // todo
+    changes: BinaryChange[]
   }
 
   interface SyncHave {
