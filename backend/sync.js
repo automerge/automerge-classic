@@ -316,7 +316,6 @@ function initSyncState() {
     lastSentHeads: [],
     theirHeads: null,
     theirNeed: null,
-    ourNeed: [],
     have: [],
     sentChanges: []
   }
@@ -358,13 +357,17 @@ function generateSyncMessage(backend, syncState) {
   if (!backend) {
     throw new Error("generateSyncMessage called with no Automerge document")
   }
-  if (!syncState) { 
+  if (!syncState) {
     throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
-  } 
+  }
 
-  const { sharedHeads, ourNeed, theirHeads, theirNeed, have: theirHave } = syncState
+  const { sharedHeads, theirHeads, theirNeed, have: theirHave } = syncState
   const ourHeads = Backend.getHeads(backend)
   const state = backendState(backend)
+
+  // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
+  // changes, and any of the remote peer's heads that we don't know about
+  const ourNeed = Backend.getMissingDeps(backend, theirHeads || [])
 
   // There are two reasons why ourNeed may be nonempty: 1. we might be missing dependencies due to
   // Bloom filter false positives; 2. we might be missing heads that the other peer mentioned
@@ -446,9 +449,9 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   if (!backend) {
     throw new Error("generateSyncMessage called with no Automerge document")
   }
-  if (!oldSyncState) { 
+  if (!oldSyncState) {
     throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
-  } 
+  }
 
   let patch = null
   let { sharedHeads, lastSentHeads } = oldSyncState
@@ -465,10 +468,6 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     ;[backend, patch] = Backend.applyChanges(backend, changes)
     sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
   }
-
-  // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
-  // changes, and any of the remote peer's heads that we don't know about
-  const ourNeed = Backend.getMissingDeps(backend, heads)
 
   // If heads are equal, indicate we don't need to send a response message
   if (changes.length === 0 && compareArrays(heads, beforeHeads)) {
@@ -494,7 +493,6 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     have: message.have, // the information we need to calculate the changes they need
     theirHeads: message.heads,
     theirNeed: message.need,
-    ourNeed, // specifically missing change (bloom filter false positives)
     sentChanges: oldSyncState.sentChanges
   }
   return [backend, syncState, patch]
