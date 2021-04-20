@@ -67,7 +67,7 @@ declare module 'automerge' {
   function save<T>(doc: Doc<T>): BinaryDocument
 
   function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
-  function receiveSyncMessage<T>(doc: Doc<T>, syncState: SyncState, message: BinarySyncMessage): [Doc<T>, SyncState]
+  function receiveSyncMessage<T>(doc: Doc<T>, syncState: SyncState, message: BinarySyncMessage): [Doc<T>, SyncState, Patch?]
   function initSyncState(): SyncState
 
   // custom CRDT types

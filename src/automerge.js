@@ -121,7 +121,7 @@ function generateSyncMessage(doc, syncState) {
 
 function receiveSyncMessage(doc, oldSyncState, message) {
   const [backendState, syncState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), oldSyncState, message)
-  if (!patch) return [doc, syncState]
+  if (!patch) return [doc, syncState, patch]
 
   // The patchCallback is passed as argument all changes that are applied.
   // We get those from the sync message if a patchCallback is present.
@@ -129,7 +129,7 @@ function receiveSyncMessage(doc, oldSyncState, message) {
   if (doc[OPTIONS].patchCallback) {
     changes = backend.decodeSyncMessage(message).changes
   }
-  return [applyPatch(doc, patch, backendState, changes, {}), syncState]
+  return [applyPatch(doc, patch, backendState, changes, {}), syncState, patch]
 }
 
 function initSyncState() {
