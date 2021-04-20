@@ -188,7 +188,7 @@ function interopTests(sourceBackend, destBackend) {
     })
   })
 
-  it.only('should be able to serialize and deserialize with javascript', () => {
+  it.skip('should be able to serialize and deserialize with javascript', () => {
     console.log(source)
     const [doc,request] = Frontend.from({ number: 1.0 });
     console.log(request)
