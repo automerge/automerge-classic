@@ -192,13 +192,8 @@ declare module 'automerge' {
   type BinarySyncState = Uint8Array & { __binarySyncState: true }
   type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
 
-  export interface SyncState {
-    sharedHeads: Hash[]
-    theirNeed: Hash[]
-    ourNeed: Hash[]
-    have: SyncHave[]
-    unappliedChanges: BinaryChange[]
-    sentChanges: BinaryChange[]
+  interface SyncState {
+    // no public methods or properties
   }
 
   interface SyncMessage {
