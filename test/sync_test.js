@@ -401,7 +401,7 @@ describe('Data sync protocol', () => {
 
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
-      for (let i = 3; ; i++) { // search for false positive; see comment above
+      for (let i = 440; ; i++) { // search for false positive; see comment above
         const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         if (new BloomFilter(getHeads(n1up)).containsHash(getHeads(n2up)[0])) {
@@ -429,7 +429,7 @@ describe('Data sync protocol', () => {
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
       let lastSync = getHeads(n1), n1hash1, n1hash2, n2hash1, n2hash2
-      for (let i = 222; ; i++) { // search for false positive; see comment above
+      for (let i = 34; ; i++) { // search for false positive; see comment above
         const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         n1hash1 = getHeads(n1us1)[0]; n2hash1 = getHeads(n2us1)[0]
@@ -460,7 +460,7 @@ describe('Data sync protocol', () => {
 
       for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
-      for (let i = 222; ; i++) { // search for false positive; see comment above
+      for (let i = 80; ; i++) { // search for false positive; see comment above
         const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         const n1hash1 = getHeads(n1us1)[0], n2hash1 = getHeads(n2us1)[0]
@@ -495,13 +495,13 @@ describe('Data sync protocol', () => {
       for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
       n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 5)
-      for (let i = 1; ; i++) { // search for false positive; see comment above
+      for (let i = 608; ; i++) { // search for false positive; see comment above
         const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         if (new BloomFilter(getHeads(n1)).containsHash(getHeads(n2us1)[0])) {
           n2 = n2us1; n2hash1 = getHeads(n2us1)[0]; break
         }
       }
-      for (let i = 37; ; i++) { // search for false positive; see comment above
+      for (let i = 19; ; i++) { // search for false positive; see comment above
         const n2us2 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} again`)
         if (new BloomFilter(getHeads(n1)).containsHash(getHeads(n2us2)[0])) {
           n2 = n2us2; n2hash2 = getHeads(n2us2)[0]; break
@@ -531,7 +531,7 @@ describe('Data sync protocol', () => {
       s1 = decodeSyncState(encodeSyncState(s1))
       s2 = decodeSyncState(encodeSyncState(s2))
 
-      for (let i = 3; ; i++) { // brute-force search for false positive; see comment above
+      for (let i = 440; ; i++) { // brute-force search for false positive; see comment above
         const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         // check if the bloom filter on n2 will believe n1 already has a particular hash
