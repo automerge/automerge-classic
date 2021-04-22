@@ -485,7 +485,43 @@ function getChangeByHash(opSet, hash) {
  * if any of the given hashes are not known to this replica.
  */
 function getMissingChanges(opSet, haveDeps) {
-  let stack = haveDeps, seenHashes = {}
+  // If the other replica has nothing, return all changes in history order
+  if (haveDeps.isEmpty()) {
+    return opSet.get('history').toJSON().map(hash => getChangeByHash(opSet, hash))
+  }
+
+  // Fast path for the common case where all new changes depend only on haveDeps
+  let stack = List(), seenHashes = {}, toReturn = []
+  for (let hash of haveDeps) {
+    seenHashes[hash] = true
+    const successors = opSet.getIn(['hashes', hash, 'depsFuture'])
+    if (!successors) throw new RangeError(`hash not found: ${hash}`)
+    stack = stack.concat(successors)
+  }
+
+  // Depth-first traversal of the hash graph to find all changes that depend on `haveDeps`
+  while (!stack.isEmpty()) {
+    const hash = stack.last()
+    seenHashes[hash] = true
+    toReturn.push(hash)
+    if (!opSet.getIn(['hashes', hash, 'depsPast']).every(dep => seenHashes[dep])) {
+      // If a change depends on a hash we have not seen, abort the traversal and fall back to the
+      // slower algorithm. This will sometimes abort even if all new changes depend on `haveDeps`,
+      // because our depth-first traversal is not necessarily a topological sort of the graph.
+      break
+    }
+    stack = stack.pop().concat(opSet.getIn(['hashes', hash, 'depsFuture']))
+  }
+
+  // If the traversal above has encountered all the heads, and was not aborted early due to
+  // a missing dependency, then the set of changes it has found is complete, so we can return it
+  if (stack.isEmpty() && opSet.get('deps').every(head => seenHashes[head])) {
+    return toReturn.map(hash => getChangeByHash(opSet, hash))
+  }
+
+  // If we haven't encountered all of the heads, we have to search harder. This will happen if
+  // changes were added that are concurrent to `haveDeps`
+  stack = haveDeps; seenHashes = {}
   while (!stack.isEmpty()) {
     const hash = stack.last()
     const deps = opSet.getIn(['hashes', hash, 'depsPast'])
