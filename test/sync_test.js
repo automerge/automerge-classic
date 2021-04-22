@@ -1,6 +1,7 @@
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { BloomFilter } = require('../backend/sync')
+const { decodeChangeMeta } = require('../backend/columnar')
 const { decodeSyncMessage, encodeSyncMessage, decodeSyncState, encodeSyncState, initSyncState } = Automerge.Backend
 
 function getHeads(doc) {
@@ -684,7 +685,7 @@ describe('Data sync protocol', () => {
       decodedMsg = decodeSyncMessage(msg)
       decodedMsg.changes = [change5, change6]
       msg = encodeSyncMessage(decodedMsg)
-      s2.sentChanges = [change5, change6]
+      s2.sentHashes = [decodeChangeMeta(change5, true).hash, decodeChangeMeta(change6, true).hash]
       ;[n1, s1] = Automerge.receiveSyncMessage(n1, s1, msg)
       assert.deepStrictEqual(s1.sharedHeads, [c2, c6].sort())
 
