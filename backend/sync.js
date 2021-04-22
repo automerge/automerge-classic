@@ -326,30 +326,6 @@ function compareArrays(a, b) {
 }
 
 /**
- * Takes two arrays of binary changes, `previousChanges` and `newChanges`. Returns those changes in
- * `newChanges` that do not appear in `previousChanges`.
- */
-function deduplicateChanges(previousChanges, newChanges) {
-  // To avoid an O(n^2) comparison of every change with every other change, we use the fact that
-  // bytes 4 to 7 of every change are a 32-bit checksum that is uniformly distributed, i.e. two
-  // different changes are likely to have different checksums. Thus, we first construct an index
-  // from checksum to the indexes in `previousChanges` at which those checksums appear, and then we
-  // can detect cheaply whether an entry in `newChanges` already exists in `previousChanges`.
-  let index = new Map()
-  for (let i = 0; i < previousChanges.length; i++) {
-    const checksum = getChangeChecksum(previousChanges[i])
-    if (!index.has(checksum)) index.set(checksum, [])
-    index.get(checksum).push(i)
-  }
-
-  return newChanges.filter(change => {
-    const positions = index.get(getChangeChecksum(change))
-    if (!positions) return true
-    return !positions.some(i => equalBytes(change, previousChanges[i]))
-  })
-}
-
-/**
  * Given a backend and what we believe to be the state of our peer, generate a message which tells
  * them about we have and includes any changes we believe they need
  */
@@ -404,8 +380,11 @@ function generateSyncMessage(backend, syncState) {
   }
 
   if (sentHashes.length > 0 && changesToSend.length > 0) {
-    const sentChanges = sentHashes.map(hash => Backend.getChangeByHash(backend, hash))
-    changesToSend = deduplicateChanges(sentChanges, changesToSend)
+    let sentHashesMap = {}
+    for (const hash of sentHashes) {
+      sentHashesMap[hash] = true
+    }
+    changesToSend = changesToSend.filter(change => !sentHashesMap[decodeChangeMeta(change, true).hash])
   }
 
   // Regular response to a sync message: send any changes that the other node
