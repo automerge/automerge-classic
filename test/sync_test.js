@@ -34,25 +34,6 @@ function sync(a, b, aSyncState = initSyncState(), bSyncState = initSyncState()) 
 }
 
 describe('Data sync protocol', () => {
-  const emptyDocBloomFilter = [{bloom: Uint8Array.of(), lastSync: []}]
-
-  const anUnknownSyncState = {
-    sharedHeads: [], theirHave: null, theirHeads: null, theirNeed: null,
-    sentChanges: [], lastSentHeads: []
-  }
-
-  const anEmptySyncState = {
-    sharedHeads: [], theirHave: emptyDocBloomFilter, theirHeads: [],
-    theirNeed: [], sentChanges: [], lastSentHeads: []
-  }
-
-  const expectedEmptyDocSyncMessage = {
-    changes: [],
-    have: emptyDocBloomFilter,
-    heads: [],
-    need: []
-  }
-
   describe('with docs already in sync', () => {
     describe('an empty local doc', () => {
       it('should send a sync message implying no local data', () => {
@@ -60,8 +41,13 @@ describe('Data sync protocol', () => {
         let s1 = initSyncState()
         let m1
         ;[s1, m1] = Automerge.generateSyncMessage(n1, s1)
-        assert.deepStrictEqual(s1, anUnknownSyncState)
-        assert.deepStrictEqual(decodeSyncMessage(m1), expectedEmptyDocSyncMessage)
+        const message = decodeSyncMessage(m1)
+        assert.deepStrictEqual(message.heads, [])
+        assert.deepStrictEqual(message.need, [])
+        assert.deepStrictEqual(message.have.length, 1)
+        assert.deepStrictEqual(message.have[0].lastSync, [])
+        assert.deepStrictEqual(message.have[0].bloom.byteLength, 0)
+        assert.deepStrictEqual(message.changes, [])
       })
 
       it('should not reply if we have no data as well', () => {
@@ -71,8 +57,6 @@ describe('Data sync protocol', () => {
         ;[s1, m1] = Automerge.generateSyncMessage(n1, s1)
         ;[n2, s2] = Automerge.receiveSyncMessage(n2, s2, m1)
         ;[s2, m2] = Automerge.generateSyncMessage(n2, s2)
-
-        assert.deepStrictEqual(s2, anEmptySyncState)
         assert.deepStrictEqual(m2, null)
       })
     })
@@ -91,7 +75,7 @@ describe('Data sync protocol', () => {
 
         // generate a naive sync message
         ;[s1, m1] = Automerge.generateSyncMessage(n1, s1)
-        assert.deepStrictEqual(s1, {...anUnknownSyncState, lastSentHeads: getHeads(n1)})
+        assert.deepStrictEqual(s1.lastSentHeads, getHeads(n1))
 
         // heads are equal so this message should be null
         ;[n2, s2] = Automerge.receiveSyncMessage(n2, s2, m1)
