@@ -36,6 +36,7 @@
     "babel-preset-env": "^1.7.0",
     "browserify": "^16.5.0",
     "copyfiles": "^2.2.0",
+    "eslint": "^7.24.0",
     "jsverify": "^0.8.4",
     "karma": "^4.4.1",
     "karma-browserify": "^7.0.0",

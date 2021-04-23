@@ -86,7 +86,7 @@ describe('Automerge.Frontend', () => {
     it('should delete keys in maps', () => {
       const actor = uuid()
       const [doc1, change1] = Frontend.change(Frontend.init(actor), doc => { doc.magpies = 2; doc.sparrows = 15 })
-      const [doc2, change2] = Frontend.change(doc1, doc => delete doc['magpies'])
+      const [doc2, change2] = Frontend.change(doc1, doc => delete doc['magpies']) // eslint-disable-line
       assert.deepStrictEqual(doc1, {magpies: 2, sparrows: 15})
       assert.deepStrictEqual(doc2, {sparrows: 15})
       assert.deepStrictEqual(change2, {

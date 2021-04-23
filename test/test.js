@@ -1,3 +1,4 @@
+/* eslint-disable dot-notation */
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
@@ -111,20 +112,20 @@ describe('Automerge', () => {
         s2 = Automerge.change(s1, doc => doc.foo = 'bar')
         try {
           s2.foo = 'lemon'
-        } catch (e) {}
+        } catch (e) { /* deliberately ignored */ }
         assert.strictEqual(s2.foo, 'bar')
 
         let deleted = false
         try {
           deleted = delete s2['foo']
-        } catch (e) {}
+        } catch (e) { /* deliberately ignored */ }
         assert.strictEqual(s2.foo, 'bar')
         assert.strictEqual(deleted, false)
 
         Automerge.change(s2, doc => {
           try {
             s2.foo = 'lemon'
-          } catch (e) {}
+          } catch (e) { /* deliberately ignored */ }
           assert.strictEqual(s2.foo, 'bar')
         })
 
@@ -635,9 +636,9 @@ describe('Automerge', () => {
       it('should handle deep nesting', () => {
         s1 = Automerge.change(s1, doc => doc.nesting = {
           maps: { m1: { m2: { foo: "bar", baz: {} }, m2a: { } } },
-          lists: [ [ 1,2,3 ] , [ [ 3,4,5,[6]], 7 ] ],
-          mapsinlists: [ { foo: "bar" } , [ { bar: "baz" } ] ],
-          listsinmaps: { foo: [1,2,3], bar: [ [ { baz: "123" } ] ] }
+          lists: [ [ 1, 2, 3 ], [ [ 3, 4, 5, [6]], 7 ] ],
+          mapsinlists: [ { foo: "bar" }, [ { bar: "baz" } ] ],
+          listsinmaps: { foo: [1, 2, 3], bar: [ [ { baz: "123" } ] ] }
         })
         s1 = Automerge.change(s1, doc => {
           doc.nesting.maps.m1a = "123"
@@ -655,9 +656,9 @@ describe('Automerge', () => {
         })
         assert.deepStrictEqual(s1, { nesting: {
           maps: { m1: { m2: { foo: "bar", baz: { xxx: "123" } } }, m1a: "123" },
-          lists: [ [ [ 3,4,5,100 ], 7 ] ],
+          lists: [ [ [ 3, 4, 5, 100 ], 7 ] ],
           mapsinlists: [ { foo: "baz" } ],
-          listsinmaps: { foo: [1,2,3,4] }
+          listsinmaps: { foo: [1, 2, 3, 4] }
         }})
       })
 
@@ -955,16 +956,16 @@ describe('Automerge', () => {
     })
 
     it('should handle concurrent deletion of the same element', () => {
-      s1 = Automerge.change(s1, doc => doc.birds = ['albatross','buzzard', 'cormorant'])
+      s1 = Automerge.change(s1, doc => doc.birds = ['albatross', 'buzzard', 'cormorant'])
       s2 = Automerge.merge(s2, s1)
       s1 = Automerge.change(s1, doc => doc.birds.deleteAt(1)) // buzzard
       s2 = Automerge.change(s2, doc => doc.birds.deleteAt(1)) // buzzard
       s3 = Automerge.merge(s1, s2)
-      assert.deepStrictEqual(s3.birds, ['albatross','cormorant'])
+      assert.deepStrictEqual(s3.birds, ['albatross', 'cormorant'])
     })
 
     it('should handle concurrent deletion of different elements', () => {
-      s1 = Automerge.change(s1, doc => doc.birds =  ['albatross','buzzard', 'cormorant'])
+      s1 = Automerge.change(s1, doc => doc.birds =  ['albatross', 'buzzard', 'cormorant'])
       s2 = Automerge.merge(s2, s1)
       s1 = Automerge.change(s1, doc => doc.birds.deleteAt(0)) // albatross
       s2 = Automerge.change(s2, doc => doc.birds.deleteAt(1)) // buzzard
@@ -1077,7 +1078,7 @@ describe('Automerge', () => {
     it('should save and load maps with @ symbols in the keys', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc["123@4567"] = "hello")
       let s2 = Automerge.load(Automerge.save(s1))
-      assert.deepStrictEqual(s2, { ["123@4567"]: "hello" })
+      assert.deepStrictEqual(s2, { "123@4567": "hello" })
     })
 
     it('should reconstitute conflicts', () => {

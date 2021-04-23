@@ -82,7 +82,7 @@ const DOC_OPS_COLUMNS = Object.assign({
 }, COMMON_COLUMNS)
 
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
-  .reduce((acc, [k, v]) => {acc[v] = k; return acc}, [])
+  .reduce((acc, [k, v]) => { acc[v] = k; return acc }, [])
 
 const DOCUMENT_COLUMNS = {
   actor:     0 << 4 | COLUMN_TYPE.ACTOR_ID,
@@ -634,7 +634,7 @@ function encodeContainer(chunkType, encodeContentsCallback) {
   bodyBuf.set(MAGIC_BYTES, HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)
   bodyBuf.set(checksum,    HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE)
   bodyBuf.set(headerBuf,   HEADER_SPACE - headerBuf.byteLength)
-  return {hash, bytes: bodyBuf.subarray( HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)}
+  return {hash, bytes: bodyBuf.subarray(HEADER_SPACE - headerBuf.byteLength - CHECKSUM_SIZE - MAGIC_BYTES.byteLength)}
 }
 
 function decodeContainerHeader(decoder, computeHash) {
@@ -1594,8 +1594,8 @@ function appendOperation(outCols, inCols, operation) {
  */
 function groupRelatedOps(change, changeCols, objectMeta) {
   const currentActor = change.actorIds[0]
-  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD]
-    = changeCols.map(col => col.decoder)
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD] =
+    changeCols.map(col => col.decoder)
   let objIdSeen = {}, firstOp = null, lastOp = null, opIdCtr = change.startOp
   let opSequences = [], objectIds = {}
 
@@ -1736,7 +1736,7 @@ class BackendDoc {
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
 
     const objectId = ops.objId
-    const elemId = op[keyStr] ? op[keyStr] :
+    const elemId = op[keyStr] ? op[keyStr] : // eslint-disable-line
                    op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                               : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
@@ -1925,7 +1925,7 @@ class BackendDoc {
       const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
       const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
         ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
-         ( docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
+          (docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
 
       // We keep going until we run out of ops in the change, except that even when we run out, we
       // keep going until we have processed all doc ops for the current key/list element.
@@ -2091,9 +2091,7 @@ class BackendDoc {
     docState.lastIndex[ops.objId] = visibleCount
     for (let col of docState.opsCols) col.decoder.reset()
 
-    let outCols = docState.allCols.map(columnId => {
-      return {columnId, encoder: encoderByColumnId(columnId)}
-    })
+    let outCols = docState.allCols.map(columnId => ({columnId, encoder: encoderByColumnId(columnId)}))
     copyColumns(outCols, docState.opsCols, skipCount)
     const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount)
     copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)

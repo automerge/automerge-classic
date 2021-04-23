@@ -119,7 +119,7 @@ class Micromerge {
       if (!meta[index].deleted) visible++
       index++
     }
-    if (index === meta.length) throw new RangeError(`List element not found: ${op.key}`)
+    if (index === meta.length) throw new RangeError(`List element not found: ${op.key}`) /* this is a bug! */ // eslint-disable-line 
     return {index, visible}
   }
 

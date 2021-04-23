@@ -165,9 +165,7 @@ describe('Automerge.Table', () => {
     const rsdpWithId = Object.assign({id: rsdp}, RSDP)
     assert.deepStrictEqual(s.books.sort('title'), [ddiaWithId, rsdpWithId])
     assert.deepStrictEqual(s.books.sort(['authors', 'title']), [rsdpWithId, ddiaWithId])
-    assert.deepStrictEqual(s.books.sort((row1, row2) => {
-      return (row1.isbn === '1449373321') ? -1 : +1
-    }), [ddiaWithId, rsdpWithId])
+    assert.deepStrictEqual(s.books.sort((row1, row2) => ((row1.isbn === '1449373321') ? -1 : +1)), [ddiaWithId, rsdpWithId])
   })
 
   it('should allow serialization to JSON', () => {

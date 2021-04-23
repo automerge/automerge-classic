@@ -189,9 +189,7 @@ function interopTests(sourceBackend, destBackend) {
   })
 
   it('should be able to serialize and deserialize with javascript', () => {
-    console.log(source)
-    const [doc,request] = Frontend.from({ number: 1.0 });
-    console.log(request)
+    const [doc, request] = Frontend.from({ number: 1.0 })
     const [source1, p1, change1] = sourceBackend.applyLocalChange(source, request)
     const saved = sourceBackend.save(source1)
     decodeDocument(saved)

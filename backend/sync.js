@@ -440,7 +440,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   // changes without applying them. The set of changes may also be incomplete if the sender decided
   // to break a large set of changes into chunks.
   if (message.changes.length > 0) {
-    ;[backend, patch] = Backend.applyChanges(backend, message.changes)
+    [backend, patch] = Backend.applyChanges(backend, message.changes)
     sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
   }
 

@@ -613,7 +613,7 @@ function getPrevious(opSet, objectId, key) {
   const parentId = getParent(opSet, objectId, key)
   let children = insertionsAfter(opSet, objectId, parentId)
   if (children.first() === key) {
-    if (parentId === '_head') return null; else return parentId;
+    if (parentId === '_head') return null; else return parentId
   }
 
   let prevId

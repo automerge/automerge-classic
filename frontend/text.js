@@ -5,12 +5,12 @@ class Text {
   constructor (text) {
     if (typeof text === 'string') {
       const elems = [...text].map(value => ({value}))
-      return instantiateText(undefined, elems)
+      return instantiateText(undefined, elems) // eslint-disable-line
     } else if (Array.isArray(text)) {
       const elems = text.map(value => ({value}))
-      return instantiateText(undefined, elems)
+      return instantiateText(undefined, elems) // eslint-disable-line
     } else if (text === undefined) {
-      return instantiateText(undefined, [])
+      return instantiateText(undefined, []) // eslint-disable-line
     } else {
       throw new TypeError(`Unsupported initial value for Text: ${text}`)
     }
@@ -169,7 +169,7 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
                     'slice', 'some', 'toLocaleString']) {
   Text.prototype[method] = function (...args) {
     const array = [...this]
-    return array[method].call(array, ...args)
+    return array[method].call(array, ...args) // eslint-disable-line
   }
 }
 

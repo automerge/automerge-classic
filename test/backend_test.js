@@ -214,7 +214,7 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(change3)])
       assert.deepStrictEqual(patch3, {
         clock: {[actor1]: 1, [actor2]: 2}, maxOp: 2, pendingChanges: 0,
-        deps: [hash(change1), hash(change3)].sort(), 
+        deps: [hash(change1), hash(change3)].sort(),
         diffs: {objectId: '_root', type: 'map', props: {conflict: {
           [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'list'},
           [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {value: 12}}}}
@@ -290,7 +290,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         actor: '111111', seq: 1, clock: {'111111': 1}, deps: [], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {['1@111111']: {value: 'magpie'}}
+          bird: {'1@111111': {value: 'magpie'}}
         }}
       })
       assert.deepStrictEqual(changes01, [{
@@ -441,10 +441,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         actor: '111111', seq: 2, clock: {'111111': 2}, deps: [], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          birds: {['1@111111']: {objectId: '1@111111', type: 'list',
+          birds: {'1@111111': {objectId: '1@111111', type: 'list',
             edits: [{action: 'insert', index: 0, elemId: '2@111111'}, {action: 'remove', index: 0}],
-            props: {}
-          }}
+            props: {}}}
         }}
       })
       assert.deepStrictEqual(changes, [{
@@ -473,7 +472,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          longString: {['1@111111']: {value: longString}}
+          longString: {'1@111111': {value: longString}}
         }}
       })
     })
@@ -508,7 +507,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch, {
         clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          longString: {['1@111111']: {value: longString}}
+          longString: {'1@111111': {value: longString}}
         }}
       })
     })

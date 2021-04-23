@@ -5,7 +5,11 @@ const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
-///// Automerge.* API
+/**
+ * Automerge.* API
+ * The functions in this file constitute the publicly facing Automerge API which combines
+ * the features of the Frontend (a document interface) and the backend (CRDT operations)
+ */
 
 function init(options) {
   if (typeof options === 'string') {
@@ -102,8 +106,7 @@ function equals(val1, val2) {
 function getHistory(doc) {
   const actor = Frontend.getActorId(doc)
   const history = getAllChanges(doc)
-  return history.map((change, index) => {
-    return {
+  return history.map((change, index) => ({
       get change () {
         return decodeChange(change)
       },
@@ -111,8 +114,8 @@ function getHistory(doc) {
         const state = backend.loadChanges(backend.init(), history.slice(0, index + 1))
         return Frontend.applyPatch(init(actor), backend.getPatch(state), state)
       }
-    }
-  })
+    })
+  )
 }
 
 function generateSyncMessage(doc, syncState) {

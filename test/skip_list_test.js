@@ -24,8 +24,8 @@ describe('SkipList', () => {
     })
 
     it('should return length-1 for the last list element', () => {
-      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').
-        insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b')
+        .insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
       assert.strictEqual(s.indexOf('d'), 3)
     })
 
@@ -192,11 +192,11 @@ describe('SkipList', () => {
 
     it('should behave like a JS array', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
-        let levels = ops.filter(op => op.hasOwnProperty('insertAfter')).map(op => op.level)
+        let levels = ops.filter(op => op.hasOwnProperty('insertAfter')).map(op => op.level) // eslint-disable-line
         let skipList = new SkipList(iter(levels))
         let shadow = []
         for (let op of ops) {
-          if (op.hasOwnProperty('insertAfter')) {
+          if (op.hasOwnProperty('insertAfter')) { // eslint-disable-line
             skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
             shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
           } else {
@@ -205,6 +205,7 @@ describe('SkipList', () => {
           }
         }
 
+        // eslint-disable-next-line
         /*if (skipList.length !== shadow.length) console.log('list lengths must be equal')
 
         shadow.forEach((id, index) => {

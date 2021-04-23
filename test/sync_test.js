@@ -16,14 +16,14 @@ function sync(a, b, aSyncState = initSyncState(), bSyncState = initSyncState()) 
   const MAX_ITER = 10
   let aToBmsg = null, bToAmsg = null, i = 0
   do {
-    ;[aSyncState, aToBmsg] = Automerge.generateSyncMessage(a, aSyncState)
+    [aSyncState, aToBmsg] = Automerge.generateSyncMessage(a, aSyncState)
     ;[bSyncState, bToAmsg] = Automerge.generateSyncMessage(b, bSyncState)
 
     if (aToBmsg) {
-      ;[b, bSyncState] = Automerge.receiveSyncMessage(b, bSyncState, aToBmsg)
+      [b, bSyncState] = Automerge.receiveSyncMessage(b, bSyncState, aToBmsg)
     }
     if (bToAmsg) {
-      ;[a, aSyncState] = Automerge.receiveSyncMessage(a, aSyncState, bToAmsg)
+      [a, aSyncState] = Automerge.receiveSyncMessage(a, aSyncState, bToAmsg)
     }
 
     if (i++ > MAX_ITER) {
@@ -449,8 +449,8 @@ describe('Data sync protocol', () => {
         const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
         const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         const n1hash1 = getHeads(n1us1)[0], n2hash1 = getHeads(n2us1)[0]
-        const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = `${i+1} @ n1`)
-        const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = `${i+1} @ n2`)
+        const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = `${i + 1} @ n1`)
+        const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = `${i + 1} @ n2`)
         const n1hash2 = getHeads(n1us2)[0], n2hash2 = getHeads(n2us2)[0]
         const n1up3 = Automerge.change(n1us2, {time: 0}, doc => doc.x = 'final @ n1')
         const n2up3 = Automerge.change(n2us2, {time: 0}, doc => doc.x = 'final @ n2')
@@ -527,7 +527,7 @@ describe('Data sync protocol', () => {
       }
 
       // n1 creates a sync message for n2 with an ill-fated bloom
-      ;[s1, message] = Automerge.generateSyncMessage(n1, s1)
+      [s1, message] = Automerge.generateSyncMessage(n1, s1)
       assert.strictEqual(decodeSyncMessage(message).changes.length, 0)
 
       // n2 receives it and DOESN'T send a change back
