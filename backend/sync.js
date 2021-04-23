@@ -379,9 +379,7 @@ function generateSyncMessage(backend, syncState) {
     return [syncState, null]
   }
 
-  if (Object.keys(sentHashes).length > 0 && changesToSend.length > 0) {
-    changesToSend = changesToSend.filter(change => !sentHashes[decodeChangeMeta(change, true).hash])
-  }
+  changesToSend = changesToSend.filter(change => !sentHashes[decodeChangeMeta(change, true).hash])
 
   // Regular response to a sync message: send any changes that the other node
   // doesn't have. We leave the "have" field empty because the previous message
