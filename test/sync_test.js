@@ -685,7 +685,10 @@ describe('Data sync protocol', () => {
       decodedMsg = decodeSyncMessage(msg)
       decodedMsg.changes = [change5, change6]
       msg = encodeSyncMessage(decodedMsg)
-      s2.sentHashes = [decodeChangeMeta(change5, true).hash, decodeChangeMeta(change6, true).hash]
+      const sentHashes = {}
+      sentHashes[decodeChangeMeta(change5, true).hash] = true
+      sentHashes[decodeChangeMeta(change6, true).hash] = true
+      s2.sentHashes = sentHashes
       ;[n1, s1] = Automerge.receiveSyncMessage(n1, s1, msg)
       assert.deepStrictEqual(s1.sharedHeads, [c2, c6].sort())
 
