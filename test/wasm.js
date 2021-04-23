@@ -15,7 +15,8 @@ if (!process.env.WASM_BACKEND_PATH) {
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const jsBackend = require('../backend')
-const { decodeChange } = require('../backend/columnar')
+const Frontend = require('../frontend')
+const { decodeChange, decodeDocument } = require('../backend/columnar')
 const uuid = require('../src/uuid')
 
 const path = require('path')
@@ -48,7 +49,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
         bird: {[`1@${actor}`]: {value: 'magpie'}}
       }}
@@ -70,7 +71,7 @@ function interopTests(sourceBackend, destBackend) {
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
     assert.deepStrictEqual(patch2, {
-      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2,
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {bird: {}}}
     })
   })
@@ -85,7 +86,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {value: 3}}}
       }}}}
@@ -102,7 +103,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list',
         edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
@@ -127,7 +128,7 @@ function interopTests(sourceBackend, destBackend) {
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
     assert.deepStrictEqual(patch2, {
-      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 3,
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 3, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list', props: {},
         edits: [{action: 'remove', index: 0}]
@@ -147,7 +148,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
           {action: 'insert', index: 0, elemId: `2@${actor}`},
@@ -175,7 +176,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'table', props: {[rowId]: {[`2@${actor}`]: {
           objectId: `2@${actor}`, type: 'map', props: {
@@ -185,6 +186,15 @@ function interopTests(sourceBackend, destBackend) {
         }}}
       }}}}
     })
+  })
+
+  it('should be able to serialize and deserialize with javascript', () => {
+    console.log(source)
+    const [doc,request] = Frontend.from({ number: 1.0 });
+    console.log(request)
+    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, request)
+    const saved = sourceBackend.save(source1)
+    decodeDocument(saved)
   })
 
   it('should support Counter objects', () => {
@@ -202,7 +212,7 @@ function interopTests(sourceBackend, destBackend) {
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     const [dest2, patch2] = destBackend.applyChanges(dest1, [change2])
     assert.deepStrictEqual(patch2, {
-      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2,
+      clock: {[actor]: 2}, deps: [decodeChange(change2).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
         counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
       }}
@@ -218,7 +228,7 @@ function interopTests(sourceBackend, destBackend) {
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
         now: {[`1@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}
       }}
@@ -236,7 +246,7 @@ function interopTests(sourceBackend, destBackend) {
     assert.ok(change1.byteLength < 100)
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
-      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+      clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
         longString: {[`1@${actor}`]: {value: longString}}
       }}
@@ -254,7 +264,7 @@ function interopTests(sourceBackend, destBackend) {
       const dest1 = destBackend.load(sourceBackend.save(source1))
       const patch = destBackend.getPatch(dest1)
       assert.deepStrictEqual(patch, {
-        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
           bird: {[`1@${actor}`]: {value: 'magpie'}}
         }}
@@ -273,7 +283,7 @@ function interopTests(sourceBackend, destBackend) {
       assert.ok(compressedDoc.byteLength < 200)
       const patch = destBackend.getPatch(destBackend.load(compressedDoc))
       assert.deepStrictEqual(patch, {
-        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1,
+        clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
           longString: {[`1@${actor}`]: {value: longString}}
         }}

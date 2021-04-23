@@ -36,28 +36,18 @@ function emptyChange(doc, options) {
   return newDoc
 }
 
-function clone(doc) {
+function clone(doc, options = {}) {
   const state = backend.clone(Frontend.getBackendState(doc))
-  const patch = backend.getPatch(state)
-  patch.state = state
-  return Frontend.applyPatch(init(), patch)
+  return applyPatch(init(options), backend.getPatch(state), state, [], options)
 }
 
 function free(doc) {
   backend.free(Frontend.getBackendState(doc))
 }
 
-function load(data, options) {
+function load(data, options = {}) {
   const state = backend.load(data)
-  const patch = backend.getPatch(state)
-  patch.state = state
-  const doc = Frontend.applyPatch(init(options), patch)
-
-  if (doc[OPTIONS].patchCallback) {
-    delete patch.state
-    doc[OPTIONS].patchCallback(patch, {}, doc, false, [data])
-  }
-  return doc
+  return applyPatch(init(options), backend.getPatch(state), state, [data], options)
 }
 
 function save(doc) {
@@ -69,7 +59,8 @@ function merge(localDoc, remoteDoc) {
     throw new RangeError('Cannot merge an actor with itself')
   }
   // Just copy all changes from the remote doc; any duplicates will be ignored
-  return applyChanges(localDoc, getAllChanges(remoteDoc))
+  const [updatedDoc, patch] = applyChanges(localDoc, getAllChanges(remoteDoc))
+  return updatedDoc
 }
 
 function getChanges(oldDoc, newDoc) {
@@ -82,22 +73,19 @@ function getAllChanges(doc) {
   return backend.getAllChanges(Frontend.getBackendState(doc))
 }
 
-function applyChanges(doc, changes, options = {}) {
-  const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = backend.applyChanges(oldState, changes)
-  patch.state = newState
-  const newDoc = Frontend.applyPatch(doc, patch)
-
+function applyPatch(doc, patch, backendState, changes, options) {
+  const newDoc = Frontend.applyPatch(doc, patch, backendState)
   const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
   if (patchCallback) {
-    delete patch.state
     patchCallback(patch, doc, newDoc, false, changes)
   }
   return newDoc
 }
 
-function getMissingDeps(doc) {
-  return backend.getMissingDeps(Frontend.getBackendState(doc))
+function applyChanges(doc, changes, options = {}) {
+  const oldState = Frontend.getBackendState(doc)
+  const [newState, patch] = backend.applyChanges(oldState, changes)
+  return [applyPatch(doc, patch, newState, changes, options), patch]
 }
 
 function equals(val1, val2) {
@@ -121,12 +109,31 @@ function getHistory(doc) {
       },
       get snapshot () {
         const state = backend.loadChanges(backend.init(), history.slice(0, index + 1))
-        const patch = backend.getPatch(state)
-        patch.state = state
-        return Frontend.applyPatch(init(actor), patch)
+        return Frontend.applyPatch(init(actor), backend.getPatch(state), state)
       }
     }
   })
+}
+
+function generateSyncMessage(doc, syncState) {
+  return backend.generateSyncMessage(Frontend.getBackendState(doc), syncState)
+}
+
+function receiveSyncMessage(doc, oldSyncState, message) {
+  const [backendState, syncState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), oldSyncState, message)
+  if (!patch) return [doc, syncState, patch]
+
+  // The patchCallback is passed as argument all changes that are applied.
+  // We get those from the sync message if a patchCallback is present.
+  let changes = null
+  if (doc[OPTIONS].patchCallback) {
+    changes = backend.decodeSyncMessage(message).changes
+  }
+  return [applyPatch(doc, patch, backendState, changes, {}), syncState, patch]
+}
+
+function initSyncState() {
+  return backend.initSyncState()
 }
 
 /**
@@ -139,9 +146,9 @@ function setDefaultBackend(newBackend) {
 
 module.exports = {
   init, from, change, emptyChange, clone, free,
-  load, save, merge, getChanges, getAllChanges, applyChanges, getMissingDeps,
+  load, save, merge, getChanges, getAllChanges, applyChanges,
   encodeChange, decodeChange, equals, getHistory, uuid,
-  Frontend, setDefaultBackend,
+  Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState,
   get Backend() { return backend }
 }
 
