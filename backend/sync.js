@@ -379,6 +379,8 @@ function generateSyncMessage(backend, syncState) {
     return [syncState, null]
   }
 
+  // TODO: this recomputes the SHA-256 hash of each change; we should restructure this to avoid the
+  // unnecessary recomputation
   changesToSend = changesToSend.filter(change => !sentHashes[decodeChangeMeta(change, true).hash])
 
   // Regular response to a sync message: send any changes that the other node
@@ -392,10 +394,7 @@ function generateSyncMessage(backend, syncState) {
     }
   }
 
-  syncState = Object.assign({}, syncState, {
-    lastSentHeads: ourHeads,
-    sentHashes: sentHashes,
-  })
+  syncState = Object.assign({}, syncState, {lastSentHeads: ourHeads, sentHashes})
   return [syncState, encodeSyncMessage(syncMessage)]
 }
 
