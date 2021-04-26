@@ -21,8 +21,8 @@ const { backendState } = require('./util')
 const Backend = require('./backend')
 const OpSet = require('./op_set')
 const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
-const { decodeChangeMeta, getChangeChecksum } = require('./columnar')
-const { copyObject, equalBytes } = require('../src/common')
+const { decodeChangeMeta } = require('./columnar')
+const { copyObject } = require('../src/common')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
@@ -167,7 +167,6 @@ function encodeSyncMessage(message) {
     encodeHashes(encoder, have.lastSync)
     encoder.appendPrefixedBytes(have.bloom)
   }
-  const changes = message.changes || []
   encoder.appendUint32(message.changes.length)
   for (let change of message.changes) {
     encoder.appendPrefixedBytes(change)
@@ -440,7 +439,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   // changes without applying them. The set of changes may also be incomplete if the sender decided
   // to break a large set of changes into chunks.
   if (message.changes.length > 0) {
-    ;[backend, patch] = Backend.applyChanges(backend, message.changes)
+    [backend, patch] = Backend.applyChanges(backend, message.changes)
     sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
   }
 
