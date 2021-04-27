@@ -351,7 +351,7 @@ function generateSyncMessage(backend, syncState) {
   // In case 2, or if ourNeed is empty, we send a Bloom filter to request any unsent changes.
   let ourHave = []
   if (ourNeed.every(hash => theirHeads.includes(hash))) {
-    ourHave = [makeBloomFilter(state, sharedHeads)]
+    ourHave = [makeBloomFilter(state, lastSentHeads)]
   }
 
   // Fall back to a full re-sync if the sender's last sync state includes hashes
