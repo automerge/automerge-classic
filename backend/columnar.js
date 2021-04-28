@@ -1736,9 +1736,9 @@ class BackendDoc {
       valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
 
     const objectId = ops.objId
-    const elemId = op[keyStr] ? op[keyStr] : // eslint-disable-line
-                   op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-                              : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
+    const elemId = op[keyStr] ? op[keyStr]
+                              : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+                                           : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
     // An operation to be overwritten if it is a document operation that has at least one successor
     const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)

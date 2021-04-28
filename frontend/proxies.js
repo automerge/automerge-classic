@@ -89,7 +89,7 @@ function listMethods(context, listId, path) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
         .map((item, index) => context.getObjectField(path, listId, index))
-      return list[method].call(list, ...args) // eslint-disable-line
+      return list[method](list, ...args)
     }
   }
 

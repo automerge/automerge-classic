@@ -192,11 +192,11 @@ describe('SkipList', () => {
 
     it('should behave like a JS array', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
-        let levels = ops.filter(op => op.hasOwnProperty('insertAfter')).map(op => op.level) // eslint-disable-line
+        let levels = ops.filter(op => op.prototype.hasOwnProperty.call('insertAfter')).map(op => op.level)
         let skipList = new SkipList(iter(levels))
         let shadow = []
         for (let op of ops) {
-          if (op.hasOwnProperty('insertAfter')) { // eslint-disable-line
+          if (op.prototype.hasOwnProperty.call('insertAfter')) {
             skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
             shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
           } else {
@@ -204,18 +204,6 @@ describe('SkipList', () => {
             shadow.splice(shadow.indexOf(op.remove), 1)
           }
         }
-
-        // eslint-disable-next-line
-        /*if (skipList.length !== shadow.length) console.log('list lengths must be equal')
-
-        shadow.forEach((id, index) => {
-          if (skipList.indexOf(id) !== index) {
-            console.log('indexOf(' + id + ') = ' + skipList.indexOf(id) + ', should be ' + index)
-          }
-          if (skipList.keyOf(index) !== id) {
-            console.log('keyOf(' + index + ') = ' + skipList.keyOf(index) + ', should be ' + id)
-          }
-        })*/
 
         return (skipList.length === shadow.length) && shadow.every((id, index) =>
           skipList.indexOf(id) === index && skipList.keyOf(index) === id
