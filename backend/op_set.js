@@ -319,7 +319,7 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
 }
 
 function makeListEditsForIndex(opSet, listId, elemId, index, insert) {
-  edits = []
+  let edits = []
   for (let op of getFieldOps(opSet, listId, elemId)) {
     let valuePatch = {}
     const opId = op.get('opId')

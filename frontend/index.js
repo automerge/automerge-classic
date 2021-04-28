@@ -117,7 +117,7 @@ function makeChange(doc, context, options) {
 }
 
 function countOps(ops) {
-  count = 0
+  let count = 0
   for (const op of ops) {
     if (op.action === 'set' && op.values) {
       count += op.values.length
