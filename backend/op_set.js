@@ -343,6 +343,7 @@ function makeListEditsForIndex(opSet, listId, elemId, index, insert) {
         action: 'insert',
         value: valuePatch,
         elemId: opId,
+        opId,
         index,
       })
     } else {

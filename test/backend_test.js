@@ -129,8 +129,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}
+          ]
         }}}}
       })
     })
@@ -197,7 +198,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}},
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}},
             {action: 'remove', index: 0, count: 1}
           ], 
         }}}}
@@ -255,8 +256,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch, {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
+          ]
         }}}}
       })
     })
@@ -300,8 +302,8 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: 'first'}},
-            {action: 'insert', index: 1, elemId: `3@${actor}`, value: {
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'first'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `3@${actor}`, value: {
               type: 'map',
               objectId: `3@${actor}`,
               props: {
@@ -525,7 +527,7 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {
           birds: {['1@111111']: {objectId: '1@111111', type: 'list',
             edits: [
-              {action: 'insert', index: 0, elemId: '2@111111', value: {type: 'value', value: 'magpie'}},
+              {action: 'insert', index: 0, elemId: '2@111111', opId: '2@111111', value: {type: 'value', value: 'magpie'}},
               {action: 'remove', index: 0, count: 1}],
           }}
         }}
@@ -744,7 +746,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}],
+          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}],
         }}}}
       })
     })
@@ -767,8 +769,9 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
           edits: [
-            {action: 'multi-insert', index: 0, elemId: `5@${actor}`, values: ['greenfinch', 'goldfinches!!']},
-          ],
+            {action: 'insert', index: 0, elemId: `5@${actor}`, opId: `5@${actor}`, value: {type: 'value', value: 'greenfinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `6@${actor}`, value: {type: 'value', value: 'goldfinches!!'}}
+          ]
         }}}}
       })
     })
@@ -792,9 +795,9 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor1}`]: {
           objectId: `1@${actor1}`, type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `4@${actor1}`, value: {type: 'value', value: 'greenfinch'}},
+            {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `4@${actor1}`, value: {type: 'value', value: 'greenfinch'}},
             {action: 'update', index: 0, opId: `4@${actor2}`, value: {type: 'value', value: 'goldfinch'}},
-            {action: 'insert', index: 1, elemId: `3@${actor1}`, value: {type: 'value', value: 'magpie'}}
+            {action: 'insert', index: 1, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'magpie'}}
           ],
         }}}}
       })
@@ -814,7 +817,7 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, value: {
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {
               type: 'map',
               objectId: `2@${actor}`,
               props: {
@@ -851,9 +854,10 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, 
-            value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`,
+             value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
+          ]
         }}}}
       })
     })

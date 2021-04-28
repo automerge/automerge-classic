@@ -397,7 +397,7 @@ class Context {
         let nextElemId = this.nextOpId()
         const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
         elemId = nextElemId
-        subpatch.edits.push({action: 'insert', index: index + offset, elemId, value: valuePatch})
+        subpatch.edits.push({action: 'insert', index: index + offset, elemId, opId: elemId, value: valuePatch})
       }
     }
   }

@@ -280,7 +280,7 @@ describe('Proxying context', () => {
       const nestedId = applyPatch.firstCall.args[0].props.birds['1@actor1'].edits[0].value.objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
-          {action: 'insert', index: 2, elemId: `1@${context.actorId}`, value: {
+          {action: 'insert', index: 2, elemId: `1@${context.actorId}`, opId: `1@${context.actorId}`, value: {
             objectId: nestedId,
             type: 'map',
             props: {

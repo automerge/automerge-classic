@@ -222,7 +222,7 @@ function updateListObject(patch, obj, updated) {
       let value = getValue(edit.value, undefined, updated)
       elemIds.splice(edit.index, 0, edit.elemId)
       list.splice(edit.index, 0, value)
-      conflicts.splice(edit.index, 0, {[edit.elemId]: value})
+      conflicts.splice(edit.index, 0, {[edit.opId]: value})
       oldConflicts.splice(edit.index, 0, undefined)
       elemIdsInthisPatch.add(edit.elemId)
     } else if (edit.action === 'multi-insert') {
@@ -300,7 +300,7 @@ function updateTextObject(patch, obj, updated) {
       }
       let elem = {
         elemId: edit.elemId,
-        pred: [edit.elemId],
+        pred: [edit.opId],
         value,
       }
       updatedElemIds.add(edit.elemId)

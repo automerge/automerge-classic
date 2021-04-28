@@ -266,7 +266,8 @@ declare module 'automerge' {
     action: 'insert'
     index: number   // the list index at which to insert the new element
     elemId: OpId    // the unique element ID of the new list element
-    value: MapDiff | ListDiff | ValueDiff 
+    opId: OpId      // ID of the operation that assigned this value
+    value: MapDiff | ListDiff | ValueDiff
   }
 
   // Describes the insertion of a consecutive sequence of primitive values into
@@ -289,8 +290,8 @@ declare module 'automerge' {
   interface UpdateEdit {
     action: 'update'
     index: number   // the list index to update
-    opId: OpId      // ID of the operation that performed this update
-    value: MapDiff | ListDiff | ValueDiff 
+    opId: OpId      // ID of the operation that assigned this value
+    value: MapDiff | ListDiff | ValueDiff
   }
 
   // Describes the deletion of one or more consecutive elements from a list or

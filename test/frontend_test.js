@@ -323,9 +323,9 @@ describe('Automerge.Frontend', () => {
       doc1 = Frontend.applyPatch(doc1, {
         actor, seq: 1, clock: {[actor]: 1}, maxOp: 2,
         diffs: {objectId: '_root', type: 'map', props: {
-          birds: {[actor]: {objectId: birds, type: 'list',
-            edits: [{action: 'insert', elemId: `2@${actor}`, index: 0, value: {type: 'value', value: 'goldfinch'}}],
-          }}
+          birds: {[actor]: {objectId: birds, type: 'list', edits: [
+            {action: 'insert', elemId: `2@${actor}`, opId: `2@${actor}`, index: 0, value: {type: 'value', value: 'goldfinch'}}
+          ]}}
         }}
       })
       assert.deepStrictEqual(doc1, {birds: ['goldfinch']})
@@ -341,9 +341,9 @@ describe('Automerge.Frontend', () => {
       const doc3 = Frontend.applyPatch(doc2, {
         clock: {[actor]: 1, [remoteActor]: 1}, maxOp: 4,
         diffs: {objectId: '_root', type: 'map', props: {
-          birds: {[actor]: {objectId: birds, type: 'list',
-            edits: [{action: 'insert', elemId: `1@${remoteActor}`, index: 1, value: {type: 'value', value: 'bullfinch'}}],
-          }}
+          birds: {[actor]: {objectId: birds, type: 'list', edits: [
+            {action: 'insert', elemId: `1@${remoteActor}`, opId: `1@${remoteActor}`, index: 1, value: {type: 'value', value: 'bullfinch'}}
+          ]}}
         }}
       })
       // The addition of 'bullfinch' does not take effect yet: it is queued up until the pending
@@ -353,12 +353,10 @@ describe('Automerge.Frontend', () => {
       const doc4 = Frontend.applyPatch(doc3, {
         actor, seq: 2, clock: {[actor]: 2, [remoteActor]: 1}, maxOp: 4,
         diffs: {objectId: '_root', type: 'map', props: {
-          birds: {[actor]: {objectId: birds, type: 'list',
-              edits: [
-                {action: 'insert', index: 0, elemId: `3@${actor}`, value: {type: 'value', value: 'chaffinch'}},
-                {action: 'insert', index: 2, elemId: `4@${actor}`, value: {type: 'value', value: 'greenfinch'}}
-              ],
-          }}
+          birds: {[actor]: {objectId: birds, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `3@${actor}`, opId: `3@${actor}`, value: {type: 'value', value: 'chaffinch'}},
+            {action: 'insert', index: 2, elemId: `4@${actor}`, opId: `4@${actor}`, value: {type: 'value', value: 'greenfinch'}}
+          ]}}
         }}
       })
       assert.deepStrictEqual(doc4, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
@@ -556,8 +554,9 @@ describe('Automerge.Frontend', () => {
       const patch = {
         clock: {[actor]: 1},
         diffs: {objectId: '_root', type: 'map', props: {birds: {[actor]: {
-          objectId: birds, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {value: 'chaffinch'}}],
+          objectId: birds, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {value: 'chaffinch'}}
+          ]
         }}}}
       }
       const doc = Frontend.applyPatch(Frontend.init(), patch)
@@ -569,8 +568,9 @@ describe('Automerge.Frontend', () => {
       const patch1 = {
         clock: {[actor]: 1},
         diffs: {objectId: '_root', type: 'map', props: {birds: {[actor]: {
-          objectId: birds, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, value: {value: 'chaffinch'}}],
+          objectId: birds, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {value: 'chaffinch'}}
+          ]
         }}}}
       }
       const patch2 = {
@@ -597,7 +597,7 @@ describe('Automerge.Frontend', () => {
           objectId: birds, 
           type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `1@${actor1}`, value: {
+            {action: 'insert', index: 0, elemId: `1@${actor1}`, opId: `1@${actor1}`, value: {
               type: 'map',
               objectId: `1@${actor1}`,
               props: {
@@ -714,8 +714,8 @@ describe('Automerge.Frontend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: birds, type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, value: {value: 'chaffinch'}},
-            {action: 'insert', index: 1, elemId: `3@${actor}`, value: {value: 'goldfinch'}}
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {value: 'chaffinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `3@${actor}`, value: {value: 'goldfinch'}}
           ],
         }}}}
       }
@@ -739,8 +739,8 @@ describe('Automerge.Frontend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: birds, type: 'list',
           edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, value: {value: 'chaffinch'}},
-            {action: 'insert', index: 1, elemId: `3@${actor}`, value: {value: 'goldfinch'}}
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {value: 'chaffinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `3@${actor}`, value: {value: 'goldfinch'}}
           ],
         }}}}
       }
@@ -766,7 +766,7 @@ describe('Automerge.Frontend', () => {
             magpies: {[`2@${actor}`]: {value: 2}}
           }}},
           details: {[`3@${actor}`]: {objectId: `3@${actor}`, type: 'list',
-            edits: [{action: 'insert', index: 0, elemId: `4@${actor}`, value: {
+            edits: [{action: 'insert', index: 0, elemId: `4@${actor}`, opId: `4@${actor}`, value: {
               type: 'map',
               objectId: `4@${actor}`,
               props: {
@@ -815,6 +815,7 @@ describe('Automerge.Frontend', () => {
             index: 0,
             value: {type: 'value', value: '1'},
             elemId: `2@${actor}`,
+            opId: `2@${actor}`
           },
           {
             action: 'multi-insert',

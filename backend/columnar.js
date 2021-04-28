@@ -1243,7 +1243,7 @@ function addPatchProperty(objects, property) {
       if (!obj.props) obj.props = {}
       obj.props[property.key] = values
     } else if (obj.type === 'list' || obj.type === 'text') {
-      makeListEdits(obj, values, property.index)
+      makeListEdits(obj, values, property.key, property.index)
     }
     return true
   } else {
@@ -1254,15 +1254,16 @@ function addPatchProperty(objects, property) {
 /**
  * When constructing a patch to instantiate a loaded document, this function adds the edits to
  * insert one list element. Usually there is one value, but in the case of a conflict there may be
- * several values. `index` is the list index at which the value(s) should be placed.
+ * several values. `elemId` is the ID of the list element, and `index` is the list index at which
+ * the value(s) should be placed.
  */
-function makeListEdits(list, values, index) {
+function makeListEdits(list, values, elemId, index) {
   if (!list.edits) list.edits = []
   let firstValue = true
   const opIds = Object.keys(values).sort((id1, id2) => compareParsedOpIds(parseOpId(id1), parseOpId(id2)))
   for (const opId of opIds) {
     if (firstValue) {
-      list.edits.push({action: 'insert', value: values[opId], elemId: opId, index})
+      list.edits.push({action: 'insert', value: values[opId], elemId, opId, index})
     } else {
       list.edits.push({action: 'update', value: values[opId], opId, index})
     }

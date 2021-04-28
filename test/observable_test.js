@@ -49,7 +49,7 @@ describe('Automerge.Observable', () => {
       callbackChanges = changes
       assert.deepStrictEqual(diff, {
         objectId: `1@${localId}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${remoteId}`, value: {type: 'value', value: 'a'}}
+          {action: 'insert', index: 0, elemId: `2@${remoteId}`, opId: `2@${remoteId}`, value: {type: 'value', value: 'a'}}
         ]
       })
       assert.deepStrictEqual(before.toString(), '')

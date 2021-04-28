@@ -54,14 +54,16 @@ function appendEdit(existingEdits, nextEdit) {
   let lastEdit = existingEdits[existingEdits.length - 1]
   if (lastEdit.action === 'insert' && nextEdit.action === 'insert' &&
       lastEdit.index === nextEdit.index - 1 &&
-      lastEdit.value.type === 'value' && nextEdit.value.type === 'value') {
+      lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
+      lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId) {
     lastEdit.action = 'multi-insert'
     lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
     delete lastEdit.value
+    delete lastEdit.opId
 
   } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
              lastEdit.index + lastEdit.values.length === nextEdit.index &&
-             nextEdit.value.type === 'value') {
+             nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId) {
     lastEdit.values.push(nextEdit.value.value)
 
   } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&
