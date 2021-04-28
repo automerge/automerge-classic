@@ -41,40 +41,36 @@ function equalBytes(array1, array2) {
   return true
 }
 
+/**
+ * Appends a list edit operation (insert, update, remove) to an array of existing operations. If the
+ * last existing operation can be extended (as a multi-op), we do that.
+ */
 function appendEdit(existingEdits, nextEdit) {
   if (existingEdits.length === 0) {
     existingEdits.push(nextEdit)
     return
   }
+
   let lastEdit = existingEdits[existingEdits.length - 1]
-  if (nextEdit.action === 'insert') {
-    if (lastEdit.action === 'insert' && lastEdit.index === nextEdit.index - 1){
-      if (lastEdit.value.type === 'value') {
-        if (nextEdit.value.type === 'value') {
-          lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
-          lastEdit.action = 'multi-insert'
-          delete lastEdit.value
-          return
-        }
-      }
-    } else if (lastEdit.action === 'multi-insert') {
-      if (lastEdit.index + lastEdit.values.length === nextEdit.index) {
-        if (nextEdit.value.type === 'value') {
-          lastEdit.values.push(nextEdit.value.value)
-          return
-        }
-      }
-    }
+  if (lastEdit.action === 'insert' && nextEdit.action === 'insert' &&
+      lastEdit.index === nextEdit.index - 1 &&
+      lastEdit.value.type === 'value' && nextEdit.value.type === 'value') {
+    lastEdit.action = 'multi-insert'
+    lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
+    delete lastEdit.value
+
+  } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
+             lastEdit.index + lastEdit.values.length === nextEdit.index &&
+             nextEdit.value.type === 'value') {
+    lastEdit.values.push(nextEdit.value.value)
+
+  } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&
+             lastEdit.index === nextEdit.index) {
+    lastEdit.count += nextEdit.count
+
+  } else {
+    existingEdits.push(nextEdit)
   }
-  if (nextEdit.action === 'remove') {
-    if (lastEdit.action === 'remove') {
-      if (lastEdit.index === nextEdit.index) {
-        lastEdit.count += nextEdit.count
-        return
-      }
-    }
-  }
-  existingEdits.push(nextEdit)
 }
 
 module.exports = {
