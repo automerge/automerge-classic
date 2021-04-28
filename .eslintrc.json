@@ -6,6 +6,7 @@
         "node": true,
         "mocha": true
     },
+    "ignorePatterns": "dist/**",
     "extends": "eslint:recommended",
     "parserOptions": {
         "ecmaVersion": 12
