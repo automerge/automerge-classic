@@ -192,11 +192,11 @@ describe('SkipList', () => {
 
     it('should behave like a JS array', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
-        let levels = ops.filter(op => op.prototype.hasOwnProperty.call('insertAfter')).map(op => op.level)
+        let levels = ops.filter(op => Object.prototype.hasOwnProperty.call(op, 'insertAfter')).map(op => op.level)
         let skipList = new SkipList(iter(levels))
         let shadow = []
         for (let op of ops) {
-          if (op.prototype.hasOwnProperty.call('insertAfter')) {
+          if (Object.prototype.hasOwnProperty.call(op, 'insertAfter')) {
             skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
             shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
           } else {

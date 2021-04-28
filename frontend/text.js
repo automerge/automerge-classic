@@ -169,7 +169,7 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
                     'slice', 'some', 'toLocaleString']) {
   Text.prototype[method] = function (...args) {
     const array = [...this]
-    return array[method](array, ...args)
+    return array[method](...args)
   }
 }
 
