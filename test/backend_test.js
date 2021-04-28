@@ -773,6 +773,33 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should handle conflicts on list elements', () => {
+      const actor1 = '01234567', actor2 = '89abcdef'
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor1}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: true, value: 'magpie', pred: []}
+      ]}
+      const change2 = {actor: actor1, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, value: 'greenfinch', pred: [`2@${actor1}`]}
+      ]}
+      const change3 = {actor: actor2, seq: 1, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, value: 'goldfinch', pred: [`2@${actor1}`]}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), maxOp: 4, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor1}`]: {
+          objectId: `1@${actor1}`, type: 'list',
+          edits: [
+            {action: 'insert', index: 0, elemId: `4@${actor1}`, value: {type: 'value', value: 'greenfinch'}},
+            {action: 'update', index: 0, opId: `4@${actor2}`, value: {type: 'value', value: 'goldfinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor1}`, value: {type: 'value', value: 'magpie'}}
+          ],
+        }}}}
+      })
+    })
+
     it('should handle nested maps in lists', () => {
       const actor = uuid()
       const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [

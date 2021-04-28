@@ -1193,7 +1193,9 @@ function inflateColumn(column) {
  * Takes all the operations for the same property (i.e. the same key in a map, or the same list
  * element) and mutates the object patch to reflect the current value(s) of that property. There
  * might be multiple values in the case of a conflict. `objects` is a map from objectId to the
- * patch for that object. `property` contains `objId`, `key`, and list of `ops`.
+ * patch for that object. `property` contains `objId`, `key`, a list of `ops`, and `index` (the
+ * current list index if the object is a list). Returns true if one or more values are present,
+ * or false if the property has been deleted.
  */
 function addPatchProperty(objects, property) {
   let values = {}, counter = null
@@ -1241,36 +1243,37 @@ function addPatchProperty(objects, property) {
       if (!obj.props) obj.props = {}
       obj.props[property.key] = values
     } else if (obj.type === 'list' || obj.type === 'text') {
-      makeListEdits(obj, values)
+      makeListEdits(obj, values, property.index)
     }
+    return true
+  } else {
+    return false
   }
 }
 
-function makeListEdits(list, values) {
+/**
+ * When constructing a patch to instantiate a loaded document, this function adds the edits to
+ * insert one list element. Usually there is one value, but in the case of a conflict there may be
+ * several values. `index` is the list index at which the value(s) should be placed.
+ */
+function makeListEdits(list, values, index) {
   if (!list.edits) list.edits = []
-  const index = list.edits.length
-  const edits = []
-  for (const opId of Object.keys(values)) {
-    const value = values[opId]
-    if (edits.length === 0){
-      edits.push({
-        action: 'insert',
-        value: value,
-        elemId: opId,
-        index,
-      })
+  let firstValue = true
+  const opIds = Object.keys(values).sort((id1, id2) => compareParsedOpIds(parseOpId(id1), parseOpId(id2)))
+  for (const opId of opIds) {
+    if (firstValue) {
+      list.edits.push({action: 'insert', value: values[opId], elemId: opId, index})
     } else {
-      edits.push({
-        action: 'update',
-        value: value,
-        opId,
-        index,
-      })
+      list.edits.push({action: 'update', value: values[opId], opId, index})
     }
+    firstValue = false
   }
-  list.edits.push(...edits)
 }
 
+/**
+ * Recursively walks the patch tree, calling appendEdit on every list edit in order to consense
+ * consecutive sequences of insertions into multi-inserts.
+ */
 function condenseEdits(diff) {
   if ((diff.type === 'list' || diff.type === 'text') && diff.edits) {
     diff.edits.forEach(e => condenseEdits(e.value))
@@ -1308,7 +1311,6 @@ function constructPatch(documentBuffer) {
       if (['list', 'text'].includes(type)) {
         objects[opId].edits = []
       }
-
     }
 
     const objActor = col.objActor.readValue(), objCtr = col.objCtr.readValue()
@@ -1345,8 +1347,13 @@ function constructPatch(documentBuffer) {
     }
 
     if (!property || property.objId !== objId || property.key !== key) {
-      if (property) addPatchProperty(objects, property)
-      property = {objId, key, ops: []}
+      let index = 0
+      if (property) {
+        index = property.index
+        if (addPatchProperty(objects, property)) index += 1
+        if (property.objId !== objId) index = 0
+      }
+      property = {objId, key, index, ops: []}
     }
     property.ops.push({opId, actionName, value, childId, succ})
   }
