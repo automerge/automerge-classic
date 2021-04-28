@@ -17,11 +17,11 @@ function numHashesByActor(state, actorId) {
   }
 }
 
-function hashByActor(state, actorId,i) {
+function hashByActor(state, actorId, index) {
   if (USE_NEW_BACKEND) {
-    return (state.hashesByActor[actorId] || [])[i]
+    return (state.hashesByActor[actorId] || [])[index]
   } else {
-    return state.getIn(['opSet', 'states', actorId, i], List())
+    return state.getIn(['opSet', 'states', actorId, index])
   }
 }
 
