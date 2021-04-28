@@ -1,6 +1,6 @@
 module.exports = function(config) {
   if (!process.env.SAUCE_USERNAME || !process.env.SAUCE_ACCESS_KEY) {
-    console.log('Make sure the SAUCE_USERNAME and SAUCE_ACCESS_KEY environment variables are set.')
+    console.log('Make sure the SAUCE_USERNAME and SAUCE_ACCESS_KEY environment variables are set.') // eslint-disable-line
     process.exit(1)
   }
 
@@ -54,7 +54,7 @@ module.exports = function(config) {
       startConnect: false, // Sauce Connect is started via setting in .travis.yml
       tunnelIdentifier: process.env.TRAVIS_JOB_NUMBER
     },
-    customLaunchers: customLaunchers,
+    customLaunchers,
     browsers: Object.keys(customLaunchers),
     reporters: ['progress', 'saucelabs'],
     singleRun: true
