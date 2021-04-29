@@ -516,7 +516,7 @@ function decoderByColumnId(columnId, buffer) {
 function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
   const emptyBuf = Uint8Array.of(), decoders = {}
-  for (let [/* columnName */, columnId] of Object.entries(columnSpec)) {
+  for (let columnId of Object.values(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }
   for (let column of columns) {
@@ -1279,7 +1279,7 @@ function constructPatch(documentBuffer) {
  *     elements that precede the position where the new operations should be applied.
  */
 function seekToOp(ops, docCols, actorIds) {
-  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert /* , action, consecutiveOps */ } = ops
+  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert } = ops
   const [objActorD, objCtrD, /* keyActorD */, /* keyCtrD */, keyStrD, idActorD, idCtrD, insertD, actionD,
     /* valLenD */, /* valRawD */, /* chldActorD */, /* chldCtrD */, succNumD] = docCols.map(col => col.decoder)
   let skipCount = 0, visibleCount = 0, elemVisible = false, nextObjActor = null, nextObjCtr = null
@@ -2123,7 +2123,7 @@ class BackendDoc {
       }
     }
     for (let col of changeCols) allCols[col.columnId] = true
-    for (let [, columnId] of Object.entries(DOC_OPS_COLUMNS)) allCols[columnId] = true
+    for (let columnId of Object.values(DOC_OPS_COLUMNS)) allCols[columnId] = true
 
     // Final document should contain any columns in either the document or the change, except for
     // pred, since the document encoding uses succ instead of pred

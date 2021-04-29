@@ -98,7 +98,7 @@ describe('Automerge.Frontend', () => {
 
     it('should create lists', () => {
       const [doc, change] = Frontend.change(Frontend.init(), doc => doc.birds = ['chaffinch'])
-      const /* birds = Frontend.getObjectId(doc.birds), */ actor = Frontend.getActorId(doc)
+      const actor = Frontend.getActorId(doc)
       assert.deepStrictEqual(doc, {birds: ['chaffinch']})
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [

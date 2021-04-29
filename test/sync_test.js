@@ -234,8 +234,7 @@ describe('Data sync protocol', () => {
 
       it('should assume sent changes were recieved until we hear otherwise', () => {
         let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
-        let s1 = initSyncState() /* , s2 = initSyncState() */ // s2 not used, but preserved for consistency
-        let message = null
+        let s1 = initSyncState(), message = null
 
         n1 = Automerge.change(n1, {time: 0}, doc => doc.items = [])
         ;[n1, n2, s1, /* s2 */] = sync(n1, n2)

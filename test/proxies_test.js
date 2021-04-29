@@ -1,4 +1,3 @@
-/* eslint-disable-file dot-notation */
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const { assertEqualsOneOf } = require('./helpers')
@@ -24,13 +23,11 @@ describe('Automerge proxy API', () => {
       Automerge.change(Automerge.init(), doc => {
         doc.key1 = 'value1'
         assert.strictEqual(doc.key1, 'value1')
-        assert.strictEqual(doc.key1, 'value1')
       })
     })
 
     it('should return undefined for unknown properties', () => {
       Automerge.change(Automerge.init(), doc => {
-        assert.strictEqual(doc.someProperty, undefined)
         assert.strictEqual(doc.someProperty, undefined)
       })
     })
@@ -129,7 +126,6 @@ describe('Automerge proxy API', () => {
         assert.strictEqual(doc.list[3],   undefined)
         assert.strictEqual(doc.list['3'], undefined)
         assert.strictEqual(doc.list[-1],  undefined)
-        assert.strictEqual(doc.list.someProperty,    undefined)
         assert.strictEqual(doc.list.someProperty, undefined)
       })
     })
@@ -200,7 +196,8 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.list.every(val => val > 0), true)
           assert.strictEqual(doc.list.every(val => val > 2), false)
           assert.strictEqual(doc.list.every((val, index) => index < 3), true)
-          doc.list.every(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          // check that in the callback, 'this' is set to the second argument of 'every'
+          doc.list.every(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -209,7 +206,7 @@ describe('Automerge proxy API', () => {
           assert.deepStrictEqual(doc.empty.filter(() => false), [])
           assert.deepStrictEqual(doc.list.filter(num => num % 2 === 1), [1, 3])
           assert.deepStrictEqual(doc.list.filter(() => true), [1, 2, 3])
-          doc.list.filter(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.filter(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -218,7 +215,7 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.empty.find(() => true), undefined)
           assert.strictEqual(doc.list.find(num => num >= 2), 2)
           assert.strictEqual(doc.list.find(num => num >= 4), undefined)
-          doc.list.find(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.find(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -227,7 +224,7 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.empty.findIndex(() => true), -1)
           assert.strictEqual(doc.list.findIndex(num => num >= 2), 1)
           assert.strictEqual(doc.list.findIndex(num => num >= 4), -1)
-          doc.list.findIndex(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.findIndex(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -237,7 +234,7 @@ describe('Automerge proxy API', () => {
           let binary = []
           doc.list.forEach(num => binary.push(num.toString(2)))
           assert.deepStrictEqual(binary, ['1', '10', '11'])
-          doc.list.forEach(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.forEach(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -294,7 +291,7 @@ describe('Automerge proxy API', () => {
           assert.deepStrictEqual(doc.empty.map(num => num * 2), [])
           assert.deepStrictEqual(doc.list.map(num => num * 2), [2, 4, 6])
           assert.deepStrictEqual(doc.list.map((num, index) => index + '->' + num), ['0->1', '1->2', '2->3'])
-          doc.list.map(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.map(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
@@ -335,7 +332,7 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.list.some(val => val > 2), true)
           assert.strictEqual(doc.list.some(val => val > 4), false)
           assert.strictEqual(doc.list.some((val, index) => index > 2), false)
-          doc.list.some(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
+          doc.list.some(function () { assert.strictEqual(this.hello, 'world'); return true }, {hello: 'world'})
         })
       })
 
