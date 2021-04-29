@@ -1,7 +1,7 @@
 const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
-const { decodeChange, decodeChangeMeta } = require('./columnar')
-const { parseOpId, appendEdit } = require('../src/common')
+const { decodeChange, decodeChangeMeta, appendEdit } = require('./columnar')
+const { parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
 // have already been applied in `opSet`.

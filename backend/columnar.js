@@ -1,5 +1,5 @@
 const pako = require('pako')
-const { copyObject, parseOpId, equalBytes, appendEdit } = require('../src/common')
+const { copyObject, parseOpId, equalBytes } = require('../src/common')
 const {
   utf8ToString, hexStringToBytes, bytesToHexString,
   Encoder, Decoder, RLEEncoder, RLEDecoder, DeltaEncoder, DeltaDecoder, BooleanEncoder, BooleanDecoder
@@ -1280,6 +1280,51 @@ function condenseEdits(diff) {
 }
 
 /**
+ * Appends a list edit operation (insert, update, remove) to an array of existing operations. If the
+ * last existing operation can be extended (as a multi-op), we do that.
+ */
+function appendEdit(existingEdits, nextEdit) {
+  if (existingEdits.length === 0) {
+    existingEdits.push(nextEdit)
+    return
+  }
+
+  let lastEdit = existingEdits[existingEdits.length - 1]
+  if (lastEdit.action === 'insert' && nextEdit.action === 'insert' &&
+      lastEdit.index === nextEdit.index - 1 &&
+      lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
+      lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId &&
+      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1)) {
+    lastEdit.action = 'multi-insert'
+    lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
+    delete lastEdit.value
+    delete lastEdit.opId
+
+  } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
+             lastEdit.index + lastEdit.values.length === nextEdit.index &&
+             nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId &&
+             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length)) {
+    lastEdit.values.push(nextEdit.value.value)
+
+  } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&
+             lastEdit.index === nextEdit.index) {
+    lastEdit.count += nextEdit.count
+
+  } else {
+    existingEdits.push(nextEdit)
+  }
+}
+
+/**
+ * Returns true if the two given operation IDs have the same actor ID, and the counter of `id2` is
+ * exactly `delta` greater than the counter of `id1`.
+ */
+function opIdDelta(id1, id2, delta = 1) {
+  const parsed1 = parseOpId(id1), parsed2 = parseOpId(id2)
+  return parsed1.actorId === parsed2.actorId && parsed1.counter + delta === parsed2.counter
+}
+
+/**
  * Parses the document (in compressed binary format) given as `documentBuffer`
  * and returns a patch that can be sent to the frontend to instantiate the
  * current state of that document.
@@ -2421,5 +2466,5 @@ class BackendDoc {
 module.exports = {
   COLUMN_TYPE, VALUE_TYPE, ACTIONS, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   splitContainers, encodeChange, decodeChange, decodeChangeMeta, decodeChanges, encodeDocument, decodeDocument,
-  getChangeChecksum, constructPatch, BackendDoc
+  getChangeChecksum, appendEdit, constructPatch, BackendDoc
 }
