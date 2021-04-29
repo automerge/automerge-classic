@@ -28,6 +28,15 @@ function parseOpId(opId) {
 }
 
 /**
+ * Returns true if the two given operation IDs have the same actor ID, and the counter of `id2` is
+ * exactly `delta` greater than the counter of `id1`.
+ */
+function opIdDelta(id1, id2, delta = 1) {
+  const parsed1 = parseOpId(id1), parsed2 = parseOpId(id2)
+  return parsed1.actorId === parsed2.actorId && parsed1.counter + delta === parsed2.counter
+}
+
+/**
  * Returns true if the two byte arrays contain the same data, false if not.
  */
 function equalBytes(array1, array2) {
@@ -55,7 +64,8 @@ function appendEdit(existingEdits, nextEdit) {
   if (lastEdit.action === 'insert' && nextEdit.action === 'insert' &&
       lastEdit.index === nextEdit.index - 1 &&
       lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
-      lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId) {
+      lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId &&
+      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1)) {
     lastEdit.action = 'multi-insert'
     lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
     delete lastEdit.value
@@ -63,7 +73,8 @@ function appendEdit(existingEdits, nextEdit) {
 
   } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
              lastEdit.index + lastEdit.values.length === nextEdit.index &&
-             nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId) {
+             nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId &&
+             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length)) {
     lastEdit.values.push(nextEdit.value.value)
 
   } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&

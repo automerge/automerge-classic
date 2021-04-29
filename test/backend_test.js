@@ -886,5 +886,25 @@ describe('Automerge.Backend', () => {
         }}}}
       })
     })
+
+    it('should use a multi-insert only for consecutive elemIds', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'goldfinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, values: ['bullfinch', 'greenfinch'], pred: []}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 5, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `4@${actor}`, values: ['bullfinch', 'greenfinch']},
+            {action: 'multi-insert', index: 2, elemId: `2@${actor}`, values: ['chaffinch', 'goldfinch']}
+          ]
+        }}}}
+      })
+    })
   })
 })
