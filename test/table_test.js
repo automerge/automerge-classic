@@ -20,10 +20,9 @@ describe('Automerge.Table', () => {
   describe('Frontend', () => {
     it('should generate ops to create a table', () => {
       const actor = uuid()
-      const [doc, change] = Frontend.change(Frontend.init(actor), doc => {
+      const [, change] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
       })
-      const books = Frontend.getObjectId(doc.books)
       assert.deepStrictEqual(change, {
         actor, seq: 1, time: change.time, message: '', startOp: 1, deps: [], ops: [
           {obj: '_root', action: 'makeTable', key: 'books', insert: false, pred: []}
@@ -33,7 +32,7 @@ describe('Automerge.Table', () => {
 
     it('should generate ops to insert a row', () => {
       const actor = uuid()
-      const [doc1, change1] = Frontend.change(Frontend.init(actor), doc => {
+      const [doc1] = Frontend.change(Frontend.init(actor), doc => {
         doc.books = new Automerge.Table()
       })
       let rowId
@@ -165,7 +164,7 @@ describe('Automerge.Table', () => {
     const rsdpWithId = Object.assign({id: rsdp}, RSDP)
     assert.deepStrictEqual(s.books.sort('title'), [ddiaWithId, rsdpWithId])
     assert.deepStrictEqual(s.books.sort(['authors', 'title']), [rsdpWithId, ddiaWithId])
-    assert.deepStrictEqual(s.books.sort((row1, row2) => ((row1.isbn === '1449373321') ? -1 : +1)), [ddiaWithId, rsdpWithId])
+    assert.deepStrictEqual(s.books.sort((row1,) => ((row1.isbn === '1449373321') ? -1 : +1)), [ddiaWithId, rsdpWithId])
   })
 
   it('should allow serialization to JSON', () => {

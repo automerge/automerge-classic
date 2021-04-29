@@ -1,6 +1,5 @@
 const assert = require('assert')
 const { Encoder } = require('../backend/encoding')
-const { decodeChanges } = require('../backend/columnar')
 
 // Assertion that succeeds if the first argument deepStrictEquals at least one of the
 // subsequent arguments (but we don't care which one)

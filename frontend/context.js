@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { isObject, copyObject } = require('../src/common')
+const { isObject } = require('../src/common')
 const uuid = require('../src/uuid')
 
 

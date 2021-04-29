@@ -190,7 +190,7 @@
         "no-unreachable-loop": "error",
         "no-unsafe-optional-chaining": "error",
         "no-unused-expressions": "error",
-        "no-unused-vars": "off", // we should turn this back on
+        "no-unused-vars": ["error", { "args": "after-used" }],
         "no-use-before-define": "off",
         "no-useless-backreference": "error",
         "no-useless-call": "error",

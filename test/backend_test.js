@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const Backend = Automerge.Backend

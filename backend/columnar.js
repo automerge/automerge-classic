@@ -516,7 +516,7 @@ function decoderByColumnId(columnId, buffer) {
 function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
   const emptyBuf = Uint8Array.of(), decoders = {}
-  for (let [columnName, columnId] of Object.entries(columnSpec)) {
+  for (let [/*columnName*/, columnId] of Object.entries(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }
   for (let column of columns) {
@@ -525,7 +525,7 @@ function makeDecoders(columns, columnSpec) {
 
   let result = []
   for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort((a, b) => a - b)) {
-    let [columnName, _] = Object.entries(columnSpec).find(([name, id]) => id === columnId)
+    let [columnName] = Object.entries(columnSpec).find(([/*name*/, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
     result.push({columnId, columnName, decoder: decoders[columnId]})
   }
@@ -1279,9 +1279,9 @@ function constructPatch(documentBuffer) {
  *     elements that precede the position where the new operations should be applied.
  */
 function seekToOp(ops, docCols, actorIds) {
-  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert, action, consecutiveOps } = ops
-  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD,
-    valLenD, valRawD, chldActorD, chldCtrD, succNumD] = docCols.map(col => col.decoder)
+  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert /*, action, consecutiveOps*/ } = ops
+  const [objActorD, objCtrD, /* keyActorD */, /* keyCtrD */, keyStrD, idActorD, idCtrD, insertD, actionD,
+    /* valLenD */, /* valRawD */, /* chldActorD */, /*chldCtrD*/, succNumD] = docCols.map(col => col.decoder)
   let skipCount = 0, visibleCount = 0, elemVisible = false, nextObjActor = null, nextObjCtr = null
   let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null, nextSuccNum = 0
 
@@ -1594,7 +1594,7 @@ function appendOperation(outCols, inCols, operation) {
  */
 function groupRelatedOps(change, changeCols, objectMeta) {
   const currentActor = change.actorIds[0]
-  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, actionD] =
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, /*idActorD*/, /*idCtrD*/, insertD, actionD] =
     changeCols.map(col => col.decoder)
   let objIdSeen = {}, firstOp = null, lastOp = null, opIdCtr = change.startOp
   let opSequences = [], objectIds = {}
@@ -1732,8 +1732,8 @@ class BackendDoc {
    */
   updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
     // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
-    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
-      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
+    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8, // eslint-disable-line
+      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15 // eslint-disable-line
 
     const objectId = ops.objId
     const elemId = op[keyStr] ? op[keyStr]
@@ -2123,7 +2123,7 @@ class BackendDoc {
       }
     }
     for (let col of changeCols) allCols[col.columnId] = true
-    for (let [columnName, columnId] of Object.entries(DOC_OPS_COLUMNS)) allCols[columnId] = true
+    for (let [, columnId] of Object.entries(DOC_OPS_COLUMNS)) allCols[columnId] = true
 
     // Final document should contain any columns in either the document or the change, except for
     // pred, since the document encoding uses succ instead of pred
@@ -2183,7 +2183,7 @@ class BackendDoc {
               keyActor: elem.actorId, keyCtr: elem.counter,
               keyStr:   null,         insert: false
             }
-            const {skipCount, visibleCount} = seekToOp(seekPos, docState.opsCols, docState.actorIds)
+            const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
             key = visibleCount
           }
           if (!patches[objectId].props[key]) patches[objectId].props[key] = {}

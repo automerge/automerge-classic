@@ -208,7 +208,7 @@ describe('Automerge proxy API', () => {
         Automerge.change(root, doc => {
           assert.deepStrictEqual(doc.empty.filter(() => false), [])
           assert.deepStrictEqual(doc.list.filter(num => num % 2 === 1), [1, 3])
-          assert.deepStrictEqual(doc.list.filter(num => true), [1, 2, 3])
+          assert.deepStrictEqual(doc.list.filter(() => true), [1, 2, 3])
           doc.list.filter(function () { assert.strictEqual(this.hello, 'world') }, {hello: 'world'}) // eslint-disable-line
         })
       })

@@ -182,15 +182,14 @@ function applyInsertOp(text, offset, op) {
 // XXX: uhhhhh, why can't I pass in text?
 function applyDeltaDocToAutomergeText(delta, doc) {
   let offset = 0
-  let text = doc.text
 
   delta.forEach(op => {
     if (op.retain) {
-      [text, offset] = applyRetainOp(doc.text, offset, op)
+      [, offset] = applyRetainOp(doc.text, offset, op)
     } else if (op.delete) {
-      [text, offset] = applyDeleteOp(doc.text, offset, op)
+      [, offset] = applyDeleteOp(doc.text, offset, op)
     } else if (op.insert) {
-      [text, offset] = applyInsertOp(doc.text, offset, op)
+      [, offset] = applyInsertOp(doc.text, offset, op)
     }
   })
 }
@@ -317,14 +316,14 @@ describe('Automerge.Text', () => {
       const s1 = Automerge.from({text: new Automerge.Text('init')})
       const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
-      const [s2, patch] = Automerge.applyChanges(Automerge.init(), changes)
+      const [s2] = Automerge.applyChanges(Automerge.init(), changes)
       assert.strictEqual(s2.text instanceof Automerge.Text, true)
       assert.strictEqual(s2.text.toString(), 'init')
       assert.strictEqual(s2.text.join(''), 'init')
     })
 
     it('should allow immediate access to the value', () => {
-      let s1 = Automerge.change(Automerge.init(), doc => {
+      Automerge.change(Automerge.init(), doc => {
         const text = new Automerge.Text('init')
         assert.strictEqual(text.length, 4)
         assert.strictEqual(text.get(0), 'i')

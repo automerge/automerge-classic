@@ -209,7 +209,7 @@ function loadChanges(backend, changes) {
     backend.frozen = true
     return {state, heads: state.heads}
   } else {
-    const [newState, _] = apply(state, changes, null, false)
+    const [newState] = apply(state, changes, null, false)
     backend.frozen = true
     return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
   }

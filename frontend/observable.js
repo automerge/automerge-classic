@@ -1,5 +1,4 @@
 const { OBJECT_ID, CONFLICTS } = require('./constants')
-const { isObject } = require('../src/common')
 
 /**
  * Allows an application to register a callback when a particular object in

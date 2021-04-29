@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // This file is used for running the test suite against an alternative backend
 // implementation, such as the WebAssembly version compiled from Rust.
 // It needs to be loaded before the test suite files, which can be done with

@@ -317,7 +317,7 @@ function finalizePatch(opSet, patch) {
  * is mutated to describe the changes. Returns the updated `opSet`.
  */
 function applyOps(opSet, change, patch) {
-  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
+  const actor = change.get('actor'), startOp = change.get('startOp')
   let newObjects = Set()
   change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')

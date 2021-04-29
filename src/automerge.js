@@ -31,12 +31,12 @@ function from(initialState, options) {
 }
 
 function change(doc, options, callback) {
-  const [newDoc, change] = Frontend.change(doc, options, callback)
+  const [newDoc] = Frontend.change(doc, options, callback)
   return newDoc
 }
 
 function emptyChange(doc, options) {
-  const [newDoc, change] = Frontend.emptyChange(doc, options)
+  const [newDoc] = Frontend.emptyChange(doc, options)
   return newDoc
 }
 
@@ -63,7 +63,7 @@ function merge(localDoc, remoteDoc) {
     throw new RangeError('Cannot merge an actor with itself')
   }
   // Just copy all changes from the remote doc; any duplicates will be ignored
-  const [updatedDoc, patch] = applyChanges(localDoc, getAllChanges(remoteDoc))
+  const [updatedDoc] = applyChanges(localDoc, getAllChanges(remoteDoc))
   return updatedDoc
 }
 

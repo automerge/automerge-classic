@@ -1,7 +1,7 @@
 const { isObject, copyObject, parseOpId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
-const { Text, instantiateText } = require('./text')
-const { Table, instantiateTable } = require('./table')
+const { OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
+const { instantiateText } = require('./text')
+const { instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
 /**
@@ -174,7 +174,7 @@ function updateTableObject(patch, obj, updated) {
   const object = updated[objectId]
 
   for (let key of Object.keys(patch.props || {})) {
-    const values = {}, opIds = Object.keys(patch.props[key])
+    const opIds = Object.keys(patch.props[key])
 
     if (opIds.length === 0) {
       object.remove(key)

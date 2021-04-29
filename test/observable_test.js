@@ -49,7 +49,7 @@ describe('Automerge.Observable', () => {
   it('should call the callback when applying remote changes', () => {
     let observable = new Automerge.Observable(), callbackChanges
     let local = Automerge.from({text: new Automerge.Text()}, {observable})
-    let remote = Automerge.init(), patch
+    let remote = Automerge.init()
     const localId = Automerge.getActorId(local), remoteId = Automerge.getActorId(remote)
     observable.observe(local.text, (diff, before, after, local, changes) => {
       callbackChanges = changes
@@ -62,10 +62,10 @@ describe('Automerge.Observable', () => {
       assert.deepStrictEqual(after.toString(), 'a')
       assert.deepStrictEqual(local, false)
     })
-    ;[remote, patch] = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
+    ;[remote] = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
     remote = Automerge.change(remote, doc => doc.text.insertAt(0, 'a'))
     const allChanges = Automerge.getAllChanges(remote)
-    ;[local, patch] = Automerge.applyChanges(local, allChanges)
+    ;[local] = Automerge.applyChanges(local, allChanges)
     assert.strictEqual(callbackChanges, allChanges)
   })
 
@@ -128,7 +128,7 @@ describe('Automerge.Observable', () => {
 
   it('should observe nested objects inside text', () => {
     let observable = new Automerge.Observable(), callbackCalled = false
-    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc), rowId
+    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc)
     doc = Automerge.change(doc, doc => {
       doc.text = new Automerge.Text()
       doc.text.insertAt(0, 'a', 'b', {start: 'bold'}, 'c', {end: 'bold'})
@@ -147,7 +147,7 @@ describe('Automerge.Observable', () => {
   })
 
   it('should not allow observers on non-document objects', () => {
-    let observable = new Automerge.Observable(), callbackCalled = false
+    let observable = new Automerge.Observable()
     let doc = Automerge.init({observable})
     assert.throws(() => {
       Automerge.change(doc, doc => {
@@ -161,8 +161,8 @@ describe('Automerge.Observable', () => {
   it('should allow multiple observers', () => {
     let observable = new Automerge.Observable(), called1 = false, called2 = false
     let doc = Automerge.init({observable})
-    observable.observe(doc, patch => { called1 = true })
-    observable.observe(doc, patch => { called2 = true })
+    observable.observe(doc, () => { called1 = true })
+    observable.observe(doc, () => { called2 = true })
     Automerge.change(doc, doc => doc.foo = 'bar')
     assert.strictEqual(called1, true)
     assert.strictEqual(called2, true)
