@@ -516,7 +516,7 @@ function decoderByColumnId(columnId, buffer) {
 function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
   const emptyBuf = Uint8Array.of(), decoders = {}
-  for (let [/*columnName*/, columnId] of Object.entries(columnSpec)) {
+  for (let [/* columnName */, columnId] of Object.entries(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }
   for (let column of columns) {
@@ -525,7 +525,7 @@ function makeDecoders(columns, columnSpec) {
 
   let result = []
   for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort((a, b) => a - b)) {
-    let [columnName] = Object.entries(columnSpec).find(([/*name*/, id]) => id === columnId)
+    let [columnName] = Object.entries(columnSpec).find(([/* name */, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
     result.push({columnId, columnName, decoder: decoders[columnId]})
   }
@@ -1279,9 +1279,9 @@ function constructPatch(documentBuffer) {
  *     elements that precede the position where the new operations should be applied.
  */
 function seekToOp(ops, docCols, actorIds) {
-  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert /*, action, consecutiveOps*/ } = ops
+  const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert /* , action, consecutiveOps */ } = ops
   const [objActorD, objCtrD, /* keyActorD */, /* keyCtrD */, keyStrD, idActorD, idCtrD, insertD, actionD,
-    /* valLenD */, /* valRawD */, /* chldActorD */, /*chldCtrD*/, succNumD] = docCols.map(col => col.decoder)
+    /* valLenD */, /* valRawD */, /* chldActorD */, /* chldCtrD */, succNumD] = docCols.map(col => col.decoder)
   let skipCount = 0, visibleCount = 0, elemVisible = false, nextObjActor = null, nextObjCtr = null
   let nextIdActor = null, nextIdCtr = null, nextKeyStr = null, nextInsert = null, nextSuccNum = 0
 
@@ -1594,7 +1594,7 @@ function appendOperation(outCols, inCols, operation) {
  */
 function groupRelatedOps(change, changeCols, objectMeta) {
   const currentActor = change.actorIds[0]
-  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, /*idActorD*/, /*idCtrD*/, insertD, actionD] =
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, /* idActorD */, /* idCtrD */, insertD, actionD] =
     changeCols.map(col => col.decoder)
   let objIdSeen = {}, firstOp = null, lastOp = null, opIdCtr = change.startOp
   let opSequences = [], objectIds = {}

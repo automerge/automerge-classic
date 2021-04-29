@@ -256,8 +256,8 @@
         ],
         "space-infix-ops": "error",
         "space-unary-ops": "error",
-        "spaced-comment": [ // this is once in fuzz_test
-            "off",
+        "spaced-comment": [
+            "error",
             "always"
         ],
         "strict": [

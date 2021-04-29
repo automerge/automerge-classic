@@ -5,7 +5,7 @@ const uuid = require('../src/uuid')
 
 function checkColumns(actualCols, expectedCols) {
   for (let actual of actualCols) {
-    const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/*name*/, id]) => id === actual.columnId)
+    const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId)
     if (expectedCols[colName]) {
       checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
     }

@@ -137,7 +137,7 @@ class Micromerge {
 }
 
 
-/********** TESTS *************/
+/* TESTS */
 
 const assert = require('assert')
 

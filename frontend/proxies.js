@@ -155,19 +155,19 @@ const ListHandler = {
   },
 
   set (target, key, value) {
-    const [context, /*objectId*/, path] = target
+    const [context, /* objectId */, path] = target
     context.setListIndex(path, parseListIndex(key), value)
     return true
   },
 
   deleteProperty (target, key) {
-    const [context, /*objectId*/, path] = target
+    const [context, /* objectId */, path] = target
     context.splice(path, parseListIndex(key), 1, [])
     return true
   },
 
   has (target, key) {
-    const [context, objectId, /*path*/] = target
+    const [context, objectId, /* path */] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
@@ -178,7 +178,7 @@ const ListHandler = {
     if (key === 'length') return {writable: true}
     if (key === OBJECT_ID) return {configurable: false, enumerable: false}
 
-    const [context, objectId, /*path*/] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
 
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
@@ -188,7 +188,7 @@ const ListHandler = {
   },
 
   ownKeys (target) {
-    const [context, objectId, /*path*/] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
     let keys = ['length']
     for (let key of Object.keys(object)) keys.push(key)

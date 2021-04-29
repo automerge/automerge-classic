@@ -376,9 +376,9 @@ describe('Automerge.Frontend', () => {
         ]
       })
       const state0 = Backend.init()
-      const [/*state1*/, patch1, /*binChange1*/] = Backend.applyLocalChange(state0, change1)
+      const [/* state1 */, patch1, /* binChange1 */] = Backend.applyLocalChange(state0, change1)
       const doc2a = Frontend.applyPatch(doc2, patch1)
-      const [/*doc3*/, change3] = Frontend.change(doc2a, doc => doc.number = 3)
+      const [/* doc3 */, change3] = Frontend.change(doc2a, doc => doc.number = 3)
       assert.deepStrictEqual(change3, {
         actor, seq: 3, startOp: 3, time: change3.time, message: '', deps: [], ops: [
           {obj: '_root', action: 'set', key: 'number', insert: false, value: 3, pred: [`2@${actor}`]}
@@ -388,8 +388,8 @@ describe('Automerge.Frontend', () => {
 
     it('deps are filled in if the frontend does not have the latest patch', () => {
       const actor1 = uuid(), actor2 = uuid()
-      const [/*doc1*/, change1] = Frontend.change(Frontend.init(actor1), doc => doc.number = 1)
-      const [/*state1*/, /*patch1*/, binChange1] = Backend.applyLocalChange(Backend.init(), change1)
+      const [/* doc1 */, change1] = Frontend.change(Frontend.init(actor1), doc => doc.number = 1)
+      const [/* state1 */, /* patch1 */, binChange1] = Backend.applyLocalChange(Backend.init(), change1)
 
       const [state1a, patch1a] = Backend.applyChanges(Backend.init(), [binChange1])
       const doc1a = Frontend.applyPatch(Frontend.init(actor2), patch1a)
@@ -415,13 +415,13 @@ describe('Automerge.Frontend', () => {
 
       const doc2a = Frontend.applyPatch(doc3, patch2)
       const doc3a = Frontend.applyPatch(doc2a, patch3)
-      const [/*doc4*/, change4] = Frontend.change(doc3a, doc => doc.number = 4)
+      const [/* doc4 */, change4] = Frontend.change(doc3a, doc => doc.number = 4)
       assert.deepStrictEqual(change4, {
         actor: actor2, seq: 3, startOp: 4, time: change4.time, message: '', deps: [], ops: [
           {obj: '_root', action: 'set', key: 'number', insert: false, value: 4, pred: [`3@${actor2}`]}
         ]
       })
-      const [/*state4*/, /*patch4*/, binChange4] = Backend.applyLocalChange(state3, change4)
+      const [/* state4 */, /* patch4 */, binChange4] = Backend.applyLocalChange(state3, change4)
       assert.deepStrictEqual(decodeChange(binChange4).deps, [decodeChange(binChange3).hash])
     })
   })
