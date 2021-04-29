@@ -317,7 +317,7 @@ function finalizePatch(opSet, patch) {
  * is mutated to describe the changes. Returns the updated `opSet`.
  */
 function applyOps(opSet, change, patch) {
-  const actor = change.get('actor'), seq = change.get('seq'), startOp = change.get('startOp')
+  const actor = change.get('actor'), startOp = change.get('startOp')
   let newObjects = Set()
   change.get('ops').forEach((op, index) => {
     const action = op.get('action'), obj = op.get('obj'), insert = op.get('insert')
@@ -613,7 +613,7 @@ function getPrevious(opSet, objectId, key) {
   const parentId = getParent(opSet, objectId, key)
   let children = insertionsAfter(opSet, objectId, parentId)
   if (children.first() === key) {
-    if (parentId === '_head') return null; else return parentId;
+    if (parentId === '_head') return null; else return parentId
   }
 
   let prevId

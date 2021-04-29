@@ -1,7 +1,5 @@
 const { Map, List } = require('immutable')
-const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
-const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
 const { backendState } = require('./util')
 
@@ -211,7 +209,7 @@ function loadChanges(backend, changes) {
     backend.frozen = true
     return {state, heads: state.heads}
   } else {
-    const [newState, _] = apply(state, changes, null, false)
+    const [newState] = apply(state, changes, null, false)
     backend.frozen = true
     return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
   }
@@ -229,7 +227,7 @@ function getPatch(backend) {
       maxOp: state.maxOp,
       clock: state.clock,
       deps: state.heads,
-      diffs: diffs
+      diffs
     }
   } else {
     const diffs = constructPatch(save(backend))

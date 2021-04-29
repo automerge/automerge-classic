@@ -208,7 +208,6 @@ describe('Proxying context', () => {
     it('should do nothing if the key does not exist', () => {
       context.cache._root = {[OBJECT_ID]: '_root', goldfinches: 3, [CONFLICTS]: {goldfinches: {'1@actor1': 3}}}
       context.deleteMapKey([], 'sparrows')
-      const expected = {objectId: '_root', type: 'map'}
       assert(applyPatch.notCalled)
       assert.deepStrictEqual(context.ops, [])
     })
