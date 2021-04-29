@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { isObject, copyObject } = require('../src/common')
+const { isObject, copyObject, parseOpId } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -453,15 +453,7 @@ class Context {
     if (!subpatch.edits) subpatch.edits = []
 
     if (deletions > 0) {
-      let op = {
-        action: 'del',
-        obj: objectId,
-        elemId: getElemId(list, start),
-        insert: false,
-        pred: [],
-        multiOp: deletions
-      }
-      let edit = {action: 'remove', index: start, count: deletions}
+      let op, lastElem, lastElemParsed, lastPred, lastPredParsed
       for (let i = 0; i < deletions; i++) {
         if (this.getObjectField(path, objectId, start + i) instanceof Counter) {
           // This may seem bizarre, but it's really fiddly to implement deletion of counters from
@@ -481,13 +473,29 @@ class Context {
           // future, hopefully the above description will be enough to get you started. Good luck!
           throw new TypeError('Unsupported operation: deleting a counter from a list')
         }
-        op.pred.push(...getPred(list, start + i))
-      }
-      if (op.multiOp === 1) {
-        delete op.multiOp
+
+        // Any sequences of deletions with consecutive elemId and pred values get combined into a
+        // single multiOp; any others become individual deletion operations. This optimisation only
+        // kicks in if the user deletes a sequence of elements at once (in a single call to splice);
+        // it might be nice to also detect such runs of deletions in the case where the user deletes
+        // a sequence of list elements one by one.
+        const thisElem = getElemId(list, start + i), thisElemParsed = parseOpId(thisElem)
+        const thisPred = getPred(list, start + i)
+        const thisPredParsed = (thisPred.length === 1) ? parseOpId(thisPred[0]) : undefined
+
+        if (op && lastElemParsed && lastPredParsed && thisPredParsed &&
+            lastElemParsed.actorId === thisElemParsed.actorId && lastElemParsed.counter + 1 === thisElemParsed.counter &&
+            lastPredParsed.actorId === thisPredParsed.actorId && lastPredParsed.counter + 1 === thisPredParsed.counter) {
+          op.multiOp = (op.multiOp || 1) + 1
+        } else {
+          if (op) this.addOp(op)
+          op = {action: 'del', obj: objectId, elemId: thisElem, insert: false, pred: thisPred}
+        }
+        lastElem = thisElem; lastElemParsed = thisElemParsed
+        lastPred = thisPred; lastPredParsed = thisPredParsed
       }
       this.addOp(op)
-      subpatch.edits.push(edit)
+      subpatch.edits.push({action: 'remove', index: start, count: deletions})
     }
 
     if (insertions.length > 0) {

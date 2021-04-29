@@ -342,11 +342,7 @@ describe('Automerge.Backend', () => {
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
       ]}
       const change2 = {actor, seq: 2, startOp: 7, time: 0, deps: [hash(change1)], ops: [
-        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [
-          `3@${actor}`,
-          `4@${actor}`,
-          `5@${actor}`,
-        ]}
+        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [`3@${actor}`]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -590,11 +586,7 @@ describe('Automerge.Backend', () => {
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]}
       ]}
       const change2 = {actor, seq: 2, startOp: 7, time: 0, deps: [hash(change1)], ops: [
-        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [
-          `3@${actor}`,
-          `4@${actor}`,
-          `5@${actor}`,
-        ]}
+        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [`3@${actor}`]}
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, change1)

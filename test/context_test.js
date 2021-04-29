@@ -332,7 +332,40 @@ describe('Proxying context', () => {
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: listId, action: 'del', elemId: '1@xxx', multiOp: 2, insert: false, pred: ['1@xxx', '2@xxx']}
+        {obj: listId, action: 'del', elemId: '1@xxx', multiOp: 2, insert: false, pred: ['1@xxx']}
+      ])
+    })
+
+    it('should use multiOps for consecutive runs of elemIds', () => {
+      list.unshift('sparrow')
+      list[ELEM_IDS].unshift('3@xxx')
+      list[CONFLICTS].unshift({'3@xxx': 'sparrow'})
+      context.splice([{key: 'birds', objectId: listId}], 0, 3, [])
+      assert(applyPatch.calledOnce)
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
+        birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
+          {action: 'remove', index: 0, count: 3}
+        ]}}
+      }})
+      assert.deepStrictEqual(context.ops, [
+        {obj: listId, action: 'del', elemId: '3@xxx', insert: false, pred: ['3@xxx']},
+        {obj: listId, action: 'del', elemId: '1@xxx', multiOp: 2, insert: false, pred: ['1@xxx']}
+      ])
+    })
+
+    it('should use multiOps for consecutive runs of preds', () => {
+      list[1] = 'sparrow'
+      list[CONFLICTS][1] = {'3@xxx': 'sparrow'}
+      context.splice([{key: 'birds', objectId: listId}], 0, 2, [])
+      assert(applyPatch.calledOnce)
+      assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
+        birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
+          {action: 'remove', index: 0, count: 2}
+        ]}}
+      }})
+      assert.deepStrictEqual(context.ops, [
+        {obj: listId, action: 'del', elemId: '1@xxx', insert: false, pred: ['1@xxx']},
+        {obj: listId, action: 'del', elemId: '2@xxx', insert: false, pred: ['3@xxx']}
       ])
     })
 

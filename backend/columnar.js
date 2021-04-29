@@ -472,16 +472,13 @@ function expandMultiOps(ops, startOp, actor) {
         lastElemId = `${opNum}@${actor}`
         opNum += 1
       }
-    } else if (op.action === 'del' && op.multiOp) {
-      let startElemId = parseOpId(op.elemId)
-      for (i = 0; i < op.multiOp; i++){
-        let elemId = `${startElemId.counter + i}@${startElemId.actorId}`
-        expandedOps.push({
-          action: 'del',
-          obj: op.obj,
-          elemId,
-          pred: op.pred,
-        })
+    } else if (op.action === 'del' && op.multiOp > 1) {
+      if (op.pred.length !== 1) throw new RangeError('multiOp deletion must have exactly one pred')
+      const startElemId = parseOpId(op.elemId), startPred = parseOpId(op.pred[0])
+      for (let i = 0; i < op.multiOp; i++){
+        const elemId = `${startElemId.counter + i}@${startElemId.actorId}`
+        const pred = [`${startPred.counter + i}@${startPred.actorId}`]
+        expandedOps.push({action: 'del', obj: op.obj, elemId, pred})
         opNum += 1
       }
     } else {
