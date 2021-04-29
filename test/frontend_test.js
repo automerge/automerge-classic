@@ -324,8 +324,7 @@ describe('Automerge.Frontend', () => {
         diffs: {objectId: '_root', type: 'map', props: {
           birds: {[actor]: {objectId: birds, type: 'list',
             edits: [{action: 'insert', index: 0}],
-            props: {0: {[actor]: {value: 'goldfinch'}}}
-          }}
+            props: {0: {[actor]: {value: 'goldfinch'}}}}}
         }}
       })
       assert.deepStrictEqual(doc1, {birds: ['goldfinch']})
@@ -343,8 +342,7 @@ describe('Automerge.Frontend', () => {
         diffs: {objectId: '_root', type: 'map', props: {
           birds: {[actor]: {objectId: birds, type: 'list',
             edits: [{action: 'insert', index: 1}],
-            props: {1: {[remoteActor]: {value: 'bullfinch'}}}
-          }}
+            props: {1: {[remoteActor]: {value: 'bullfinch'}}}}}
         }}
       })
       // The addition of 'bullfinch' does not take effect yet: it is queued up until the pending
@@ -356,8 +354,7 @@ describe('Automerge.Frontend', () => {
         diffs: {objectId: '_root', type: 'map', props: {
           birds: {[actor]: {objectId: birds, type: 'list',
             edits: [{action: 'insert', index: 0}, {action: 'insert', index: 2}],
-            props: {0: {[actor]: {value: 'chaffinch'}}, 2: {[actor]: {value: 'greenfinch'}}}
-          }}
+            props: {0: {[actor]: {value: 'chaffinch'}}, 2: {[actor]: {value: 'greenfinch'}}}}}
         }}
       })
       assert.deepStrictEqual(doc4, {birds: ['chaffinch', 'goldfinch', 'greenfinch', 'bullfinch']})
@@ -664,8 +661,7 @@ describe('Automerge.Frontend', () => {
             props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
               species: {[actor]: {value: 'magpie'}},
               family:  {[actor]: {value: 'corvidae'}}
-            }}}}
-          }}
+          }}}}}}
         }}
       }
       const patch2 = {
@@ -677,8 +673,7 @@ describe('Automerge.Frontend', () => {
           details: {[actor]: {objectId: details, type: 'list', edits: [],
             props: {0: {[actor]: {objectId: detail1, type: 'map', props: {
               species: {[actor]: {value: 'Eurasian magpie'}}
-            }}}}
-          }}
+          }}}}}}
         }}
       }
       const doc1 = Frontend.applyPatch(Frontend.init(), patch1)

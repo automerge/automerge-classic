@@ -204,7 +204,7 @@
         "no-warning-comments": "off",
         "no-whitespace-before-property": "off",
         "nonblock-statement-body-position": "error",
-        "object-curly-newline": "off", // just a few cases in frontend_test
+        "object-curly-newline": "error",
         "object-curly-spacing": "off",
         "object-property-newline": "off",
         "object-shorthand": "error",
