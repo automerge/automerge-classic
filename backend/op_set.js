@@ -237,12 +237,14 @@ function initializePatch(opSet, pathOp, patch) {
   if (patch.type !== type) {
     throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
   }
-  if (['map', 'table'].includes(patch.type)) {
+
+  if (type === 'map' || type === 'table') {
     setPatchPropsForMap(opSet, objectId, key, patch)
     if (patch.props[key][opId] === undefined) {
       throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
     }
     return patch.props[key][opId]
+
   } else {
     let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
     let index = elemIds.indexOf(key)

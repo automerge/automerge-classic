@@ -236,12 +236,7 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
-          {
-            action: 'update',
-            index: 0,
-            opId: `1@${context.actorId}`,
-            value: {value: 'starling', type: 'value'}
-          }
+          {action: 'update', index: 0, opId: `1@${context.actorId}`, value: {value: 'starling', type: 'value'}}
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [
@@ -254,17 +249,13 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       const nestedId = applyPatch.firstCall.args[0].props.birds['1@actor1'].edits[0].value.objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
-        birds: {'1@actor1': {objectId: listId, type: 'list', edits:[{
-          action: 'update',
-          index: 1,
-          opId: `1@${context.actorId}`,
-          value: {
-            objectId: nestedId,
-            type: 'map',
-            props: {
+        birds: {'1@actor1': {objectId: listId, type: 'list', edits: [{
+          action: 'update', index: 1, opId: `1@${context.actorId}`, value: {
+            objectId: nestedId, type: 'map', props: {
               english: {[`2@${context.actorId}`]: {value: 'goldfinch', type: 'value'}},
               latin: {[`3@${context.actorId}`]: {value: 'carduelis', type: 'value'}}
-            }}
+            }
+          }
         }]}}
       }})
       assert.deepStrictEqual(context.ops, [
@@ -281,9 +272,7 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
           {action: 'insert', index: 2, elemId: `1@${context.actorId}`, opId: `1@${context.actorId}`, value: {
-            objectId: nestedId,
-            type: 'map',
-            props: {
+            objectId: nestedId, type: 'map', props: {
               english: {[`2@${context.actorId}`]: {value: 'goldfinch', type: 'value'}},
               latin: {[`3@${context.actorId}`]: {value: 'carduelis', type: 'value'}}
             }

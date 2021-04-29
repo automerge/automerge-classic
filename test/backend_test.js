@@ -151,12 +151,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-            objectId: `1@${actor}`, type: 'list', edits: [{
-                action: 'update',
-                opId: `3@${actor}`,
-                value: {type: 'value', value: 'greenfinch'},
-                index: 0,
-            }],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'update', opId: `3@${actor}`, index: 0, value: {type: 'value', value: 'greenfinch'}}
+          ]
         }}}}
       })
     })
@@ -176,8 +173,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'remove', index: 0, count: 1}]
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'remove', index: 0, count: 1}
+          ]
         }}}}
       })
     })
@@ -563,7 +561,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid() 
       const localChange = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyLocalChange(s0, localChange)
@@ -571,10 +569,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [], maxOp: 6, actor, seq: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [
-            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]},
-          ],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+          ]
         }}}}
       })
     })
@@ -583,7 +580,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid() 
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]}
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]}
       ]}
       const change2 = {actor, seq: 2, startOp: 7, time: 0, deps: [hash(change1)], ops: [
         {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [`3@${actor}`]}
@@ -594,10 +591,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [], maxOp: 9, actor, seq: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [
+          objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'remove', index: 1, count: 3}
-          ],
+          ]
         }}}}
       })
     })

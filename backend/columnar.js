@@ -461,14 +461,7 @@ function expandMultiOps(ops, startOp, actor) {
       if (op.pred.length !== 0) throw new RangeError('multi-insert pred must be empty')
       let lastElemId = op.elemId
       for (const value of op.values) {
-        expandedOps.push({
-          action: 'set',
-          obj: op.obj,
-          elemId: lastElemId,
-          value,
-          pred: [],
-          insert: true,
-        })
+        expandedOps.push({action: 'set', obj: op.obj, elemId: lastElemId, value, pred: [], insert: true})
         lastElemId = `${opNum}@${actor}`
         opNum += 1
       }
