@@ -49,15 +49,17 @@ function applyMake(opSet, op, patch) {
   let object = Map({_init: op, _inbound: Set(), _keys: Map()})
   if (action === 'makeList' || action === 'makeText') {
     object = object.set('_elemIds', new SkipList())
-    if (patch && !patch.edits) {
-      patch.edits = []
-    }
   }
   opSet = opSet.setIn(['byObject', objectId], object)
 
   if (patch) {
     patch.objectId = objectId
     patch.type = getObjectType(opSet, objectId)
+    if (patch.type === 'list' || patch.type === 'text') {
+      patch.edits = []
+    } else {
+      patch.props = {}
+    }
   }
   return opSet
 }
@@ -79,10 +81,6 @@ function updateListElement(opSet, objectId, elemId, patch) {
   const ops = getFieldOps(opSet, objectId, elemId)
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let index = elemIds.indexOf(elemId)
-
-  if (patch && patch.edits === undefined) {
-    patch.edits = []
-  }
 
   if (index >= 0) {
     if (ops.isEmpty()) {
@@ -156,23 +154,13 @@ function applyAssign(opSet, op, patch) {
     if (patch.objectId !== objectId) {
       throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
     }
-    if (['map', 'table'].includes(type)) {
-      if (patch.props === undefined) {
-        patch.props = {}
-      }
-      if (patch.props[key] === undefined) {
-        patch.props[key] = {}
-      }
-    } else {
-      if (!patch.edits) {
-        patch.edits = []
-      }
-    }
 
     patch.type = patch.type || type
     if (patch.type !== type) {
       throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
     }
+
+    if (type !== 'list' && type !== 'text' && !patch.props[key]) patch.props[key] = {}
   }
 
   if (action.startsWith('make')) {
@@ -258,7 +246,6 @@ function initializePatch(opSet, pathOp, patch) {
   } else {
     let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
     let index = elemIds.indexOf(key)
-    if (!patch.edits) patch.edits = []
     let elemPatch = patch.edits.find(e => e.opId === key || e.elemId === key)
     if (elemPatch) {
       return elemPatch.value
@@ -281,12 +268,7 @@ function initializePatch(opSet, pathOp, patch) {
  */
 function setPatchPropsForMap(opSet, objectId, key, patch) {
   if (!patch) return
-  if (patch.props === undefined) {
-    patch.props = {}
-  }
-  if (patch.props[key] === undefined) {
-    patch.props[key] = {}
-  }
+  if (!patch.props[key]) patch.props[key] = {}
 
   const ops = {}
   for (let op of getFieldOps(opSet, objectId, key)) {
@@ -300,10 +282,12 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
       }
     } else if (isChildOp(op)) {
       if (!patch.props[key][opId]) {
-        const childId = getChildId(op)
-        const type = getObjectType(opSet, childId)
-        patch.props[key][opId] = {objectId: childId, type}
-        if (type === "list" || type === "text") patch.props[key][opId].edits = []
+        const childId = getChildId(op), type = getObjectType(opSet, childId)
+        if (type === 'list' || type === 'text') {
+          patch.props[key][opId] = {objectId: childId, type, edits: []}
+        } else {
+          patch.props[key][opId] = {objectId: childId, type, props: {}}
+        }
       }
     } else {
       throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
@@ -330,10 +314,12 @@ function makeListEditsForIndex(opSet, listId, elemId, index, insert) {
         valuePatch.datatype = op.get('datatype')
       }
     } else if (isChildOp(op)) {
-      const childId = getChildId(op)
-      const type = getObjectType(opSet, childId)
-      valuePatch = {objectId: childId, type}
-      if (type === 'list' || type === 'text') valuePatch.edits = []
+      const childId = getChildId(op), type = getObjectType(opSet, childId)
+      if (type === 'list' || type === 'text') {
+        valuePatch = {objectId: childId, type, edits: []}
+      } else {
+        valuePatch = {objectId: childId, type, props: {}}
+      }
     } else {
       throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
     }

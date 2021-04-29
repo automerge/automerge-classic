@@ -1238,7 +1238,6 @@ function addPatchProperty(objects, property) {
   if (Object.keys(values).length > 0) {
     let obj = objects[property.objId]
     if (obj.type === 'map' || obj.type === 'table') {
-      if (!obj.props) obj.props = {}
       obj.props[property.key] = values
     } else if (obj.type === 'list' || obj.type === 'text') {
       makeListEdits(obj, values, property.key, property.index)
@@ -1256,7 +1255,6 @@ function addPatchProperty(objects, property) {
  * the value(s) should be placed.
  */
 function makeListEdits(list, values, elemId, index) {
-  if (!list.edits) list.edits = []
   let firstValue = true
   const opIds = Object.keys(values).sort((id1, id2) => compareParsedOpIds(parseOpId(id1), parseOpId(id2)))
   for (const opId of opIds) {
@@ -1274,12 +1272,12 @@ function makeListEdits(list, values, elemId, index) {
  * consecutive sequences of insertions into multi-inserts.
  */
 function condenseEdits(diff) {
-  if ((diff.type === 'list' || diff.type === 'text') && diff.edits) {
+  if (diff.type === 'list' || diff.type === 'text') {
     diff.edits.forEach(e => condenseEdits(e.value))
     let newEdits = diff.edits
     diff.edits = []
     for (const edit of newEdits) appendEdit(diff.edits, edit)
-  } else if ((diff.type === 'map' || diff.type === 'table') && diff.props) {
+  } else if (diff.type === 'map' || diff.type === 'table') {
     for (const prop of Object.keys(diff.props)) {
       for (const opId of Object.keys(diff.props[prop])) {
         condenseEdits(diff.props[prop][opId])
@@ -1298,7 +1296,7 @@ function constructPatch(documentBuffer) {
   const col = makeDecoders(opsColumns, DOC_OPS_COLUMNS).reduce(
     (acc, col) => Object.assign(acc, {[col.columnName]: col.decoder}), {})
 
-  let objects = {_root: {objectId: '_root', type: 'map'}}
+  let objects = {_root: {objectId: '_root', type: 'map', props: {}}}
   let property = null
 
   while (!col.idActor.done) {
@@ -1306,9 +1304,10 @@ function constructPatch(documentBuffer) {
     const action = col.action.readValue(), actionName = ACTIONS[action]
     if (action % 2 === 0) { // even-numbered actions are object creation
       const type = OBJECT_TYPE[actionName] || 'unknown'
-      objects[opId] = {objectId: opId, type}
       if (['list', 'text'].includes(type)) {
-        objects[opId].edits = []
+        objects[opId] = {objectId: opId, type, edits: []}
+      } else {
+        objects[opId] = {objectId: opId, type, props: {}}
       }
     }
 

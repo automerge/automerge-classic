@@ -282,7 +282,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch3, {
         clock: {[actor1]: 2, [actor2]: 1}, maxOp: 3, pendingChanges: 0,
         deps: [hash(change2), hash(change3)].sort(),
-        diffs: {objectId: '_root', type: 'map'}
+        diffs: {objectId: '_root', type: 'map', props: {}}
       })
     })
 
@@ -704,7 +704,7 @@ describe('Automerge.Backend', () => {
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 3}, deps: [hash(change3)], maxOp: 3, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map'}
+        diffs: {objectId: '_root', type: 'map', props: {}}
       })
     })
 
