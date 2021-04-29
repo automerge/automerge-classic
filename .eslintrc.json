@@ -228,7 +228,7 @@
         "prefer-template": "off",
         "quote-props": "off",
         "quotes": "off",
-        "radix": "off", // pvh suggests we re-enable this
+        "radix": "error",
         "require-atomic-updates": "error",
         "require-await": "error",
         "require-unicode-regexp": "off",

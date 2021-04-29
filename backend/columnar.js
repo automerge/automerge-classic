@@ -524,7 +524,7 @@ function makeDecoders(columns, columnSpec) {
   }
 
   let result = []
-  for (let columnId of Object.keys(decoders).map(id => parseInt(id)).sort((a, b) => a - b)) {
+  for (let columnId of Object.keys(decoders).map(id => parseInt(id, 10)).sort((a, b) => a - b)) {
     let [columnName] = Object.entries(columnSpec).find(([/* name */, id]) => id === columnId)
     if (!columnName) columnName = columnId.toString()
     result.push({columnId, columnName, decoder: decoders[columnId]})
@@ -2130,7 +2130,7 @@ class BackendDoc {
     delete allCols[CHANGE_COLUMNS.predNum]
     delete allCols[CHANGE_COLUMNS.predActor]
     delete allCols[CHANGE_COLUMNS.predCtr]
-    return Object.keys(allCols).map(id => parseInt(id)).sort((a, b) => a - b)
+    return Object.keys(allCols).map(id => parseInt(id, 10)).sort((a, b) => a - b)
   }
 
   /**

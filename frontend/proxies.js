@@ -3,7 +3,7 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 
 function parseListIndex(key) {
-  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
+  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key, 10)
   if (typeof key !== 'number') {
     throw new TypeError('A list index must be a number, but you passed ' + JSON.stringify(key))
   }

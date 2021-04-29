@@ -24,7 +24,7 @@ function parseOpId(opId) {
   if (!match) {
     throw new RangeError(`Not a valid opId: ${opId}`)
   }
-  return {counter: parseInt(match[1]), actorId: match[2]}
+  return {counter: parseInt(match[1], 10), actorId: match[2]}
 }
 
 /**

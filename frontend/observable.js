@@ -50,7 +50,7 @@ class Observable {
           childAfter = after && after.byId(propName)
 
         } else if (diff.type === 'list') {
-          const index = parseInt(propName)
+          const index = parseInt(propName, 10)
           // Don't try to get the child object before if the indexes might have changed
           if (!diff.edits || diff.edits.length === 0) {
             childBefore = before && before[CONFLICTS] && before[CONFLICTS][index] &&
@@ -60,7 +60,7 @@ class Observable {
             after[CONFLICTS][index][opId]
 
         } else if (diff.type === 'text') {
-          const index = parseInt(propName)
+          const index = parseInt(propName, 10)
           // Don't try to get the child object before if the indexes might have changed
           if (!diff.edits || diff.edits.length === 0) {
             childBefore = before && before.get(index)
