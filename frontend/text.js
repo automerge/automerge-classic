@@ -137,6 +137,9 @@ class Text {
    * Inserts new list items `values` starting at position `index`.
    */
   insertAt(index, ...values) {
+    if (typeof values[0] === 'string' && values[0].length > 1) {
+      values = values[0].split("")
+    }
     if (this.context) {
       this.context.splice(this.path, index, 0, values)
     } else if (!this[OBJECT_ID]) {

@@ -201,11 +201,24 @@ describe('Automerge.Text', () => {
     s2 = Automerge.merge(Automerge.init(), s1)
   })
 
-  it('should support insertion', () => {
+  it('should support insertion of chacracter', () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a'))
     assert.strictEqual(s1.text.length, 1)
     assert.strictEqual(s1.text.get(0), 'a')
     assert.strictEqual(s1.text.toString(), 'a')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
+  })
+
+  it('should support insertion of string', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'string'))
+    assert.strictEqual(s1.text.length, 6)
+    assert.strictEqual(s1.text.get(0), 's')
+    assert.strictEqual(s1.text.get(1), 't')
+    assert.strictEqual(s1.text.get(2), 'r')
+    assert.strictEqual(s1.text.get(3), 'i')
+    assert.strictEqual(s1.text.get(4), 'n')
+    assert.strictEqual(s1.text.get(5), 'g')
+    assert.strictEqual(s1.text.toString(), 'string')
     assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
   })
 
