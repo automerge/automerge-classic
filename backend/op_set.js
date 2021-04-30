@@ -85,11 +85,10 @@ function updateListElement(opSet, objectId, elemId, patch) {
   if (index >= 0) {
     if (ops.isEmpty()) {
       elemIds = elemIds.removeIndex(index)
-      if (patch) appendEdit(patch.edits, {action: 'remove', index, count: 1})
     } else {
       elemIds = elemIds.setValue(elemId, ops.first().get('value'))
-      if (patch) mergeEdits(patch.edits, makeListEditsForIndex(opSet, objectId, elemId, index, false))
     }
+    setPatchEditsForList(opSet, objectId, elemId, index, false, patch)
 
   } else {
     if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
@@ -106,9 +105,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    if (patch) {
-      mergeEdits(patch.edits, makeListEditsForIndex(opSet, objectId, elemId, index, true))
-    }
+    setPatchEditsForList(opSet, objectId, elemId, index, true, patch)
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -238,28 +235,26 @@ function initializePatch(opSet, pathOp, patch) {
     throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
   }
 
-  if (type === 'map' || type === 'table') {
+  if (type === 'list' || type === 'text') {
+    const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(key)
+    let elemPatch = patch.edits.find(e => e.opId === key || e.elemId === key)
+    if (elemPatch) {
+      return elemPatch.value
+    } else {
+      setPatchEditsForList(opSet, objectId, key, index, false, patch)
+      elemPatch = patch.edits.find(e => e.opId === opId || e.elemId === opId)
+      if (elemPatch === undefined) {
+        throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
+      }
+      return elemPatch.value
+    }
+
+  } else {
     setPatchPropsForMap(opSet, objectId, key, patch)
     if (patch.props[key][opId] === undefined) {
       throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
     }
     return patch.props[key][opId]
-
-  } else {
-    let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
-    let index = elemIds.indexOf(key)
-    let elemPatch = patch.edits.find(e => e.opId === key || e.elemId === key)
-    if (elemPatch) {
-      return elemPatch.value
-    } else {
-      const edits = makeListEditsForIndex(opSet, objectId, key, index, false)
-      let elemPatch = edits.find(e => e.opId === opId || e.elemId === opId)
-      if (elemPatch === undefined) {
-        throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
-      }
-      patch.edits.push(...edits)
-      return elemPatch.value
-    }
   }
 }
 
@@ -311,27 +306,26 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
 }
 
 /**
- * Returns a list of edits to apply to a list in order to reference the list elements at
- * a particular index. This is usually one edit, but may be multiple in the case of a conflict at
- * this list element.
+ * Updates `patch` to include edits for all the values at a particular index. This is usually one
+ * edit, but may be multiple in the case of a conflict at this list element.
  */
-function makeListEditsForIndex(opSet, listId, elemId, index, insert) {
-  let edits = []
-  for (let op of getFieldOps(opSet, listId, elemId)) {
+function setPatchEditsForList(opSet, listId, elemId, index, insert, patch) {
+  if (!patch) return
+
+  let fieldOps = getFieldOps(opSet, listId, elemId), firstOp = true
+  if (fieldOps.isEmpty()) {
+    appendEdit(patch.edits, {action: 'remove', index, count: 1})
+  }
+
+  for (let op of fieldOps) {
     const opId = op.get('opId'), value = makePatchForOperation(opSet, op)
 
-    if (edits.length === 0 && insert) {
-      edits.push({action: 'insert', index, elemId: opId, opId, value})
+    if (insert && firstOp) {
+      appendEdit(patch.edits, {action: 'insert', index, elemId: opId, opId, value})
     } else {
-      edits.push({action: 'update', index, opId, value})
+      appendEdit(patch.edits, {action: 'update', index, opId, value})
     }
-  }
-  return edits
-}
-
-function mergeEdits(existingEdits, newEdits) {
-  for (const edit of newEdits) {
-    appendEdit(existingEdits, edit)
+    firstOp = false
   }
 }
 
