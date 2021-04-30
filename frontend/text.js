@@ -138,7 +138,7 @@ class Text {
    */
   insertAt(index, ...values) {
     if (typeof values[0] === 'string' && values[0].length > 1) {
-      values = values[0].split("")
+      values = [...values[0]]
     }
     if (this.context) {
       this.context.splice(this.path, index, 0, values)

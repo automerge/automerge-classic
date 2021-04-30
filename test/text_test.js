@@ -222,6 +222,20 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
   })
 
+  it('should support insertion of string containing a unicode character', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, '🐦string'))
+    assert.strictEqual(s1.text.length, 7)
+    assert.strictEqual(s1.text.get(0), '🐦')
+    assert.strictEqual(s1.text.get(1), 's')
+    assert.strictEqual(s1.text.get(2), 't')
+    assert.strictEqual(s1.text.get(3), 'r')
+    assert.strictEqual(s1.text.get(4), 'i')
+    assert.strictEqual(s1.text.get(5), 'n')
+    assert.strictEqual(s1.text.get(6), 'g')
+    assert.strictEqual(s1.text.toString(), '🐦string')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
+  })
+
   it('should support deletion', () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
     s1 = Automerge.change(s1, doc => doc.text.deleteAt(1, 1))
