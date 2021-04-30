@@ -261,7 +261,28 @@ function initializePatch(opSet, pathOp, patch) {
       return elemPatch.value
     }
   }
+}
 
+/**
+ * Constructs a patch for the value created by a particular operation.
+ */
+function makePatchForOperation(opSet, op) {
+  if (op.get('action') === 'set') {
+    const patch = {type: 'value', value: op.get('value')}
+    if (op.get('datatype')) patch.datatype = op.get('datatype')
+    return patch
+
+  } else if (isChildOp(op)) {
+    const childId = getChildId(op), type = getObjectType(opSet, childId)
+    if (type === 'list' || type === 'text') {
+      return {objectId: childId, type, edits: []}
+    } else {
+      return {objectId: childId, type, props: {}}
+    }
+
+  } else {
+    throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
+  }
 }
 
 /**
@@ -276,23 +297,8 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
   for (let op of getFieldOps(opSet, objectId, key)) {
     const opId = op.get('opId')
     ops[opId] = true
-
-    if (op.get('action') === 'set') {
-      patch.props[key][opId] = {type: 'value', value: op.get('value')}
-      if (op.get('datatype')) {
-        patch.props[key][opId].datatype = op.get('datatype')
-      }
-    } else if (isChildOp(op)) {
-      if (!patch.props[key][opId]) {
-        const childId = getChildId(op), type = getObjectType(opSet, childId)
-        if (type === 'list' || type === 'text') {
-          patch.props[key][opId] = {objectId: childId, type, edits: []}
-        } else {
-          patch.props[key][opId] = {objectId: childId, type, props: {}}
-        }
-      }
-    } else {
-      throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
+    if (!isChildOp(op) || !patch.props[key][opId]) {
+      patch.props[key][opId] = makePatchForOperation(opSet, op)
     }
   }
 
@@ -304,46 +310,22 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
   }
 }
 
+/**
+ * Returns a list of edits to apply to a list in order to reference the list elements at
+ * a particular index. This is usually one edit, but may be multiple in the case of a conflict at
+ * this list element.
+ */
 function makeListEditsForIndex(opSet, listId, elemId, index, insert) {
   let edits = []
   for (let op of getFieldOps(opSet, listId, elemId)) {
-    let valuePatch = {}
-    const opId = op.get('opId')
-
-    if (op.get('action') === 'set') {
-      valuePatch = {type: 'value', value: op.get('value')}
-      if (op.get('datatype')) {
-        valuePatch.datatype = op.get('datatype')
-      }
-    } else if (isChildOp(op)) {
-      const childId = getChildId(op), type = getObjectType(opSet, childId)
-      if (type === 'list' || type === 'text') {
-        valuePatch = {objectId: childId, type, edits: []}
-      } else {
-        valuePatch = {objectId: childId, type, props: {}}
-      }
-    } else {
-      throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
-    }
+    const opId = op.get('opId'), value = makePatchForOperation(opSet, op)
 
     if (edits.length === 0 && insert) {
-      edits.push({
-        action: 'insert',
-        value: valuePatch,
-        elemId: opId,
-        opId,
-        index,
-      })
+      edits.push({action: 'insert', index, elemId: opId, opId, value})
     } else {
-      edits.push({
-        action: 'update',
-        value: valuePatch,
-        opId: opId,
-        index,
-      })
+      edits.push({action: 'update', index, opId, value})
     }
   }
-
   return edits
 }
 
