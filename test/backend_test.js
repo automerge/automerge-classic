@@ -291,6 +291,36 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should overwrite list elements', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'makeMap', obj: `1@${actor}`, elemId: '_head', insert: true, pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'title', value: 'buy milk', pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor}`, elemId: `2@${actor}`, insert: false, pred: [`2@${actor}`]},
+        {action: 'set', obj: `5@${actor}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `5@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1), encodeChange(change2)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 7, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `5@${actor}`, value: {
+              objectId: `5@${actor}`, type: 'map', props: {
+                title: {[`6@${actor}`]: {type: 'value', value: 'water plants'}},
+                done: {[`7@${actor}`]: {type: 'value', value: false}}
+              }
+            }}
+          ]
+        }}}}
+      })
+    })
+
     it('should delete list elements', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [

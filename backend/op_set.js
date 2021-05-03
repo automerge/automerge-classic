@@ -302,6 +302,15 @@ function setPatchEditsForList(opSet, listId, elemId, index, insert, patch) {
   setPatchPropsForMap(opSet, listId, elemId, patch)
   if (Object.keys(patch.props[elemId]).length === 0) {
     appendEdit(patch.edits, {action: 'remove', index, count: 1})
+    return
+  }
+
+  // If the most recent existing edit is for the same index, we need to remove it, since the patch
+  // format for lists treats several consecutive updates for the same index as a conflict.
+  while (!insert && patch.edits.length > 0 && patch.edits[patch.edits.length - 1].index === index &&
+         ['insert', 'update'].includes(patch.edits[patch.edits.length - 1].action)) {
+    const previousEdit = patch.edits.pop()
+    insert = (previousEdit.action === 'insert')
   }
 
   let firstOp = true
