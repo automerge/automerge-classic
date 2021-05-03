@@ -252,6 +252,45 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should apply updates inside conflicted list elements', () => {
+      const actor1 = '01234567', actor2 = '89abcdef'
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: '_head', insert: true, pred: []}
+      ]}
+      const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: `2@${actor1}`, pred: [`2@${actor1}`]},
+        {action: 'set', obj: `3@${actor1}`, key: 'title', value: 'buy milk', pred: []},
+        {action: 'set', obj: `3@${actor1}`, key: 'done', value: false, pred: []}
+      ]}
+      const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: `2@${actor1}`, pred: [`2@${actor1}`]},
+        {action: 'set', obj: `3@${actor2}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `3@${actor2}`, key: 'done', value: false, pred: []}
+      ]}
+      const change4 = {actor: actor1, seq: 3, startOp: 6, time: 0, deps: [hash(change2), hash(change3)].sort(), ops: [
+        {action: 'set', obj: `3@${actor1}`, key: 'done', value: true, pred: [`5@${actor1}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1, change2, change3].map(encodeChange))
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change4)])
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor1]: 3, [actor2]: 1}, deps: [hash(change4)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor1}`]: {
+          objectId: `1@${actor1}`, type: 'list', edits: [
+            {action: 'update', index: 0, opId: `3@${actor1}`, value: {
+              objectId: `3@${actor1}`, type: 'map', props: {
+                done: {[`6@${actor1}`]: {type: 'value', value: true}}
+              }
+            }},
+            {action: 'update', index: 0, opId: `3@${actor2}`, value: {
+              objectId: `3@${actor2}`, type: 'map', props: {}
+            }}
+          ]
+        }}}}
+      })
+    })
+
     it('should delete list elements', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [

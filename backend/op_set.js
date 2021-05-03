@@ -55,11 +55,8 @@ function applyMake(opSet, op, patch) {
   if (patch) {
     patch.objectId = objectId
     patch.type = getObjectType(opSet, objectId)
-    if (patch.type === 'list' || patch.type === 'text') {
-      patch.edits = []
-    } else {
-      patch.props = {}
-    }
+    patch.props = {}
+    if (patch.type === 'list' || patch.type === 'text') patch.edits = []
   }
   return opSet
 }
@@ -235,27 +232,18 @@ function initializePatch(opSet, pathOp, patch) {
     throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
   }
 
-  if (type === 'list' || type === 'text') {
-    const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(key)
-    let elemPatch = patch.edits.find(e => e.opId === key || e.elemId === key)
-    if (elemPatch) {
-      return elemPatch.value
-    } else {
+  if (!patch.props[key] || !patch.props[key][opId]) {
+    if (type === 'list' || type === 'text') {
+      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(key)
       setPatchEditsForList(opSet, objectId, key, index, false, patch)
-      elemPatch = patch.edits.find(e => e.opId === opId || e.elemId === opId)
-      if (elemPatch === undefined) {
-        throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
-      }
-      return elemPatch.value
+    } else {
+      setPatchPropsForMap(opSet, objectId, key, patch)
     }
-
-  } else {
-    setPatchPropsForMap(opSet, objectId, key, patch)
-    if (patch.props[key][opId] === undefined) {
-      throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
-    }
-    return patch.props[key][opId]
   }
+  if (patch.props[key][opId] === undefined) {
+    throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
+  }
+  return patch.props[key][opId]
 }
 
 /**
@@ -270,7 +258,7 @@ function makePatchForOperation(opSet, op) {
   } else if (isChildOp(op)) {
     const childId = getChildId(op), type = getObjectType(opSet, childId)
     if (type === 'list' || type === 'text') {
-      return {objectId: childId, type, edits: []}
+      return {objectId: childId, type, props: {}, edits: []}
     } else {
       return {objectId: childId, type, props: {}}
     }
@@ -311,21 +299,39 @@ function setPatchPropsForMap(opSet, objectId, key, patch) {
  */
 function setPatchEditsForList(opSet, listId, elemId, index, insert, patch) {
   if (!patch) return
-
-  let fieldOps = getFieldOps(opSet, listId, elemId), firstOp = true
-  if (fieldOps.isEmpty()) {
+  setPatchPropsForMap(opSet, listId, elemId, patch)
+  if (Object.keys(patch.props[elemId]).length === 0) {
     appendEdit(patch.edits, {action: 'remove', index, count: 1})
   }
 
-  for (let op of fieldOps) {
-    const opId = op.get('opId'), value = makePatchForOperation(opSet, op)
-
+  let firstOp = true
+  for (const opId of Object.keys(patch.props[elemId]).sort(opIdCompare)) {
+    const value = patch.props[elemId][opId]
     if (insert && firstOp) {
-      appendEdit(patch.edits, {action: 'insert', index, elemId: opId, opId, value})
+      appendEdit(patch.edits, {action: 'insert', index, elemId, opId, value})
     } else {
       appendEdit(patch.edits, {action: 'update', index, opId, value})
     }
     firstOp = false
+  }
+}
+
+/**
+ * Recursively walks a patch, removing any internal information that should not be returned through
+ * the API. This should be done after all the changes have been applied, since we need to preserve
+ * the internal information across several calls to `OpSet.addChange()`.
+ */
+function finalizePatch(diff) {
+  if (!diff) return
+  if (diff.type === 'list' || diff.type === 'text') {
+    delete diff.props // this is the actual property being deleted
+    for (let edit of diff.edits) finalizePatch(edit.value)
+  } else if (diff.type === 'map' || diff.type === 'table') {
+    for (const prop of Object.keys(diff.props)) {
+      for (const opId of Object.keys(diff.props[prop])) {
+        finalizePatch(diff.props[prop][opId])
+      }
+    }
   }
 }
 
@@ -589,8 +595,18 @@ function getParent(opSet, objectId, key) {
   return insertion.get('elemId')
 }
 
+/**
+ * Compares the opIds of two operations using Lamport timestamp ordering
+ */
 function lamportCompare(op1, op2) {
-  const time1 = parseOpId(op1.get('opId')), time2 = parseOpId(op2.get('opId'))
+  return opIdCompare(op1.get('opId'), op2.get('opId'))
+}
+
+/**
+ * Compares two opIds using Lamport timestamp ordering
+ */
+function opIdCompare(id1, id2) {
+  const time1 = parseOpId(id1), time2 = parseOpId(id2)
   if (time1.counter < time2.counter) return -1
   if (time1.counter > time2.counter) return  1
   if (time1.actorId < time2.actorId) return -1
@@ -706,5 +722,5 @@ function constructObject(opSet, objectId) {
 module.exports = {
   init, addChange, addLocalChange, getHeads,
   getChangeByHash, getMissingChanges, getMissingDeps,
-  constructObject, getFieldOps, getOperationKey
+  constructObject, getFieldOps, getOperationKey, finalizePatch
 }
