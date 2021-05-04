@@ -50,39 +50,6 @@ describe('integration tests for data sync protocol', () => {
   })
 })
 
-// dummy 2-way channel for testing
-class Channel extends EventEmitter {
-  peers = 0
-  buffer = []
-
-  join() {
-    this.peers += 1
-    if (this.peers >= 3) throw new Error('This channel only supports 2 peers')
-    if (this.peers === 2) {
-      // someone is already here, emit any messages they sent before we joined
-      for (const { peerId, msg } of this.buffer) {
-        this.emit('data', peerId, msg)
-      }
-      this.buffer = []
-    }
-    return this
-  }
-
-  leave() {
-    this.peers -= 1
-  }
-
-  write(peerId, msg) {
-    if (this.peers === 2) {
-      // there's someone on the other end
-      this.emit('data', peerId, msg)
-    } else {
-      // we're alone, save up messages until someone else joins
-      this.buffer.push({ peerId, msg })
-    }
-  }
-}
-
 class ConnectedDoc extends EventEmitter {
   constructor(channel, doc) {
     super()
@@ -138,5 +105,38 @@ class ConnectedDoc extends EventEmitter {
   send(msg) {
     if (msg === null) return // null msg = nothing changed
     this.channel.write(this.peerId, msg)
+  }
+}
+
+// dummy 2-way channel for testing
+class Channel extends EventEmitter {
+  peers = 0
+  buffer = []
+
+  join() {
+    this.peers += 1
+    if (this.peers >= 3) throw new Error('This channel only supports 2 peers')
+    if (this.peers === 2) {
+      // someone is already here, emit any messages they sent before we joined
+      for (const { peerId, msg } of this.buffer) {
+        this.emit('data', peerId, msg)
+      }
+      this.buffer = []
+    }
+    return this
+  }
+
+  leave() {
+    this.peers -= 1
+  }
+
+  write(peerId, msg) {
+    if (this.peers === 2) {
+      // there's someone on the other end
+      this.emit('data', peerId, msg)
+    } else {
+      // we're alone, save up messages until someone else joins
+      this.buffer.push({ peerId, msg })
+    }
   }
 }
