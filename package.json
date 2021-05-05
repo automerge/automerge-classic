@@ -1,6 +1,6 @@
 {
   "name": "automerge",
-  "version": "0.14.2",
+  "version": "1.0.1-preview.0",
   "description": "Data structures for building collaborative applications",
   "main": "dist/automerge.js",
   "types": "dist/index.d.ts",
