@@ -9,7 +9,7 @@ describe('sync protocol - integration', () => {
 
   describe('two peers', () => {
     it(`syncs a single change`, () => {
-      let doc = A.from({ wrens: 1, goldfinches: 12 })
+      let doc = A.from({})
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -18,16 +18,15 @@ describe('sync protocol - integration', () => {
 
       // alice makes a change
       alice.change(s => {
-        s.wrens = 42
+        s.alice = 1
       })
 
       // bob gets the changes
-      assert.strictEqual(bob.doc.wrens, 42)
       assert.deepStrictEqual(alice.doc, bob.doc)
     })
 
     it('syncs divergent changes', () => {
-      let doc = A.from({ wrens: 1, goldfinches: 12 })
+      let doc = A.from({})
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -37,28 +36,24 @@ describe('sync protocol - integration', () => {
       alice.disconnect()
 
       // alice makes a change
-      alice.change(s => (s.wrens = 42))
+      alice.change(s => (s.alice = 1))
 
       // bob makes a change
-      bob.change(s => (s.goldfinches = 0))
+      bob.change(s => (s.bob = 1))
 
       // while they're disconnected, they have divergent docs
-      assert.strictEqual(bob.doc.wrens, 1)
-      assert.strictEqual(alice.doc.goldfinches, 12)
       assert.notDeepStrictEqual(alice.doc, bob.doc)
 
       alice.connect()
 
       // after connecting, their docs converge
-      assert.strictEqual(bob.doc.wrens, 42)
-      assert.strictEqual(alice.doc.goldfinches, 0)
       assert.deepStrictEqual(alice.doc, bob.doc)
     })
   })
 
   describe('three peers', () => {
     it(`syncs a single change`, () => {
-      let doc = A.from({ wrens: 1, goldfinches: 12 })
+      let doc = A.from({})
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -69,16 +64,15 @@ describe('sync protocol - integration', () => {
 
       // alice makes a change
       alice.change(s => {
-        s.wrens = 42
+        s.alice = 1
       })
 
       // charlie gets the changes (via bob)
-      assert.strictEqual(charlie.doc.wrens, 42)
       assert.deepStrictEqual(alice.doc, charlie.doc)
     })
 
     it(`syncs a single change (all connected to all)`, () => {
-      let doc = A.from({ wrens: 1, goldfinches: 12 })
+      let doc = A.from({})
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -90,11 +84,10 @@ describe('sync protocol - integration', () => {
 
       // alice makes a change
       alice.change(s => {
-        s.wrens = 42
+        s.alice = 1
       })
 
       // charlie gets the changes (via bob)
-      assert.strictEqual(charlie.doc.wrens, 42)
       assert.deepStrictEqual(alice.doc, charlie.doc)
     })
 
@@ -159,8 +152,8 @@ describe('sync protocol - integration', () => {
 
       // after connecting, their docs converge
       assert.deepStrictEqual(alice.doc, bob.doc)
-      // assert.deepStrictEqual(bob.doc, charlie.doc)
-      // assert.deepStrictEqual(alice.doc, charlie.doc)
+      assert.deepStrictEqual(bob.doc, charlie.doc)
+      assert.deepStrictEqual(alice.doc, charlie.doc)
     })
   })
 })
@@ -192,10 +185,8 @@ class ConnectedDoc extends EventEmitter {
 
   update(doc, remotePeerId) {
     this.doc = doc
-    if (this.connected) {
-      for (const peerId in this.peers) {
-        this.peers[peerId].update(doc)
-      }
+    for (const peerId in this.peers) {
+      this.peers[peerId].update(doc)
     }
   }
 
@@ -240,33 +231,26 @@ class Peer extends EventEmitter {
   }
 
   update(doc) {
-    try {
-      const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
-      this.doc = doc
-      this.syncState = syncState
-      this.send(msg)
-    } catch (e) {
-      if (e.message.startsWith('Attempting to use an outdated Automerge document')) return
-      else throw e
-    }
+    const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
+    this.doc = doc
+    this.syncState = syncState
+    this.send(msg)
   }
 
   receive(msg) {
-    try {
-      const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
-      // console.log(`receiving update ${this.peerId}<-${this.remotePeerId}`, doc)
-      this.syncState = syncState
-      this.emit('change', doc)
-    } catch (e) {
-      if (e.message.startsWith('Attempting to use an outdated Automerge document')) return
-      else throw e
-    }
+    const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
+    // console.log(`received update ${this.peerId}<-${this.remotePeerId}`, doc)
+    this.doc = doc
+    this.syncState = syncState
+    this.emit('change', doc)
   }
 
   send(msg) {
     if (msg === null) return // nothing changed
+
     this.updates += 1
     if (this.updates > 10) throw new Error('loop detected')
+
     // console.log(`sending update ${this.peerId}->${this.remotePeerId}`, this.doc)
     this.channel.write(this.peerId, msg)
   }
