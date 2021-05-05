@@ -6,9 +6,6 @@ const webpackConfig = require("./webpack.config.js")
 delete webpackConfig.entry;
 delete webpackConfig.output.filename;
 
-// Minify is unnecessary and adds about 15s of work
-delete webpackConfig.optimization
-
 // Don't mix dist/
 webpackConfig.output.path = path.join(webpackConfig.output.path, 'test')
 
