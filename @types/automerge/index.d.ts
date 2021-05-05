@@ -91,9 +91,11 @@ declare module 'automerge' {
     deleteAt?(index: number, numDelete?: number): List<T>
   }
 
-  class Text extends List<string> {
+  class Text {
     constructor(text?: string | string[])
-    get(index: number): string
+    get<T>(index: number): string | T
+    insertAt(index: number, characters: string | (string | T)[]): Text
+    deleteAt(index: number, numDelete?: number): Text
     toSpans<T>(): (string | T)[]
   }
 

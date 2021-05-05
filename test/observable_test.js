@@ -42,7 +42,7 @@ describe('Automerge.Observable', () => {
       assert.deepStrictEqual(after.toString(), 'abc')
       assert.deepStrictEqual(local, true)
     })
-    doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'abc'))
     assert.strictEqual(callbackCalled, true)
   })
 
@@ -131,7 +131,7 @@ describe('Automerge.Observable', () => {
     let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc)
     doc = Automerge.change(doc, doc => {
       doc.text = new Automerge.Text()
-      doc.text.insertAt(0, 'a', 'b', {start: 'bold'}, 'c', {end: 'bold'})
+      doc.text.insertAt(0, ['a', 'b', {start: 'bold'}, 'c', {end: 'bold'}])
     })
     observable.observe(doc.text.get(2), (diff, before, after, local) => {
       callbackCalled = true

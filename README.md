@@ -484,13 +484,13 @@ Compared to using a regular JavaScript array, `Automerge.Text` offers better per
 > [skintone modifier](http://www.unicode.org/reports/tr51/) is a combining mark).
 
 You can create a Text object inside a change callback. Then you can use `insertAt()` and
-`deleteAt()` to insert and delete characters (same API as for list modifications, shown
+`deleteAt()` to insert and delete characters (similar API as for list modifications, shown
 [above](#updating-a-document)):
 
 ```js
 newDoc = Automerge.change(currentDoc, doc => {
   doc.text = new Automerge.Text()
-  doc.text.insertAt(0, 'h', 'e', 'l', 'l', 'o')
+  doc.text.insertAt(0, 'hello') // splits up the string into 'h', 'e', 'l', 'l', 'o'
   doc.text.deleteAt(0)
   doc.text.insertAt(0, 'H')
 })

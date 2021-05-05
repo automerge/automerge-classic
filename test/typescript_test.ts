@@ -326,19 +326,31 @@ describe('TypeScript support', () => {
 
     describe('insertAt', () => {
       it('should support inserting a single element', () => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'abc'))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ['abc']))
+        assert.strictEqual(doc.text.get(0), 'abc')
         assert.strictEqual(JSON.stringify(doc.text), '"abc"')
       })
 
       it('should support inserting multiple elements', () => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ['a', 'b', 'c']))
+        assert.strictEqual(doc.text.get(0), 'a')
+        assert.strictEqual(doc.text.get(1), 'b')
+        assert.strictEqual(doc.text.get(2), 'c')
+        assert.strictEqual(JSON.stringify(doc.text), '"abc"')
+      })
+
+      it('should split a multi-character string if given', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'abc'))
+        assert.strictEqual(doc.text.get(0), 'a')
+        assert.strictEqual(doc.text.get(1), 'b')
+        assert.strictEqual(doc.text.get(2), 'c')
         assert.strictEqual(JSON.stringify(doc.text), '"abc"')
       })
     })
 
     describe('deleteAt', () => {
       beforeEach(() => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'c', 'd', 'e', 'f', 'g'))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'abcdefg'))
       })
 
       it('should support deleting a single element without specifying `numDelete`', () => {
@@ -354,7 +366,7 @@ describe('TypeScript support', () => {
 
     describe('get', () => {
       it('should get the element at the given index', () => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b', 'cdefg', 'hi', 'jkl'))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ['a', 'b', 'cdefg', 'hi', 'jkl']))
         assert.strictEqual(doc.text.get(0), 'a')
         assert.strictEqual(doc.text.get(2), 'cdefg')
       })
@@ -363,7 +375,7 @@ describe('TypeScript support', () => {
     describe('delegated read-only operations from `Array`', () => {
       const a = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
       beforeEach(() => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ...a))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, a))
       })
 
       it('supports `indexOf`', () => assert.strictEqual(doc.text.indexOf('c'), 2))
@@ -374,7 +386,7 @@ describe('TypeScript support', () => {
 
     describe('getElementIds', () => {
       it('should return the element ID of each character', () => {
-        doc = Automerge.change(doc, doc => doc.text.insertAt(0, 'a', 'b'))
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, ['a', 'b']))
         const elemIds = Automerge.Frontend.getElementIds(doc.text)
         assert.deepStrictEqual(elemIds, [`2@${Automerge.getActorId(doc)}`, `3@${Automerge.getActorId(doc)}`])
       })

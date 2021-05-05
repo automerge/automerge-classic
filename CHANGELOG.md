@@ -31,6 +31,9 @@ is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
   (UUIDs can still be used, but the hyphens need to be removed).
 - **Changed**: `Automerge.getConflicts()` now returns *all* conflicting values, including the
   value chosen as default resolution.
+- **Changed**: `Automerge.Text.insertAt` now takes two arguments, the index and the characters to
+  insert. The characters can be given either as a string (which will be split into characters),
+  or as an array that is already split into individual characters.
 - **Changed**: Multiple references to the same object in an Automerge document are no longer
   allowed. In other words, the document is now required to be a tree, not a DAG.
 - **Changed**: We no longer assume that the backend state is immutable, giving us greater freedom
