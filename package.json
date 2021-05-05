@@ -33,7 +33,6 @@
     "@types/mocha": "^8.2.1",
     "@types/node": "^14.14.31",
     "babel-loader": "^8.2.2",
-    "browserify": "^17.0.0",
     "copyfiles": "^2.4.1",
     "jsverify": "^0.8.4",
     "karma": "^6.1.1",
