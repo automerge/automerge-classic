@@ -3,6 +3,10 @@ const { EventEmitter } = require('events')
 const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
 describe('sync protocol - integration', () => {
+  beforeEach(() => {
+    iterations = 0
+  })
+
   describe('two peers', () => {
     it(`syncs a single change`, () => {
       let doc = A.from({ wrens: 1, goldfinches: 12 })
@@ -94,8 +98,8 @@ describe('sync protocol - integration', () => {
       assert.deepStrictEqual(alice.doc, charlie.doc)
     })
 
-    it.only('syncs divergent changes', () => {
-      let doc = A.from({ wrens: 1, goldfinches: 12 })
+    it(`syncs multiple changes`, () => {
+      let doc = A.from({})
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -105,19 +109,49 @@ describe('sync protocol - integration', () => {
       connect(bob, charlie)
       connect(alice, charlie)
 
+      // each one makes a change
+      alice.change(s => (s.alice = 1))
+      bob.change(s => (s.bob = 1))
+      charlie.change(s => (s.charlie = 1))
+
+      // all docs converge
+      assert.deepStrictEqual(alice.doc, bob.doc)
+      assert.deepStrictEqual(bob.doc, charlie.doc)
+      assert.deepStrictEqual(alice.doc, charlie.doc)
+    })
+
+    it('syncs divergent changes', async () => {
+      let doc = A.from({})
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+
+      // console.log('---------------- connecting')
+
+      connect(alice, charlie)
+      connect(alice, bob)
+      connect(alice, charlie)
+
+      // console.log('---------------- disconnecting')
+
       alice.disconnect()
       bob.disconnect()
       charlie.disconnect()
 
+      // console.log('---------------- making changes')
+
       // each one makes a change
-      alice.change(s => (s.wrens = 42))
-      bob.change(s => (s.goldfinches = 0))
-      charlie.change(s => (s.cassowaries = 13))
+      alice.change(s => (s.alice = 1))
+      bob.change(s => (s.bob = 1))
+      charlie.change(s => (s.charlie = 1))
 
       // while they're disconnected, they have divergent docs
       assert.notDeepStrictEqual(alice.doc, bob.doc)
       assert.notDeepStrictEqual(bob.doc, charlie.doc)
       assert.notDeepStrictEqual(alice.doc, charlie.doc)
+
+      // console.log('---------------- reconnecting')
 
       alice.connect()
       bob.connect()
@@ -125,8 +159,8 @@ describe('sync protocol - integration', () => {
 
       // after connecting, their docs converge
       assert.deepStrictEqual(alice.doc, bob.doc)
-      assert.deepStrictEqual(bob.doc, charlie.doc)
-      assert.deepStrictEqual(alice.doc, charlie.doc)
+      // assert.deepStrictEqual(bob.doc, charlie.doc)
+      // assert.deepStrictEqual(alice.doc, charlie.doc)
     })
   })
 })
@@ -146,16 +180,22 @@ class ConnectedDoc extends EventEmitter {
   }
 
   connectTo(remotePeerId, channel) {
+    this.connected = true
     const peer = new Peer(this.peerId, remotePeerId, this.doc, channel)
     this.peers[remotePeerId] = peer
     peer.update(this.doc)
-    peer.on('change', doc => this.update(doc))
+    peer.on('change', doc => {
+      // console.log(`doc changed ${this.peerId}<-${remotePeerId}`, doc)
+      this.update(doc, remotePeerId)
+    })
   }
 
-  update(doc) {
+  update(doc, remotePeerId) {
     this.doc = doc
-    for (const peerId in this.peers) {
-      this.peers[peerId].update(doc)
+    if (this.connected) {
+      for (const peerId in this.peers) {
+        this.peers[peerId].update(doc)
+      }
     }
   }
 
@@ -165,14 +205,18 @@ class ConnectedDoc extends EventEmitter {
   }
 
   disconnect() {
+    this.connected = false
     for (const peerId in this.peers) {
       this.peers[peerId].channel.leave()
     }
   }
 
   connect() {
+    this.connected = true
     for (const peerId in this.peers) {
-      this.peers[peerId].channel.join()
+      const peer = this.peers[peerId]
+      peer.channel.join()
+      peer.update(this.doc)
     }
   }
 }
@@ -184,6 +228,8 @@ class Peer extends EventEmitter {
     this.peerId = peerId
     this.remotePeerId = remotePeerId
     this.doc = doc
+
+    this.updates = 0
 
     channel.join()
     this.channel = channel
@@ -208,8 +254,8 @@ class Peer extends EventEmitter {
   receive(msg) {
     try {
       const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
+      // console.log(`receiving update ${this.peerId}<-${this.remotePeerId}`, doc)
       this.syncState = syncState
-      this.update(doc)
       this.emit('change', doc)
     } catch (e) {
       if (e.message.startsWith('Attempting to use an outdated Automerge document')) return
@@ -219,7 +265,9 @@ class Peer extends EventEmitter {
 
   send(msg) {
     if (msg === null) return // nothing changed
-    console.log(`sending update ${this.peerId}->${this.remotePeerId}`, this.doc)
+    this.updates += 1
+    if (this.updates > 10) throw new Error('loop detected')
+    // console.log(`sending update ${this.peerId}->${this.remotePeerId}`, this.doc)
     this.channel.write(this.peerId, msg)
   }
 }
@@ -256,3 +304,5 @@ class Channel extends EventEmitter {
     }
   }
 }
+
+const pause = (t = 100) => new Promise(resolve => setTimeout(() => resolve(), t))
