@@ -313,15 +313,14 @@ function setPatchEditsForList(opSet, listId, elemId, index, insert, patch) {
     insert = (previousEdit.action === 'insert')
   }
 
-  let firstOp = true
   for (const opId of Object.keys(patch.props[elemId]).sort(opIdCompare)) {
     const value = patch.props[elemId][opId]
-    if (insert && firstOp) {
+    if (insert) {
       appendEdit(patch.edits, {action: 'insert', index, elemId, opId, value})
     } else {
       appendEdit(patch.edits, {action: 'update', index, opId, value})
     }
-    firstOp = false
+    insert = false
   }
 }
 

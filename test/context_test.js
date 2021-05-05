@@ -87,7 +87,7 @@ describe('Proxying context', () => {
       context.setMapKey([{key: 'birds', objectId: objectId2}], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {birds: {
-        '1@actor1': {objectId: objectId1, type: 'map'},
+        '1@actor1': {objectId: objectId1, type: 'map', props: {}},
         '1@actor2': {objectId: objectId2, type: 'map', props: {
           goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value'}}
         }}

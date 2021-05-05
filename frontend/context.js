@@ -65,11 +65,15 @@ class Context {
 
       } else {
         // Nested object (map, list, text, or table)
-        const objectId = value[OBJECT_ID]
+        const objectId = value[OBJECT_ID], type = this.getObjectType(objectId)
         if (!objectId) {
           throw new RangeError(`Object ${JSON.stringify(value)} has no objectId`)
         }
-        return {objectId, type: this.getObjectType(objectId)}
+        if (type === 'list' || type === 'text') {
+          return {objectId, type, edits: []}
+        } else {
+          return {objectId, type, props: {}}
+        }
       }
     } else {
       // Primitive value (number, string, boolean, or null)
@@ -158,19 +162,6 @@ class Context {
       }
       subpatch = values[nextOpId]
       object = this.getPropertyValue(object, pathElem.key, nextOpId)
-      if (object instanceof Text) {
-        subpatch.type = "text"
-        subpatch.edits = []
-      } else if (object instanceof Table) {
-        subpatch.type = "table"
-        subpatch.props = {}
-      } else if (Array.isArray(object)) {
-        subpatch.type = "list"
-        subpatch.edits = []
-      } else if (isObject(object)) {
-        subpatch.type = "map"
-        subpatch.props = {}
-      }
     }
 
     return subpatch
@@ -304,13 +295,10 @@ class Context {
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      const opDescription = copyObject(description)
-      if (opDescription.type === 'value') {
-        delete opDescription.type
-      }
-      const op = elemId ? {action: 'set', obj: objectId, elemId, insert, pred}
-                        : {action: 'set', obj: objectId, key, insert, pred}
-      this.addOp(Object.assign(op, opDescription))
+      const op = {action: 'set', obj: objectId, insert, value: description.value, pred}
+      if (elemId) op.elemId = elemId; else op.key = key
+      if (description.datatype) op.datatype = description.datatype
+      this.addOp(op)
       return description
     }
   }
@@ -382,7 +370,9 @@ class Context {
     }
 
     let elemId = getElemId(list, index, true)
-    const allPrimitive = values.every(v => typeof v === 'string' || typeof v === 'number')
+    const allPrimitive = values.every(v => typeof v === 'string' || typeof v === 'number' ||
+                                      typeof v === 'boolean' || v === null)
+
     if (allPrimitive && values.length > 1) {
       let nextElemId = this.nextOpId()
       this.addOp({action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []})
@@ -450,7 +440,6 @@ class Context {
 
     let patch = {diffs: {objectId: '_root', type: 'map', props: {}}}
     let subpatch = this.getSubpatch(patch.diffs, path)
-    if (!subpatch.edits) subpatch.edits = []
 
     if (deletions > 0) {
       let op, lastElem, lastElemParsed, lastPred, lastPredParsed
