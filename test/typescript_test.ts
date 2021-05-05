@@ -346,6 +346,11 @@ describe('TypeScript support', () => {
         assert.strictEqual(doc.text.get(2), 'c')
         assert.strictEqual(JSON.stringify(doc.text), '"abc"')
       })
+
+      it('should allow control objects to be inserted', () => {
+        doc = Automerge.change(doc, doc => doc.text.insertAt(0, {bold: true}))
+        assert.deepStrictEqual(doc.text.get(0), {bold: true})
+      })
     })
 
     describe('deleteAt', () => {

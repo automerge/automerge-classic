@@ -144,7 +144,7 @@ class Text {
     if (typeof characters === 'string') {
       characters = [...characters]
     } else if (!Array.isArray(characters)) {
-      throw new TypeError('Text.insertAt takes either a string or an array of characters')
+      characters = [characters]
     }
 
     if (this.context) {

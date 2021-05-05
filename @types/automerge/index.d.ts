@@ -94,7 +94,7 @@ declare module 'automerge' {
   class Text {
     constructor(text?: string | string[])
     get<T>(index: number): string | T
-    insertAt(index: number, characters: string | (string | T)[]): Text
+    insertAt(index: number, characters: string | (string | T)[] | T): Text
     deleteAt(index: number, numDelete?: number): Text
     toSpans<T>(): (string | T)[]
   }
