@@ -214,61 +214,53 @@ function updateListObject(patch, obj, updated) {
   }
 
   const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
-  const oldConflicts = conflicts.slice()
-  const elemIdsInthisPatch = new Set()
+  for (let i = 0; i < patch.edits.length; i++) {
+    const edit = patch.edits[i]
 
-  for (const edit of patch.edits) {
-    if (edit.action === 'insert') {
-      let value = getValue(edit.value, undefined, updated)
-      elemIds.splice(edit.index, 0, edit.elemId)
-      list.splice(edit.index, 0, value)
-      conflicts.splice(edit.index, 0, {[edit.opId]: value})
-      oldConflicts.splice(edit.index, 0, undefined)
-      elemIdsInthisPatch.add(edit.elemId)
+    if (edit.action === 'insert' || edit.action === 'update') {
+      const oldValue = conflicts[edit.index] && conflicts[edit.index][edit.opId]
+      let lastValue = getValue(edit.value, oldValue, updated)
+      let values = {[edit.opId]: lastValue}
+
+      // Successive updates for the same index are an indication of a conflict on that list element.
+      // Edits are sorted in increasing order by Lamport timestamp, so the last value (with the
+      // greatest timestamp) is the default resolution of the conflict.
+      while (i < patch.edits.length - 1 && patch.edits[i + 1].index === edit.index &&
+             patch.edits[i + 1].action === 'update') {
+        i++
+        const conflict = patch.edits[i]
+        const oldValue2 = conflicts[conflict.index] && conflicts[conflict.index][conflict.opId]
+        lastValue = getValue(conflict.value, oldValue2, updated)
+        values[conflict.opId] = lastValue
+      }
+
+      if (edit.action === 'insert') {
+        list.splice(edit.index, 0, lastValue)
+        conflicts.splice(edit.index, 0, values)
+        elemIds.splice(edit.index, 0, edit.elemId)
+      } else {
+        list[edit.index] = lastValue
+        conflicts[edit.index] = values
+      }
+
     } else if (edit.action === 'multi-insert') {
-      let startOpId = parseOpId(edit.elemId)
-      let newElems = []
-      let newValues = []
-      let newConflicts = []
+      const startElemId = parseOpId(edit.elemId), newElems = [], newValues = [], newConflicts = []
       edit.values.forEach((value, index) => {
-        let counter = startOpId.counter + index
-        let opid = `${counter}@${startOpId.actorId}`
-        newElems.push(opid)
-        newConflicts.push({[opid]: {value, type: 'value'}})
+        const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
         newValues.push(value)
-        elemIdsInthisPatch.add(opid)
+        newConflicts.push({[elemId]: {value, type: 'value'}})
+        newElems.push(elemId)
       })
       list.splice(edit.index, 0, ...newValues)
       conflicts.splice(edit.index, 0, ...newConflicts)
-      oldConflicts.splice(edit.index, 0, Array(edit.count))
       elemIds.splice(edit.index, 0, ...newElems)
-    } else if (edit.action === 'update') {
-      elemIdsInthisPatch.add(edit.opId)
-      let elemConflicts = conflicts[edit.index]
-      let oldElemConflicts = oldConflicts[edit.index] || {}
-      oldConflicts[edit.index] = oldElemConflicts
-      const currentValue = elemConflicts[edit.opId] || oldElemConflicts[edit.opId] || undefined
-      const value = getValue(edit.value, currentValue, updated)
 
-      let newConflicts = {}
-      for (const opId of Object.keys(elemConflicts)) {
-        if (elemIdsInthisPatch.has(opId)) {
-          newConflicts[opId] = elemConflicts[opId]
-        }
-      }
-      newConflicts[edit.opId] = value
-
-      const opIds = Object.keys(newConflicts).sort(lamportCompare).reverse()
-      conflicts[edit.index] = newConflicts
-      list[edit.index] = newConflicts[opIds[0]]
     } else if (edit.action === 'remove') {
-      elemIds.splice(edit.index, edit.count)
       list.splice(edit.index, edit.count)
       conflicts.splice(edit.index, edit.count)
-      oldConflicts.splice(edit.index, edit.count)
+      elemIds.splice(edit.index, edit.count)
     }
   }
-
   return list
 }
 
@@ -288,58 +280,25 @@ function updateTextObject(patch, obj, updated) {
     elems = []
   }
 
-  const updatedElemIds = new Set()
-
   for (const edit of patch.edits) {
     if (edit.action === 'insert') {
-      let value 
-      if (edit.value.type === 'value') {
-        value = edit.value.value
-      } else {
-        value = getValue(edit.value, undefined, updated)
-      }
-      let elem = {
-        elemId: edit.elemId,
-        pred: [edit.opId],
-        value,
-      }
-      updatedElemIds.add(edit.elemId)
+      const value = getValue(edit.value, undefined, updated)
+      const elem = {elemId: edit.elemId, pred: [edit.opId], value}
       elems.splice(edit.index, 0, elem)
+
     } else if (edit.action === 'multi-insert') {
-      let startOpId = parseOpId(edit.elemId)
-      let newElems = []
-      edit.values.forEach((value, index) => {
-        let counter = startOpId.counter + index
-        let elemId = `${counter}@${startOpId.actorId}`
-        let elem = {
-          elemId,
-          pred: [elemId],
-          value,
-        }
-        newElems.push(elem)
-        updatedElemIds.add(elemId)
+      const startElemId = parseOpId(edit.elemId)
+      const newElems = edit.values.map((value, index) => {
+        const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
+        return {elemId, pred: [elemId], value}
       })
       elems.splice(edit.index, 0, ...newElems)
+
     } else if (edit.action === 'update') {
-      let current = elems[edit.index]
-      if (lamportCompare(current.elemId, edit.opId) >= 0){
-        if (updatedElemIds.has(current.elemId)) {
-          continue
-        }
-      }
-      let value 
-      if (edit.value.type === 'value') {
-        value = edit.value.value
-      } else {
-        value = getValue(edit.value, elems[edit.index].value, updated)
-      }
-      let newElem = {
-        elemId: edit.opId,
-        pred: [edit.opId],
-        value,
-      }
-      updatedElemIds.add(newElem.elemId)
-      elems[edit.index] = newElem
+      const elemId = elems[edit.index].elemId
+      const value = getValue(edit.value, elems[edit.index].value, updated)
+      elems[edit.index] = {elemId, pred: [edit.opId], value}
+
     } else if (edit.action === 'remove') {
       elems.splice(edit.index, edit.count)
     }
