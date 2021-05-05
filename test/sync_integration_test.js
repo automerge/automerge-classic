@@ -2,108 +2,224 @@
 const { EventEmitter } = require('events')
 const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
-describe('integration tests for data sync protocol', () => {
-  function setup(template) {
-    let doc = A.from(template)
+describe('sync protocol - integration', () => {
+  describe('two peers', () => {
+    it(`syncs a single change`, () => {
+      let doc = A.from({ wrens: 1, goldfinches: 12 })
 
-    const channel = new Channel()
-    const alice = new ConnectedDoc(channel, doc)
-    const bob = new ConnectedDoc(channel, doc)
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
 
-    return { alice, bob }
-  }
+      connect(alice, bob)
 
-  it(`syncs a change one way`, () => {
-    const { alice, bob } = setup({ wrens: 1, goldfinches: 12 })
+      // alice makes a change
+      alice.change(s => {
+        s.wrens = 42
+      })
 
-    // alice makes a change
-    alice.change(s => {
-      s.wrens = 42
+      // bob gets the changes
+      assert.strictEqual(bob.doc.wrens, 42)
+      assert.deepStrictEqual(alice.doc, bob.doc)
     })
 
-    assert.strictEqual(bob.doc.wrens, 42)
-    assert.deepStrictEqual(alice.doc, bob.doc)
+    it('syncs divergent changes', () => {
+      let doc = A.from({ wrens: 1, goldfinches: 12 })
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+
+      connect(alice, bob)
+
+      alice.disconnect()
+
+      // alice makes a change
+      alice.change(s => (s.wrens = 42))
+
+      // bob makes a change
+      bob.change(s => (s.goldfinches = 0))
+
+      // while they're disconnected, they have divergent docs
+      assert.strictEqual(bob.doc.wrens, 1)
+      assert.strictEqual(alice.doc.goldfinches, 12)
+      assert.notDeepStrictEqual(alice.doc, bob.doc)
+
+      alice.connect()
+
+      // after connecting, their docs converge
+      assert.strictEqual(bob.doc.wrens, 42)
+      assert.strictEqual(alice.doc.goldfinches, 0)
+      assert.deepStrictEqual(alice.doc, bob.doc)
+    })
   })
 
-  it('syncs divergent changes', () => {
-    const { alice, bob } = setup({ wrens: 1, goldfinches: 12 })
+  describe('three peers', () => {
+    it(`syncs a single change`, () => {
+      let doc = A.from({ wrens: 1, goldfinches: 12 })
 
-    alice.disconnect()
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
 
-    // alice makes a change
-    alice.change(s => (s.wrens = 42))
+      connect(alice, bob)
+      connect(bob, charlie)
 
-    // bob makes a change
-    bob.change(s => (s.goldfinches = 0))
+      // alice makes a change
+      alice.change(s => {
+        s.wrens = 42
+      })
 
-    // while they're disconnected, they have divergent docs
-    assert.strictEqual(bob.doc.wrens, 1)
-    assert.strictEqual(alice.doc.goldfinches, 12)
-    assert.notDeepStrictEqual(alice.doc, bob.doc)
+      // charlie gets the changes (via bob)
+      assert.strictEqual(charlie.doc.wrens, 42)
+      assert.deepStrictEqual(alice.doc, charlie.doc)
+    })
 
-    alice.connect()
+    it(`syncs a single change (all connected to all)`, () => {
+      let doc = A.from({ wrens: 1, goldfinches: 12 })
 
-    // after connecting, their docs converge
-    assert.strictEqual(bob.doc.wrens, 42)
-    assert.strictEqual(alice.doc.goldfinches, 0)
-    assert.deepStrictEqual(alice.doc, bob.doc)
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      connect(alice, charlie)
+
+      // alice makes a change
+      alice.change(s => {
+        s.wrens = 42
+      })
+
+      // charlie gets the changes (via bob)
+      assert.strictEqual(charlie.doc.wrens, 42)
+      assert.deepStrictEqual(alice.doc, charlie.doc)
+    })
+
+    it.only('syncs divergent changes', () => {
+      let doc = A.from({ wrens: 1, goldfinches: 12 })
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      connect(alice, charlie)
+
+      alice.disconnect()
+      bob.disconnect()
+      charlie.disconnect()
+
+      // each one makes a change
+      alice.change(s => (s.wrens = 42))
+      bob.change(s => (s.goldfinches = 0))
+      charlie.change(s => (s.cassowaries = 13))
+
+      // while they're disconnected, they have divergent docs
+      assert.notDeepStrictEqual(alice.doc, bob.doc)
+      assert.notDeepStrictEqual(bob.doc, charlie.doc)
+      assert.notDeepStrictEqual(alice.doc, charlie.doc)
+
+      alice.connect()
+      bob.connect()
+      charlie.connect()
+
+      // after connecting, their docs converge
+      assert.deepStrictEqual(alice.doc, bob.doc)
+      assert.deepStrictEqual(bob.doc, charlie.doc)
+      assert.deepStrictEqual(alice.doc, charlie.doc)
+    })
   })
 })
 
+function connect(a, b) {
+  const channel = new Channel()
+  a.connectTo(b.peerId, channel)
+  b.connectTo(a.peerId, channel)
+}
+
 class ConnectedDoc extends EventEmitter {
-  constructor(channel, doc) {
+  constructor(peerId, doc) {
     super()
-    this.peerId = A.uuid()
+    this.peerId = peerId
     this.doc = A.clone(doc)
-    this.syncState = A.initSyncState()
-
-    // connect to channel
-    this.channel = channel.join()
-    this.channel.on('data', (senderPeerId, msg) => {
-      if (senderPeerId === this.peerId) return // ignore messages we sent
-      this.receive(msg)
-    })
-
-    // send an initial update
-    this.update()
+    this.peers = {}
   }
 
-  // public
+  connectTo(remotePeerId, channel) {
+    const peer = new Peer(this.peerId, remotePeerId, this.doc, channel)
+    this.peers[remotePeerId] = peer
+    peer.update(this.doc)
+    peer.on('change', doc => this.update(doc))
+  }
+
+  update(doc) {
+    this.doc = doc
+    for (const peerId in this.peers) {
+      this.peers[peerId].update(doc)
+    }
+  }
+
+  change(fn) {
+    const updatedDoc = A.change(this.doc, fn)
+    this.update(updatedDoc)
+  }
 
   disconnect() {
-    this.channel.leave()
+    for (const peerId in this.peers) {
+      this.peers[peerId].channel.leave()
+    }
   }
 
   connect() {
-    this.channel.join()
+    for (const peerId in this.peers) {
+      this.peers[peerId].channel.join()
+    }
   }
+}
 
-  // wrapper for Automerge.change that also triggers an update
-  change(fn) {
-    this.doc = A.change(this.doc, fn)
-    this.update()
-  }
-
-  // private
-
-  // called any time the document changes
-  update() {
-    const [syncState, msg] = A.generateSyncMessage(this.doc, this.syncState)
-    this.syncState = syncState
-    this.send(msg)
-  }
-
-  // this is called internally whenever we receive a message on the channel
-  receive(msg) {
-    const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
+class Peer extends EventEmitter {
+  constructor(peerId, remotePeerId, doc, channel) {
+    super()
+    this.syncState = A.initSyncState()
+    this.peerId = peerId
+    this.remotePeerId = remotePeerId
     this.doc = doc
-    this.syncState = syncState
-    this.update()
+
+    channel.join()
+    this.channel = channel
+    channel.addListener('data', (senderPeerId, msg) => {
+      if (senderPeerId === this.peerId) return // ignore our own messages
+      this.receive(msg)
+    })
   }
 
-  // this is called internally to send messages over the channel
+  update(doc) {
+    try {
+      const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
+      this.doc = doc
+      this.syncState = syncState
+      this.send(msg)
+    } catch (e) {
+      if (e.message.startsWith('Attempting to use an outdated Automerge document')) return
+      else throw e
+    }
+  }
+
+  receive(msg) {
+    try {
+      const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
+      this.syncState = syncState
+      this.update(doc)
+      this.emit('change', doc)
+    } catch (e) {
+      if (e.message.startsWith('Attempting to use an outdated Automerge document')) return
+      else throw e
+    }
+  }
+
   send(msg) {
-    if (msg === null) return // null msg = nothing changed
+    if (msg === null) return // nothing changed
+    console.log(`sending update ${this.peerId}->${this.remotePeerId}`, this.doc)
     this.channel.write(this.peerId, msg)
   }
 }
