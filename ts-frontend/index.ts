@@ -2,6 +2,7 @@ import { List, Map } from "immutable"
 import * as immutable from "immutable"
 import { inspect } from "util"
 import * as Backend from "../backend"
+import { deepStrictEqual, strictEqual } from "assert"
 
 let uuid = require("../src/uuid")
 
@@ -69,12 +70,7 @@ interface ObjectDiff {
   objectId: OpId
   type: CollectionType
   edits?: Edit[]
-  props?: {[propName: string]: {[opId: string]: ObjectDiff | ValueDiff}}
-}
-
-interface ValueDiff {
-  value: number | boolean | string | null
-  datatype?: DataType
+  props?: {[propName: string]: {[opId: string]: ObjectDiff | ScalarVal }}
 }
 
 interface Edit {
@@ -131,24 +127,23 @@ namespace Value {
     return { value, datatype: "counter" }
   }
   export function Datetime(value: number) : ScalarVal {
-    return { value, datatype: "datetime" }
+    return { value, datatype: "timestamp" }
   }
 }
 
 interface ScalarVal {
-  type?: "number" | "string" | "timestamp" | "datetype";
-  value: string | number | boolean | null
-  datatype?: string
+  value: number | boolean | string | null
+  datatype?: DataType
 }
 
 interface MapVal {
-  type: "map"
+  type: "map" | "table"
   objectId: string
   props: Map<string, Map<OpId, Val>>
 }
 
 interface ListVal {
-  type: "list"
+  type: "list" | "text"
   objectId: string
   elems: List<ElemId>
   props: Map<ElemId, Map<OpId, Val>>
@@ -169,9 +164,7 @@ function makeMapOp(obj: MapVal, action: string, key: string, val?: ScalarVal) : 
   let value = val || {}
   let objectId = obj.objectId
   let pred = obj.props.get(key, Map()).keySeq().toArray()
-  log(value)
   let op = { action, obj: objectId, key, ... value, insert: false, pred }
-  log(op)
   return op
 }
 
@@ -300,11 +293,7 @@ class ListCtx extends Ctx {
   }
 
   value() : any {
-    let value = []
-    for (let index = 0; index < this.val.elems.size; index++) {
-      value.push(this.get(index).value())
-    }
-    return value
+    return this.val.elems.map((val,i) => this.get(i).value()).toJS()
   }
 
   get(index: number) : Ctx {
@@ -312,15 +301,17 @@ class ListCtx extends Ctx {
     let elemId = val.elems.get(index)
     let opId = val.props.get(elemId, Map()).keySeq().toArray().sort(lamportCompare)[0]
     if (!opId) { return null }
-    let subval = this.val.props.get(elemId, Map()).get(opId)
+    let subval = this.val.props.getIn([elemId, opId])
     let updater = (child) => {
       this.val = { ... val, props: val.props.set(elemId,Map({ [opId] : child }))}
       this.update(this.val)
     }
     switch (subval.type) {
       case "map":
+      case "table":
         return new MapCtx(subval, this.frontend, updater)
       case "list":
+      case "text":
         return new ListCtx(subval, this.frontend, updater)
       default:
         return new ScalarCtx(subval, this.frontend, null)
@@ -385,26 +376,24 @@ class MapCtx extends Ctx {
   }
 
   value() : any {
-    let value = {}
-    for (let key of this.val.props.keySeq().toJS()) {
-      value[key] = this.get(key).value()
-    }
-    return value
+    return this.val.props.mapEntries(([prop,_]) => [prop, this.get(prop).value()]).toJS()
   }
 
   get(key: string) : Ctx {
     let val = this.val
     let opId = val.props.get(key, Map()).keySeq().toArray().sort(lamportCompare)[0]
     if (!opId) { return null }
-    let subval = this.val.props.get(key, Map()).get(opId)
+    let subval = this.val.props.getIn([key, opId])
     let updater = (child) => {
       this.val = { ... val, props: val.props.set(key,Map({ [opId] : child }))}
       this.update(this.val)
     }
     switch (subval.type) {
       case "map":
+      case "table":
         return new MapCtx(subval, this.frontend, updater)
       case "list":
+      case "text":
         return new ListCtx(subval, this.frontend, updater)
       default:
         return new ScalarCtx(subval, this.frontend, null)
@@ -438,6 +427,7 @@ class LowLevelFrontend {
   deps: Hash[]
   roots: MapVal[];
   ops: Op[];
+  pendingChanges: number
   ctx?: MapCtx;
 
   private rootCtx() : MapCtx {
@@ -464,6 +454,71 @@ class LowLevelFrontend {
     return this.rootCtx().del(prop)
   }
 
+  private createNewVal(diff: ObjectDiff) : MapVal | ListVal {
+    return null
+  }
+
+  private interpretDiff(val: Val | null, diff: ObjectDiff|ScalarVal ) : Val {
+    if ("type" in diff) {
+      // this is a ObjectDiff
+      if (val !== null && "type" in val && val.objectId !== diff.objectId) {
+        throw new Error("objets out of sync - something happened")
+      }
+      if (diff.type === "list" || diff.type === "text") {
+          return this.interpretListDiff(val as ListVal, diff)
+      } else {
+          return this.interpretMapDiff(val as MapVal, diff)
+      }
+    } else {
+      // this is a ScalarValue so just return it
+      return diff
+    }
+  }
+
+  private interpretListDiff(val: ListVal | null, diff: ObjectDiff) : ListVal {
+    // FIXME - list or text
+    //val = val || { type: diff.type, objectId: diff.objectId, elems: List(), props: Map() }
+    val = val || { type: "list", objectId: diff.objectId, elems: List(), props: Map() }
+    let elems = val.elems
+    let props = val.props
+    for (let edit of (diff.edits || [])) {
+      switch (edit.action) {
+        case "insert":
+          elems = elems.insert(edit.index, edit.elemId)
+          break
+        case "remove":
+          // TODO - need to delete an element from an old commit - make sure it works
+          props = props.delete(elems.get(edit.index))
+          elems = elems.delete(edit.index)
+          break
+      } 
+    }
+    props = props.merge(Map(
+      Object.entries(diff.props || {}).map(([index,values]) => {
+        let elemId = elems.get(+index)
+        return [ elemId, Map(Object.entries(values).map(([opid,value]) =>
+          [opid, this.interpretDiff(val.props.getIn([elemId,opid],null), value)]
+        ))]
+      })
+    ))
+    return { ... val, elems, props }
+  }
+
+  private interpretMapDiff(val: MapVal | null, diff: ObjectDiff) : MapVal {
+    //FIXME - map or table
+    //val = val || { type: diff.type, objectId: diff.objectId, props: Map() }
+    val = val || { type: "map", objectId: diff.objectId, props: Map() }
+    let props = val.props.merge(Map(
+      Object.entries(diff.props || {}).map(([prop,values]) => {
+        let v = Map(Object.entries(values).map(([opid,value]) =>
+          [opid, this.interpretDiff(val.props.getIn([prop,opid],null), value)]
+        ))
+        return v.size === 0 ? null : [ prop, v ]
+      })
+    ))
+    return { ... val, props }
+  }
+
   applyPatch(patch: Patch) {
     if (this.seq && this.roots.length < 2) {
       throw new Error("Cannot apply a patch - out of sync")
@@ -471,17 +526,19 @@ class LowLevelFrontend {
     this.clock = patch.clock
     this.maxOp = Math.max(this.maxOp, patch.maxOp)
     this.deps = patch.deps
+    this.pendingChanges = patch.pendingChanges
 
-    /*
     let root = this.roots.pop()
-    // interpret patch here
     if (patch.seq) {
       // this is a local patch
-      // so after updating it we need to replace the root state following this one
-      this.roots.pop()
+      root = this.interpretDiff(root,patch.diffs) as MapVal
+      let optimisticRoot = this.roots.pop() // normally we toss this
+      // make sure this works!
+      let val1 = (new MapCtx(root, null, null)).value()
+      let val2 = (new MapCtx(optimisticRoot, null, null)).value()
+      deepStrictEqual(val1, val2) // debug
     }
     this.roots.push(root)
-    */
   }
 
   begin() {
@@ -540,6 +597,7 @@ class LowLevelFrontend {
     this.deps = []
     this.ops = null
     this.maxOp = 0
+    this.pendingChanges = 0
     this.seq = 0
     this.ctx = null
   }
@@ -559,7 +617,12 @@ frontend.getMap("sub").set("subsub",Value.Map).getMap("subsub").set("foo","bar")
 frontend.set("items", Value.List)
 frontend.getList("items").insert(0,"dog").insert(0,"bat").insert(1,"zebra").set(1,"sumo").set(1,Value.Map).getMap(1).set("a","AAA")
 frontend.getList("items").insert(1,"xxx").del(1)
+
 let [ request, change ] = frontend.commit()
 log(request)
+
+//frontend.rollback()
+
+strictEqual(frontend.roots.length, 1)
 log(frontend.value())
 
