@@ -53,7 +53,7 @@ describe('change encoding', () => {
   })
 
   describe('with trailing bytes', () => {
-    let change = Uint8Array.from([
+    let change = new Uint8Array([
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
       0x15, 0x72, 0xa6, 0x6c, // checksum
       1, 61, 0, 2, 0x12, 0x34, // chunkType: change, length, deps, actor '1234'

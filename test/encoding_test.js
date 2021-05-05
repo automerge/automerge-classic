@@ -512,7 +512,7 @@ describe('Binary encoding', () => {
     }
 
     function decodeRLE(type, buffer) {
-      if (Array.isArray(buffer)) buffer = Uint8Array.from(buffer)
+      if (Array.isArray(buffer)) buffer = new Uint8Array(buffer)
       const decoder = new RLEDecoder(type, buffer), values = []
       while (!decoder.done) values.push(decoder.readValue())
       return values
@@ -899,7 +899,7 @@ describe('Binary encoding', () => {
     }
 
     function decodeBools(buffer) {
-      if (Array.isArray(buffer)) buffer = Uint8Array.from(buffer)
+      if (Array.isArray(buffer)) buffer = new Uint8Array(buffer)
       const decoder = new BooleanDecoder(buffer), values = []
       while (!decoder.done) values.push(decoder.readValue())
       return values
@@ -951,7 +951,7 @@ describe('Binary encoding', () => {
     it('should strictly enforce canonical encoded form', () => {
       assert.throws(() => { decodeBools([1, 0]) }, /Zero-length runs are not allowed/)
       assert.throws(() => { decodeBools([1, 1, 0]) }, /Zero-length runs are not allowed/)
-      const decoder = new BooleanDecoder(Uint8Array.from([2, 0, 1]))
+      const decoder = new BooleanDecoder(new Uint8Array([2, 0, 1]))
       decoder.skipValues(1)
       assert.throws(() => { decoder.skipValues(2) }, /Zero-length runs are not allowed/)
     })

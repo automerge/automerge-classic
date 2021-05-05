@@ -20,7 +20,7 @@ const {
 const { Hash } = require('fast-sha256')
 
 // These bytes don't mean anything, they were generated randomly
-const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
+const MAGIC_BYTES = new Uint8Array([0x85, 0x6f, 0x4a, 0x83])
 
 const COLUMN_TYPE = {
   GROUP_CARD: 0, ACTOR_ID: 1, INT_RLE: 2, INT_DELTA: 3, BOOLEAN: 4,
@@ -499,7 +499,7 @@ function decoderByColumnId(columnId, buffer) {
 
 function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
-  const emptyBuf = Uint8Array.of(), decoders = {}
+  const emptyBuf = new Uint8Array(0), decoders = {}
   for (let [columnName, columnId] of Object.entries(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }
