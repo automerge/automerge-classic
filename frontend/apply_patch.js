@@ -315,7 +315,8 @@ function updateTextObject(patch, obj, updated) {
  */
 function interpretPatch(patch, obj, updated) {
   // Return original object if it already exists and isn't being modified
-  if (isObject(obj) && !patch.props && !patch.edits && !updated[patch.objectId]) {
+  if (isObject(obj) && (!patch.props || Object.keys(patch.props).length === 0) &&
+      (!patch.edits || patch.edits.length === 0) && !updated[patch.objectId]) {
     return obj
   }
 
