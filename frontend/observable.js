@@ -34,41 +34,63 @@ class Observable {
       }
     }
 
-    if (!diff.props) return
-    for (let propName of Object.keys(diff.props)) {
-      for (let opId of Object.keys(diff.props[propName])) {
-        let childDiff = diff.props[propName][opId], childBefore, childAfter
-
-        if (diff.type === 'map') {
-          childBefore = before && before[CONFLICTS] && before[CONFLICTS][propName] &&
-            before[CONFLICTS][propName][opId]
-          childAfter = after && after[CONFLICTS] && after[CONFLICTS][propName] &&
-            after[CONFLICTS][propName][opId]
-
-        } else if (diff.type === 'table') {
-          childBefore = before && before.byId(propName)
-          childAfter = after && after.byId(propName)
-
-        } else if (diff.type === 'list') {
-          const index = parseInt(propName, 10)
-          // Don't try to get the child object before if the indexes might have changed
-          if (!diff.edits || diff.edits.length === 0) {
-            childBefore = before && before[CONFLICTS] && before[CONFLICTS][index] &&
-              before[CONFLICTS][index][opId]
-          }
-          childAfter = after && after[CONFLICTS] && after[CONFLICTS][index] &&
-            after[CONFLICTS][index][opId]
-
-        } else if (diff.type === 'text') {
-          const index = parseInt(propName, 10)
-          // Don't try to get the child object before if the indexes might have changed
-          if (!diff.edits || diff.edits.length === 0) {
-            childBefore = before && before.get(index)
-          }
-          childAfter = after && after.get(index)
+    if (diff.type === 'map' && diff.props) {
+      for (const propName of Object.keys(diff.props)) {
+        for (const opId of Object.keys(diff.props[propName])) {
+          this._objectUpdate(diff.props[propName][opId],
+                             before && before[CONFLICTS] && before[CONFLICTS][propName] && before[CONFLICTS][propName][opId],
+                             after && after[CONFLICTS] && after[CONFLICTS][propName] && after[CONFLICTS][propName][opId],
+                             local, changes)
         }
+      }
 
-        this._objectUpdate(childDiff, childBefore, childAfter, local, changes)
+    } else if (diff.type === 'table' && diff.props) {
+      for (const rowId of Object.keys(diff.props)) {
+        for (const opId of Object.keys(diff.props[rowId])) {
+          this._objectUpdate(diff.props[rowId][opId],
+                             before && before.byId(rowId),
+                             after && after.byId(rowId),
+                             local, changes)
+        }
+      }
+
+    } else if (diff.type === 'list' && diff.edits) {
+      let offset = 0
+      for (const edit of diff.edits) {
+        if (edit.action === 'insert') {
+          offset -= 1
+          this._objectUpdate(edit.value, undefined,
+                             after && after[CONFLICTS] && after[CONFLICTS][edit.index] && after[CONFLICTS][edit.index][edit.elemId],
+                             local, changes)
+        } else if (edit.action === 'multi-insert') {
+          offset -= edit.values.length
+        } else if (edit.action === 'update') {
+          this._objectUpdate(edit.value,
+                             before && before[CONFLICTS] && before[CONFLICTS][edit.index + offset] &&
+                               before[CONFLICTS][edit.index + offset][edit.opId],
+                             after && after[CONFLICTS] && after[CONFLICTS][edit.index] && after[CONFLICTS][edit.index][edit.opId],
+                             local, changes)
+        } else if (edit.action === 'remove') {
+          offset += edit.count
+        }
+      }
+
+    } else if (diff.type === 'text' && diff.edits) {
+      let offset = 0
+      for (const edit of diff.edits) {
+        if (edit.action === 'insert') {
+          offset -= 1
+          this._objectUpdate(edit.value, undefined, after && after.get(edit.index), local, changes)
+        } else if (edit.action === 'multi-insert') {
+          offset -= edit.values.length
+        } else if (edit.action === 'update') {
+          this._objectUpdate(edit.value,
+                             before && before.get(edit.index + offset),
+                             after && after.get(edit.index),
+                             local, changes)
+        } else if (edit.action === 'remove') {
+          offset += edit.count
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 const { Map, List, Set, fromJS } = require('immutable')
 const { SkipList } = require('./skip_list')
-const { decodeChange, decodeChangeMeta } = require('./columnar')
+const { decodeChange, decodeChangeMeta, appendEdit } = require('./columnar')
 const { parseOpId } = require('../src/common')
 
 // Returns true if all changes that causally precede the given change
@@ -55,6 +55,8 @@ function applyMake(opSet, op, patch) {
   if (patch) {
     patch.objectId = objectId
     patch.type = getObjectType(opSet, objectId)
+    patch.props = {}
+    if (patch.type === 'list' || patch.type === 'text') patch.edits = []
   }
   return opSet
 }
@@ -77,17 +79,13 @@ function updateListElement(opSet, objectId, elemId, patch) {
   let elemIds = opSet.getIn(['byObject', objectId, '_elemIds'])
   let index = elemIds.indexOf(elemId)
 
-  if (patch && patch.edits === undefined) {
-    patch.edits = []
-  }
-
   if (index >= 0) {
     if (ops.isEmpty()) {
       elemIds = elemIds.removeIndex(index)
-      if (patch) patch.edits.push({action: 'remove', index})
     } else {
       elemIds = elemIds.setValue(elemId, ops.first().get('value'))
     }
+    setPatchEditsForList(opSet, objectId, elemId, index, false, patch)
 
   } else {
     if (ops.isEmpty()) return opSet // deleting a non-existent element = no-op
@@ -104,7 +102,7 @@ function updateListElement(opSet, objectId, elemId, patch) {
 
     index += 1
     elemIds = elemIds.insertIndex(index, elemId, ops.first().get('value'))
-    if (patch) patch.edits.push({action: 'insert', index, elemId})
+    setPatchEditsForList(opSet, objectId, elemId, index, true, patch)
   }
   return opSet.setIn(['byObject', objectId, '_elemIds'], elemIds)
 }
@@ -150,23 +148,22 @@ function applyAssign(opSet, op, patch) {
     if (patch.objectId !== objectId) {
       throw new RangeError(`objectId mismatch in patch: ${patch.objectId} != ${objectId}`)
     }
-    if (patch.props === undefined) {
-      patch.props = {}
-    }
-    if (patch.props[key] === undefined) {
-      patch.props[key] = {}
-    }
 
     patch.type = patch.type || type
     if (patch.type !== type) {
       throw new RangeError(`object type mismatch in patch: ${patch.type} != ${type}`)
     }
+
+    if (type !== 'list' && type !== 'text' && !patch.props[key]) patch.props[key] = {}
   }
 
   if (action.startsWith('make')) {
     if (patch) {
-      patch.props[key][op.get('opId')] = {}
-      opSet = applyMake(opSet, op, patch.props[key][op.get('opId')])
+      const valuePatch = {}
+      opSet = applyMake(opSet, op, valuePatch)
+      if (type === 'map' || type === 'table') {
+        patch.props[key][op.get('opId')] = valuePatch
+      }
     } else {
       opSet = applyMake(opSet, op)
     }
@@ -207,10 +204,11 @@ function applyAssign(opSet, op, patch) {
   }
   remaining = remaining.sort(lamportCompare).reverse()
   opSet = opSet.setIn(['byObject', objectId, '_keys', key], remaining)
-  setPatchProps(opSet, objectId, key, patch)
 
   if (type === 'list' || type === 'text') {
     opSet = updateListElement(opSet, objectId, key, patch)
+  } else {
+    setPatchPropsForMap(opSet, objectId, key, patch)
   }
   return opSet
 }
@@ -233,8 +231,15 @@ function initializePatch(opSet, pathOp, patch) {
   if (patch.type !== type) {
     throw new RangeError(`object type mismatch in path: ${patch.type} != ${type}`)
   }
-  setPatchProps(opSet, objectId, key, patch)
 
+  if (!patch.props[key] || !patch.props[key][opId]) {
+    if (type === 'list' || type === 'text') {
+      const index = opSet.getIn(['byObject', objectId, '_elemIds']).indexOf(key)
+      setPatchEditsForList(opSet, objectId, key, index, false, patch)
+    } else {
+      setPatchPropsForMap(opSet, objectId, key, patch)
+    }
+  }
   if (patch.props[key][opId] === undefined) {
     throw new RangeError(`field ops for ${key} did not contain opId ${opId}`)
   }
@@ -242,35 +247,41 @@ function initializePatch(opSet, pathOp, patch) {
 }
 
 /**
+ * Constructs a patch for the value created by a particular operation.
+ */
+function makePatchForOperation(opSet, op) {
+  if (op.get('action') === 'set') {
+    const patch = {type: 'value', value: op.get('value')}
+    if (op.get('datatype')) patch.datatype = op.get('datatype')
+    return patch
+
+  } else if (isChildOp(op)) {
+    const childId = getChildId(op), type = getObjectType(opSet, childId)
+    if (type === 'list' || type === 'text') {
+      return {objectId: childId, type, props: {}, edits: []}
+    } else {
+      return {objectId: childId, type, props: {}}
+    }
+
+  } else {
+    throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
+  }
+}
+
+/**
  * Updates `patch` to include all the values (including conflicts) for the field
  * `key` of the object with ID `objectId`.
  */
-function setPatchProps(opSet, objectId, key, patch) {
+function setPatchPropsForMap(opSet, objectId, key, patch) {
   if (!patch) return
-  if (patch.props === undefined) {
-    patch.props = {}
-  }
-  if (patch.props[key] === undefined) {
-    patch.props[key] = {}
-  }
+  if (!patch.props[key]) patch.props[key] = {}
 
   const ops = {}
   for (let op of getFieldOps(opSet, objectId, key)) {
     const opId = op.get('opId')
     ops[opId] = true
-
-    if (op.get('action') === 'set') {
-      patch.props[key][opId] = {value: op.get('value')}
-      if (op.get('datatype')) {
-        patch.props[key][opId].datatype = op.get('datatype')
-      }
-    } else if (isChildOp(op)) {
-      if (!patch.props[key][opId]) {
-        const childId = getChildId(op)
-        patch.props[key][opId] = {objectId: childId, type: getObjectType(opSet, childId)}
-      }
-    } else {
-      throw new RangeError(`Unexpected operation in field ops: ${op.get('action')}`)
+    if (!isChildOp(op) || !patch.props[key][opId]) {
+      patch.props[key][opId] = makePatchForOperation(opSet, op)
     }
   }
 
@@ -283,31 +294,51 @@ function setPatchProps(opSet, objectId, key, patch) {
 }
 
 /**
- * Mutates `patch`, changing elemId-based addressing of lists to index-based
- * addressing. (This can only be done once all the changes have been applied,
- * since the indexes are still in flux until that point.)
+ * Updates `patch` to include edits for all the values at a particular index. This is usually one
+ * edit, but may be multiple in the case of a conflict at this list element.
  */
-function finalizePatch(opSet, patch) {
-  if (!patch || !patch.props) return
-
-  if (patch.type === 'list' || patch.type === 'text') {
-    const elemIds = opSet.getIn(['byObject', patch.objectId, '_elemIds'])
-    const newProps = {}
-    for (let elemId of Object.keys(patch.props)) {
-      if (/^[0-9]+$/.test(elemId)) {
-        newProps[elemId] = patch.props[elemId]
-      } else if (Object.keys(patch.props[elemId]).length > 0) {
-        const index = elemIds.indexOf(elemId)
-        if (index < 0) throw new RangeError(`List element has no index: ${elemId}`)
-        newProps[index] = patch.props[elemId]
-      }
-    }
-    patch.props = newProps
+function setPatchEditsForList(opSet, listId, elemId, index, insert, patch) {
+  if (!patch) return
+  setPatchPropsForMap(opSet, listId, elemId, patch)
+  if (Object.keys(patch.props[elemId]).length === 0) {
+    appendEdit(patch.edits, {action: 'remove', index, count: 1})
+    return
   }
 
-  for (let key of Object.keys(patch.props)) {
-    for (let opId of Object.keys(patch.props[key])) {
-      finalizePatch(opSet, patch.props[key][opId])
+  // If the most recent existing edit is for the same index, we need to remove it, since the patch
+  // format for lists treats several consecutive updates for the same index as a conflict.
+  while (!insert && patch.edits.length > 0 && patch.edits[patch.edits.length - 1].index === index &&
+         ['insert', 'update'].includes(patch.edits[patch.edits.length - 1].action)) {
+    const previousEdit = patch.edits.pop()
+    insert = (previousEdit.action === 'insert')
+  }
+
+  for (const opId of Object.keys(patch.props[elemId]).sort(opIdCompare)) {
+    const value = patch.props[elemId][opId]
+    if (insert) {
+      appendEdit(patch.edits, {action: 'insert', index, elemId, opId, value})
+    } else {
+      appendEdit(patch.edits, {action: 'update', index, opId, value})
+    }
+    insert = false
+  }
+}
+
+/**
+ * Recursively walks a patch, removing any internal information that should not be returned through
+ * the API. This should be done after all the changes have been applied, since we need to preserve
+ * the internal information across several calls to `OpSet.addChange()`.
+ */
+function finalizePatch(diff) {
+  if (!diff) return
+  if (diff.type === 'list' || diff.type === 'text') {
+    delete diff.props // this is the actual property being deleted
+    for (let edit of diff.edits) finalizePatch(edit.value)
+  } else if (diff.type === 'map' || diff.type === 'table') {
+    for (const prop of Object.keys(diff.props)) {
+      for (const opId of Object.keys(diff.props[prop])) {
+        finalizePatch(diff.props[prop][opId])
+      }
     }
   }
 }
@@ -572,8 +603,18 @@ function getParent(opSet, objectId, key) {
   return insertion.get('elemId')
 }
 
+/**
+ * Compares the opIds of two operations using Lamport timestamp ordering
+ */
 function lamportCompare(op1, op2) {
-  const time1 = parseOpId(op1.get('opId')), time2 = parseOpId(op2.get('opId'))
+  return opIdCompare(op1.get('opId'), op2.get('opId'))
+}
+
+/**
+ * Compares two opIds using Lamport timestamp ordering
+ */
+function opIdCompare(id1, id2) {
+  const time1 = parseOpId(id1), time2 = parseOpId(id2)
   if (time1.counter < time2.counter) return -1
   if (time1.counter > time2.counter) return  1
   if (time1.actorId < time2.actorId) return -1
@@ -666,7 +707,6 @@ function constructList(opSet, objectId, type) {
 
     const fieldOps = getFieldOps(opSet, objectId, elemId)
     if (!fieldOps.isEmpty()) {
-      patch.edits.push({action: 'insert', index, elemId})
       patch.props[index] = {}
       for (let op of fieldOps) {
         patch.props[index][op.get('opId')] = constructField(opSet, op)

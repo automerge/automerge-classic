@@ -564,9 +564,9 @@ describe('TypeScript support', () => {
       let doc = Automerge.init<TextDoc>({patchCallback: (patch, before, after, local, changes) => {
         callbackCalled = true
         assert.deepStrictEqual(patch.diffs.props.text[`1@${actor}`], {
-          objectId: `1@${actor}`, type: 'text',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: 'a'}}}
+          objectId: `1@${actor}`, type: 'text', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'a'}}
+          ]
         })
         assert.deepStrictEqual(before, {})
         assert.strictEqual(after.text.toString(), 'a')
@@ -585,8 +585,11 @@ describe('TypeScript support', () => {
       let actor = Automerge.getActorId(doc)
       observable.observe(doc.text, (diff, before, after, local, changes) => {
         callbackCalled = true
-        assert.deepStrictEqual(diff.edits, [{action: 'insert', index: 0, elemId: `2@${actor}`}])
-        assert.deepStrictEqual(diff.props, {0: {[`2@${actor}`]: {value: 'a'}}})
+        if (diff.type == 'text') {
+          assert.deepStrictEqual(diff.edits, [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'a'}}
+          ])
+        }
         assert.strictEqual(before.toString(), '')
         assert.strictEqual(after.toString(), 'a')
         assert.strictEqual(local, true)

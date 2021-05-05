@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { isObject } = require('../src/common')
+const { isObject, parseOpId } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -33,7 +33,17 @@ class Context {
    * Returns the operation ID of the next operation to be added to the context.
    */
   nextOpId() {
-    return `${this.maxOp + this.ops.length + 1}@${this.actorId}`
+    let opNum = this.maxOp + 1
+    for (const op of this.ops) {
+      if (op.action === 'set' && op.values) {
+        opNum += op.values.length
+      } else if (op.action === 'del' && op.multiOp) {
+        opNum += op.multiOp
+      } else {
+        opNum += 1
+      }
+    }
+    return `${opNum}@${this.actorId}`
   }
 
   /**
@@ -47,23 +57,27 @@ class Context {
     if (isObject(value)) {
       if (value instanceof Date) {
         // Date object, represented as milliseconds since epoch
-        return {value: value.getTime(), datatype: 'timestamp'}
+        return {type: 'value', value: value.getTime(), datatype: 'timestamp'}
 
       } else if (value instanceof Counter) {
         // Counter object
-        return {value: value.value, datatype: 'counter'}
+        return {type: 'value', value: value.value, datatype: 'counter'}
 
       } else {
         // Nested object (map, list, text, or table)
-        const objectId = value[OBJECT_ID]
+        const objectId = value[OBJECT_ID], type = this.getObjectType(objectId)
         if (!objectId) {
           throw new RangeError(`Object ${JSON.stringify(value)} has no objectId`)
         }
-        return {objectId, type: this.getObjectType(objectId)}
+        if (type === 'list' || type === 'text') {
+          return {objectId, type, edits: []}
+        } else {
+          return {objectId, type, props: {}}
+        }
       }
     } else {
       // Primitive value (number, string, boolean, or null)
-      return {value}
+      return {type: 'value', value}
     }
   }
 
@@ -80,7 +94,8 @@ class Context {
     } else if (object instanceof Text) {
       // Text objects don't support conflicts
       const value = object.get(key)
-      return value ? {[key]: this.getValueDescription(value)} : {}
+      const elemId = object.getElemId(key)
+      return value ? {[elemId]: this.getValueDescription(value)} : {}
     } else {
       // Map or list objects
       const conflicts = object[CONFLICTS][key], values = {}
@@ -113,17 +128,22 @@ class Context {
    * by mutating the patch object. Returns the subpatch at the given path.
    */
   getSubpatch(patch, path) {
-    let subpatch = patch.diffs, object = this.getObject('_root')
+    if (path.length == 0) return patch
+    let subpatch = patch, object = this.getObject('_root')
 
     for (let pathElem of path) {
-      if (!subpatch.props) {
-        subpatch.props = {}
-      }
-      if (!subpatch.props[pathElem.key]) {
-        subpatch.props[pathElem.key] = this.getValuesDescriptions(path, object, pathElem.key)
+      let values = this.getValuesDescriptions(path, object, pathElem.key)
+      if (subpatch.props) {
+        if (!subpatch.props[pathElem.key]) {
+          subpatch.props[pathElem.key] = values
+        }
+      } else if (subpatch.edits) {
+        for (const opId of Object.keys(values)) {
+          subpatch.edits.push({action: 'update', index: pathElem.key, opId, value: values[opId]})
+        }
       }
 
-      let nextOpId = null, values = subpatch.props[pathElem.key]
+      let nextOpId = null
       for (let opId of Object.keys(values)) {
         if (values[opId].objectId === pathElem.objectId) {
           nextOpId = opId
@@ -132,13 +152,11 @@ class Context {
       if (!nextOpId) {
         throw new RangeError(`Cannot find path object with objectId ${pathElem.objectId}`)
       }
+
       subpatch = values[nextOpId]
       object = this.getPropertyValue(object, pathElem.key, nextOpId)
     }
 
-    if (!subpatch.props) {
-      subpatch.props = {}
-    }
     return subpatch
   }
 
@@ -207,7 +225,7 @@ class Context {
       // Create a new Text object
       this.addOp(elemId ? {action: 'makeText', obj, elemId, insert, pred}
                         : {action: 'makeText', obj, key, insert, pred})
-      const subpatch = {objectId, type: 'text', edits: [], props: {}}
+      const subpatch = {objectId, type: 'text', edits: []}
       this.insertListItems(subpatch, 0, [...value], true)
       return subpatch
 
@@ -224,7 +242,7 @@ class Context {
       // Create a new list object
       this.addOp(elemId ? {action: 'makeList', obj, elemId, insert, pred}
                         : {action: 'makeList', obj, key, insert, pred})
-      const subpatch = {objectId, type: 'list', edits: [], props: {}}
+      const subpatch = {objectId, type: 'list', edits: []}
       this.insertListItems(subpatch, 0, value, true)
       return subpatch
 
@@ -270,9 +288,10 @@ class Context {
     } else {
       // Date or counter object, or primitive value (number, string, boolean, or null)
       const description = this.getValueDescription(value)
-      const op = elemId ? {action: 'set', obj: objectId, elemId, insert, pred}
-                        : {action: 'set', obj: objectId, key, insert, pred}
-      this.addOp(Object.assign(op, description))
+      const op = {action: 'set', obj: objectId, insert, value: description.value, pred}
+      if (elemId) op.elemId = elemId; else op.key = key
+      if (description.datatype) op.datatype = description.datatype
+      this.addOp(op)
       return description
     }
   }
@@ -282,9 +301,9 @@ class Context {
    * and then immediately applies the patch to the document.
    */
   applyAtPath(path, callback) {
-    let patch = {diffs: {objectId: '_root', type: 'map'}}
-    callback(this.getSubpatch(patch, path))
-    this.applyPatch(patch.diffs, this.cache._root, this.updated)
+    let diff = {objectId: '_root', type: 'map', props: {}}
+    callback(this.getSubpatch(diff, path))
+    this.applyPatch(diff, this.cache._root, this.updated)
   }
 
   /**
@@ -343,12 +362,20 @@ class Context {
     }
 
     let elemId = getElemId(list, index, true)
-    for (let offset = 0; offset < values.length; offset++) {
+    const allPrimitive = values.every(v => typeof v === 'string' || typeof v === 'number' ||
+                                      typeof v === 'boolean' || v === null)
+
+    if (allPrimitive && values.length > 1) {
       let nextElemId = this.nextOpId()
-      const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
-      elemId = nextElemId
-      subpatch.edits.push({action: 'insert', index: index + offset, elemId})
-      subpatch.props[index + offset] = {[elemId]: valuePatch}
+      this.addOp({action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []})
+      subpatch.edits.push({action: 'multi-insert', elemId: nextElemId, index, values})
+    } else {
+      for (let offset = 0; offset < values.length; offset++) {
+        let nextElemId = this.nextOpId()
+        const valuePatch = this.setValue(subpatch.objectId, index + offset, values[offset], true, [], elemId)
+        elemId = nextElemId
+        subpatch.edits.push({action: 'insert', index: index + offset, elemId, opId: elemId, value: valuePatch})
+      }
     }
   }
 
@@ -376,7 +403,7 @@ class Context {
         const pred = getPred(list, index)
         const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, index, value, false, pred, getElemId(list, index))
-        subpatch.props[index] = {[opId]: valuePatch}
+        subpatch.edits.push({action: 'update', index, opId, value: valuePatch})
       })
     }
   }
@@ -393,11 +420,11 @@ class Context {
     }
     if (deletions === 0 && insertions.length === 0) return
 
-    let patch = {diffs: {objectId: '_root', type: 'map'}}
-    let subpatch = this.getSubpatch(patch, path)
-    if (!subpatch.edits) subpatch.edits = []
+    let patch = {diffs: {objectId: '_root', type: 'map', props: {}}}
+    let subpatch = this.getSubpatch(patch.diffs, path)
 
     if (deletions > 0) {
+      let op, lastElemParsed, lastPredParsed
       for (let i = 0; i < deletions; i++) {
         if (this.getObjectField(path, objectId, start + i) instanceof Counter) {
           // This may seem bizarre, but it's really fiddly to implement deletion of counters from
@@ -418,11 +445,28 @@ class Context {
           throw new TypeError('Unsupported operation: deleting a counter from a list')
         }
 
-        const elemId = getElemId(list, start + i)
-        const pred = getPred(list, start + i)
-        this.addOp({action: 'del', obj: objectId, elemId, insert: false, pred})
-        subpatch.edits.push({action: 'remove', index: start})
+        // Any sequences of deletions with consecutive elemId and pred values get combined into a
+        // single multiOp; any others become individual deletion operations. This optimisation only
+        // kicks in if the user deletes a sequence of elements at once (in a single call to splice);
+        // it might be nice to also detect such runs of deletions in the case where the user deletes
+        // a sequence of list elements one by one.
+        const thisElem = getElemId(list, start + i), thisElemParsed = parseOpId(thisElem)
+        const thisPred = getPred(list, start + i)
+        const thisPredParsed = (thisPred.length === 1) ? parseOpId(thisPred[0]) : undefined
+
+        if (op && lastElemParsed && lastPredParsed && thisPredParsed &&
+            lastElemParsed.actorId === thisElemParsed.actorId && lastElemParsed.counter + 1 === thisElemParsed.counter &&
+            lastPredParsed.actorId === thisPredParsed.actorId && lastPredParsed.counter + 1 === thisPredParsed.counter) {
+          op.multiOp = (op.multiOp || 1) + 1
+        } else {
+          if (op) this.addOp(op)
+          op = {action: 'del', obj: objectId, elemId: thisElem, insert: false, pred: thisPred}
+        }
+        lastElemParsed = thisElemParsed
+        lastPredParsed = thisPredParsed
       }
+      this.addOp(op)
+      subpatch.edits.push({action: 'remove', index: start, count: deletions})
     }
 
     if (insertions.length > 0) {
@@ -494,7 +538,11 @@ class Context {
     }
 
     this.applyAtPath(path, subpatch => {
-      subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
+      if (type === 'list' || type === 'text') {
+        subpatch.edits.push({action: 'update', index: key, opId, value: {value, datatype: 'counter'}})
+      } else {
+        subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
+      }
     })
   }
 }
