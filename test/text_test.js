@@ -135,7 +135,7 @@ function applyRetainOp(text, offset, op) {
   let length = op.retain
 
   if (op.attributes) {
-    text.insertAt(offset, { attributes: op.attributes })
+    text.insertAt(offset, [{ attributes: op.attributes }])
     offset += 1
   }
 
@@ -148,7 +148,7 @@ function applyRetainOp(text, offset, op) {
   }
 
   if (op.attributes) {
-    text.insertAt(offset, { attributes: inverseAttributes(op.attributes) })
+    text.insertAt(offset, [{ attributes: inverseAttributes(op.attributes) }])
     offset += 1
   }
 
@@ -160,20 +160,21 @@ function applyInsertOp(text, offset, op) {
   let originalOffset = offset
 
   if (typeof op.insert === 'string') {
-    text.insertAt(offset, ...op.insert.split(''))
-    offset += op.insert.length
+    const chars = [...op.insert]
+    text.insertAt(offset, chars)
+    offset += chars.length
   } else {
     // we have an embed or something similar
-    text.insertAt(offset, op.insert)
+    text.insertAt(offset, [op.insert])
     offset += 1
   }
 
   if (op.attributes) {
-    text.insertAt(originalOffset, { attributes: op.attributes })
+    text.insertAt(originalOffset, [{ attributes: op.attributes }])
     offset += 1
   }
   if (op.attributes) {
-    text.insertAt(offset, { attributes: inverseAttributes(op.attributes) })
+    text.insertAt(offset, [{ attributes: inverseAttributes(op.attributes) }])
     offset += 1
   }
   return [text, offset]
@@ -201,7 +202,7 @@ describe('Automerge.Text', () => {
     s2 = Automerge.merge(Automerge.init(), s1)
   })
 
-  it('should support insertion', () => {
+  it('should support insertion of character', () => {
     s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a'))
     assert.strictEqual(s1.text.length, 1)
     assert.strictEqual(s1.text.get(0), 'a')
@@ -209,8 +210,35 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
   })
 
+  it('should support insertion of string', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'string'))
+    assert.strictEqual(s1.text.length, 6)
+    assert.strictEqual(s1.text.get(0), 's')
+    assert.strictEqual(s1.text.get(1), 't')
+    assert.strictEqual(s1.text.get(2), 'r')
+    assert.strictEqual(s1.text.get(3), 'i')
+    assert.strictEqual(s1.text.get(4), 'n')
+    assert.strictEqual(s1.text.get(5), 'g')
+    assert.strictEqual(s1.text.toString(), 'string')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
+  })
+
+  it('should support insertion of string containing a unicode character', () => {
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, '🐦string'))
+    assert.strictEqual(s1.text.length, 7)
+    assert.strictEqual(s1.text.get(0), '🐦')
+    assert.strictEqual(s1.text.get(1), 's')
+    assert.strictEqual(s1.text.get(2), 't')
+    assert.strictEqual(s1.text.get(3), 'r')
+    assert.strictEqual(s1.text.get(4), 'i')
+    assert.strictEqual(s1.text.get(5), 'n')
+    assert.strictEqual(s1.text.get(6), 'g')
+    assert.strictEqual(s1.text.toString(), '🐦string')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
+  })
+
   it('should support deletion', () => {
-    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, ['a', 'b', 'c']))
     s1 = Automerge.change(s1, doc => doc.text.deleteAt(1, 1))
     assert.strictEqual(s1.text.length, 2)
     assert.strictEqual(s1.text.get(0), 'a')
@@ -219,7 +247,7 @@ describe('Automerge.Text', () => {
   })
 
   it("should support implicit and explicit deletion", () => {
-    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, "a", "b", "c"))
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, ['a', 'b', 'c']))
     s1 = Automerge.change(s1, doc => doc.text.deleteAt(1))
     s1 = Automerge.change(s1, doc => doc.text.deleteAt(1, 0))
     assert.strictEqual(s1.text.length, 2)
@@ -229,8 +257,8 @@ describe('Automerge.Text', () => {
   })
 
   it('should handle concurrent insertion', () => {
-    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', 'b', 'c'))
-    s2 = Automerge.change(s2, doc => doc.text.insertAt(0, 'x', 'y', 'z'))
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, ['a', 'b', 'c']))
+    s2 = Automerge.change(s2, doc => doc.text.insertAt(0, ['x', 'y', 'z']))
     s1 = Automerge.merge(s1, s2)
     assert.strictEqual(s1.text.length, 6)
     assertEqualsOneOf(s1.text.toString(), 'abcxyz', 'xyzabc')
@@ -240,7 +268,7 @@ describe('Automerge.Text', () => {
   it('should handle text and other ops in the same change', () => {
     s1 = Automerge.change(s1, doc => {
       doc.foo = 'bar'
-      doc.text.insertAt(0, 'a')
+      doc.text.insertAt(0, ['a'])
     })
     assert.strictEqual(s1.foo, 'bar')
     assert.strictEqual(s1.text.toString(), 'a')
@@ -248,14 +276,14 @@ describe('Automerge.Text', () => {
   })
 
   it('should serialize to JSON as a simple string', () => {
-    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, 'a', '"', 'b'))
+    s1 = Automerge.change(s1, doc => doc.text.insertAt(0, ['a', '"', 'b']))
     assert.strictEqual(JSON.stringify(s1), '{"text":"a\\"b"}')
   })
 
   it('should allow modification before an object is assigned to a document', () => {
     s1 = Automerge.change(Automerge.init(), doc => {
       const text = new Automerge.Text()
-      text.insertAt(0, 'a', 'b', 'c', 'd')
+      text.insertAt(0, ['a', 'b', 'c', 'd'])
       text.deleteAt(2)
       doc.text = text
       assert.strictEqual(doc.text.toString(), 'abd')
@@ -269,7 +297,7 @@ describe('Automerge.Text', () => {
     s1 = Automerge.change(Automerge.init(), doc => {
       const text = new Automerge.Text()
       doc.text = text
-      doc.text.insertAt(0, 'a', 'b', 'c', 'd')
+      doc.text.insertAt(0, ['a', 'b', 'c', 'd'])
       doc.text.deleteAt(2)
       assert.strictEqual(doc.text.toString(), 'abd')
       assert.strictEqual(doc.text.join(''), 'abd')

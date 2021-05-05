@@ -134,13 +134,23 @@ class Text {
   }
 
   /**
-   * Inserts new list items `values` starting at position `index`.
+   * Inserts one or more new characters starting at position `index`. `characters` can either be a
+   * string (in which case it will be split into a sequence of Unicode code points), or an array of
+   * strings (in which case each element of the array is treated as a character and not split any
+   * further). The latter mode is useful if you want to use custom logic for splitting the string,
+   * for example to split it into Unicode grapheme clusters.
    */
-  insertAt(index, ...values) {
+  insertAt(index, characters) {
+    if (typeof characters === 'string') {
+      characters = [...characters]
+    } else if (!Array.isArray(characters)) {
+      characters = [characters]
+    }
+
     if (this.context) {
-      this.context.splice(this.path, index, 0, values)
+      this.context.splice(this.path, index, 0, characters)
     } else if (!this[OBJECT_ID]) {
-      this.elems.splice(index, 0, ...values.map(value => ({value})))
+      this.elems.splice(index, 0, ...characters.map(value => ({value})))
     } else {
       throw new TypeError('Automerge.Text object cannot be modified outside of a change block')
     }
