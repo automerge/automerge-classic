@@ -15,43 +15,60 @@ declare module 'automerge' {
 
   // Automerge.* functions
 
-  function init<T>(options?: InitOptions): Doc<T>
-  function from<T>(initialState: T | Doc<T>, options?: InitOptions): Doc<T>
+  function init<T>(options?: InitOptions<T>): Doc<T>
+  function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): Doc<T>
+  function clone<T>(doc: Doc<T>, options?: InitOptions<T>): Doc<T>
+  function free<T>(doc: Doc<T>): void
 
-  type InitOptions =
+  type InitOptions<T> =
     | string // = actorId
     | { 
       actorId?: string
       deferActorId?: boolean
-      freeze?: boolean 
+      freeze?: boolean
+      patchCallback?: PatchCallback<T>
+      observable?: Observable
     }
+
+  type ChangeOptions<T> =
+    | string // = message
+    | {
+      message?: string
+      time?: number
+      patchCallback?: PatchCallback<T>
+    }
+
+  type PatchCallback<T> = (patch: Patch, before: T, after: T, local: boolean, changes: BinaryChange[]) => void
+  type ObserverCallback<T> = (diff: MapDiff | ListDiff | ValueDiff, before: T, after: T, local: boolean, changes: BinaryChange[]) => void
+
+  class Observable {
+    observe<T>(object: T, callback: ObserverCallback<T>): void
+  }
 
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
-  function change<D, T = Proxy<D>>(doc: D, message: string, callback: ChangeFn<T>): D
+  function change<D, T = Proxy<D>>(doc: D, options: ChangeOptions<T>, callback: ChangeFn<T>): D
   function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
-  function emptyChange<D extends Doc<any>>(doc: D, message?: string): D
-  function applyChanges<T>(doc: Doc<T>, changes: Change[]): Doc<T>
-  function diff<D extends Doc<any>>(olddoc: D, newdoc: D): Diff[]
+  function emptyChange<D extends Doc<any>>(doc: D, options?: ChangeOptions<D>): D
+  function applyChanges<T>(doc: Doc<T>, changes: BinaryChange[]): [Doc<T>, Patch]
   function equals<T>(val1: T, val2: T): boolean
+  function encodeChange(change: Change): BinaryChange
+  function decodeChange(binaryChange: BinaryChange): Change
 
   function getActorId<T>(doc: Doc<T>): string
-  function getAllChanges<T>(doc: Doc<T>): Change[]
-  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): Change[]
+  function getAllChanges<T>(doc: Doc<T>): BinaryChange[]
+  function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): BinaryChange[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
-  function getMissingDeps<T>(doc: Doc<T>): Clock
-  function getObjectById<T>(doc: Doc<T>, objectId: UUID): any
-  function getObjectId(object: any): UUID
+  function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
+  function getObjectId(object: any): OpId
 
-  function load<T>(doc: string, options?: any): Doc<T>
-  function save<T>(doc: Doc<T>): string
+  function load<T>(data: BinaryDocument, options?: any): Doc<T>
+  function save<T>(doc: Doc<T>): BinaryDocument
 
-  function canRedo<T>(doc: Doc<T>): boolean
-  function canUndo<T>(doc: Doc<T>): boolean
-
-  function redo<T>(doc: Doc<T>, message?: string): Doc<T>
-  function undo<T>(doc: Doc<T>, message?: string): Doc<T>
+  function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
+  function receiveSyncMessage<T>(doc: Doc<T>, syncState: SyncState, message: BinarySyncMessage): [Doc<T>, SyncState, Patch?]
+  function initSyncState(): SyncState
 
   // custom CRDT types
 
@@ -75,9 +92,8 @@ declare module 'automerge' {
   }
 
   class Text extends List<string> {
-    constructor(objectId?: UUID, elems?: string[], maxElem?: number)
+    constructor(text?: string | string[])
     get(index: number): string
-    getElemId(index: number): string
     toSpans<T>(): (string | T)[]
   }
 
@@ -102,79 +118,53 @@ declare module 'automerge' {
   type ReadonlyList<T> = ReadonlyArray<T> & List<T>
   type ReadonlyText = ReadonlyList<string> & Text
 
-  // Utility classes
-
-  class Connection<T> {
-    constructor(docSet: DocSet<T>, sendMsg: (msg: Message) => void)
-    close(): void
-    docChanged(docId: string, doc: Doc<T>): void
-    maybeSendChanges(docId: string): void
-    open(): void
-    receiveMsg(msg: Message): Doc<T>
-    sendMsg(docId: string, clock: Clock, changes: Change[]): void
-  }
-
-  type DocSetHandler<T> = (docId: string, doc: Doc<T>) => void
-  class DocSet<T> {
-    constructor()
-    applyChanges(docId: string, changes: Change[]): T
-    getDoc(docId: string): Doc<T>
-    removeDoc(docId: string): void
-    setDoc(docId: string, doc: Doc<T>): void
-    docIds: string[]
-    registerHandler(handler: DocSetHandler<T>): void
-    unregisterHandler(handler: DocSetHandler<T>): void
-  }
-
-  type WatchableDocHandler<T> = (doc: Doc<T>) => void
-  class WatchableDoc<D, T = Proxy<D>> {
-    constructor(doc: Doc<D>)
-    applyChanges(changes: Change[]): D
-    get(): Doc<D>
-    set(doc: Doc<D>): void
-    registerHandler(handler: WatchableDocHandler<T>): void
-    unregisterHandler(handler: WatchableDocHandler<T>): void
-  }
-
   // Front & back
 
   namespace Frontend {
-    function applyPatch<T>(doc: Doc<T>, patch: Patch): Doc<T>
-    function canRedo<T>(doc: Doc<T>): boolean
-    function canUndo<T>(doc: Doc<T>): boolean
-    function change<D, T = Proxy<D>>(
-      doc: D,
-      message: string | undefined,
-      callback: ChangeFn<T>
-    ): [T, Change]
+    function applyPatch<T>(doc: Doc<T>, patch: Patch, backendState?: BackendState): Doc<T>
+    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
     function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
-    function from<T>(initialState: T | Doc<T>, options?: InitOptions): [Doc<T>, Change]
+    function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
     function getBackendState<T>(doc: Doc<T>): BackendState
     function getConflicts<T>(doc: Doc<T>, key: keyof T): any
     function getElementIds(list: any): string[]
-    function getObjectById<T>(doc: Doc<T>, objectId: UUID): Doc<T>
-    function getObjectId<T>(doc: Doc<T>): UUID
-    function init<T>(options?: InitOptions): Doc<T>
-    function redo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
+    function getLastLocalChange<T>(doc: Doc<T>): BinaryChange
+    function getObjectById<T>(doc: Doc<T>, objectId: OpId): Doc<T>
+    function getObjectId<T>(doc: Doc<T>): OpId
+    function init<T>(options?: InitOptions<T>): Doc<T>
     function setActorId<T>(doc: Doc<T>, actorId: string): Doc<T>
-    function undo<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
   }
 
   namespace Backend {
-    function applyChanges(state: BackendState, changes: Change[]): [BackendState, Patch]
-    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch]
-    function getChanges(oldState: BackendState, newState: BackendState): Change[]
-    function getChangesForActor(state: BackendState, actorId: string): Change[]
-    function getMissingChanges(state: BackendState, clock: Clock): Change[]
-    function getMissingDeps(state: BackendState): Clock
+    function applyChanges(state: BackendState, changes: BinaryChange[]): [BackendState, Patch]
+    function applyLocalChange(state: BackendState, change: Change): [BackendState, Patch, BinaryChange]
+    function clone(state: BackendState): BackendState
+    function free(state: BackendState): void
+    function getAllChanges(state: BackendState): BinaryChange[]
+    function getChangeByHash(state: BackendState, hash: Hash): BinaryChange
+    function getChanges(state: BackendState, haveDeps: Hash[]): BinaryChange[]
+    function getHeads(state: BackendState): Hash[]
+    function getMissingDeps(state: BackendState, heads?: Hash[]): Hash[]
     function getPatch(state: BackendState): Patch
     function init(): BackendState
-    function merge(local: BackendState, remote: BackendState): BackendState
+    function load(data: BinaryDocument): BackendState
+    function loadChanges(state: BackendState, changes: BinaryChange[]): BackendState
+    function save(state: BackendState): BinaryDocument
+    function generateSyncMessage(state: BackendState, syncState: SyncState): [SyncState, BinarySyncMessage?]
+    function receiveSyncMessage(state: BackendState, syncState: SyncState, message: BinarySyncMessage): [BackendState, SyncState, Patch?]
+    function encodeSyncMessage(message: SyncMessage): BinarySyncMessage
+    function decodeSyncMessage(bytes: BinarySyncMessage): SyncMessage
+    function initSyncState(): SyncState
+    function encodeSyncState(syncState: SyncState): BinarySyncState
+    function decodeSyncState(bytes: BinarySyncState): SyncState
   }
 
   // Internals
+
+  type Hash = string // 64-digit hex string
+  type OpId = string // of the form `${counter}@${actorId}`
 
   type UUID = string
   type UUIDGenerator = () => UUID
@@ -183,12 +173,6 @@ declare module 'automerge' {
     reset: () => void
   }
   const uuid: UUIDFactory
-
-  interface Message {
-    docId: string
-    clock: Clock
-    changes?: Change[]
-  }
 
   interface Clock {
     [actorId: string]: number
@@ -203,76 +187,138 @@ declare module 'automerge' {
     // no public methods or properties
   }
 
+  type BinaryChange = Uint8Array & { __binaryChange: true }
+  type BinaryDocument = Uint8Array & { __binaryDocument: true }
+  type BinarySyncState = Uint8Array & { __binarySyncState: true }
+  type BinarySyncMessage = Uint8Array & { __binarySyncMessage: true }
+
+  interface SyncState {
+    // no public methods or properties
+  }
+
+  interface SyncMessage {
+    heads: Hash[]
+    need: Hash[]
+    have: SyncHave[]
+    changes: BinaryChange[]
+  }
+
+  interface SyncHave {
+    lastSync: Hash[]
+    bloom: Uint8Array
+  }
+
   interface Change {
-    message?: string
-    requestType?: RequestType
+    message: string
     actor: string
+    time: number
     seq: number
-    deps: Clock
+    deps: Hash[]
     ops: Op[]
-    diffs?: Diff[]
   }
 
   interface Op {
     action: OpAction
-    obj: UUID
-    key?: string
-    value?: any
+    obj: OpId
+    key: string | number
+    insert: boolean
+    child?: OpId
+    value?: number | boolean | string | null
     datatype?: DataType
-    elem?: number
+    pred?: OpId[]
+    values?: (number | boolean | string | null)[]
+    multiOp?: number
   }
 
   interface Patch {
     actor?: string
     seq?: number
-    clock?: Clock
-    deps?: Clock
-    canUndo?: boolean
-    canRedo?: boolean
-    diffs: Diff[]
+    pendingChanges: number
+    clock: Clock
+    deps: Hash[]
+    diffs: MapDiff
   }
 
-  interface Diff {
-    action: DiffAction
-    type: CollectionType
-    obj: UUID
-    path?: string[]
-    key?: string
-    index?: number
-    value?: any
-    elemId?: string
-    conflicts?: Conflict[]
+  // Describes changes to a map (in which case propName represents a key in the
+  // map) or a table object (in which case propName is the primary key of a row).
+  interface MapDiff {
+    objectId: OpId        // ID of object being updated
+    type: 'map' | 'table' // type of object being updated
+    // For each key/property that is changing, props contains one entry
+    // (properties that are not changing are not listed). The nested object is
+    // empty if the property is being deleted, contains one opId if it is set to
+    // a single value, and contains multiple opIds if there is a conflict.
+    props: {[propName: string]: {[opId: string]: MapDiff | ListDiff | ValueDiff }}
+  }
+
+  // Describes changes to a list or Automerge.Text object, in which each element
+  // is identified by its index.
+  interface ListDiff {
+    objectId: OpId        // ID of object being updated
+    type: 'list' | 'text' // type of objct being updated
+    // This array contains edits in the order they should be applied.
+    edits: (SingleInsertEdit | MultiInsertEdit | UpdateEdit | RemoveEdit)[]
+  }
+
+  // Describes the insertion of a single element into a list or text object.
+  // The element can be a nested object.
+  interface SingleInsertEdit {
+    action: 'insert'
+    index: number   // the list index at which to insert the new element
+    elemId: OpId    // the unique element ID of the new list element
+    opId: OpId      // ID of the operation that assigned this value
+    value: MapDiff | ListDiff | ValueDiff
+  }
+
+  // Describes the insertion of a consecutive sequence of primitive values into
+  // a list or text object. In the case of text, the values are strings (each
+  // character as a separate string value). Each inserted value is given a
+  // consecutive element ID: starting with `elemId` for the first value, the
+  // subsequent values are given elemIds with the same actor ID and incrementing
+  // counters. To insert non-primitive values, use SingleInsertEdit.
+  interface MultiInsertEdit {
+    action: 'multi-insert'
+    index: number   // the list index at which to insert the first value
+    elemId: OpId    // the unique ID of the first inserted element
+    values: (number | boolean | string | null)[] // list of values to insert
+  }
+
+  // Describes the update of the value or nested object at a particular index
+  // of a list or text object. In the case where there are multiple conflicted
+  // values at the same list index, multiple UpdateEdits with the same index
+  // (but different opIds) appear in the edits array of ListDiff.
+  interface UpdateEdit {
+    action: 'update'
+    index: number   // the list index to update
+    opId: OpId      // ID of the operation that assigned this value
+    value: MapDiff | ListDiff | ValueDiff
+  }
+
+  // Describes the deletion of one or more consecutive elements from a list or
+  // text object.
+  interface RemoveEdit {
+    action: 'remove'
+    index: number   // index of the first list element to remove
+    count: number   // number of list elements to remove
+  }
+
+  // Describes a primitive value, optionally tagged with a datatype that
+  // indicates how the value should be interpreted.
+  interface ValueDiff {
+    type: 'value'
+    value: number | boolean | string | null
     datatype?: DataType
-    link?: boolean
   }
-
-  interface Conflict {
-    actor: string
-    value: any
-    link?: boolean
-  }
-
-  type RequestType =
-    | 'change' //..
-    | 'redo'
-    | 'undo'
 
   type OpAction =
-    | 'ins'
     | 'del'
     | 'inc'
-    | 'link'
     | 'set'
+    | 'link'
     | 'makeText'
     | 'makeTable'
     | 'makeList'
     | 'makeMap'
-
-  type DiffAction =
-    | 'create' //..
-    | 'insert'
-    | 'set'
-    | 'remove'
 
   type CollectionType =
     | 'list' //..
@@ -306,6 +352,4 @@ declare module 'automerge' {
   interface FreezeArray<T> extends ReadonlyArray<Freeze<T>> {}
   interface FreezeMap<K, V> extends ReadonlyMap<Freeze<K>, Freeze<V>> {}
   type FreezeObject<T> = { readonly [P in keyof T]: Freeze<T[P]> }
-
-  type Lookup<T, K> = K extends keyof T ? T[K] : never
 }

@@ -25,8 +25,8 @@ describe('uuid', () => {
     beforeEach(() => counter = 0)
 
     it('invokes the custom factory', () => {
-      assert.equal(uuid(), 'custom-uuid-0');
-      assert.equal(uuid(), 'custom-uuid-1');
+      assert.equal(uuid(), 'custom-uuid-0')
+      assert.equal(uuid(), 'custom-uuid-1')
     })
   })
 })

@@ -13,15 +13,15 @@ function attributeStateToAttributes(accumulatedAttributes) {
 }
 
 function isEquivalent(a, b) {
-  var aProps = Object.getOwnPropertyNames(a)
-  var bProps = Object.getOwnPropertyNames(b)
+  const aProps = Object.getOwnPropertyNames(a)
+  const bProps = Object.getOwnPropertyNames(b)
 
   if (aProps.length != bProps.length) {
       return false
   }
 
-  for (var i = 0; i < aProps.length; i++) {
-      var propName = aProps[i]
+  for (let i = 0; i < aProps.length; i++) {
+    const propName = aProps[i]
       if (a[propName] !== b[propName]) {
           return false
       }
@@ -135,7 +135,6 @@ function applyRetainOp(text, offset, op) {
   let length = op.retain
 
   if (op.attributes) {
-    console.log(op)
     text.insertAt(offset, { attributes: op.attributes })
     offset += 1
   }
@@ -183,15 +182,14 @@ function applyInsertOp(text, offset, op) {
 // XXX: uhhhhh, why can't I pass in text?
 function applyDeltaDocToAutomergeText(delta, doc) {
   let offset = 0
-  let text = doc.text
 
   delta.forEach(op => {
     if (op.retain) {
-      [text, offset] = applyRetainOp(doc.text, offset, op)
+      [, offset] = applyRetainOp(doc.text, offset, op)
     } else if (op.delete) {
-      [text, offset] = applyDeleteOp(doc.text, offset, op)
+      [, offset] = applyDeleteOp(doc.text, offset, op)
     } else if (op.insert) {
-      [text, offset] = applyInsertOp(doc.text, offset, op)
+      [, offset] = applyInsertOp(doc.text, offset, op)
     }
   })
 }
@@ -208,6 +206,7 @@ describe('Automerge.Text', () => {
     assert.strictEqual(s1.text.length, 1)
     assert.strictEqual(s1.text.get(0), 'a')
     assert.strictEqual(s1.text.toString(), 'a')
+    assert.strictEqual(s1.text.getElemId(0), `2@${Automerge.getActorId(s1)}`)
   })
 
   it('should support deletion', () => {
@@ -270,8 +269,8 @@ describe('Automerge.Text', () => {
     s1 = Automerge.change(Automerge.init(), doc => {
       const text = new Automerge.Text()
       doc.text = text
-      text.insertAt(0, 'a', 'b', 'c', 'd')
-      text.deleteAt(2)
+      doc.text.insertAt(0, 'a', 'b', 'c', 'd')
+      doc.text.deleteAt(2)
       assert.strictEqual(doc.text.toString(), 'abd')
       assert.strictEqual(doc.text.join(''), 'abd')
     })
@@ -317,14 +316,14 @@ describe('Automerge.Text', () => {
       const s1 = Automerge.from({text: new Automerge.Text('init')})
       const changes = Automerge.getAllChanges(s1)
       assert.strictEqual(changes.length, 1)
-      const s2 = Automerge.applyChanges(Automerge.init(), changes)
+      const [s2] = Automerge.applyChanges(Automerge.init(), changes)
       assert.strictEqual(s2.text instanceof Automerge.Text, true)
       assert.strictEqual(s2.text.toString(), 'init')
       assert.strictEqual(s2.text.join(''), 'init')
     })
 
     it('should allow immediate access to the value', () => {
-      let s1 = Automerge.change(Automerge.init(), doc => {
+      Automerge.change(Automerge.init(), doc => {
         const text = new Automerge.Text('init')
         assert.strictEqual(text.length, 4)
         assert.strictEqual(text.get(0), 'i')
@@ -353,10 +352,8 @@ describe('Automerge.Text', () => {
       let s1 = Automerge.change(Automerge.init(), doc => {
         const text = new Automerge.Text('init')
         doc.text = text
-        text.deleteAt(0)
+        doc.text.deleteAt(0)
         doc.text.insertAt(0, 'I')
-        assert.strictEqual(text.join(''), 'Init')
-        assert.strictEqual(text.toString(), 'Init')
         assert.strictEqual(doc.text.join(''), 'Init')
         assert.strictEqual(doc.text.toString(), 'Init')
       })
@@ -377,6 +374,7 @@ describe('Automerge.Text', () => {
 
     it('should allow fetching non-textual characters', () => {
       assert.deepEqual(s1.text.get(1), { attribute: 'bold' })
+      assert.strictEqual(s1.text.getElemId(1), `3@${Automerge.getActorId(s1)}`)
     })
 
     it('should include control characters in string length', () => {
@@ -388,14 +386,22 @@ describe('Automerge.Text', () => {
       assert.strictEqual(s1.text.toString(), 'a')
     })
 
+    it('should allow control characters to be updated', () => {
+      const s2 = Automerge.change(s1, doc => doc.text.get(1).attribute = 'italic')
+      const s3 = Automerge.load(Automerge.save(s2))
+      assert.strictEqual(s1.text.get(1).attribute, 'bold')
+      assert.strictEqual(s2.text.get(1).attribute, 'italic')
+      assert.strictEqual(s3.text.get(1).attribute, 'italic')
+    })
+
     describe('spans interface to Text', () => {
-      it('should return a simple string as a single span', () =>{
+      it('should return a simple string as a single span', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text('hello world')
         })
         assert.deepEqual(s1.text.toSpans(), ['hello world'])
       })
-      it('should return an empty string as an empty array', () =>{
+      it('should return an empty string as an empty array', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text()
         })
@@ -440,8 +446,8 @@ describe('Automerge.Text', () => {
         let s1 = Automerge.change(Automerge.init(), doc => {
           doc.text = new Automerge.Text('Gandalf the Grey')
           doc.text.insertAt(0,  { attributes: { bold: true } })
-          doc.text.insertAt(7+1, { attributes: { bold: null } })
-          doc.text.insertAt(12+2, { attributes: { color: '#cccccc' } })
+          doc.text.insertAt(7 + 1, { attributes: { bold: null } })
+          doc.text.insertAt(12 + 2, { attributes: { color: '#cccccc' } })
         })
 
         let deltaDoc = automergeTextToDeltaDoc(s1.text)
@@ -491,12 +497,12 @@ describe('Automerge.Text', () => {
 
         let s3 = Automerge.change(s1, doc => {
           doc.text.insertAt(8,  { attributes: { bold: true } })
-          doc.text.insertAt(16+1, { attributes: { bold: null } })
+          doc.text.insertAt(16 + 1, { attributes: { bold: null } })
         })
 
         let s4 = Automerge.change(s2, doc => {
           doc.text.insertAt(0,  { attributes: { bold: true } })
-          doc.text.insertAt(11+1, { attributes: { bold: null } })
+          doc.text.insertAt(11 + 1, { attributes: { bold: null } })
         })
 
         let merged = Automerge.merge(s3, s4)
@@ -520,12 +526,12 @@ describe('Automerge.Text', () => {
 
         let s3 = Automerge.change(s1, doc => {
           doc.text.insertAt(0,  { attributes: { bold: true } })
-          doc.text.insertAt(16+1, { attributes: { bold: null } })
+          doc.text.insertAt(16 + 1, { attributes: { bold: null } })
         })
 
         let s4 = Automerge.change(s2, doc => {
           doc.text.insertAt(8,  { attributes: { bold: null } })
-          doc.text.insertAt(11+1, { attributes: { bold: true } })
+          doc.text.insertAt(11 + 1, { attributes: { bold: true } })
         })
 
 
@@ -553,18 +559,18 @@ describe('Automerge.Text', () => {
 
         let s3 = Automerge.change(s1, doc => {
           doc.text.insertAt(0,  { attributes: { bold: true } })
-          doc.text.insertAt(16+1, { attributes: { bold: null } })
+          doc.text.insertAt(16 + 1, { attributes: { bold: null } })
         })
 
         let s4 = Automerge.change(s2, doc => {
           doc.text.insertAt(8,  { attributes: { bold: null } })
-          doc.text.insertAt(11+1, { attributes: { bold: true } })
+          doc.text.insertAt(11 + 1, { attributes: { bold: true } })
         })
 
         let merged = Automerge.merge(s3, s4)
 
         let final = Automerge.change(merged, doc => {
-          doc.text.insertAt(3+1, { attributes: { bold: null } })
+          doc.text.insertAt(3 + 1, { attributes: { bold: null } })
           doc.text.insertAt(doc.text.length, { attributes: { bold: true } })
         })
 
@@ -680,5 +686,12 @@ describe('Automerge.Text', () => {
         ])
       })
     })
+  })
+
+  it('should support unicode when creating text', () => {
+    s1 = Automerge.from({
+      text: new Automerge.Frontend.Text('🐦')
+    })
+    assert.strictEqual(s1.text.get(0), '🐦')
   })
 })

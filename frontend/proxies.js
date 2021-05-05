@@ -1,10 +1,9 @@
-const { ROOT_ID } = require('../src/common')
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
 function parseListIndex(key) {
-  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
+  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key, 10)
   if (typeof key !== 'number') {
     throw new TypeError('A list index must be a number, but you passed ' + JSON.stringify(key))
   }
@@ -14,17 +13,17 @@ function parseListIndex(key) {
   return key
 }
 
-function listMethods(context, listId) {
+function listMethods(context, listId, path) {
   const methods = {
     deleteAt(index, numDelete) {
-      context.splice(listId, parseListIndex(index), numDelete || 1, [])
+      context.splice(path, parseListIndex(index), numDelete || 1, [])
       return this
     },
 
     fill(value, start, end) {
       let list = context.getObject(listId)
       for (let index = parseListIndex(start || 0); index < parseListIndex(end || list.length); index++) {
-        context.setListIndex(listId, index, value)
+        context.setListIndex(path, index, value)
       }
       return this
     },
@@ -38,28 +37,28 @@ function listMethods(context, listId) {
             return index
           }
         }
-        return -1  
+        return -1
       } else {
         return context.getObject(listId).indexOf(o, start)
       }
     },
 
     insertAt(index, ...values) {
-      context.splice(listId, parseListIndex(index), 0, values)
+      context.splice(path, parseListIndex(index), 0, values)
       return this
     },
 
     pop() {
       let list = context.getObject(listId)
       if (list.length == 0) return
-      const last = context.getObjectField(listId, list.length - 1)
-      context.splice(listId, list.length - 1, 1, [])
+      const last = context.getObjectField(path, listId, list.length - 1)
+      context.splice(path, list.length - 1, 1, [])
       return last
     },
 
     push(...values) {
       let list = context.getObject(listId)
-      context.splice(listId, list.length, 0, values)
+      context.splice(path, list.length, 0, values)
       // need to getObject() again because the list object above may be immutable
       return context.getObject(listId).length
     },
@@ -67,8 +66,8 @@ function listMethods(context, listId) {
     shift() {
       let list = context.getObject(listId)
       if (list.length == 0) return
-      const first = context.getObjectField(listId, 0)
-      context.splice(listId, 0, 1, [])
+      const first = context.getObjectField(path, listId, 0)
+      context.splice(path, 0, 1, [])
       return first
     },
 
@@ -80,14 +79,14 @@ function listMethods(context, listId) {
       }
       const deleted = []
       for (let n = 0; n < deleteCount; n++) {
-        deleted.push(context.getObjectField(listId, start + n))
+        deleted.push(context.getObjectField(path, listId, start + n))
       }
-      context.splice(listId, start, deleteCount, values)
+      context.splice(path, start, deleteCount, values)
       return deleted
     },
 
     unshift(...values) {
-      context.splice(listId, 0, 0, values)
+      context.splice(path, 0, 0, values)
       return context.getObject(listId).length
     }
   }
@@ -103,8 +102,8 @@ function listMethods(context, listId) {
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
-        .map((item, index) => context.getObjectField(listId, index))
-      return list[method].call(list, ...args)
+        .map((item, index) => context.getObjectField(path, listId, index))
+      return list[method](...args)
     }
   }
 
@@ -113,28 +112,28 @@ function listMethods(context, listId) {
 
 const MapHandler = {
   get (target, key) {
-    const { context, objectId } = target
+    const { context, objectId, path } = target
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === STATE) return {actorId: context.actorId}
-    return context.getObjectField(objectId, key)
+    return context.getObjectField(path, objectId, key)
   },
 
   set (target, key, value) {
-    const { context, objectId, readonly } = target
+    const { context, path, readonly } = target
     if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
       throw new RangeError(`Object property "${key}" cannot be modified`)
     }
-    context.setMapKey(objectId, 'map', key, value)
+    context.setMapKey(path, key, value)
     return true
   },
 
   deleteProperty (target, key) {
-    const { context, objectId, readonly } = target
+    const { context, path, readonly } = target
     if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
       throw new RangeError(`Object property "${key}" cannot be modified`)
     }
-    context.deleteMapKey(objectId, key)
+    context.deleteMapKey(path, key)
     return true
   },
 
@@ -162,31 +161,31 @@ const MapHandler = {
 
 const ListHandler = {
   get (target, key) {
-    const [context, objectId] = target
+    const [context, objectId, path] = target
     if (key === Symbol.iterator) return context.getObject(objectId)[Symbol.iterator]
     if (key === OBJECT_ID) return objectId
     if (key === CHANGE) return context
     if (key === 'length') return context.getObject(objectId).length
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
-      return context.getObjectField(objectId, parseListIndex(key))
+      return context.getObjectField(path, objectId, parseListIndex(key))
     }
-    return listMethods(context, objectId)[key]
+    return listMethods(context, objectId, path)[key]
   },
 
   set (target, key, value) {
-    const [context, objectId] = target
-    context.setListIndex(objectId, parseListIndex(key), value)
+    const [context, /* objectId */, path] = target
+    context.setListIndex(path, parseListIndex(key), value)
     return true
   },
 
   deleteProperty (target, key) {
-    const [context, objectId] = target
-    context.splice(objectId, parseListIndex(key), 1, [])
+    const [context, /* objectId */, path] = target
+    context.splice(path, parseListIndex(key), 1, [])
     return true
   },
 
   has (target, key) {
-    const [context, objectId] = target
+    const [context, objectId, /* path */] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
@@ -194,7 +193,7 @@ const ListHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    const [context, objectId] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
 
     if (key === 'length') return {writable: true, value: object.length}
@@ -210,7 +209,7 @@ const ListHandler = {
   },
 
   ownKeys (target) {
-    const [context, objectId] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
     let keys = ['length']
     for (let key of Object.keys(object)) keys.push(key)
@@ -218,12 +217,12 @@ const ListHandler = {
   }
 }
 
-function mapProxy(context, objectId, readonly) {
-  return new Proxy({context, objectId, readonly}, MapHandler)
+function mapProxy(context, objectId, path, readonly) {
+  return new Proxy({context, objectId, path, readonly}, MapHandler)
 }
 
-function listProxy(context, objectId) {
-  return new Proxy([context, objectId], ListHandler)
+function listProxy(context, objectId, path) {
+  return new Proxy([context, objectId, path], ListHandler)
 }
 
 /**
@@ -232,20 +231,20 @@ function listProxy(context, objectId) {
  * When it is called, `this` is the context object.
  * `readonly` is a list of map property names that cannot be modified.
  */
-function instantiateProxy(objectId, readonly) {
+function instantiateProxy(path, objectId, readonly) {
   const object = this.getObject(objectId)
   if (Array.isArray(object)) {
-    return listProxy(this, objectId)
+    return listProxy(this, objectId, path)
   } else if (object instanceof Text || object instanceof Table) {
-    return object.getWriteable(this)
+    return object.getWriteable(this, path)
   } else {
-    return mapProxy(this, objectId, readonly)
+    return mapProxy(this, objectId, path, readonly)
   }
 }
 
 function rootObjectProxy(context) {
   context.instantiateObject = instantiateProxy
-  return mapProxy(context, ROOT_ID)
+  return mapProxy(context, '_root', [])
 }
 
 module.exports = { rootObjectProxy }

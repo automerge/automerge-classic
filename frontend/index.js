@@ -1,34 +1,52 @@
-const { OPTIONS, CACHE, INBOUND, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
-const { ROOT_ID, isObject, copyObject } = require('../src/common')
+const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = require('./constants')
+const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
-const { applyDiffs, updateParentObjects, cloneRootObject } = require('./apply_patch')
+const { interpretPatch, cloneRootObject } = require('./apply_patch')
 const { rootObjectProxy } = require('./proxies')
 const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
+const { Observable } = require('./observable')
 
 /**
- * Takes a set of objects that have been updated (in `updated`) and an updated
- * mapping from child objectId to parent objectId (in `inbound`), and returns
- * a new immutable document root object based on `doc` that reflects those
- * updates. The state object `state` is attached to the new root object.
+ * Actor IDs must consist only of hexadecimal digits so that they can be encoded
+ * compactly in binary form.
  */
-function updateRootObject(doc, updated, inbound, state) {
-  let newDoc = updated[ROOT_ID]
+function checkActorId(actorId) {
+  if (typeof actorId !== 'string') {
+    throw new TypeError(`Unsupported type of actorId: ${typeof actorId}`)
+  }
+  if (!/^[0-9a-f]+$/.test(actorId)) {
+    throw new RangeError('actorId must consist only of lowercase hex digits')
+  }
+  if (actorId.length % 2 !== 0) {
+    throw new RangeError('actorId must consist of an even number of digits')
+  }
+}
+
+/**
+ * Takes a set of objects that have been updated (in `updated`) and an updated state object
+ * `state`, and returns a new immutable document root object based on `doc` that reflects
+ * those updates.
+ */
+function updateRootObject(doc, updated, state) {
+  let newDoc = updated._root
   if (!newDoc) {
-    newDoc = cloneRootObject(doc[CACHE][ROOT_ID])
-    updated[ROOT_ID] = newDoc
+    newDoc = cloneRootObject(doc[CACHE]._root)
+    updated._root = newDoc
   }
   Object.defineProperty(newDoc, OPTIONS,  {value: doc[OPTIONS]})
   Object.defineProperty(newDoc, CACHE,    {value: updated})
-  Object.defineProperty(newDoc, INBOUND,  {value: inbound})
   Object.defineProperty(newDoc, STATE,    {value: state})
 
   if (doc[OPTIONS].freeze) {
     for (let objectId of Object.keys(updated)) {
       if (updated[objectId] instanceof Table) {
         updated[objectId]._freeze()
+      } else if (updated[objectId] instanceof Text) {
+        Object.freeze(updated[objectId].elems)
+        Object.freeze(updated[objectId])
       } else {
         Object.freeze(updated[objectId])
         Object.freeze(updated[objectId][CONFLICTS])
@@ -44,84 +62,77 @@ function updateRootObject(doc, updated, inbound, state) {
 
   if (doc[OPTIONS].freeze) {
     Object.freeze(updated)
-    Object.freeze(inbound)
   }
   return newDoc
 }
 
 /**
- * Filters a list of operations `ops` such that, if there are multiple assignment
- * operations for the same object and key, we keep only the most recent. Returns
- * the filtered list of operations.
- */
-function ensureSingleAssignment(ops) {
-  let assignments = {}, result = []
-
-  for (let i = ops.length - 1; i >= 0; i--) {
-    const op = ops[i], { obj, key, action } = op
-    if (['set', 'del', 'link', 'inc'].includes(action)) {
-      if (!assignments[obj]) {
-        assignments[obj] = {[key]: op}
-        result.push(op)
-      } else if (!assignments[obj][key]) {
-        assignments[obj][key] = op
-        result.push(op)
-      } else if (assignments[obj][key].action === 'inc' && ['set', 'inc'].includes(action)) {
-        assignments[obj][key].action = action
-        assignments[obj][key].value += op.value
-      }
-    } else {
-      result.push(op)
-    }
-  }
-  return result.reverse()
-}
-
-/**
  * Adds a new change request to the list of pending requests, and returns an
- * updated document root object. `requestType` is a string indicating the type
- * of request, which may be "change", "undo", or "redo". For the "change" request
- * type, the details of the change are taken from the context object `context`.
+ * updated document root object.
+ * The details of the change are taken from the context object `context`.
  * `options` contains properties that may affect how the change is processed; in
  * particular, the `message` property of `options` is an optional human-readable
  * string describing the change.
  */
-function makeChange(doc, requestType, context, options) {
+function makeChange(doc, context, options) {
   const actor = getActorId(doc)
   if (!actor) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
   }
   const state = copyObject(doc[STATE])
   state.seq += 1
-  const deps = copyObject(state.deps)
-  delete deps[actor]
 
-  const request = {requestType, actor, seq: state.seq, deps}
-  if (options && options.message !== undefined) {
-    request.message = options.message
-  }
-  if (options && options.undoable === false) {
-    request.undoable = false
-  }
-  if (context) {
-    request.ops = ensureSingleAssignment(context.ops)
+  const change = {
+    actor,
+    seq: state.seq,
+    startOp: state.maxOp + 1,
+    deps: state.deps,
+    time: (options && typeof options.time === 'number') ? options.time
+                                                        : Math.round(new Date().getTime() / 1000),
+    message: (options && typeof options.message === 'string') ? options.message : '',
+    ops: context.ops
   }
 
   if (doc[OPTIONS].backend) {
-    const [backendState, patch] = doc[OPTIONS].backend.applyLocalChange(state.backendState, request)
+    const [backendState, patch, binaryChange] = doc[OPTIONS].backend.applyLocalChange(state.backendState, change)
     state.backendState = backendState
-    state.requests = []
-    return [applyPatchToDoc(doc, patch, state, true), request]
+    state.lastLocalChange = binaryChange
+    // NOTE: When performing a local change, the patch is effectively applied twice -- once by the
+    // context invoking interpretPatch as soon as any change is made, and the second time here
+    // (after a round-trip through the backend). This is perhaps more robust, as changes only take
+    // effect in the form processed by the backend, but the downside is a performance cost.
+    // Should we change this?
+    const newDoc = applyPatchToDoc(doc, patch, state, true)
+    const patchCallback = options && options.patchCallback || doc[OPTIONS].patchCallback
+    if (patchCallback) patchCallback(patch, doc, newDoc, true, [binaryChange])
+    return [newDoc, change]
 
   } else {
-    if (!context) context = new Context(doc, actor)
-    const queuedRequest = copyObject(request)
-    queuedRequest.before = doc
-    queuedRequest.diffs = context.diffs
-    state.requests = state.requests.slice() // shallow clone
-    state.requests.push(queuedRequest)
-    return [updateRootObject(doc, context.updated, context.inbound, state), request]
+    const queuedRequest = {actor, seq: change.seq, before: doc}
+    state.requests = state.requests.concat([queuedRequest])
+    state.maxOp = state.maxOp + countOps(change.ops)
+    state.deps = []
+    return [updateRootObject(doc, context ? context.updated : {}, state), change]
   }
+}
+
+function countOps(ops) {
+  let count = 0
+  for (const op of ops) {
+    if (op.action === 'set' && op.values) {
+      count += op.values.length
+    } else {
+      count += 1
+    }
+  }
+  return count
+}
+
+/**
+ * Returns the binary encoding of the last change made by the local actor.
+ */
+function getLastLocalChange(doc) {
+  return doc[STATE] && doc[STATE].lastLocalChange ? doc[STATE].lastLocalChange : null
 }
 
 /**
@@ -133,82 +144,19 @@ function makeChange(doc, requestType, context, options) {
  */
 function applyPatchToDoc(doc, patch, state, fromBackend) {
   const actor = getActorId(doc)
-  const inbound = copyObject(doc[INBOUND])
   const updated = {}
-  applyDiffs(patch.diffs, doc[CACHE], updated, inbound)
-  updateParentObjects(doc[CACHE], updated, inbound)
+  interpretPatch(patch.diffs, doc, updated)
 
   if (fromBackend) {
-    const seq = patch.clock ? patch.clock[actor] : undefined
-    if (seq && seq > state.seq) state.seq = seq
-    state.deps = patch.deps
-    state.canUndo = patch.canUndo
-    state.canRedo = patch.canRedo
-  }
-  return updateRootObject(doc, updated, inbound, state)
-}
-
-/**
- * Mutates the request object `request` (representing a change made locally but
- * not yet applied by the backend), transforming it past the remote `patch`.
- * The transformed version of `request` can be applied after `patch` has been
- * applied, and its effect is the same as when the original version of `request`
- * is applied to the base document without `patch`.
- *
- * This function implements a simple form of Operational Transformation.
- * However, the implementation here is actually incomplete and incorrect.
- * Fortunately, it's actually not a big problem if the transformation here is
- * not quite right, because the transformed request is only used transiently
- * while waiting for a response from the backend. When the backend responds, the
- * transformation result is discarded and replaced with the backend's version.
- *
- * One scenario that is not handled correctly is insertion at the same index:
- * request = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
- * patch = {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1}]}
- *
- * Correct behaviour (i.e. consistent with the CRDT) would be to order the two
- * insertions by their elemIds; any subsequent insertions with consecutive
- * indexes may also need to be adjusted accordingly (to keep an insertion
- * sequence by a particular actor uninterrupted).
- *
- * Another scenario that is not handled correctly:
- * requests = [
- *   {diffs: [{obj: someList, type: 'list', action: 'insert', index: 1, value: 'a'}]},
- *   {diffs: [{obj: someList, type: 'list', action: 'set',    index: 1, value: 'b'}]}
- * ]
- * patch = {diffs: [{obj: someList, type: 'list', action: 'remove', index: 1}]}
- *
- * The first request's insertion is correctly left unchanged, but the 'set' action
- * is incorrectly turned into an 'insert' because we don't realise that it is
- * assigning the previously inserted list item (not the deleted item).
- *
- * A third scenario is concurrent assignment to the same list element or map key;
- * this should create a conflict.
- */
-function transformRequest(request, patch) {
-  let transformed = []
-
-  local_loop:
-  for (let local of request.diffs) {
-    local = copyObject(local)
-
-    for (let remote of patch.diffs) {
-      // If the incoming patch modifies list indexes (because it inserts or removes),
-      // adjust the indexes in local diffs accordingly
-      if (local.obj === remote.obj && local.type === 'list' &&
-          ['insert', 'set', 'remove'].includes(local.action)) {
-        if (remote.action === 'insert' && remote.index <=  local.index) local.index += 1
-        if (remote.action === 'remove' && remote.index <   local.index) local.index -= 1
-        if (remote.action === 'remove' && remote.index === local.index) {
-          if (local.action === 'set') local.action = 'insert'
-          if (local.action === 'remove') continue local_loop // drop this diff
-        }
-      }
+    if (!patch.clock) throw new RangeError('patch is missing clock field')
+    if (patch.clock[actor] && patch.clock[actor] > state.seq) {
+      state.seq = patch.clock[actor]
     }
-    transformed.push(local)
+    state.clock = patch.clock
+    state.deps  = patch.deps
+    state.maxOp = Math.max(state.maxOp, patch.maxOp)
   }
-
-  request.diffs = transformed
+  return updateRootObject(doc, updated, state)
 }
 
 /**
@@ -222,20 +170,32 @@ function init(options) {
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported value for init() options: ${options}`)
   }
-  if (options.actorId === undefined && !options.deferActorId) {
-    options.actorId = uuid()
+
+  if (!options.deferActorId) {
+    if (options.actorId === undefined) {
+      options.actorId = uuid()
+    }
+    checkActorId(options.actorId)
   }
 
-  const root = {}, cache = {[ROOT_ID]: root}
-  const state = {seq: 0, requests: [], deps: {}, canUndo: false, canRedo: false}
+  if (options.observable) {
+    const patchCallback = options.patchCallback, observable = options.observable
+    options.patchCallback = (patch, before, after, local, changes) => {
+      if (patchCallback) patchCallback(patch, before, after, local, changes)
+      observable.patchCallback(patch, before, after, local, changes)
+    }
+  }
+
+  const root = {}, cache = {_root: root}
+  const state = {seq: 0, maxOp: 0, requests: [], clock: {}, deps: []}
   if (options.backend) {
     state.backendState = options.backend.init()
+    state.lastLocalChange = null
   }
-  Object.defineProperty(root, OBJECT_ID, {value: ROOT_ID})
+  Object.defineProperty(root, OBJECT_ID, {value: '_root'})
   Object.defineProperty(root, OPTIONS,   {value: Object.freeze(options)})
   Object.defineProperty(root, CONFLICTS, {value: Object.freeze({})})
   Object.defineProperty(root, CACHE,     {value: Object.freeze(cache)})
-  Object.defineProperty(root, INBOUND,   {value: Object.freeze({})})
   Object.defineProperty(root, STATE,     {value: Object.freeze(state)})
   return Object.freeze(root)
 }
@@ -252,7 +212,6 @@ function from(initialState, options) {
  * Changes a document `doc` according to actions taken by the local user.
  * `options` is an object that can contain the following properties:
  *  - `message`: an optional descriptive string that is attached to the change.
- *  - `undoable`: false if the change should not affect the undo history.
  * If `options` is a string, it is treated as `message`.
  *
  * The actual change is made within the callback function `callback`, which is
@@ -262,14 +221,14 @@ function from(initialState, options) {
  * changed, returns the original `doc` and a `null` change request.
  */
 function change(doc, options, callback) {
-  if (doc[OBJECT_ID] !== ROOT_ID) {
+  if (doc[OBJECT_ID] !== '_root') {
     throw new TypeError('The first argument to Automerge.change must be the document root')
   }
   if (doc[CHANGE]) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
   if (typeof options === 'function' && callback === undefined) {
-    ;[options, callback] = [callback, options]
+    [options, callback] = [callback, options]
   }
   if (typeof options === 'string') {
     options = {message: options}
@@ -289,8 +248,7 @@ function change(doc, options, callback) {
     // If the callback didn't change anything, return the original document object unchanged
     return [doc, null]
   } else {
-    updateParentObjects(doc[CACHE], context.updated, context.inbound)
-    return makeChange(doc, 'change', context, options)
+    return makeChange(doc, context, options)
   }
 }
 
@@ -314,7 +272,7 @@ function emptyChange(doc, options) {
   if (!actorId) {
     throw new Error('Actor ID must be initialized with setActorId() before making a change')
   }
-  return makeChange(doc, 'change', new Context(doc, actorId), options)
+  return makeChange(doc, new Context(doc, actorId), options)
 }
 
 /**
@@ -323,116 +281,42 @@ function emptyChange(doc, options) {
  * If it is the result of a local change, the `seq` field from the change
  * request should be included in the patch, so that we can match them up here.
  */
-function applyPatch(doc, patch) {
+function applyPatch(doc, patch, backendState = undefined) {
   const state = copyObject(doc[STATE])
+
+  if (doc[OPTIONS].backend) {
+    if (!backendState) {
+      throw new RangeError('applyPatch must be called with the updated backend state')
+    }
+    state.backendState = backendState
+    return applyPatchToDoc(doc, patch, state, true)
+  }
+
   let baseDoc
 
   if (state.requests.length > 0) {
     baseDoc = state.requests[0].before
-    if (patch.actor === getActorId(doc) && patch.seq !== undefined) {
+    if (patch.actor === getActorId(doc)) {
       if (state.requests[0].seq !== patch.seq) {
         throw new RangeError(`Mismatched sequence number: patch ${patch.seq} does not match next request ${state.requests[0].seq}`)
       }
-      state.requests = state.requests.slice(1).map(copyObject)
+      state.requests = state.requests.slice(1)
     } else {
-      state.requests = state.requests.slice().map(copyObject)
+      state.requests = state.requests.slice()
     }
   } else {
     baseDoc = doc
     state.requests = []
   }
 
-  if (doc[OPTIONS].backend) {
-    if (!patch.state) {
-      throw new RangeError('When an immediate backend is used, a patch must contain the new backend state')
-    }
-    state.backendState = patch.state
-    state.requests = []
-    return applyPatchToDoc(doc, patch, state, true)
-  }
-
   let newDoc = applyPatchToDoc(baseDoc, patch, state, true)
-  for (let request of state.requests) {
-    request.before = newDoc
-    transformRequest(request, patch)
-    newDoc = applyPatchToDoc(request.before, request, state, false)
+  if (state.requests.length === 0) {
+    return newDoc
+  } else {
+    state.requests[0] = copyObject(state.requests[0])
+    state.requests[0].before = newDoc
+    return updateRootObject(doc, {}, state)
   }
-  return newDoc
-}
-
-/**
- * Returns `true` if undo is currently possible on the document `doc` (because
- * there is a local change that has not already been undone); `false` if not.
- */
-function canUndo(doc) {
-  return !!doc[STATE].canUndo && !isUndoRedoInFlight(doc)
-}
-
-/**
- * Returns `true` if one of the pending requests is an undo or redo.
- */
-function isUndoRedoInFlight(doc) {
-  return doc[STATE].requests.some(req => ['undo', 'redo'].includes(req.requestType))
-}
-
-/**
- * Creates a request to perform an undo on the document `doc`, returning a
- * two-element array `[doc, request]` where `doc` is the updated document, and
- * `request` needs to be sent to the backend. `options` is an object as
- * described in the documentation for the `change` function; it may contain a
- * `message` property with an optional change description to attach to the undo.
- * Note that the undo does not take effect immediately: only after the request
- * is sent to the backend, and the backend responds with a patch, does the
- * user-visible document update actually happen.
- */
-function undo(doc, options) {
-  if (typeof options === 'string') {
-    options = {message: options}
-  }
-  if (options !== undefined && !isObject(options)) {
-    throw new TypeError('Unsupported type of options')
-  }
-  if (!doc[STATE].canUndo) {
-    throw new Error('Cannot undo: there is nothing to be undone')
-  }
-  if (isUndoRedoInFlight(doc)) {
-    throw new Error('Can only have one undo in flight at any one time')
-  }
-  return makeChange(doc, 'undo', null, options)
-}
-
-/**
- * Returns `true` if redo is currently possible on the document `doc` (because
- * a prior action was an undo that has not already been redone); `false` if not.
- */
-function canRedo(doc) {
-  return !!doc[STATE].canRedo && !isUndoRedoInFlight(doc)
-}
-
-/**
- * Creates a request to perform a redo of a prior undo on the document `doc`,
- * returning a two-element array `[doc, request]` where `doc` is the updated
- * document, and `request` needs to be sent to the backend. `options` is an
- * object as described in the documentation for the `change` function; it may
- * contain a `message` property with an optional change description to attach
- * to the redo. Note that the redo does not take effect immediately: only
- * after the request is sent to the backend, and the backend responds with a
- * patch, does the user-visible document update actually happen.
- */
-function redo(doc, options) {
-  if (typeof options === 'string') {
-    options = {message: options}
-  }
-  if (options !== undefined && !isObject(options)) {
-    throw new TypeError('Unsupported type of options')
-  }
-  if (!doc[STATE].canRedo) {
-    throw new Error('Cannot redo: there is no prior undo')
-  }
-  if (isUndoRedoInFlight(doc)) {
-    throw new Error('Can only have one redo in flight at any one time')
-  }
-  return makeChange(doc, 'redo', null, options)
 }
 
 /**
@@ -443,16 +327,19 @@ function getObjectId(object) {
 }
 
 /**
- * Returns the object with the given Automerge object ID.
+ * Returns the object with the given Automerge object ID. Note: when called
+ * within a change callback, the returned object is read-only (not a mutable
+ * proxy object).
  */
 function getObjectById(doc, objectId) {
-  const context = doc[CHANGE]
-  if (context) {
-    // If we're within a change callback, return a proxied object
-    return context.instantiateObject(objectId)
-  } else {
-    return doc[CACHE][objectId]
+  // It would be nice to return a proxied object in a change callback.
+  // However, that requires knowing the path from the root to the current
+  // object, which we don't have if we jumped straight to the object by its ID.
+  // If we maintained an index from object ID to parent ID we could work out the path.
+  if (doc[CHANGE]) {
+    throw new TypeError('Cannot use getObjectById in a change callback')
   }
+  return doc[CACHE][objectId]
 }
 
 /**
@@ -467,8 +354,9 @@ function getActorId(doc) {
  * document object with updated metadata.
  */
 function setActorId(doc, actorId) {
+  checkActorId(actorId)
   const state = Object.assign({}, doc[STATE], {actorId})
-  return updateRootObject(doc, {}, doc[INBOUND], state)
+  return updateRootObject(doc, {}, state)
 }
 
 /**
@@ -477,7 +365,10 @@ function setActorId(doc, actorId) {
  * index; if `object` is a map, then `key` must be a property name.
  */
 function getConflicts(object, key) {
-  return object[CONFLICTS][key]
+  if (object[CONFLICTS] && object[CONFLICTS][key] &&
+      Object.keys(object[CONFLICTS][key]).length > 1) {
+    return object[CONFLICTS][key]
+  }
 }
 
 /**
@@ -488,14 +379,21 @@ function getBackendState(doc) {
   return doc[STATE].backendState
 }
 
+/**
+ * Given an array or text object from an Automerge document, returns an array
+ * containing the unique element ID of each list element/character.
+ */
 function getElementIds(list) {
-  return list[ELEM_IDS]
+  if (list instanceof Text) {
+    return list.elems.map(elem => elem.elemId)
+  } else {
+    return list[ELEM_IDS]
+  }
 }
 
 module.exports = {
   init, from, change, emptyChange, applyPatch,
-  canUndo, undo, canRedo, redo,
-  getObjectId, getObjectById, getActorId, setActorId, getConflicts,
+  getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter
+  Text, Table, Counter, Observable
 }

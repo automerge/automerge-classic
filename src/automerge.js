@@ -1,21 +1,15 @@
-const transit = require('transit-immutable-js')
 const uuid = require('./uuid')
 const Frontend = require('../frontend')
-const Backend = require('../backend')
+const { OPTIONS } = require('../frontend/constants')
+const { encodeChange, decodeChange } = require('../backend/columnar')
 const { isObject } = require('./common')
+let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
 /**
- * Constructs a new frontend document that reflects the given list of changes.
+ * Automerge.* API
+ * The functions in this file constitute the publicly facing Automerge API which combines
+ * the features of the Frontend (a document interface) and the backend (CRDT operations)
  */
-function docFromChanges(options, changes) {
-  const doc = init(options)
-  const [state, _] = Backend.applyChanges(Backend.init(), changes)
-  const patch = Backend.getPatch(state)
-  patch.state = state
-  return Frontend.applyPatch(doc, patch)
-}
-
-///// Automerge.* API
 
 function init(options) {
   if (typeof options === 'string') {
@@ -25,85 +19,77 @@ function init(options) {
   } else if (!isObject(options)) {
     throw new TypeError(`Unsupported options for init(): ${options}`)
   }
-  return Frontend.init(Object.assign({backend: Backend}, options))
+  return Frontend.init(Object.assign({backend}, options))
 }
 
 /**
  * Returns a new document object initialized with the given state.
  */
 function from(initialState, options) {
-  const changeOpts = {message: 'Initialization', undoable: false}
+  const changeOpts = {message: 'Initialization'}
   return change(init(options), changeOpts, doc => Object.assign(doc, initialState))
 }
 
 function change(doc, options, callback) {
-  const [newDoc, change] = Frontend.change(doc, options, callback)
+  const [newDoc] = Frontend.change(doc, options, callback)
   return newDoc
 }
 
 function emptyChange(doc, options) {
-  const [newDoc, change] = Frontend.emptyChange(doc, options)
+  const [newDoc] = Frontend.emptyChange(doc, options)
   return newDoc
 }
 
-function undo(doc, options) {
-  const [newDoc, change] = Frontend.undo(doc, options)
-  return newDoc
+function clone(doc, options = {}) {
+  const state = backend.clone(Frontend.getBackendState(doc))
+  return applyPatch(init(options), backend.getPatch(state), state, [], options)
 }
 
-function redo(doc, options) {
-  const [newDoc, change] = Frontend.redo(doc, options)
-  return newDoc
+function free(doc) {
+  backend.free(Frontend.getBackendState(doc))
 }
 
-function load(string, options) {
-  return docFromChanges(options, transit.fromJSON(string))
+function load(data, options = {}) {
+  const state = backend.load(data)
+  return applyPatch(init(options), backend.getPatch(state), state, [data], options)
 }
 
 function save(doc) {
-  const state = Frontend.getBackendState(doc)
-  return transit.toJSON(state.getIn(['opSet', 'history']).concat(state.getIn(['opSet', 'queue'])))
+  return backend.save(Frontend.getBackendState(doc))
 }
 
 function merge(localDoc, remoteDoc) {
   if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
     throw new RangeError('Cannot merge an actor with itself')
   }
-  const localState  = Frontend.getBackendState(localDoc)
-  const remoteState = Frontend.getBackendState(remoteDoc)
-  const [state, patch] = Backend.merge(localState, remoteState)
-  if (patch.diffs.length === 0) return localDoc
-  patch.state = state
-  return Frontend.applyPatch(localDoc, patch)
-}
-
-function diff(oldDoc, newDoc) {
-  const oldState = Frontend.getBackendState(oldDoc)
-  const newState = Frontend.getBackendState(newDoc)
-  const changes = Backend.getChanges(oldState, newState)
-  const [state, patch] = Backend.applyChanges(oldState, changes)
-  return patch.diffs
+  // Just copy all changes from the remote doc; any duplicates will be ignored
+  const [updatedDoc] = applyChanges(localDoc, getAllChanges(remoteDoc))
+  return updatedDoc
 }
 
 function getChanges(oldDoc, newDoc) {
   const oldState = Frontend.getBackendState(oldDoc)
   const newState = Frontend.getBackendState(newDoc)
-  return Backend.getChanges(oldState, newState)
+  return backend.getChanges(newState, backend.getHeads(oldState))
 }
 
 function getAllChanges(doc) {
-  return getChanges(init(), doc)
+  return backend.getAllChanges(Frontend.getBackendState(doc))
 }
 
-function applyChanges(doc, changes) {
+function applyPatch(doc, patch, backendState, changes, options) {
+  const newDoc = Frontend.applyPatch(doc, patch, backendState)
+  const patchCallback = options.patchCallback || doc[OPTIONS].patchCallback
+  if (patchCallback) {
+    patchCallback(patch, doc, newDoc, false, changes)
+  }
+  return newDoc
+}
+
+function applyChanges(doc, changes, options = {}) {
   const oldState = Frontend.getBackendState(doc)
-  const [newState, patch] = Backend.applyChanges(oldState, changes)
-  patch.state = newState
-  return Frontend.applyPatch(doc, patch)
-}
-
-function getMissingDeps(doc) {
-  return Backend.getMissingDeps(Frontend.getBackendState(doc))
+  const [newState, patch] = backend.applyChanges(oldState, changes)
+  return [applyPatch(doc, patch, newState, changes, options), patch]
 }
 
 function equals(val1, val2) {
@@ -118,32 +104,59 @@ function equals(val1, val2) {
 }
 
 function getHistory(doc) {
-  const state = Frontend.getBackendState(doc)
   const actor = Frontend.getActorId(doc)
-  const history = state.getIn(['opSet', 'history'])
-  return history.map((change, index) => {
-    return {
+  const history = getAllChanges(doc)
+  return history.map((change, index) => ({
       get change () {
-        return change.toJS()
+        return decodeChange(change)
       },
       get snapshot () {
-        return docFromChanges(actor, history.slice(0, index + 1))
+        const state = backend.loadChanges(backend.init(), history.slice(0, index + 1))
+        return Frontend.applyPatch(init(actor), backend.getPatch(state), state)
       }
-    }
-  }).toArray()
+    })
+  )
+}
+
+function generateSyncMessage(doc, syncState) {
+  return backend.generateSyncMessage(Frontend.getBackendState(doc), syncState)
+}
+
+function receiveSyncMessage(doc, oldSyncState, message) {
+  const [backendState, syncState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), oldSyncState, message)
+  if (!patch) return [doc, syncState, patch]
+
+  // The patchCallback is passed as argument all changes that are applied.
+  // We get those from the sync message if a patchCallback is present.
+  let changes = null
+  if (doc[OPTIONS].patchCallback) {
+    changes = backend.decodeSyncMessage(message).changes
+  }
+  return [applyPatch(doc, patch, backendState, changes, {}), syncState, patch]
+}
+
+function initSyncState() {
+  return backend.initSyncState()
+}
+
+/**
+ * Replaces the default backend implementation with a different one.
+ * This allows you to switch to using the Rust/WebAssembly implementation.
+ */
+function setDefaultBackend(newBackend) {
+  backend = newBackend
 }
 
 module.exports = {
-  init, from, change, emptyChange, undo, redo,
-  load, save, merge, diff, getChanges, getAllChanges, applyChanges, getMissingDeps,
-  equals, getHistory, uuid,
-  Frontend, Backend,
-  DocSet: require('./doc_set'),
-  WatchableDoc: require('./watchable_doc'),
-  Connection: require('./connection')
+  init, from, change, emptyChange, clone, free,
+  load, save, merge, getChanges, getAllChanges, applyChanges,
+  encodeChange, decodeChange, equals, getHistory, uuid,
+  Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState,
+  get Backend() { return backend }
 }
 
-for (let name of ['canUndo', 'canRedo', 'getObjectId', 'getObjectById', 'getActorId',
-     'setActorId', 'getConflicts', 'Text', 'Table', 'Counter']) {
+for (let name of ['getObjectId', 'getObjectById', 'getActorId',
+     'setActorId', 'getConflicts', 'getLastLocalChange',
+     'Text', 'Table', 'Counter', 'Observable']) {
   module.exports[name] = Frontend[name]
 }

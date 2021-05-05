@@ -24,8 +24,8 @@ describe('SkipList', () => {
     })
 
     it('should return length-1 for the last list element', () => {
-      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b').
-        insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
+      let s = new SkipList().insertAfter(null, 'a', 'a').insertAfter('a', 'b', 'b')
+        .insertAfter('b', 'c', 'c').insertAfter('c', 'd', 'd')
       assert.strictEqual(s.indexOf('d'), 3)
     })
 
@@ -154,17 +154,17 @@ describe('SkipList', () => {
   describe('iterators', () => {
     it('should iterate over values by default', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s], ['value1', 'value2'])
+      assert.deepStrictEqual([...s], ['value1', 'value2'])
     })
 
     it('should support iterating over keys', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s.iterator('keys')], ['key1', 'key2'])
+      assert.deepStrictEqual([...s.iterator('keys')], ['key1', 'key2'])
     })
 
     it('should support iterating over entries', () => {
       let s = new SkipList().insertAfter(null, 'key1', 'value1').insertAfter('key1', 'key2', 'value2')
-      assert.deepEqual([...s.iterator('entries')], [['key1', 'value1'], ['key2', 'value2']])
+      assert.deepStrictEqual([...s.iterator('entries')], [['key1', 'value1'], ['key2', 'value2']])
     })
   })
 
@@ -192,11 +192,11 @@ describe('SkipList', () => {
 
     it('should behave like a JS array', () => {
       jsc.assert(jsc.forall(jsc.bless({generator: makeSkipListOps}), function (ops) {
-        let levels = ops.filter(op => op.hasOwnProperty('insertAfter')).map(op => op.level)
+        let levels = ops.filter(op => Object.prototype.hasOwnProperty.call(op, 'insertAfter')).map(op => op.level)
         let skipList = new SkipList(iter(levels))
         let shadow = []
         for (let op of ops) {
-          if (op.hasOwnProperty('insertAfter')) {
+          if (Object.prototype.hasOwnProperty.call(op, 'insertAfter')) {
             skipList = skipList.insertAfter(op.insertAfter, op.id, op.id)
             shadow.splice(shadow.indexOf(op.insertAfter) + 1, 0, op.id)
           } else {
@@ -204,17 +204,6 @@ describe('SkipList', () => {
             shadow.splice(shadow.indexOf(op.remove), 1)
           }
         }
-
-        /*if (skipList.length !== shadow.length) console.log('list lengths must be equal')
-
-        shadow.forEach((id, index) => {
-          if (skipList.indexOf(id) !== index) {
-            console.log('indexOf(' + id + ') = ' + skipList.indexOf(id) + ', should be ' + index)
-          }
-          if (skipList.keyOf(index) !== id) {
-            console.log('keyOf(' + index + ') = ' + skipList.keyOf(index) + ', should be ' + id)
-          }
-        })*/
 
         return (skipList.length === shadow.length) && shadow.every((id, index) =>
           skipList.indexOf(id) === index && skipList.keyOf(index) === id

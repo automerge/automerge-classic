@@ -2,7 +2,7 @@ language: node_js
 node_js:
 - '10'
 - '12'
-script: 'yarn test && yarn build && TEST_DIST=1 yarn test && node -e "const Automerge = require(\"./dist/automerge\")"'
+script: 'yarn lint && yarn test && yarn build && TEST_DIST=1 yarn test && node -e "const Automerge = require(\"./dist/automerge\")"'
 jobs:
   include:
     - stage: browsertest

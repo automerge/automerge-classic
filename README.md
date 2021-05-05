@@ -354,48 +354,6 @@ like a git repository).
 >
 > To get the `actorId` of the current node, call `Automerge.getActorId(doc)`.
 
-### Undo and redo
-
-Automerge makes it easy to support an undo/redo feature in your application. Note that undo is a
-somewhat tricky concept in a collaborative application! Here, "undo" is taken as meaning "what the
-user expects to happen when they hit <kbd>ctrl+Z</kbd>/<kbd>⌘ Z</kbd>". In particular, the undo
-feature undoes the most recent change _by the local user_; it cannot currently be used to revert
-changes made by other users.
-
-Moreover, undo is not the same as jumping back to a previous version of a document; see
-[the next section](#examining-document-history) on how to examine document history. Undo works by
-applying the inverse operation of the local user's most recent change, and redo works by applying
-the inverse of the inverse. Both undo and redo create new changes, so from other users' point of
-view, an undo or redo looks the same as any other kind of change.
-
-To check whether undo is currently available, use the function `Automerge.canUndo(doc)`. It returns
-true if the local user has made any changes since the document was created or loaded. You can then
-call `Automerge.undo(doc)` to perform an undo. The functions `canRedo()` and `redo()` do the
-inverse:
-
-```js
-let doc = Automerge.change(Automerge.init(), doc => {
-  doc.birds = []
-})
-doc = Automerge.change(doc, doc => {
-  doc.birds.push('blackbird')
-})
-doc = Automerge.change(doc, doc => {
-  doc.birds.push('robin')
-})
-// now doc is {birds: ['blackbird', 'robin']}
-
-Automerge.canUndo(doc) // returns true
-doc = Automerge.undo(doc) // now doc is {birds: ['blackbird']}
-doc = Automerge.undo(doc) // now doc is {birds: []}
-doc = Automerge.redo(doc) // now doc is {birds: ['blackbird']}
-doc = Automerge.redo(doc) // now doc is {birds: ['blackbird', 'robin']}
-```
-
-You can pass an optional `message` as second argument to `Automerge.undo(doc, message)` and
-`Automerge.redo(doc, message)`. This string is used as "commit message" that describes the undo/redo
-change, and it appears in the [change history](#examining-document-history).
-
 ### Sending and receiving changes
 
 The Automerge library itself is agnostic to the network layer — that is, you can use whatever
@@ -404,23 +362,11 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- [`Automerge.Connection`](https://github.com/automerge/automerge/blob/main/src/connection.js) is
-  an implementation of a protocol that syncs up two nodes by determining missing changes and sending
-  them to each other. The [automerge-net](https://github.com/automerge/automerge-net) repository
-  contains an example that runs the Connection protocol over a simple TCP connection.
-- [Cevitxe](https://github.com/DevResults/cevitxe) uses Automerge behind a familiar Redux interface.
-  It provides multiple database adapters for persistence, and synchronization via a tiny relay
-  server that allows peers to connect to each other via WebSockets.
-- [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
-  ([usage example](https://github.com/automerge/automerge/issues/117)) runs the `Automerge.Connection`
-  protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
-- [MPL](https://github.com/automerge/mpl) runs the `Automerge.Connection` protocol over
-  [WebRTC](https://webrtc.org/).
-- [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
-  combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
-  [Dat project](https://datproject.org/).
-- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the `Automerge.Connection` protocol over
-  [PeerJS](https://github.com/peers/peerjs).
+- Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protcol
+  (e.g. WebSocket), and call `Automerge.receiveSyncMessage()` on the recipient to process the
+  messages. TODO: need more documentation for this protocol.
+- There are also a number of external libraries that provide network sync for Automerge; these are
+  in the process of being updated for the Automerge 1.0 data format and sync protocol.
 
 The `getChanges()/applyChanges()` API works as follows:
 
@@ -522,49 +468,8 @@ Automerge.getHistory(doc2)
 ```
 
 Within the change object, the property `message` is set to the free-form "commit message" that was
-passed in as second argument to `Automerge.change()` (if any). The rest of the change object is
-specific to Automerge implementation details, and normally shouldn't need to be interpreted.
-
-If you want to find out what actually changed in a particular edit, rather than inspecting the
-change object, it is better to use `Automerge.diff(oldDoc, newDoc)`. This function returns a list of
-edits that were made in document `newDoc` since its prior version `oldDoc`. You can pass in
-snapshots returned by `Automerge.getHistory()` in order to determine differences between historic
-versions.
-
-The data returned by `Automerge.diff()` has the following form:
-
-```js
-let history = Automerge.getHistory(doc2)
-Automerge.diff(history[2].snapshot, doc2) // get all changes since history[2]
-// [ { action: 'set', type: 'map', obj: '...', key: 'x', value: 1 },
-//   { action: 'set', type: 'map', obj: '...', key: 'x', value: 2 } ]
-```
-
-In the objects returned by `Automerge.diff()`, `obj` indicates the object ID of the object being
-edited (the same as returned by `Automerge.getObjectId()`), and `type` indicates whether that object
-is a `map`, `list`, or `text`.
-
-The available values for `action` depend on the type of object. For `type: 'map'`, the possible
-actions are:
-
-- `action: 'set'`: Then the property `key` is the name of the property being updated. If the value
-  assigned to the property is a primitive (string, number, boolean, null), then `value` contains
-  that value. If the assigned value is an object (map, list, or text), then `value` contains the ID
-  of that object, and additionally the property `link: true` is set. Moreover, if this assignment
-  caused conflicts, then the conflicting values are additionally contained in a `conflicts`
-  property.
-- `action: 'remove'`: Then the property `key` is the name of the property being removed.
-
-For `type: 'list'` and `type: 'text'`, the possible actions are:
-
-- `action: 'insert'`: Then the property `index` contains the list index at which a new element is
-  being inserted, and `value` contains the value inserted there. If the inserted value is an object,
-  the `value` property contains its ID, and the property `link: true` is set.
-- `action: 'set'`: Then the property `index` contains the list index to which a new value is being
-  assigned, and `value` contains that value. If the assigned value is an object, the `value`
-  property contains its ID, and the property `link: true` is set.
-- `action: 'remove'`: Then the property `index` contains the list index that is being removed from
-  the list.
+passed in as second argument to `Automerge.change()` (if any). The rest of the change object
+describes the changes in Automerge's internal change format.
 
 ## Custom CRDT types
 
@@ -721,24 +626,17 @@ objects that you add to a table should have the same properties (like columns in
 Automerge does not enforce this. This is because different users may be running different versions
 of your app, which might be using different properties.
 
-## Caveats
+## Scope of Automerge
 
-Automerge has a comprehensive test suite and is developed using good software engineering
-practices. However, it currently has a few limitations that you should be aware of:
-
-- Automerge is a data structure library, not a full network protocol. `Automerge.Connection`
-  provides a basic building block for a network protocol, but other protocol concerns (such as
-  encryption, authentication, and access control) need to be handled by separate layers
-  outside of Automerge.
-- Storage overhead: Automerge needs to store additional metadata besides the actual objects you
-  create; for some datatypes, such as text, the overhead is substantial. We are
-  [working to improve this](https://github.com/automerge/automerge/pull/253).
-
-See also the [list of open issues](https://github.com/automerge/automerge/issues).
+Automerge is an in-memory data structure library. It does not perform any I/O, neither disk access
+nor network communication. Automerge includes general-purpose building blocks for network protocols,
+but you need to use a separate library to perform the actual communication (including encryption,
+authentication, and access control). Similarly, disk persistence needs to happen in a separate layer
+outside of Automerge.
 
 ## Meta
 
-Copyright 2017–2020, the Automerge contributors. Released under the terms of the
+Copyright 2017–2021, the Automerge contributors. Released under the terms of the
 MIT license (see `LICENSE`).
 
 Created by [Martin Kleppmann](https://martin.kleppmann.com/) and

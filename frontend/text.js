@@ -1,15 +1,16 @@
-const { OBJECT_ID, ELEM_IDS, MAX_ELEM } = require('./constants')
+const { OBJECT_ID } = require('./constants')
+const { isObject } = require('../src/common')
 
 class Text {
   constructor (text) {
     if (typeof text === 'string') {
-      const elems = text.split('').map(value => ({value}))
-      return instantiateText(undefined, elems, undefined)
+      const elems = [...text].map(value => ({value}))
+      return instantiateText(undefined, elems) // eslint-disable-line
     } else if (Array.isArray(text)) {
       const elems = text.map(value => ({value}))
-      return instantiateText(undefined, elems, undefined)
+      return instantiateText(undefined, elems) // eslint-disable-line
     } else if (text === undefined) {
-      return instantiateText(undefined, [], 0)
+      return instantiateText(undefined, []) // eslint-disable-line
     } else {
       throw new TypeError(`Unsupported initial value for Text: ${text}`)
     }
@@ -20,7 +21,14 @@ class Text {
   }
 
   get (index) {
-    return this.elems[index].value
+    const value = this.elems[index].value
+    if (this.context && isObject(value)) {
+      const objectId = value[OBJECT_ID]
+      const path = this.path.concat([{key: index, objectId}])
+      return this.context.instantiateObject(path, objectId)
+    } else {
+      return value
+    }
   }
 
   getElemId (index) {
@@ -100,13 +108,14 @@ class Text {
    * the text object is accessed within a change callback. `context` is the
    * proxy context that keeps track of the mutations.
    */
-  getWriteable(context) {
+  getWriteable(context, path) {
     if (!this[OBJECT_ID]) {
       throw new RangeError('getWriteable() requires the objectId to be set')
     }
 
-    const instance = instantiateText(this[OBJECT_ID], this.elems, this[MAX_ELEM])
+    const instance = instantiateText(this[OBJECT_ID], this.elems)
     instance.context = context
+    instance.path = path
     return instance
   }
 
@@ -115,7 +124,7 @@ class Text {
    */
   set (index, value) {
     if (this.context) {
-      this.context.setListIndex(this[OBJECT_ID], index, value)
+      this.context.setListIndex(this.path, index, value)
     } else if (!this[OBJECT_ID]) {
       this.elems[index].value = value
     } else {
@@ -129,7 +138,7 @@ class Text {
    */
   insertAt(index, ...values) {
     if (this.context) {
-      this.context.splice(this[OBJECT_ID], index, 0, values)
+      this.context.splice(this.path, index, 0, values)
     } else if (!this[OBJECT_ID]) {
       this.elems.splice(index, 0, ...values.map(value => ({value})))
     } else {
@@ -144,7 +153,7 @@ class Text {
    */
   deleteAt(index, numDelete = 1) {
     if (this.context) {
-      this.context.splice(this[OBJECT_ID], index, numDelete, [])
+      this.context.splice(this.path, index, numDelete, [])
     } else if (!this[OBJECT_ID]) {
       this.elems.splice(index, numDelete)
     } else {
@@ -160,24 +169,15 @@ for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach',
                     'slice', 'some', 'toLocaleString']) {
   Text.prototype[method] = function (...args) {
     const array = [...this]
-    return array[method].call(array, ...args)
+    return array[method](...args)
   }
 }
 
-function instantiateText(objectId, elems, maxElem) {
+function instantiateText(objectId, elems) {
   const instance = Object.create(Text.prototype)
   instance[OBJECT_ID] = objectId
   instance.elems = elems
-  instance[MAX_ELEM] = maxElem
   return instance
 }
 
-/**
- * Returns the elemId of the `index`-th element. `object` may be either
- * a list object or a Text object.
- */
-function getElemId(object, index) {
-  return (object instanceof Text) ? object.getElemId(index) : object[ELEM_IDS][index]
-}
-
-module.exports = { Text, getElemId, instantiateText }
+module.exports = { Text, instantiateText }

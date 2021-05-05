@@ -1,5 +1,3 @@
-const ROOT_ID   = '00000000-0000-0000-0000-000000000000'
-
 function isObject(obj) {
   return typeof obj === 'object' && obj !== null
 }
@@ -18,31 +16,31 @@ function copyObject(obj) {
 }
 
 /**
- * Returns true if all components of `clock1` are less than or equal to those
- * of `clock2` (both clocks given as Immutable.js Map objects). Returns false
- * if there is at least one component in which `clock1` is greater than
- * `clock2` (that is, either `clock1` is overall greater than `clock2`, or the
- * clocks are incomparable).
+ * Takes a string in the form that is used to identify operations (a counter concatenated
+ * with an actor ID, separated by an `@` sign) and returns an object `{counter, actorId}`.
  */
-function lessOrEqual(clock1, clock2) {
-  return clock1.keySeq().concat(clock2.keySeq()).reduce(
-    (result, key) => (result && clock1.get(key, 0) <= clock2.get(key, 0)),
-    true)
+function parseOpId(opId) {
+  const match = /^(\d+)@(.*)$/.exec(opId || '')
+  if (!match) {
+    throw new RangeError(`Not a valid opId: ${opId}`)
+  }
+  return {counter: parseInt(match[1], 10), actorId: match[2]}
 }
 
 /**
- * Takes a string in the form that is used to identify list elements (an actor
- * ID concatenated with a counter, separated by a colon) and returns an object
- * of the structure `{counter, actorId}`.
+ * Returns true if the two byte arrays contain the same data, false if not.
  */
-function parseElemId(elemId) {
-  const match = /^(.*):(\d+)$/.exec(elemId || '')
-  if (!match) {
-    throw new RangeError(`Not a valid elemId: ${elemId}`)
+function equalBytes(array1, array2) {
+  if (!(array1 instanceof Uint8Array) || !(array2 instanceof Uint8Array)) {
+    throw new TypeError('equalBytes can only compare Uint8Arrays')
   }
-  return {counter: parseInt(match[2]), actorId: match[1]}
+  if (array1.byteLength !== array2.byteLength) return false
+  for (let i = 0; i < array1.byteLength; i++) {
+    if (array1[i] !== array2[i]) return false
+  }
+  return true
 }
 
 module.exports = {
-  ROOT_ID, isObject, copyObject, lessOrEqual, parseElemId
+  isObject, copyObject, parseOpId, equalBytes
 }

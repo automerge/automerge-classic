@@ -114,7 +114,7 @@ class SkipList {
   constructor (randomSource) {
     const head = new Node(null, null, 1, [], [null], [], [null])
     const random = randomSource ? randomSource() : randomLevel()
-    return makeInstance(0, Map().set(null, head), random)
+    return makeInstance(0, Map().set(null, head), random) // eslint-disable-line
   }
 
   get headNode () {
