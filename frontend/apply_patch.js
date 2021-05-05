@@ -81,58 +81,6 @@ function applyProperties(props, object, conflicts, updated) {
 }
 
 /**
- * `edits` is an array of edits to a list data structure, each of which is an object of the form
- * either `{action: 'insert', index, elemId}` or `{action: 'remove', index}`. This merges adjacent
- * edits and calls `insertCallback(index, elemIds)` or `removeCallback(index, count)`, as
- * appropriate, for each sequence of insertions or removals.
- */
-function iterateEdits(edits, insertCallback, removeCallback) {
-  if (!edits) return
-  let splicePos = -1, deletions, insertions
-
-  for (let i = 0; i < edits.length; i++) {
-    const { action, index, elemId } = edits[i]
-
-    if (action === 'insert') {
-      if (splicePos < 0) {
-        splicePos = index
-        deletions = 0
-        insertions = []
-      }
-      insertions.push(elemId)
-
-      // If there are multiple consecutive insertions at successive indexes,
-      // accumulate them and then process them in a single insertCallback
-      if (i === edits.length - 1 ||
-          edits[i + 1].action !== 'insert' ||
-          edits[i + 1].index  !== index + 1) {
-        insertCallback(splicePos, insertions)
-        splicePos = -1
-      }
-
-    } else if (action === 'remove') {
-      if (splicePos < 0) {
-        splicePos = index
-        deletions = 0
-        insertions = []
-      }
-      deletions += 1
-
-      // If there are multiple consecutive removals of the same index,
-      // accumulate them and then process them in a single removeCallback
-      if (i === edits.length - 1 ||
-          edits[i + 1].action !== 'remove' ||
-          edits[i + 1].index  !== index) {
-        removeCallback(splicePos, deletions)
-        splicePos = -1
-      }
-    } else {
-      throw new RangeError(`Unknown list edit action: ${action}`)
-    }
-  }
-}
-
-/**
  * Creates a writable copy of an immutable map object. If `originalObject`
  * is undefined, creates an empty object with ID `objectId`.
  */
