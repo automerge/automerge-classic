@@ -1,5 +1,4 @@
 const path = require('path')
-const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin
 
 module.exports = {
   entry: './src/automerge.js',
@@ -12,12 +11,6 @@ module.exports = {
     // https://github.com/webpack/webpack/issues/6525
     globalObject: 'this',
   },
-  plugins: [
-    new BundleAnalyzerPlugin({
-      analyzerMode: 'static',
-      openAnalyzer: false,
-    }),
-  ],
   devtool: 'source-map',
   module: {
     rules: [
