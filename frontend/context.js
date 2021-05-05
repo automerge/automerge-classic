@@ -128,11 +128,8 @@ class Context {
    * by mutating the patch object. Returns the subpatch at the given path.
    */
   getSubpatch(patch, path) {
-    if (path.length == 0) {
-      return patch
-    }
+    if (path.length == 0) return patch
     let subpatch = patch, object = this.getObject('_root')
-
 
     for (let pathElem of path) {
       let values = this.getValuesDescriptions(path, object, pathElem.key)
@@ -142,12 +139,7 @@ class Context {
         }
       } else if (subpatch.edits) {
         for (const opId of Object.keys(values)) {
-          subpatch.edits.push({
-            action: 'update',
-            index: pathElem.key,
-            value: values[opId],
-            opId,
-          })
+          subpatch.edits.push({action: 'update', index: pathElem.key, opId, value: values[opId]})
         }
       }
 
@@ -160,6 +152,7 @@ class Context {
       if (!nextOpId) {
         throw new RangeError(`Cannot find path object with objectId ${pathElem.objectId}`)
       }
+
       subpatch = values[nextOpId]
       object = this.getPropertyValue(object, pathElem.key, nextOpId)
     }
@@ -363,7 +356,6 @@ class Context {
    * `subpatch` to reflect the sequence of values.
    */
   insertListItems(subpatch, index, values, newObject) {
-
     const list = newObject ? [] : this.getObject(subpatch.objectId)
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
@@ -376,12 +368,7 @@ class Context {
     if (allPrimitive && values.length > 1) {
       let nextElemId = this.nextOpId()
       this.addOp({action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []})
-      subpatch.edits.push({
-        index,
-        action: 'multi-insert',
-        elemId: nextElemId,
-        values,
-      })
+      subpatch.edits.push({action: 'multi-insert', elemId: nextElemId, index, values})
     } else {
       for (let offset = 0; offset < values.length; offset++) {
         let nextElemId = this.nextOpId()
@@ -416,12 +403,7 @@ class Context {
         const pred = getPred(list, index)
         const opId = this.nextOpId()
         const valuePatch = this.setValue(objectId, index, value, false, pred, getElemId(list, index))
-        subpatch.edits.push({
-          action: 'update',
-          index,
-          value: valuePatch,
-          opId,
-        })
+        subpatch.edits.push({action: 'update', index, opId, value: valuePatch})
       })
     }
   }
@@ -557,12 +539,7 @@ class Context {
 
     this.applyAtPath(path, subpatch => {
       if (type === 'list' || type === 'text') {
-        subpatch.edits.push({
-          action: 'update',
-          opId,
-          index: key,
-          value: {value, datatype: 'counter'}
-        })
+        subpatch.edits.push({action: 'update', index: key, opId, value: {value, datatype: 'counter'}})
       } else {
         subpatch.props[key] = {[opId]: {value, datatype: 'counter'}}
       }

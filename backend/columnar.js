@@ -1342,7 +1342,7 @@ function constructPatch(documentBuffer) {
     const action = col.action.readValue(), actionName = ACTIONS[action]
     if (action % 2 === 0) { // even-numbered actions are object creation
       const type = OBJECT_TYPE[actionName] || 'unknown'
-      if (['list', 'text'].includes(type)) {
+      if (type === 'list' || type === 'text') {
         objects[opId] = {objectId: opId, type, edits: []}
       } else {
         objects[opId] = {objectId: opId, type, props: {}}

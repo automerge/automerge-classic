@@ -361,7 +361,7 @@ describe('Automerge.Backend', () => {
           objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}},
             {action: 'remove', index: 0, count: 1}
-          ], 
+          ]
         }}}}
       })
     })
@@ -383,7 +383,7 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(change3)])
       assert.deepStrictEqual(patch3, {
         clock: {[actor1]: 1, [actor2]: 2}, maxOp: 2, pendingChanges: 0,
-        deps: [hash(change1), hash(change3)].sort(), 
+        deps: [hash(change1), hash(change3)].sort(),
         diffs: {objectId: '_root', type: 'map', props: {conflict: {
           [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'list', edits: []},
           [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {type: 'value', value: 12}}}}
@@ -418,7 +418,8 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`,
+              value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
           ]
         }}}}
       })
@@ -472,13 +473,13 @@ describe('Automerge.Backend', () => {
                 done:  {[`5@${actor}`]: {type: 'value', value: false}}
               }
             }}
-          ],
+          ]
         }}}}
       })
     })
 
     it('should support inserting multiple elements in one op', () => {
-      const actor = uuid() 
+      const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
@@ -488,16 +489,15 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [
-            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]},
-          ],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+          ]
         }}}}
       })
     })
 
     it('should support deleting multiple elements in one op', () => {
-      const actor = uuid() 
+      const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
@@ -511,10 +511,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 9, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [
+          objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'remove', index: 1, count: 3}
-          ],
+          ]
         }}}}
       })
     })
@@ -721,7 +720,7 @@ describe('Automerge.Backend', () => {
     })
 
     it('should support inserting multiple elements in one change', () => {
-      const actor = uuid() 
+      const actor = uuid()
       const localChange = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]},
@@ -740,7 +739,7 @@ describe('Automerge.Backend', () => {
     })
 
     it('should support deleting multiple elements in one op', () => {
-      const actor = uuid() 
+      const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]}
@@ -896,8 +895,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}],
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}
+          ]
         }}}}
       })
     })
@@ -949,7 +949,7 @@ describe('Automerge.Backend', () => {
             {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `4@${actor1}`, value: {type: 'value', value: 'greenfinch'}},
             {action: 'update', index: 0, opId: `4@${actor2}`, value: {type: 'value', value: 'goldfinch'}},
             {action: 'insert', index: 1, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'magpie'}}
-          ],
+          ]
         }}}}
       })
     })
@@ -976,7 +976,7 @@ describe('Automerge.Backend', () => {
                 done:  {[`4@${actor}`]: {type: 'value', value: false}}
               }
             }}
-          ],
+          ]
         }}}}
       })
     })
@@ -1033,7 +1033,7 @@ describe('Automerge.Backend', () => {
               'bullfinch',
               'greenfinch',
             ]}
-          ],
+          ]
         }}}}
       })
     })

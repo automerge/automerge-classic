@@ -304,7 +304,7 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {'1@actor1': {objectId: listId, type: 'list', edits: [
-          {action: 'remove', index: 0, count: 1} 
+          {action: 'remove', index: 0, count: 1}
         ]}}
       }})
       assert.deepStrictEqual(context.ops, [

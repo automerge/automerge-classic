@@ -161,7 +161,7 @@ function applyAssign(opSet, op, patch) {
     if (patch) {
       const valuePatch = {}
       opSet = applyMake(opSet, op, valuePatch)
-      if (['map', 'table'].includes(type)) {
+      if (type === 'map' || type === 'table') {
         patch.props[key][op.get('opId')] = valuePatch
       }
     } else {
