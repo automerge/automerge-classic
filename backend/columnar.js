@@ -21,7 +21,7 @@ const {
 const { Hash } = require('fast-sha256')
 
 // These bytes don't mean anything, they were generated randomly
-const MAGIC_BYTES = Uint8Array.of(0x85, 0x6f, 0x4a, 0x83)
+const MAGIC_BYTES = new Uint8Array([0x85, 0x6f, 0x4a, 0x83])
 
 const CHUNK_TYPE_DOCUMENT = 0
 const CHUNK_TYPE_CHANGE = 1
@@ -545,7 +545,7 @@ function decoderByColumnId(columnId, buffer) {
 
 function makeDecoders(columns, columnSpec) {
   // By default, every column decodes an empty byte array
-  const emptyBuf = Uint8Array.of(), decoders = {}
+  const emptyBuf = new Uint8Array(0), decoders = {}
   for (let columnId of Object.values(columnSpec)) {
     decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
   }

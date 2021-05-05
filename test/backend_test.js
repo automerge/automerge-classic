@@ -685,8 +685,8 @@ describe('Automerge.Backend', () => {
           birds: {'1@111111': {objectId: '1@111111', type: 'list',
             edits: [
               {action: 'insert', index: 0, elemId: '2@111111', opId: '2@111111', value: {type: 'value', value: 'magpie'}},
-              {action: 'remove', index: 0, count: 1}],
-          }}
+              {action: 'remove', index: 0, count: 1}
+            ]}}
         }}
       })
       assert.deepStrictEqual(changes, [{

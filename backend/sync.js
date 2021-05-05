@@ -69,7 +69,7 @@ class BloomFilter {
    * Returns the Bloom filter state, encoded as a byte array.
    */
   get bytes() {
-    if (this.numEntries === 0) return Uint8Array.of()
+    if (this.numEntries === 0) return new Uint8Array(0)
     const encoder = new Encoder()
     encoder.appendUint32(this.numEntries)
     encoder.appendUint32(this.numBitsPerEntry)
@@ -361,7 +361,7 @@ function generateSyncMessage(backend, syncState) {
     const lastSync = theirHave[0].lastSync
     if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
       // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
-      const resetMsg = {heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: []}
+      const resetMsg = {heads: ourHeads, need: [], have: [{ lastSync: [], bloom: new Uint8Array(0) }], changes: []}
       return [syncState, encodeSyncMessage(resetMsg)]
     }
   }

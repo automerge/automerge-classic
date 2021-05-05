@@ -1228,7 +1228,7 @@ describe('Automerge', () => {
     it('should handle updates to a list element', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Chaffinch', 'Bullfinch'])
       let s2 = Automerge.change(s1, doc => doc.birds[0] = 'Goldfinch')
-      let [s3, patch3] = Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2))
+      let [s3] = Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2))
       assert.deepStrictEqual(s3.birds, ['Goldfinch', 'Bullfinch'])
       assert.strictEqual(Automerge.getConflicts(s3.birds, 0), undefined)
     })
@@ -1236,7 +1236,7 @@ describe('Automerge', () => {
     it('should handle updates to a text object', () => {
       let s1 = Automerge.change(Automerge.init(), doc => doc.text = new Automerge.Text('ab'))
       let s2 = Automerge.change(s1, doc => doc.text.set(0, 'A'))
-      let [s3, patch3] = Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2))
+      let [s3] = Automerge.applyChanges(Automerge.init(), Automerge.getAllChanges(s2))
       assert.deepStrictEqual([...s3.text], ['A', 'b'])
     })
 

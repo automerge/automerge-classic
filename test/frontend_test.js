@@ -5,7 +5,6 @@ const { Backend } = require('../src/automerge')
 const uuid = require('../src/uuid')
 const { STATE } = require('../frontend/constants')
 const UUID_PATTERN = /^[0-9a-f]{32}$/
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('../frontend/constants')
 
 describe('Automerge.Frontend', () => {
   describe('initializing', () => {
@@ -725,8 +724,7 @@ describe('Automerge.Frontend', () => {
                 species: {[`5@${actor}`]: {type: 'value', value: 'magpie'}},
                 family: {[`6@${actor}`]: {type: 'value', value: 'corvidae'}}
               }
-            }}]
-          }}
+            }}]}}
         }}
       }
       const patch2 = {
