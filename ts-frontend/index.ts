@@ -497,7 +497,7 @@ class LowLevelFrontend {
       Object.entries(diff.props || {}).map(([index,values]) => {
         let elemId = elems.get(+index)
         return [ elemId, Map(Object.entries(values).map(([opid,value]) =>
-          [opid, this.interpretDiff(val.props.getIn([elemId,opid],null), value)]
+          [opid, this.interpretDiff(props.getIn([elemId,opid],null), value)]
         ))]
       })
     ))
@@ -511,7 +511,7 @@ class LowLevelFrontend {
     let props = val.props
     Object.entries(diff.props || {}).forEach(([prop,values]) => {
       let updated : Map<OpId,Val> = Map(Object.entries(values).map(([opid,value]) =>
-        [opid, this.interpretDiff(val.props.getIn([prop,opid],null), value)]
+        [opid, this.interpretDiff(props.getIn([prop,opid],null), value)]
       ))
       if (updated.size === 0) {
         props = props.delete(prop)
