@@ -13,7 +13,7 @@ describe('sync protocol - integration', () => {
 
   describe('two peers', () => {
     it(`syncs a single change`, () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -30,7 +30,7 @@ describe('sync protocol - integration', () => {
     })
 
     it('syncs divergent changes', () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -57,7 +57,7 @@ describe('sync protocol - integration', () => {
 
   describe('three peers', () => {
     it(`syncs a single change`, () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -76,7 +76,7 @@ describe('sync protocol - integration', () => {
     })
 
     it(`syncs a single change (all connected to all)`, () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -96,7 +96,7 @@ describe('sync protocol - integration', () => {
     })
 
     it(`syncs multiple changes`, () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
@@ -118,7 +118,7 @@ describe('sync protocol - integration', () => {
     })
 
     it('syncs divergent changes', async () => {
-      let doc = A.from({})
+      let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
