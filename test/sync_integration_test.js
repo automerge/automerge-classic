@@ -2,6 +2,8 @@
 const { EventEmitter } = require('events')
 const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
+console.clear()
+
 describe('sync protocol - integration', () => {
   beforeEach(() => {
     iterations = 0
@@ -120,19 +122,13 @@ describe('sync protocol - integration', () => {
       const bob = new ConnectedDoc('bob', doc)
       const charlie = new ConnectedDoc('charlie', doc)
 
-      // console.log('---------------- connecting')
-
       connect(alice, charlie)
       connect(alice, bob)
       connect(alice, charlie)
 
-      // console.log('---------------- disconnecting')
-
       alice.disconnect()
       bob.disconnect()
       charlie.disconnect()
-
-      // console.log('---------------- making changes')
 
       // each one makes a change
       alice.change(s => (s.alice = 1))
@@ -143,8 +139,6 @@ describe('sync protocol - integration', () => {
       assert.notDeepStrictEqual(alice.doc, bob.doc)
       assert.notDeepStrictEqual(bob.doc, charlie.doc)
       assert.notDeepStrictEqual(alice.doc, charlie.doc)
-
-      // console.log('---------------- reconnecting')
 
       alice.connect()
       bob.connect()
@@ -160,34 +154,21 @@ describe('sync protocol - integration', () => {
 
 function connect(a, b) {
   const channel = new Channel()
-  a.connectTo(b.peerId, channel)
-  b.connectTo(a.peerId, channel)
+  a.connectTo(b.id, channel)
+  b.connectTo(a.id, channel)
 }
 
 class ConnectedDoc extends EventEmitter {
-  constructor(peerId, doc) {
+  peers = {}
+
+  constructor(id, doc) {
     super()
-    this.peerId = peerId
+    this.id = id
     this.doc = A.clone(doc)
-    this.peers = {}
   }
 
-  connectTo(remotePeerId, channel) {
-    this.connected = true
-    const peer = new Peer(this.peerId, remotePeerId, this.doc, channel)
-    this.peers[remotePeerId] = peer
-    peer.update(this.doc)
-    peer.on('change', doc => {
-      // console.log(`doc changed ${this.peerId}<-${remotePeerId}`, doc)
-      this.update(doc, remotePeerId)
-    })
-  }
-
-  update(doc, remotePeerId) {
-    this.doc = doc
-    for (const peerId in this.peers) {
-      this.peers[peerId].update(doc)
-    }
+  get peerList() {
+    return Object.values(this.peers)
   }
 
   change(fn) {
@@ -195,64 +176,63 @@ class ConnectedDoc extends EventEmitter {
     this.update(updatedDoc)
   }
 
+  connectTo(peerId, channel) {
+    const peer = new Peer(this.id, peerId, channel)
+    this.peers[peerId] = peer
+    channel.join()
+    channel.addListener('data', (senderId, msg) => {
+      if (senderId === this.id) return // don't react to our own mesages
+      const newDoc = this.peers[senderId].receive(this.doc, msg)
+      this.update(newDoc)
+    })
+    this.connected = true
+  }
+
+  update(doc) {
+    this.doc = doc
+    for (const peer of this.peerList) {
+      peer.update(this.doc)
+    }
+  }
+
   disconnect() {
     this.connected = false
-    for (const peerId in this.peers) {
-      this.peers[peerId].channel.leave()
+    for (const peer of this.peerList) {
+      peer.channel.leave()
     }
   }
 
   connect() {
     this.connected = true
-    for (const peerId in this.peers) {
-      const peer = this.peers[peerId]
+    for (const peer of this.peerList) {
       peer.channel.join()
-      peer.update(this.doc)
     }
   }
 }
 
 class Peer extends EventEmitter {
-  constructor(peerId, remotePeerId, doc, channel) {
+  constructor(id, peerId, channel) {
     super()
+    this.id = id
+    this.channel = channel
     this.syncState = A.initSyncState()
     this.peerId = peerId
-    this.remotePeerId = remotePeerId
-    this.doc = doc
+  }
 
-    this.updates = 0
-
-    channel.join()
-    this.channel = channel
-    channel.addListener('data', (senderPeerId, msg) => {
-      if (senderPeerId === this.peerId) return // ignore our own messages
-      this.receive(msg)
-    })
+  send(msg) {
+    this.channel.write(this.id, msg)
   }
 
   update(doc) {
     const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
-    this.doc = doc
     this.syncState = syncState
-    this.send(msg)
+    if (msg) this.send(msg)
   }
 
-  receive(msg) {
-    const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncState, msg)
-    // console.log(`received update ${this.peerId}<-${this.remotePeerId}`, doc)
-    this.doc = doc
+  receive(doc, msg) {
+    const [newDoc, syncState] = A.receiveSyncMessage(doc, this.syncState, msg)
     this.syncState = syncState
-    this.emit('change', doc)
-  }
-
-  send(msg) {
-    if (msg === null) return // nothing changed
-
-    this.updates += 1
-    if (this.updates > 10) throw new Error('loop detected')
-
-    // console.log(`sending update ${this.peerId}->${this.remotePeerId}`, this.doc)
-    this.channel.write(this.peerId, msg)
+    return newDoc
   }
 }
 
