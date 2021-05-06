@@ -508,14 +508,17 @@ class LowLevelFrontend {
     //FIXME - map or table
     //val = val || { type: diff.type, objectId: diff.objectId, props: Map() }
     val = val || { type: "map", objectId: diff.objectId, props: Map() }
-    let props = val.props.merge(Map(
-      Object.entries(diff.props || {}).map(([prop,values]) => {
-        let v = Map(Object.entries(values).map(([opid,value]) =>
-          [opid, this.interpretDiff(val.props.getIn([prop,opid],null), value)]
-        ))
-        return v.size === 0 ? null : [ prop, v ]
-      })
-    ))
+    let props = val.props
+    Object.entries(diff.props || {}).forEach(([prop,values]) => {
+      let updated : Map<OpId,Val> = Map(Object.entries(values).map(([opid,value]) =>
+        [opid, this.interpretDiff(val.props.getIn([prop,opid],null), value)]
+      ))
+      if (updated.size === 0) {
+        props = props.delete(prop)
+      } else {
+        props = props.set(prop, updated)
+      }
+    })
     return { ... val, props }
   }
 
@@ -606,20 +609,28 @@ class LowLevelFrontend {
 
 let backend = Backend.init()
 let frontend = new LowLevelFrontend({ backend })
+let request, change
 frontend.begin()
 frontend.set("hello", "world")
 frontend.set("hello", "world2")
 frontend.set("hello", "world3")
+frontend.set("number", 127)
+frontend.set("boolean", true)
+frontend.set("null", null)
 frontend.set("tmp", "xxx")
-frontend.del("tmp")
 frontend.set("sub", Value.Map).getMap("sub").set("key","val")
 frontend.getMap("sub").set("subsub",Value.Map).getMap("subsub").set("foo","bar")
 frontend.set("items", Value.List)
 frontend.getList("items").insert(0,"dog").insert(0,"bat").insert(1,"zebra").set(1,"sumo").set(1,Value.Map).getMap(1).set("a","AAA")
-frontend.getList("items").insert(1,"xxx").del(1)
-
-let [ request, change ] = frontend.commit()
+frontend.getList("items").insert(1,"xxx")
+;[ request, change ] = frontend.commit()
 log(request)
+log(frontend.value())
+frontend.begin()
+frontend.del("tmp")
+frontend.getList("items").del(1)
+;[ request, change ] = frontend.commit()
+//log(request)
 
 //frontend.rollback()
 
