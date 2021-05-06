@@ -99,7 +99,6 @@ describe('Automerge', () => {
         doc.counter.increment(-1)
         doc.counter.increment(3)
       })
-     
       assert.deepStrictEqual(s1, {counter: new Automerge.Counter(4)})
     })
 
