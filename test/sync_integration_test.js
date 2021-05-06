@@ -12,7 +12,9 @@ describe('sync protocol - integration', () => {
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
 
-      connect(alice, bob)
+      const channel = new Channel()
+      alice.connectTo(bob.userId, channel)
+      bob.connectTo(alice.userId, channel)
 
       // alice makes a change
       alice.change(s => (s.alice = 1))
@@ -27,7 +29,9 @@ describe('sync protocol - integration', () => {
       const alice = new ConnectedDoc('alice', doc)
       const bob = new ConnectedDoc('bob', doc)
 
-      connect(alice, bob)
+      const channel = new Channel()
+      alice.connectTo(bob.userId, channel)
+      bob.connectTo(alice.userId, channel)
 
       alice.disconnect()
 
@@ -51,45 +55,45 @@ describe('sync protocol - integration', () => {
   describePeers(['alice', 'bob', 'charlie', 'dwight'])
   describePeers(['alice', 'bob', 'charlie', 'dwight', 'eleanor'])
 
-  function connect(a, b) {
-    const channel = new Channel()
-    a.connectTo(b.userId, channel)
-    b.connectTo(a.userId, channel)
-  }
-
-  function connectAll(peers) {
-    for (let i = 0; i < peers.length; i++) {
-      for (let j = i + 1; j < peers.length; j++) {
-        const a = peers[i]
-        const b = peers[j]
-        connect(a, b)
-      }
-    }
-  }
-
-  function connectAllInDaisyChain(peers) {
-    peers.slice(0, peers.length - 1).forEach((peer, i) => {
-      const nextPeer = peers[i + 1]
-      connect(peer, nextPeer)
-    })
-  }
-
-  function assertAllEqual(peers) {
-    peers.slice(0, peers.length - 1).forEach((peer, i) => {
-      const nextPeer = peers[i + 1]
-      assert.deepStrictEqual(peer.doc, nextPeer.doc)
-    })
-  }
-
-  function assertAllDifferent(peers) {
-    peers.slice(0, peers.length - 1).forEach((peer, i) => {
-      const nextPeer = peers[i + 1]
-      assert.notDeepStrictEqual(peer.doc, nextPeer.doc)
-    })
-  }
-
   function describePeers(users) {
     describe(`${users.length} peers`, () => {
+      function connect(a, b) {
+        const channel = new Channel()
+        a.connectTo(b.userId, channel)
+        b.connectTo(a.userId, channel)
+      }
+
+      function connectAll(peers) {
+        for (let i = 0; i < peers.length; i++) {
+          for (let j = i + 1; j < peers.length; j++) {
+            const a = peers[i]
+            const b = peers[j]
+            connect(a, b)
+          }
+        }
+      }
+
+      function connectAllInDaisyChain(peers) {
+        peers.slice(0, peers.length - 1).forEach((peer, i) => {
+          const nextPeer = peers[i + 1]
+          connect(peer, nextPeer)
+        })
+      }
+
+      function assertAllEqual(peers) {
+        peers.slice(0, peers.length - 1).forEach((peer, i) => {
+          const nextPeer = peers[i + 1]
+          assert.deepStrictEqual(peer.doc, nextPeer.doc)
+        })
+      }
+
+      function assertAllDifferent(peers) {
+        peers.slice(0, peers.length - 1).forEach((peer, i) => {
+          const nextPeer = peers[i + 1]
+          assert.notDeepStrictEqual(peer.doc, nextPeer.doc)
+        })
+      }
+
       it(`syncs a single change (direct connections)`, () => {
         const doc = A.init()
         const peers = users.map(name => new ConnectedDoc(name, doc))
@@ -138,7 +142,7 @@ describe('sync protocol - integration', () => {
         connectAllInDaisyChain(peers)
 
         // each user makes a change
-        peers.forEach(peer => peer.change(s => (s[peer.userId] = 1)))
+        peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
 
         // all peers have the same doc
         assertAllEqual(peers)
@@ -153,7 +157,7 @@ describe('sync protocol - integration', () => {
         peers.forEach(peer => peer.disconnect())
 
         // each user makes a change
-        peers.forEach(peer => peer.change(s => (s[peer.userId] = 1)))
+        peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
 
         // while they're disconnected, they have divergent docs
         assertAllDifferent(peers)
