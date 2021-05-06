@@ -9,6 +9,12 @@ describe('sync protocol - integration', () => {
     iterations = 0
   })
 
+  function connect(a, b) {
+    const channel = new Channel()
+    a.connectTo(b.userId, channel)
+    b.connectTo(a.userId, channel)
+  }
+
   describe('two peers', () => {
     it(`syncs a single change`, () => {
       let doc = A.from({})
@@ -152,87 +158,107 @@ describe('sync protocol - integration', () => {
   })
 })
 
-function connect(a, b) {
-  const channel = new Channel()
-  a.connectTo(b.id, channel)
-  b.connectTo(a.id, channel)
-}
-
 class ConnectedDoc extends EventEmitter {
+  /** Map of `Peer` objects (key is their peerId) */
   peers = {}
 
-  constructor(id, doc) {
+  connected = true
+
+  /**
+   * Keeps the user's Automerge document in sync with any number of peers
+   * @param userId Unique identifier for the current user, e.g. `alice` or `herb@devresults.com`
+   * @param doc The Automerge document to keep in sync
+   */
+  constructor(userId, doc) {
     super()
-    this.id = id
+    this.userId = userId
     this.doc = A.clone(doc)
   }
 
-  get peerList() {
-    return Object.values(this.peers)
-  }
-
-  change(fn) {
-    const updatedDoc = A.change(this.doc, fn)
-    this.update(updatedDoc)
-  }
-
+  /**
+   * Sets up the connection with a peer and listens for their messages
+   * @param peerId The id of the peer we're connecting to
+   * @param channel The channel used to connect to the peer
+   */
   connectTo(peerId, channel) {
-    const peer = new Peer(this.id, peerId, channel)
+    const peer = new Peer(this.userId, peerId, channel)
     this.peers[peerId] = peer
     channel.join()
     channel.addListener('data', (senderId, msg) => {
-      if (senderId === this.id) return // don't react to our own mesages
-      const newDoc = this.peers[senderId].receive(this.doc, msg)
-      this.update(newDoc)
+      if (senderId === this.userId) return // don't react to our own mesages
+      const peer = this.peers[senderId]
+      const updatedDoc = peer.receive(this.doc, msg)
+      this._update(updatedDoc)
     })
-    this.connected = true
   }
 
-  update(doc) {
-    this.doc = doc
-    for (const peer of this.peerList) {
-      peer.update(this.doc)
-    }
+  /**
+   * By using this method to modify the doc, we ensure that all peers are automatically updated
+   * @param fn An Automerge.ChangeFn used to mutate the doc in place
+   */
+  change(fn) {
+    const updatedDoc = A.change(this.doc, fn)
+    this._update(updatedDoc)
   }
 
+  /**
+   *
+   */
   disconnect() {
-    this.connected = false
-    for (const peer of this.peerList) {
+    for (const peer of this._peerList) {
       peer.channel.leave()
     }
+    this.connected = false
   }
 
   connect() {
-    this.connected = true
-    for (const peer of this.peerList) {
+    for (const peer of this._peerList) {
       peer.channel.join()
+    }
+    this.connected = true
+    this._update(this.doc)
+  }
+
+  // PRIVATE
+
+  /** Our set of peers as an array */
+  get _peerList() {
+    return Object.values(this.peers)
+  }
+
+  _update(updatedDoc) {
+    this.doc = updatedDoc
+    if (!this.connected) return // only send updates if we're online
+    for (const peer of this._peerList) {
+      peer.update(this.doc)
     }
   }
 }
 
 class Peer extends EventEmitter {
-  constructor(id, peerId, channel) {
+  constructor(userId, peerId, channel) {
     super()
-    this.id = id
+    this.userId = userId
+    this.peerId = peerId
     this.channel = channel
     this.syncState = A.initSyncState()
-    this.peerId = peerId
   }
 
   send(msg) {
-    this.channel.write(this.id, msg)
+    this.channel.write(this.userId, msg)
   }
 
   update(doc) {
     const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
     this.syncState = syncState
-    if (msg) this.send(msg)
+    // only send a sync message if something has changed
+    if (msg !== null) this.send(msg)
   }
 
   receive(doc, msg) {
-    const [newDoc, syncState] = A.receiveSyncMessage(doc, this.syncState, msg)
+    const [updatedDoc, syncState] = A.receiveSyncMessage(doc, this.syncState, msg)
     this.syncState = syncState
-    return newDoc
+    return updatedDoc
   }
 }
 
