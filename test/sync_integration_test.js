@@ -252,6 +252,7 @@ class Peer extends EventEmitter {
 // dummy 2-way channel for testing
 class Channel extends EventEmitter {
   constructor() {
+    super();
     this.peers = 0;
     this.buffer = []
   }
