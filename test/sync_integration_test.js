@@ -21,9 +21,7 @@ describe('sync protocol - integration', () => {
       connect(alice, bob)
 
       // alice makes a change
-      alice.change(s => {
-        s.alice = 1
-      })
+      alice.change(s => (s.alice = 1))
 
       // bob gets the changes
       assert.deepStrictEqual(alice.doc, bob.doc)
@@ -56,7 +54,7 @@ describe('sync protocol - integration', () => {
   })
 
   describe('three peers', () => {
-    it(`syncs a single change`, () => {
+    it(`syncs a single change (indirect connections)`, () => {
       let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
@@ -67,15 +65,13 @@ describe('sync protocol - integration', () => {
       connect(bob, charlie)
 
       // alice makes a change
-      alice.change(s => {
-        s.alice = 1
-      })
+      alice.change(s => (s.alice = 1))
 
       // charlie gets the changes (via bob)
       assert.deepStrictEqual(alice.doc, charlie.doc)
     })
 
-    it(`syncs a single change (all connected to all)`, () => {
+    it(`syncs a single change (all direct connections)`, () => {
       let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
@@ -87,11 +83,9 @@ describe('sync protocol - integration', () => {
       connect(alice, charlie)
 
       // alice makes a change
-      alice.change(s => {
-        s.alice = 1
-      })
+      alice.change(s => (s.alice = 1))
 
-      // charlie gets the changes (via bob)
+      // charlie gets the changes
       assert.deepStrictEqual(alice.doc, charlie.doc)
     })
 
@@ -150,6 +144,118 @@ describe('sync protocol - integration', () => {
       assert.deepStrictEqual(alice.doc, bob.doc)
       assert.deepStrictEqual(bob.doc, charlie.doc)
       assert.deepStrictEqual(alice.doc, charlie.doc)
+    })
+  })
+
+  describe('four peers', () => {
+    it(`syncs a single change (indirect connections)`, () => {
+      let doc = A.init()
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+      const dwight = new ConnectedDoc('dwight', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      connect(charlie, dwight)
+
+      // alice makes a change
+      alice.change(s => (s.alice = 1))
+
+      // dwight gets the changes
+      assert.deepStrictEqual(alice.doc, dwight.doc)
+    })
+
+    it(`syncs a single change (all direct connections)`, () => {
+      let doc = A.init()
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+      const dwight = new ConnectedDoc('dwight', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      connect(alice, charlie)
+      // connect(alice, dwight)
+      connect(bob, dwight)
+      connect(charlie, dwight)
+
+      // alice makes a change
+      alice.change(s => (s.alice = 1))
+
+      // dwight gets the changes
+      assert.deepStrictEqual(alice.doc, dwight.doc)
+    })
+
+    it(`syncs multiple changes`, () => {
+      let doc = A.init()
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+      const dwight = new ConnectedDoc('dwight', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      connect(alice, charlie)
+      connect(alice, dwight)
+      // connect(bob, dwight)
+      // connect(charlie, dwight)
+
+      // each one makes a change
+      alice.change(s => (s.alice = 1))
+      bob.change(s => (s.bob = 1))
+      charlie.change(s => (s.charlie = 1))
+      dwight.change(s => (s.dwight = 1))
+
+      // all docs converge
+      assert.deepStrictEqual(alice.doc, bob.doc)
+      assert.deepStrictEqual(bob.doc, charlie.doc)
+      assert.deepStrictEqual(charlie.doc, dwight.doc)
+    })
+
+    it('syncs divergent changes', async () => {
+      let doc = A.init()
+
+      const alice = new ConnectedDoc('alice', doc)
+      const bob = new ConnectedDoc('bob', doc)
+      const charlie = new ConnectedDoc('charlie', doc)
+      const dwight = new ConnectedDoc('dwight', doc)
+
+      connect(alice, bob)
+      connect(bob, charlie)
+      // connect(alice, charlie)
+      connect(charlie, dwight)
+      // connect(bob, dwight)
+      // connect(charlie, dwight)
+
+      alice.disconnect()
+      bob.disconnect()
+      charlie.disconnect()
+      dwight.disconnect()
+
+      // each one makes a change
+      alice.change(s => (s.alice = 1))
+      bob.change(s => (s.bob = 1))
+      charlie.change(s => (s.charlie = 1))
+      dwight.change(s => (s.dwight = 1))
+
+      // while they're disconnected, they have divergent docs
+      assert.notDeepStrictEqual(alice.doc, bob.doc)
+      assert.notDeepStrictEqual(bob.doc, charlie.doc)
+      assert.notDeepStrictEqual(charlie.doc, dwight.doc)
+
+      alice.connect()
+      bob.connect()
+      charlie.connect()
+      dwight.connect()
+
+      // after connecting, their docs converge
+      assert.deepStrictEqual(alice.doc, bob.doc)
+      assert.deepStrictEqual(bob.doc, charlie.doc)
+      assert.deepStrictEqual(charlie.doc, dwight.doc)
     })
   })
 })
@@ -226,6 +332,7 @@ class ConnectedDoc extends EventEmitter {
 }
 
 class Peer extends EventEmitter {
+  iterations = 0
   syncState = A.initSyncState()
 
   /**
@@ -251,8 +358,13 @@ class Peer extends EventEmitter {
     this.syncState = syncState
 
     // only send a sync message if something has changed
-    // (if msg is null, nothing has changed)
-    if (msg !== null) this.send(msg)
+    // (if msg is null, our docs have converged)
+    if (msg !== null) {
+      this.send(msg)
+    } else {
+      // we've converged
+      this.iterations = 0
+    }
   }
 
   /**
@@ -271,6 +383,10 @@ class Peer extends EventEmitter {
   // PRIVATE
 
   send(msg) {
+    this.iterations += 1
+    // console.log(`${this.userId}->${this.peerId} ${this.iterations}`)
+    if (this.iterations > 5) throw new Error('loop detected')
+
     this.channel.write(this.userId, msg)
   }
 }
