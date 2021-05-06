@@ -5,13 +5,7 @@ const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require
 describe('sync protocol - integration', () => {
   console.clear()
 
-  function connect(a, b) {
-    const channel = new Channel()
-    a.connectTo(b.userId, channel)
-    b.connectTo(a.userId, channel)
-  }
-
-  describe('two peers', () => {
+  describe('2 peers', () => {
     it(`syncs a single change`, () => {
       let doc = A.init()
 
@@ -38,10 +32,10 @@ describe('sync protocol - integration', () => {
       alice.disconnect()
 
       // alice makes a change
-      alice.change(s => (s.alice = 1))
+      alice.change(s => (s.alice = 42))
 
       // bob makes a change
-      bob.change(s => (s.bob = 1))
+      bob.change(s => (s.bob = 13))
 
       // while they're disconnected, they have divergent docs
       assert.notDeepStrictEqual(alice.doc, bob.doc)
@@ -53,211 +47,125 @@ describe('sync protocol - integration', () => {
     })
   })
 
-  describe('three peers', () => {
-    it(`syncs a single change (indirect connections)`, () => {
-      let doc = A.init()
+  describePeers(['alice', 'bob', 'charlie'])
+  describePeers(['alice', 'bob', 'charlie', 'dwight'])
+  describePeers(['alice', 'bob', 'charlie', 'dwight', 'eleanor'])
 
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
+  function connect(a, b) {
+    const channel = new Channel()
+    a.connectTo(b.userId, channel)
+    b.connectTo(a.userId, channel)
+  }
 
-      connect(alice, bob)
-      connect(bob, charlie)
+  function connectAll(peers) {
+    for (let i = 0; i < peers.length; i++) {
+      for (let j = i + 1; j < peers.length; j++) {
+        const a = peers[i]
+        const b = peers[j]
+        connect(a, b)
+      }
+    }
+  }
 
-      // alice makes a change
-      alice.change(s => (s.alice = 1))
-
-      // charlie gets the changes (via bob)
-      assert.deepStrictEqual(alice.doc, charlie.doc)
+  function connectAllInDaisyChain(peers) {
+    peers.slice(0, peers.length - 1).forEach((peer, i) => {
+      const nextPeer = peers[i + 1]
+      connect(peer, nextPeer)
     })
+  }
 
-    it(`syncs a single change (all direct connections)`, () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-
-      connect(alice, bob)
-      connect(bob, charlie)
-      connect(alice, charlie)
-
-      // alice makes a change
-      alice.change(s => (s.alice = 1))
-
-      // charlie gets the changes
-      assert.deepStrictEqual(alice.doc, charlie.doc)
+  function assertAllEqual(peers) {
+    peers.slice(0, peers.length - 1).forEach((peer, i) => {
+      const nextPeer = peers[i + 1]
+      assert.deepStrictEqual(peer.doc, nextPeer.doc)
     })
+  }
 
-    it(`syncs multiple changes`, () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-
-      connect(alice, bob)
-      connect(bob, charlie)
-      connect(alice, charlie)
-
-      // each one makes a change
-      alice.change(s => (s.alice = 1))
-      bob.change(s => (s.bob = 1))
-      charlie.change(s => (s.charlie = 1))
-
-      // all docs converge
-      assert.deepStrictEqual(alice.doc, bob.doc)
-      assert.deepStrictEqual(bob.doc, charlie.doc)
-      assert.deepStrictEqual(alice.doc, charlie.doc)
+  function assertAllDifferent(peers) {
+    peers.slice(0, peers.length - 1).forEach((peer, i) => {
+      const nextPeer = peers[i + 1]
+      assert.notDeepStrictEqual(peer.doc, nextPeer.doc)
     })
+  }
 
-    it('syncs divergent changes', async () => {
-      let doc = A.init()
+  function describePeers(users) {
+    describe(`${users.length} peers`, () => {
+      it(`syncs a single change (direct connections)`, () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAll(peers)
 
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
+        // first user makes a change
+        peers[0].change(s => (s[users[0]] = 42))
 
-      connect(alice, charlie)
-      connect(alice, bob)
-      connect(alice, charlie)
+        // all peers have the same doc
+        peers.slice(0, peers.length - 1).forEach((peer, i) => {
+          const nextPeer = peers[i + 1]
+          assert.deepStrictEqual(peer.doc, nextPeer.doc)
+        })
+      })
 
-      alice.disconnect()
-      bob.disconnect()
-      charlie.disconnect()
+      it(`syncs a single change (indirect connections)`, () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAllInDaisyChain(peers)
 
-      // each one makes a change
-      alice.change(s => (s.alice = 1))
-      bob.change(s => (s.bob = 1))
-      charlie.change(s => (s.charlie = 1))
+        // first user makes a change
+        peers[0].change(s => (s[users[0]] = 42))
 
-      // while they're disconnected, they have divergent docs
-      assert.notDeepStrictEqual(alice.doc, bob.doc)
-      assert.notDeepStrictEqual(bob.doc, charlie.doc)
-      assert.notDeepStrictEqual(alice.doc, charlie.doc)
+        // all peers have the same doc
+        assertAllEqual(peers)
+      })
 
-      alice.connect()
-      bob.connect()
-      charlie.connect()
+      it(`syncs multiple changes (direct connections)`, () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAll(peers)
 
-      // after connecting, their docs converge
-      assert.deepStrictEqual(alice.doc, bob.doc)
-      assert.deepStrictEqual(bob.doc, charlie.doc)
-      assert.deepStrictEqual(alice.doc, charlie.doc)
+        // first user makes a change
+        peers[0].change(s => (s[users[0]] = 42))
+
+        // all peers have the same doc
+        peers.slice(0, peers.length - 1).forEach((peer, i) => {
+          const nextPeer = peers[i + 1]
+          assert.deepStrictEqual(peer.doc, nextPeer.doc)
+        })
+      })
+
+      it(`syncs multiple changes (indirect connections)`, () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAllInDaisyChain(peers)
+
+        // each user makes a change
+        peers.forEach(peer => peer.change(s => (s[peer.userId] = 1)))
+
+        // all peers have the same doc
+        assertAllEqual(peers)
+      })
+
+      it('syncs multiple divergent changes (direct connections)', () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAll(peers)
+
+        // everyone disconnects
+        peers.forEach(peer => peer.disconnect())
+
+        // each user makes a change
+        peers.forEach(peer => peer.change(s => (s[peer.userId] = 1)))
+
+        // while they're disconnected, they have divergent docs
+        assertAllDifferent(peers)
+
+        // everyone reconnects
+        peers.forEach(peer => peer.connect())
+
+        // after connecting, their docs converge
+        assertAllEqual(peers)
+      })
     })
-  })
-
-  describe('four peers', () => {
-    it(`syncs a single change (indirect connections)`, () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-      const dwight = new ConnectedDoc('dwight', doc)
-
-      connect(alice, bob)
-      connect(bob, charlie)
-      connect(charlie, dwight)
-
-      // alice makes a change
-      alice.change(s => (s.alice = 1))
-
-      // dwight gets the changes
-      assert.deepStrictEqual(alice.doc, dwight.doc)
-    })
-
-    it(`syncs a single change (all direct connections)`, () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-      const dwight = new ConnectedDoc('dwight', doc)
-
-      connect(alice, bob)
-      connect(alice, charlie)
-      connect(alice, dwight)
-      connect(bob, charlie)
-      connect(bob, dwight)
-      connect(charlie, dwight)
-
-      // alice makes a change
-      alice.change(s => (s.alice = 1))
-
-      // dwight gets the changes
-      assert.deepStrictEqual(alice.doc, dwight.doc)
-    })
-
-    it(`syncs multiple changes`, () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-      const dwight = new ConnectedDoc('dwight', doc)
-
-      connect(alice, bob)
-      connect(alice, charlie)
-      connect(alice, dwight)
-      connect(bob, charlie)
-      connect(bob, dwight)
-      connect(charlie, dwight)
-
-      // each one makes a change
-      alice.change(s => (s.alice = 1))
-      bob.change(s => (s.bob = 1))
-      charlie.change(s => (s.charlie = 1))
-      dwight.change(s => (s.dwight = 1))
-
-      // all docs converge
-      assert.deepStrictEqual(alice.doc, bob.doc)
-      assert.deepStrictEqual(bob.doc, charlie.doc)
-      assert.deepStrictEqual(charlie.doc, dwight.doc)
-    })
-
-    it('syncs divergent changes', async () => {
-      let doc = A.init()
-
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
-      const charlie = new ConnectedDoc('charlie', doc)
-      const dwight = new ConnectedDoc('dwight', doc)
-
-      connect(alice, bob)
-      connect(alice, charlie)
-      connect(alice, dwight)
-      connect(bob, charlie)
-      connect(bob, dwight)
-      connect(charlie, dwight)
-
-      alice.disconnect()
-      bob.disconnect()
-      charlie.disconnect()
-      dwight.disconnect()
-
-      // each one makes a change
-      alice.change(s => (s.alice = 1))
-      bob.change(s => (s.bob = 1))
-      charlie.change(s => (s.charlie = 1))
-      dwight.change(s => (s.dwight = 1))
-
-      // while they're disconnected, they have divergent docs
-      assert.notDeepStrictEqual(alice.doc, bob.doc)
-      assert.notDeepStrictEqual(bob.doc, charlie.doc)
-      assert.notDeepStrictEqual(charlie.doc, dwight.doc)
-
-      alice.connect()
-      bob.connect()
-      charlie.connect()
-      dwight.connect()
-
-      // after connecting, their docs converge
-      assert.deepStrictEqual(alice.doc, bob.doc)
-      assert.deepStrictEqual(bob.doc, charlie.doc)
-      assert.deepStrictEqual(charlie.doc, dwight.doc)
-    })
-  })
+  }
 })
 
 class ConnectedDoc {
@@ -383,8 +291,8 @@ class Peer {
   send(msg) {
     this.iterations += 1
     // console.log(`${this.userId}->${this.peerId} ${this.iterations}`)
-    if (this.iterations > 20) {
-      throw truncateStack(new Error('loop detected (failed to converge)'), 10)
+    if (this.iterations > 100) {
+      throw truncateStack(new Error('loop detected (failed to converge)'), 2)
     }
 
     this.channel.write(this.userId, msg)
