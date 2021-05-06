@@ -251,9 +251,10 @@ class Peer extends EventEmitter {
 
 // dummy 2-way channel for testing
 class Channel extends EventEmitter {
-  peers = 0;
-  buffer = [];
-
+  constructor() {
+    this.peers = 0;
+    this.buffer = []
+  }
   join() {
     this.peers += 1;
     if (this.peers >= 3) throw new Error("This channel only supports 2 peers");
