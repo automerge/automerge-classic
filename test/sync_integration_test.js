@@ -285,5 +285,3 @@ class Channel extends EventEmitter {
     this.emit('data', peerId, msg)
   }
 }
-
-const pause = (t = 100) => new Promise(resolve => setTimeout(() => resolve(), t))
