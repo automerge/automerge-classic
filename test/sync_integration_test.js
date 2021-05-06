@@ -159,10 +159,11 @@ describe('sync protocol - integration', () => {
 })
 
 class ConnectedDoc extends EventEmitter {
+  /** Tracks our simulated connection status */
+  online = true
+
   /** Map of `Peer` objects (key is their peerId) */
   peers = {}
-
-  connected = true
 
   /**
    * Keeps the user's Automerge document in sync with any number of peers
@@ -178,17 +179,21 @@ class ConnectedDoc extends EventEmitter {
   /**
    * Sets up the connection with a peer and listens for their messages
    * @param peerId The id of the peer we're connecting to
-   * @param channel The channel used to connect to the peer
+   * @param channel The channel used to connect to the peer (must expose a `write` method, and emit a `data` event)
    */
   connectTo(peerId, channel) {
     const peer = new Peer(this.userId, peerId, channel)
     this.peers[peerId] = peer
-    channel.join()
     channel.addListener('data', (senderId, msg) => {
       if (senderId === this.userId) return // don't react to our own mesages
-      const peer = this.peers[senderId]
+      if (!this.online) return // don't react to messages while we're "offline"
+
+      // use the message received, along with the the sync state we're tracking for the peer,
+      // to create an updated version of our doc
       const updatedDoc = peer.receive(this.doc, msg)
-      this._update(updatedDoc)
+
+      // update our doc and sync with all our peers
+      this.sync(updatedDoc)
     })
   }
 
@@ -197,26 +202,23 @@ class ConnectedDoc extends EventEmitter {
    * @param fn An Automerge.ChangeFn used to mutate the doc in place
    */
   change(fn) {
+    // apply the change function to get an updated version of our doc
     const updatedDoc = A.change(this.doc, fn)
-    this._update(updatedDoc)
+
+    // update our doc and sync with all our peers
+    this.sync(updatedDoc)
   }
 
-  /**
-   *
-   */
+  /** Simulates going offline */
   disconnect() {
-    for (const peer of this._peerList) {
-      peer.channel.leave()
-    }
-    this.connected = false
+    this.online = false
   }
 
+  /** Simulates going back online */
   connect() {
-    for (const peer of this._peerList) {
-      peer.channel.join()
-    }
-    this.connected = true
-    this._update(this.doc)
+    this.online = true
+    // ask everyone what happened while we were away
+    this.sync(this.doc)
   }
 
   // PRIVATE
@@ -226,72 +228,70 @@ class ConnectedDoc extends EventEmitter {
     return Object.values(this.peers)
   }
 
-  _update(updatedDoc) {
+  /** Updates our document and syncs with peers */
+  sync(updatedDoc) {
     this.doc = updatedDoc
-    if (!this.connected) return // only send updates if we're online
+    if (!this.online) return // only send updates if we're online
     for (const peer of this._peerList) {
-      peer.update(this.doc)
+      peer.sync(this.doc)
     }
   }
 }
 
 class Peer extends EventEmitter {
+  syncState = A.initSyncState()
+
+  /**
+   *
+   * @param userId Current user's unique id
+   * @param peerId Remote peer's unique id
+   * @param channel Channel used to connect to the remote peer
+   */
   constructor(userId, peerId, channel) {
     super()
     this.userId = userId
     this.peerId = peerId
     this.channel = channel
-    this.syncState = A.initSyncState()
   }
 
-  send(msg) {
-    this.channel.write(this.userId, msg)
-  }
-
-  update(doc) {
+  /**
+   * Compares the latest Automerge doc with the sync state we have for this peer,
+   * and sends the peer a sync message if anything has changed
+   * @param doc The latest version of the Automerge doc
+   */
+  sync(doc) {
     const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
     this.syncState = syncState
+
     // only send a sync message if something has changed
+    // (if msg is null, nothing has changed)
     if (msg !== null) this.send(msg)
   }
 
+  /**
+   * Use information in the message received, along with the the sync state
+   * we have for the peer, to return an updated version of our doc
+   * @param doc Document at the time the message was received
+   * @param msg Automerge sync message
+   * @returns an updated document
+   */
   receive(doc, msg) {
     const [updatedDoc, syncState] = A.receiveSyncMessage(doc, this.syncState, msg)
     this.syncState = syncState
     return updatedDoc
   }
+
+  // PRIVATE
+
+  send(msg) {
+    this.channel.write(this.userId, msg)
+  }
 }
 
 // dummy 2-way channel for testing
 class Channel extends EventEmitter {
-  peers = 0
-  buffer = []
-
-  join() {
-    this.peers += 1
-    if (this.peers >= 3) throw new Error('This channel only supports 2 peers')
-    if (this.peers === 2) {
-      // someone is already here, emit any messages they sent before we joined
-      for (const { peerId, msg } of this.buffer) {
-        this.emit('data', peerId, msg)
-      }
-      this.buffer = []
-    }
-    return this
-  }
-
-  leave() {
-    this.peers -= 1
-  }
-
   write(peerId, msg) {
-    if (this.peers === 2) {
-      // there's someone on the other end
-      this.emit('data', peerId, msg)
-    } else {
-      // we're alone, save up messages until someone else joins
-      this.buffer.push({ peerId, msg })
-    }
+    this.emit('data', peerId, msg)
   }
 }
 
