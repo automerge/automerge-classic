@@ -2,9 +2,9 @@
 const { EventEmitter } = require('events')
 const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 
-console.clear()
-
 describe('sync protocol - integration', () => {
+  console.clear()
+
   function connect(a, b) {
     const channel = new Channel()
     a.connectTo(b.userId, channel)
@@ -386,9 +386,7 @@ class Peer extends EventEmitter {
     this.iterations += 1
     // console.log(`${this.userId}->${this.peerId} ${this.iterations}`)
     if (this.iterations > 20) {
-      const err = new Error('loop detected (failed to converge)')
-      err.stack = err.stack.split('\n').slice(0, 10).join('\n') // truncate repetitive stack
-      throw err
+      throw truncateStack(new Error('loop detected (failed to converge)'), 10)
     }
 
     this.channel.write(this.userId, msg)
@@ -400,4 +398,9 @@ class Channel extends EventEmitter {
   write(peerId, msg) {
     this.emit('data', peerId, msg)
   }
+}
+
+const truncateStack = (err, lines = 5) => {
+  err.stack = err.stack.split('\n').slice(0, lines).join('\n') // truncate repetitive stack
+  return err
 }
