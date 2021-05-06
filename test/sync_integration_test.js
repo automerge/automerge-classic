@@ -6,7 +6,7 @@ describe('sync protocol - integration', () => {
   console.clear()
 
   describe('2 peers', () => {
-    it(`syncs a single change`, () => {
+    it(`syncs a single change`, async () => {
       let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
@@ -19,11 +19,13 @@ describe('sync protocol - integration', () => {
       // alice makes a change
       alice.change(s => (s.alice = 1))
 
+      await pause()
+
       // bob gets the changes
       assert.deepStrictEqual(alice.doc, bob.doc)
     })
 
-    it('syncs divergent changes', () => {
+    it('syncs divergent changes', async () => {
       let doc = A.init()
 
       const alice = new ConnectedDoc('alice', doc)
@@ -41,10 +43,13 @@ describe('sync protocol - integration', () => {
       // bob makes a change
       bob.change(s => (s.bob = 13))
 
+      await pause()
+
       // while they're disconnected, they have divergent docs
       assert.notDeepStrictEqual(alice.doc, bob.doc)
 
       alice.connect()
+      await pause()
 
       // after connecting, their docs converge
       assert.deepStrictEqual(alice.doc, bob.doc)
@@ -80,39 +85,26 @@ describe('sync protocol - integration', () => {
         })
       }
 
-      function assertAllEqual(peers) {
+      async function assertAllEqual(peers) {
+        await pause(peers.length * 50)
         peers.slice(0, peers.length - 1).forEach((peer, i) => {
           const nextPeer = peers[i + 1]
           assert.deepStrictEqual(peer.doc, nextPeer.doc)
         })
       }
 
-      function assertAllDifferent(peers) {
+      async function assertAllDifferent(peers) {
+        await pause(peers.length * 50)
         peers.slice(0, peers.length - 1).forEach((peer, i) => {
           const nextPeer = peers[i + 1]
           assert.notDeepStrictEqual(peer.doc, nextPeer.doc)
         })
       }
 
-      it(`syncs a single change (direct connections)`, () => {
+      it(`syncs a single change (direct connections)`, async () => {
         const doc = A.init()
         const peers = users.map(name => new ConnectedDoc(name, doc))
         connectAll(peers)
-
-        // first user makes a change
-        peers[0].change(s => (s[users[0]] = 42))
-
-        // all peers have the same doc
-        peers.slice(0, peers.length - 1).forEach((peer, i) => {
-          const nextPeer = peers[i + 1]
-          assert.deepStrictEqual(peer.doc, nextPeer.doc)
-        })
-      })
-
-      it(`syncs a single change (indirect connections)`, () => {
-        const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAllInDaisyChain(peers)
 
         // first user makes a change
         peers[0].change(s => (s[users[0]] = 42))
@@ -121,7 +113,19 @@ describe('sync protocol - integration', () => {
         assertAllEqual(peers)
       })
 
-      it(`syncs multiple changes (direct connections)`, () => {
+      it(`syncs a single change (indirect connections)`, async () => {
+        const doc = A.init()
+        const peers = users.map(name => new ConnectedDoc(name, doc))
+        connectAllInDaisyChain(peers)
+
+        // first user makes a change
+        peers[0].change(s => (s[users[0]] = 42))
+
+        // all peers have the same doc
+        await assertAllEqual(peers)
+      })
+
+      it(`syncs multiple changes (direct connections)`, async () => {
         const doc = A.init()
         const peers = users.map(name => new ConnectedDoc(name, doc))
         connectAll(peers)
@@ -130,13 +134,10 @@ describe('sync protocol - integration', () => {
         peers[0].change(s => (s[users[0]] = 42))
 
         // all peers have the same doc
-        peers.slice(0, peers.length - 1).forEach((peer, i) => {
-          const nextPeer = peers[i + 1]
-          assert.deepStrictEqual(peer.doc, nextPeer.doc)
-        })
+        await assertAllEqual(peers)
       })
 
-      it(`syncs multiple changes (indirect connections)`, () => {
+      it(`syncs multiple changes (indirect connections)`, async () => {
         const doc = A.init()
         const peers = users.map(name => new ConnectedDoc(name, doc))
         connectAllInDaisyChain(peers)
@@ -145,10 +146,10 @@ describe('sync protocol - integration', () => {
         peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
 
         // all peers have the same doc
-        assertAllEqual(peers)
+        await assertAllEqual(peers)
       })
 
-      it('syncs multiple divergent changes (direct connections)', () => {
+      it('syncs multiple divergent changes (direct connections)', async () => {
         const doc = A.init()
         const peers = users.map(name => new ConnectedDoc(name, doc))
         connectAll(peers)
@@ -160,13 +161,13 @@ describe('sync protocol - integration', () => {
         peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
 
         // while they're disconnected, they have divergent docs
-        assertAllDifferent(peers)
+        await assertAllDifferent(peers)
 
         // everyone reconnects
         peers.forEach(peer => peer.connect())
 
         // after connecting, their docs converge
-        assertAllEqual(peers)
+        await assertAllEqual(peers)
       })
     })
   }
@@ -306,7 +307,9 @@ class Peer {
 // dummy 2-way channel for testing
 class Channel extends EventEmitter {
   write(peerId, msg) {
-    this.emit('data', peerId, msg)
+    setTimeout(() => {
+      this.emit('data', peerId, msg)
+    }, 1)
   }
 }
 
@@ -314,3 +317,4 @@ const truncateStack = (err, lines = 5) => {
   err.stack = err.stack.split('\n').slice(0, lines).join('\n') // truncate repetitive stack
   return err
 }
+const pause = (t = 50) => new Promise(resolve => setTimeout(() => resolve(), t))
