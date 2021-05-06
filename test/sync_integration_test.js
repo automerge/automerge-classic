@@ -260,7 +260,7 @@ describe('sync protocol - integration', () => {
   })
 })
 
-class ConnectedDoc extends EventEmitter {
+class ConnectedDoc {
   /** Tracks our simulated connection status */
   online = true
 
@@ -273,7 +273,6 @@ class ConnectedDoc extends EventEmitter {
    * @param doc The Automerge document to keep in sync
    */
   constructor(userId, doc) {
-    super()
     this.userId = userId
     this.doc = A.clone(doc)
   }
@@ -331,7 +330,7 @@ class ConnectedDoc extends EventEmitter {
   }
 }
 
-class Peer extends EventEmitter {
+class Peer {
   iterations = 0
   syncState = A.initSyncState()
 
@@ -342,7 +341,6 @@ class Peer extends EventEmitter {
    * @param channel Channel used to connect to the remote peer
    */
   constructor(userId, peerId, channel) {
-    super()
     this.userId = userId
     this.peerId = peerId
     this.channel = channel
