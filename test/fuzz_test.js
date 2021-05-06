@@ -119,7 +119,7 @@ class Micromerge {
       if (!meta[index].deleted) visible++
       index++
     }
-    if (index === meta.length) throw new RangeError(`List element not found: ${op.key}`)
+    if (index === meta.length) throw new RangeError(`List element not found: ${elemId}`)
     return {index, visible}
   }
 
@@ -131,13 +131,13 @@ class Micromerge {
   compareOpIds(id1, id2) {
     const regex = /^([0-9]+)@(.*)$/
     const match1 = regex.exec(id1), match2 = regex.exec(id2)
-    const counter1 = parseInt(match1[1]), counter2 = parseInt(match2[1])
+    const counter1 = parseInt(match1[1], 10), counter2 = parseInt(match2[1], 10)
     return (counter1 < counter2) || (counter1 === counter2 && match1[2] < match2[2])
   }
 }
 
 
-/********** TESTS *************/
+/* TESTS */
 
 const assert = require('assert')
 

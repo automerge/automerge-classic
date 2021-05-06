@@ -1,10 +1,9 @@
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
-const { Counter } = require('./counter')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
 function parseListIndex(key) {
-  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key)
+  if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key, 10)
   if (typeof key !== 'number') {
     throw new TypeError('A list index must be a number, but you passed ' + JSON.stringify(key))
   }
@@ -27,6 +26,21 @@ function listMethods(context, listId, path) {
         context.setListIndex(path, index, value)
       }
       return this
+    },
+
+    indexOf(o, start = 0) {
+      const id = o[OBJECT_ID]
+      if (id) {
+        const list = context.getObject(listId)
+        for (let index = start; index < list.length; index++) {
+          if (list[index][OBJECT_ID] === id) {
+            return index
+          }
+        }
+        return -1
+      } else {
+        return context.getObject(listId).indexOf(o, start)
+      }
     },
 
     insertAt(index, ...values) {
@@ -60,7 +74,7 @@ function listMethods(context, listId, path) {
     splice(start, deleteCount, ...values) {
       let list = context.getObject(listId)
       start = parseListIndex(start)
-      if (deleteCount === undefined) {
+      if (deleteCount === undefined || deleteCount > list.length - start) {
         deleteCount = list.length - start
       }
       const deleted = []
@@ -84,12 +98,12 @@ function listMethods(context, listId, path) {
 
   // Read-only methods that can delegate to the JavaScript built-in implementations
   for (let method of ['concat', 'every', 'filter', 'find', 'findIndex', 'forEach', 'includes',
-                      'indexOf', 'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
+                      'join', 'lastIndexOf', 'map', 'reduce', 'reduceRight',
                       'slice', 'some', 'toLocaleString', 'toString']) {
     methods[method] = (...args) => {
       const list = context.getObject(listId)
         .map((item, index) => context.getObjectField(path, listId, index))
-      return list[method].call(list, ...args)
+      return list[method](...args)
     }
   }
 
@@ -106,7 +120,7 @@ const MapHandler = {
   },
 
   set (target, key, value) {
-    const { context, objectId, path, readonly } = target
+    const { context, path, readonly } = target
     if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
       throw new RangeError(`Object property "${key}" cannot be modified`)
     }
@@ -115,7 +129,7 @@ const MapHandler = {
   },
 
   deleteProperty (target, key) {
-    const { context, objectId, path, readonly } = target
+    const { context, path, readonly } = target
     if (Array.isArray(readonly) && readonly.indexOf(key) >= 0) {
       throw new RangeError(`Object property "${key}" cannot be modified`)
     }
@@ -132,7 +146,10 @@ const MapHandler = {
     const { context, objectId } = target
     const object = context.getObject(objectId)
     if (key in object) {
-      return {configurable: true, enumerable: true}
+      return {
+        configurable: true, enumerable: true,
+        value: context.getObjectField(objectId, key)
+      }
     }
   },
 
@@ -156,19 +173,19 @@ const ListHandler = {
   },
 
   set (target, key, value) {
-    const [context, objectId, path] = target
+    const [context, /* objectId */, path] = target
     context.setListIndex(path, parseListIndex(key), value)
     return true
   },
 
   deleteProperty (target, key) {
-    const [context, objectId, path] = target
+    const [context, /* objectId */, path] = target
     context.splice(path, parseListIndex(key), 1, [])
     return true
   },
 
   has (target, key) {
-    const [context, objectId, path] = target
+    const [context, objectId, /* path */] = target
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       return parseListIndex(key) < context.getObject(objectId).length
     }
@@ -176,20 +193,23 @@ const ListHandler = {
   },
 
   getOwnPropertyDescriptor (target, key) {
-    if (key === 'length') return {writable: true}
-    if (key === OBJECT_ID) return {configurable: false, enumerable: false}
-
-    const [context, objectId, path] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
+
+    if (key === 'length') return {writable: true, value: object.length}
+    if (key === OBJECT_ID) return {configurable: false, enumerable: false, value: objectId}
 
     if (typeof key === 'string' && /^[0-9]+$/.test(key)) {
       const index = parseListIndex(key)
-      if (index < object.length) return {configurable: true, enumerable: true}
+      if (index < object.length) return {
+        configurable: true, enumerable: true,
+        value: context.getObjectField(objectId, index)
+      }
     }
   },
 
   ownKeys (target) {
-    const [context, objectId, path] = target
+    const [context, objectId, /* path */] = target
     const object = context.getObject(objectId)
     let keys = ['length']
     for (let key of Object.keys(object)) keys.push(key)

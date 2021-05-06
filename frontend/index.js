@@ -87,8 +87,8 @@ function makeChange(doc, context, options) {
     seq: state.seq,
     startOp: state.maxOp + 1,
     deps: state.deps,
-    time: (options && typeof options.time === 'number') ? options.time :
-          Math.round(new Date().getTime() / 1000),
+    time: (options && typeof options.time === 'number') ? options.time
+                                                        : Math.round(new Date().getTime() / 1000),
     message: (options && typeof options.message === 'string') ? options.message : '',
     ops: context.ops
   }
@@ -110,10 +110,22 @@ function makeChange(doc, context, options) {
   } else {
     const queuedRequest = {actor, seq: change.seq, before: doc}
     state.requests = state.requests.concat([queuedRequest])
-    state.maxOp = state.maxOp + change.ops.length
+    state.maxOp = state.maxOp + countOps(change.ops)
     state.deps = []
     return [updateRootObject(doc, context ? context.updated : {}, state), change]
   }
+}
+
+function countOps(ops) {
+  let count = 0
+  for (const op of ops) {
+    if (op.action === 'set' && op.values) {
+      count += op.values.length
+    } else {
+      count += 1
+    }
+  }
+  return count
 }
 
 /**
@@ -216,7 +228,7 @@ function change(doc, options, callback) {
     throw new TypeError('Calls to Automerge.change cannot be nested')
   }
   if (typeof options === 'function' && callback === undefined) {
-    ;[options, callback] = [callback, options]
+    [options, callback] = [callback, options]
   }
   if (typeof options === 'string') {
     options = {message: options}

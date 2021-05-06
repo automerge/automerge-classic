@@ -1,7 +1,5 @@
 const { Map, List } = require('immutable')
-const { copyObject } = require('../src/common')
 const OpSet = require('./op_set')
-const { SkipList } = require('./skip_list')
 const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
 const { backendState } = require('./util')
 
@@ -9,11 +7,19 @@ const { backendState } = require('./util')
 // byte-array-based data structures. New data structures are not yet fully working.
 const USE_NEW_BACKEND = false
 
-function hashesByActor(state, actorId) {
+function numHashesByActor(state, actorId) {
   if (USE_NEW_BACKEND) {
-    return state.hashesByActor[actorId] || []
+    return (state.hashesByActor[actorId] || []).length
   } else {
-    return state.getIn(['opSet', 'states', actorId], List()).toJS()
+    return state.getIn(['opSet', 'states', actorId], List()).size
+  }
+}
+
+function hashByActor(state, actorId, index) {
+  if (USE_NEW_BACKEND) {
+    return (state.hashesByActor[actorId] || [])[index]
+  } else {
+    return state.getIn(['opSet', 'states', actorId, index])
   }
 }
 
@@ -68,7 +74,7 @@ function makePatch(state, diffs, request, isIncremental) {
  * `loadChanges()`.
  */
 function apply(state, changes, request, isIncremental) {
-  let diffs = isIncremental ? {objectId: '_root', type: 'map'} : null
+  let diffs = isIncremental ? {objectId: '_root', type: 'map', props: {}} : null
   let opSet = state.get('opSet')
   for (let change of changes) {
     for (let chunk of splitContainers(change)) {
@@ -80,7 +86,7 @@ function apply(state, changes, request, isIncremental) {
     }
   }
 
-  OpSet.finalizePatch(opSet, diffs)
+  OpSet.finalizePatch(diffs)
   state = state.set('opSet', opSet)
 
   return [state, isIncremental ? makePatch(state, diffs, request, true) : null]
@@ -115,7 +121,7 @@ function applyChanges(backend, changes) {
  */
 function applyLocalChange(backend, change) {
   const state = backendState(backend)
-  if (change.seq <= hashesByActor(state, change.actor).length) {
+  if (change.seq <= numHashesByActor(state, change.actor)) {
     throw new RangeError('Change request has already been applied')
   }
 
@@ -133,7 +139,7 @@ function applyLocalChange(backend, change) {
   // necessary to add this dependency. However, it doesn't do any harm either (only
   // using a few extra bytes of storage).
   if (change.seq > 1) {
-    const lastHash = hashesByActor(state, change.actor)[change.seq - 2]
+    const lastHash = hashByActor(state, change.actor, change.seq - 2)
     if (!lastHash) {
       throw new RangeError(`Cannot find hash of localChange before seq=${change.seq}`)
     }
@@ -149,7 +155,7 @@ function applyLocalChange(backend, change) {
     backend.frozen = true
 
     // On the patch we send out, omit the last local change hash
-    const lastHash = hashesByActor(state, change.actor)[change.seq - 1]
+    const lastHash = hashByActor(state, change.actor, change.seq - 1)
     patch.deps = patch.deps.filter(head => head !== lastHash)
     return [{state, heads: state.heads}, patch, binaryChange]
 
@@ -203,7 +209,7 @@ function loadChanges(backend, changes) {
     backend.frozen = true
     return {state, heads: state.heads}
   } else {
-    const [newState, _] = apply(state, changes, null, false)
+    const [newState] = apply(state, changes, null, false)
     backend.frozen = true
     return {state: newState, heads: OpSet.getHeads(newState.get('opSet'))}
   }
@@ -221,7 +227,7 @@ function getPatch(backend) {
       maxOp: state.maxOp,
       clock: state.clock,
       deps: state.heads,
-      diffs: diffs
+      diffs
     }
   } else {
     const diffs = constructPatch(save(backend))

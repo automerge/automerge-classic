@@ -1,7 +1,7 @@
 const { isObject, copyObject, parseOpId } = require('../src/common')
-const { OPTIONS, OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
-const { Text, instantiateText } = require('./text')
-const { Table, instantiateTable } = require('./table')
+const { OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
+const { instantiateText } = require('./text')
+const { instantiateTable } = require('./table')
 const { Counter } = require('./counter')
 
 /**
@@ -81,58 +81,6 @@ function applyProperties(props, object, conflicts, updated) {
 }
 
 /**
- * `edits` is an array of edits to a list data structure, each of which is an object of the form
- * either `{action: 'insert', index, elemId}` or `{action: 'remove', index}`. This merges adjacent
- * edits and calls `insertCallback(index, elemIds)` or `removeCallback(index, count)`, as
- * appropriate, for each sequence of insertions or removals.
- */
-function iterateEdits(edits, insertCallback, removeCallback) {
-  if (!edits) return
-  let splicePos = -1, deletions, insertions
-
-  for (let i = 0; i < edits.length; i++) {
-    const { action, index, elemId } = edits[i]
-
-    if (action === 'insert') {
-      if (splicePos < 0) {
-        splicePos = index
-        deletions = 0
-        insertions = []
-      }
-      insertions.push(elemId)
-
-      // If there are multiple consecutive insertions at successive indexes,
-      // accumulate them and then process them in a single insertCallback
-      if (i === edits.length - 1 ||
-          edits[i + 1].action !== 'insert' ||
-          edits[i + 1].index  !== index + 1) {
-        insertCallback(splicePos, insertions)
-        splicePos = -1
-      }
-
-    } else if (action === 'remove') {
-      if (splicePos < 0) {
-        splicePos = index
-        deletions = 0
-        insertions = []
-      }
-      deletions += 1
-
-      // If there are multiple consecutive removals of the same index,
-      // accumulate them and then process them in a single removeCallback
-      if (i === edits.length - 1 ||
-          edits[i + 1].action !== 'remove' ||
-          edits[i + 1].index  !== index) {
-        removeCallback(splicePos, deletions)
-        splicePos = -1
-      }
-    } else {
-      throw new RangeError(`Unknown list edit action: ${action}`)
-    }
-  }
-}
-
-/**
  * Creates a writable copy of an immutable map object. If `originalObject`
  * is undefined, creates an empty object with ID `objectId`.
  */
@@ -174,7 +122,7 @@ function updateTableObject(patch, obj, updated) {
   const object = updated[objectId]
 
   for (let key of Object.keys(patch.props || {})) {
-    const values = {}, opIds = Object.keys(patch.props[key])
+    const opIds = Object.keys(patch.props[key])
 
     if (opIds.length === 0) {
       object.remove(key)
@@ -214,22 +162,53 @@ function updateListObject(patch, obj, updated) {
   }
 
   const list = updated[objectId], conflicts = list[CONFLICTS], elemIds = list[ELEM_IDS]
+  for (let i = 0; i < patch.edits.length; i++) {
+    const edit = patch.edits[i]
 
-  iterateEdits(patch.edits,
-    (index, newElems) => { // insertion
-      const blanks = new Array(newElems.length)
-      elemIds  .splice(index, 0, ...newElems)
-      list     .splice(index, 0, ...blanks)
-      conflicts.splice(index, 0, ...blanks)
-    },
-    (index, count) => { // deletion
-      elemIds  .splice(index, count)
-      list     .splice(index, count)
-      conflicts.splice(index, count)
+    if (edit.action === 'insert' || edit.action === 'update') {
+      const oldValue = conflicts[edit.index] && conflicts[edit.index][edit.opId]
+      let lastValue = getValue(edit.value, oldValue, updated)
+      let values = {[edit.opId]: lastValue}
+
+      // Successive updates for the same index are an indication of a conflict on that list element.
+      // Edits are sorted in increasing order by Lamport timestamp, so the last value (with the
+      // greatest timestamp) is the default resolution of the conflict.
+      while (i < patch.edits.length - 1 && patch.edits[i + 1].index === edit.index &&
+             patch.edits[i + 1].action === 'update') {
+        i++
+        const conflict = patch.edits[i]
+        const oldValue2 = conflicts[conflict.index] && conflicts[conflict.index][conflict.opId]
+        lastValue = getValue(conflict.value, oldValue2, updated)
+        values[conflict.opId] = lastValue
+      }
+
+      if (edit.action === 'insert') {
+        list.splice(edit.index, 0, lastValue)
+        conflicts.splice(edit.index, 0, values)
+        elemIds.splice(edit.index, 0, edit.elemId)
+      } else {
+        list[edit.index] = lastValue
+        conflicts[edit.index] = values
+      }
+
+    } else if (edit.action === 'multi-insert') {
+      const startElemId = parseOpId(edit.elemId), newElems = [], newValues = [], newConflicts = []
+      edit.values.forEach((value, index) => {
+        const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
+        newValues.push(value)
+        newConflicts.push({[elemId]: {value, type: 'value'}})
+        newElems.push(elemId)
+      })
+      list.splice(edit.index, 0, ...newValues)
+      conflicts.splice(edit.index, 0, ...newConflicts)
+      elemIds.splice(edit.index, 0, ...newElems)
+
+    } else if (edit.action === 'remove') {
+      list.splice(edit.index, edit.count)
+      conflicts.splice(edit.index, edit.count)
+      elemIds.splice(edit.index, edit.count)
     }
-  )
-
-  applyProperties(patch.props, list, conflicts, updated)
+  }
   return list
 }
 
@@ -249,25 +228,27 @@ function updateTextObject(patch, obj, updated) {
     elems = []
   }
 
-  iterateEdits(patch.edits,
-    (index, elemIds) => { // insertion
-      const blanks = elemIds.map(elemId => ({elemId}))
-      elems.splice(index, 0, ...blanks)
-    },
-    (index, deletions) => { // deletion
-      elems.splice(index, deletions)
-    }
-  )
+  for (const edit of patch.edits) {
+    if (edit.action === 'insert') {
+      const value = getValue(edit.value, undefined, updated)
+      const elem = {elemId: edit.elemId, pred: [edit.opId], value}
+      elems.splice(edit.index, 0, elem)
 
-  for (let key of Object.keys(patch.props || {})) {
-    const pred = Object.keys(patch.props[key])
-    const opId = pred.sort(lamportCompare).reverse()[0]
-    if (!opId) throw new RangeError(`No default value at index ${key}`)
+    } else if (edit.action === 'multi-insert') {
+      const startElemId = parseOpId(edit.elemId)
+      const newElems = edit.values.map((value, index) => {
+        const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
+        return {elemId, pred: [elemId], value}
+      })
+      elems.splice(edit.index, 0, ...newElems)
 
-    elems[key] = {
-      elemId: elems[key].elemId,
-      pred,
-      value: getValue(patch.props[key][opId], elems[key].value, updated)
+    } else if (edit.action === 'update') {
+      const elemId = elems[edit.index].elemId
+      const value = getValue(edit.value, elems[edit.index].value, updated)
+      elems[edit.index] = {elemId, pred: [edit.opId], value}
+
+    } else if (edit.action === 'remove') {
+      elems.splice(edit.index, edit.count)
     }
   }
 
@@ -282,7 +263,8 @@ function updateTextObject(patch, obj, updated) {
  */
 function interpretPatch(patch, obj, updated) {
   // Return original object if it already exists and isn't being modified
-  if (isObject(obj) && !patch.props && !patch.edits && !updated[patch.objectId]) {
+  if (isObject(obj) && (!patch.props || Object.keys(patch.props).length === 0) &&
+      (!patch.edits || patch.edits.length === 0) && !updated[patch.objectId]) {
     return obj
   }
 

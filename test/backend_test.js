@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const Backend = Automerge.Backend
@@ -20,7 +21,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {[`1@${actor}`]: {value: 'magpie'}}
+          bird: {[`1@${actor}`]: {type: 'value', value: 'magpie'}}
         }}
       })
     })
@@ -39,7 +40,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+          counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
         }}
       })
     })
@@ -57,7 +58,10 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {111111: 1, 222222: 1}, deps: [hash(change2)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {'1@111111': {value: 'magpie'}, '2@222222': {value: 'blackbird'}}
+          bird: {
+            '1@111111': {type: 'value', value: 'magpie'},
+            '2@222222': {type: 'value', value: 'blackbird'}
+          }
         }}
       })
     })
@@ -90,7 +94,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {value: 3}}}
+          objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {type: 'value', value: 3}}}
         }}}}
       })
     })
@@ -110,8 +114,64 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`3@${actor}`]: {value: 15}}}
+          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`3@${actor}`]: {type: 'value', value: 15}}}
         }}}}
+      })
+    })
+
+    it('should handle conflicts on nested maps', () => {
+      const actor1 = uuid(), actor2 = uuid()
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor1}`, key: 'wrens', value: 3, pred: []}
+      ]}
+      const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: [`1@${actor1}`]},
+        {action: 'set', obj: `3@${actor1}`, key: 'hawks', value: 1, pred: []}
+      ]}
+      const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: [`1@${actor1}`]},
+        {action: 'set', obj: `3@${actor2}`, key: 'sparrows', value: 15, pred: []}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1, change2, change3].map(encodeChange))
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), maxOp: 4, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {
+          [`3@${actor1}`]: {objectId: `3@${actor1}`, type: 'map', props: {
+            hawks: {[`4@${actor1}`]: {type: 'value', value: 1}}
+          }},
+          [`3@${actor2}`]: {objectId: `3@${actor2}`, type: 'map', props: {
+            sparrows: {[`4@${actor2}`]: {type: 'value', value: 15}}
+          }}
+        }}}
+      })
+    })
+
+    it('should handle updates inside conflicted map keys', () => {
+      const actor1 = uuid(), actor2 = uuid()
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor1}`, key: 'hawks', value: 1, pred: []}
+      ]}
+      const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeMap', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor2}`, key: 'sparrows', value: 15, pred: []}
+      ]}
+      const change3 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1), hash(change2)].sort(), ops: [
+        {action: 'set', obj: `1@${actor2}`, key: 'sparrows', value: 17, pred: [`2@${actor2}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1), encodeChange(change2)])
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change3)])
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)], maxOp: 3, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {
+          [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {}},
+          [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {
+            sparrows: {[`3@${actor1}`]: {type: 'value', value: 17}}
+          }}
+        }}}
       })
     })
 
@@ -126,9 +186,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: 'chaffinch'}}}
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}
+          ]
         }}}}
       })
     })
@@ -148,8 +208,116 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list', edits: [],
-          props: {0: {[`3@${actor}`]: {value: 'greenfinch'}}}
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'update', opId: `3@${actor}`, index: 0, value: {type: 'value', value: 'greenfinch'}}
+          ]
+        }}}}
+      })
+    })
+
+    it('should apply updates to objects inside list elements', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'makeMap', obj: `1@${actor}`, elemId: '_head', insert: true, pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'title', value: 'buy milk', pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      // insert a new list element and update the existing list element in the same change
+      const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor}`, elemId: '_head', insert: true, pred: []},
+        {action: 'set', obj: `5@${actor}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `5@${actor}`, key: 'done', value: false, pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'done', value: true, pred: [`4@${actor}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 8, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `5@${actor}`, opId: `5@${actor}`, value: {
+              objectId: `5@${actor}`, type: 'map', props: {
+                title: {[`6@${actor}`]: {type: 'value', value: 'water plants'}},
+                done: {[`7@${actor}`]: {type: 'value', value: false}}
+              }
+            }},
+            {action: 'update', index: 1, opId: `2@${actor}`, value: {
+              objectId: `2@${actor}`, type: 'map', props: {
+                done: {[`8@${actor}`]: {type: 'value', value: true}}
+              }
+            }}
+          ]
+        }}}}
+      })
+    })
+
+    it('should apply updates inside conflicted list elements', () => {
+      const actor1 = '01234567', actor2 = '89abcdef'
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: '_head', insert: true, pred: []}
+      ]}
+      const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: `2@${actor1}`, pred: [`2@${actor1}`]},
+        {action: 'set', obj: `3@${actor1}`, key: 'title', value: 'buy milk', pred: []},
+        {action: 'set', obj: `3@${actor1}`, key: 'done', value: false, pred: []}
+      ]}
+      const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor1}`, elemId: `2@${actor1}`, pred: [`2@${actor1}`]},
+        {action: 'set', obj: `3@${actor2}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `3@${actor2}`, key: 'done', value: false, pred: []}
+      ]}
+      const change4 = {actor: actor1, seq: 3, startOp: 6, time: 0, deps: [hash(change2), hash(change3)].sort(), ops: [
+        {action: 'set', obj: `3@${actor1}`, key: 'done', value: true, pred: [`5@${actor1}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [change1, change2, change3].map(encodeChange))
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change4)])
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor1]: 3, [actor2]: 1}, deps: [hash(change4)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor1}`]: {
+          objectId: `1@${actor1}`, type: 'list', edits: [
+            {action: 'update', index: 0, opId: `3@${actor1}`, value: {
+              objectId: `3@${actor1}`, type: 'map', props: {
+                done: {[`6@${actor1}`]: {type: 'value', value: true}}
+              }
+            }},
+            {action: 'update', index: 0, opId: `3@${actor2}`, value: {
+              objectId: `3@${actor2}`, type: 'map', props: {}
+            }}
+          ]
+        }}}}
+      })
+    })
+
+    it('should overwrite list elements', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'makeMap', obj: `1@${actor}`, elemId: '_head', insert: true, pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'title', value: 'buy milk', pred: []},
+        {action: 'set', obj: `2@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+        {action: 'makeMap', obj: `1@${actor}`, elemId: `2@${actor}`, insert: false, pred: [`2@${actor}`]},
+        {action: 'set', obj: `5@${actor}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `5@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1), encodeChange(change2)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 7, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `5@${actor}`, value: {
+              objectId: `5@${actor}`, type: 'map', props: {
+                title: {[`6@${actor}`]: {type: 'value', value: 'water plants'}},
+                done: {[`7@${actor}`]: {type: 'value', value: false}}
+              }
+            }}
+          ]
         }}}}
       })
     })
@@ -169,8 +337,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list', props: {},
-          edits: [{action: 'remove', index: 0}]
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'remove', index: 0, count: 1}
+          ]
         }}}}
       })
     })
@@ -191,8 +360,9 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`}, {action: 'remove', index: 0}
-          ], props: {}
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}},
+            {action: 'remove', index: 0, count: 1}
+          ]
         }}}}
       })
     })
@@ -214,10 +384,10 @@ describe('Automerge.Backend', () => {
       const [s3, patch3] = Backend.applyChanges(s2, [encodeChange(change3)])
       assert.deepStrictEqual(patch3, {
         clock: {[actor1]: 1, [actor2]: 2}, maxOp: 2, pendingChanges: 0,
-        deps: [hash(change1), hash(change3)].sort(), 
+        deps: [hash(change1), hash(change3)].sort(),
         diffs: {objectId: '_root', type: 'map', props: {conflict: {
-          [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'list'},
-          [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {value: 12}}}}
+          [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'list', edits: []},
+          [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {type: 'value', value: 12}}}}
         }}}
       })
     })
@@ -232,7 +402,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch, {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          now: {[`1@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}
+          now: {[`1@${actor}`]: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
         }}
       })
     })
@@ -248,9 +418,10 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch, {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}}
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`,
+              value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
+          ]
         }}}}
       })
     })
@@ -274,7 +445,77 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch3, {
         clock: {[actor1]: 2, [actor2]: 1}, maxOp: 3, pendingChanges: 0,
         deps: [hash(change2), hash(change3)].sort(),
-        diffs: {objectId: '_root', type: 'map'}
+        diffs: {objectId: '_root', type: 'map', props: {}}
+      })
+    })
+
+    it('should handle nested maps in lists', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], value: 'first'},
+        {action: 'makeMap', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, pred: []},
+        {action: 'set', obj: `3@${actor}`, key: 'title', value: 'water plants', pred: []},
+        {action: 'set', obj: `3@${actor}`, key: 'done', value: false, pred: []}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 5, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list',
+          edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'first'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `3@${actor}`, value: {
+              type: 'map',
+              objectId: `3@${actor}`,
+              props: {
+                title: {[`4@${actor}`]: {type: 'value', value: 'water plants'}},
+                done:  {[`5@${actor}`]: {type: 'value', value: false}}
+              }
+            }}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support deleting multiple elements in one op', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
+      ]}
+      const change2 = {actor, seq: 2, startOp: 7, time: 0, deps: [hash(change1)], ops: [
+        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [`3@${actor}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 9, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'remove', index: 1, count: 3}
+          ]
+        }}}}
       })
     })
   })
@@ -290,7 +531,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         actor: '111111', seq: 1, clock: {'111111': 1}, deps: [], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {['1@111111']: {value: 'magpie'}}
+          bird: {'1@111111': {type: 'value', value: 'magpie'}}
         }}
       })
       assert.deepStrictEqual(changes01, [{
@@ -369,7 +610,7 @@ describe('Automerge.Backend', () => {
         actor: '111111', seq: 2, clock: {'111111': 2, '222222': 1},
         deps: [hash(remote1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {'2@222222': {value: 'magpie'}, '2@111111': {value: 'jay'}}
+          bird: {'2@222222': {type: 'value', value: 'magpie'}, '2@111111': {type: 'value', value: 'jay'}}
         }}
       })
       assert.deepStrictEqual(changes[2], {
@@ -441,10 +682,11 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         actor: '111111', seq: 2, clock: {'111111': 2}, deps: [], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          birds: {['1@111111']: {objectId: '1@111111', type: 'list',
-            edits: [{action: 'insert', index: 0, elemId: '2@111111'}, {action: 'remove', index: 0}],
-            props: {}
-          }}
+          birds: {'1@111111': {objectId: '1@111111', type: 'list',
+            edits: [
+              {action: 'insert', index: 0, elemId: '2@111111', opId: '2@111111', value: {type: 'value', value: 'magpie'}},
+              {action: 'remove', index: 0, count: 1}
+            ]}}
         }}
       })
       assert.deepStrictEqual(changes, [{
@@ -473,8 +715,49 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          longString: {['1@111111']: {value: longString}}
+          longString: {'1@111111': {type: 'value', value: longString}}
         }}
+      })
+    })
+
+    it('should support inserting multiple elements in one change', () => {
+      const actor = uuid()
+      const localChange = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, localChange)
+      const changes = Backend.getChanges(s1, []).map(decodeChange)
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [], maxOp: 6, actor, seq: 1, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support deleting multiple elements in one op', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3, 4, 5]}
+      ]}
+      const change2 = {actor, seq: 2, startOp: 7, time: 0, deps: [hash(change1)], ops: [
+        {action: 'del', obj: `1@${actor}`, elemId: `3@${actor}`, multiOp: 3, pred: [`3@${actor}`]}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, change1)
+      const [s2, patch2] = Backend.applyLocalChange(s1, change2)
+      assert.deepStrictEqual(patch2, {
+        clock: {[actor]: 2}, deps: [], maxOp: 9, actor, seq: 2, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'remove', index: 1, count: 3}
+          ]
+        }}}}
       })
     })
   })
@@ -508,7 +791,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch, {
         clock: {'111111': 1}, deps: [hash(change1)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          longString: {['1@111111']: {value: longString}}
+          longString: {'1@111111': {type: 'value', value: longString}}
         }}
       })
     })
@@ -527,7 +810,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {[`2@${actor}`]: {value: 'blackbird'}}
+          bird: {[`2@${actor}`]: {type: 'value', value: 'blackbird'}}
         }}
       })
     })
@@ -544,7 +827,7 @@ describe('Automerge.Backend', () => {
         clock: {111111: 1, 222222: 1},
         deps: [hash(change1), hash(change2)].sort(), maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          bird: {'1@111111': {value: 'magpie'}, '1@222222': {value: 'blackbird'}}
+          bird: {'1@111111': {type: 'value', value: 'magpie'}, '1@222222': {type: 'value', value: 'blackbird'}}
         }}
       })
     })
@@ -580,7 +863,7 @@ describe('Automerge.Backend', () => {
       const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 3}, deps: [hash(change3)], maxOp: 3, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map'}
+        diffs: {objectId: '_root', type: 'map', props: {}}
       })
     })
 
@@ -598,7 +881,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 4, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`4@${actor}`]: {value: 15}}}
+          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`4@${actor}`]: {type: 'value', value: 15}}}
         }}}}
       })
     })
@@ -613,9 +896,9 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: 'chaffinch'}}}
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}}
+          ]
         }}}}
       })
     })
@@ -637,8 +920,37 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 6, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `5@${actor}`}, {action: 'insert', index: 1, elemId: `3@${actor}`}],
-          props: {0: {[`5@${actor}`]: {value: 'greenfinch'}}, 1: {[`6@${actor}`]: {value: 'goldfinches!!'}}}
+          edits: [
+            {action: 'insert', index: 0, elemId: `5@${actor}`, opId: `5@${actor}`, value: {type: 'value', value: 'greenfinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `6@${actor}`, value: {type: 'value', value: 'goldfinches!!'}}
+          ]
+        }}}}
+      })
+    })
+
+    it('should handle conflicts on list elements', () => {
+      const actor1 = '01234567', actor2 = '89abcdef'
+      const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor1}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: true, value: 'magpie', pred: []}
+      ]}
+      const change2 = {actor: actor1, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, value: 'greenfinch', pred: [`2@${actor1}`]}
+      ]}
+      const change3 = {actor: actor2, seq: 1, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor1}`, elemId: `2@${actor1}`, value: 'goldfinch', pred: [`2@${actor1}`]}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1, change2, change3].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), maxOp: 4, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor1}`]: {
+          objectId: `1@${actor1}`, type: 'list',
+          edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `4@${actor1}`, value: {type: 'value', value: 'greenfinch'}},
+            {action: 'update', index: 0, opId: `4@${actor2}`, value: {type: 'value', value: 'goldfinch'}},
+            {action: 'insert', index: 1, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'magpie'}}
+          ]
         }}}}
       })
     })
@@ -656,13 +968,16 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 4, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {
-            objectId: `2@${actor}`, type: 'map', props: {
-              title: {[`3@${actor}`]: {value: 'water plants'}},
-              done:  {[`4@${actor}`]: {value: false}}
-            }
-          }}}
+          edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {
+              type: 'map',
+              objectId: `2@${actor}`,
+              props: {
+                title: {[`3@${actor}`]: {type: 'value', value: 'water plants'}},
+                done:  {[`4@${actor}`]: {type: 'value', value: false}}
+              }
+            }}
+          ]
         }}}}
       })
     })
@@ -676,7 +991,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          now: {[`1@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}
+          now: {[`1@${actor}`]: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
         }}
       })
     })
@@ -691,9 +1006,55 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 1}, deps: [hash(change)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`,
+             value: {type: 'value', value: now.getTime(), datatype: 'timestamp'}}
+          ]
+        }}}}
+      })
+    })
+
+    it('should condense multiple inserts into a single edit', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'goldfinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `3@${actor}`, insert: true, values: ['bullfinch', 'greenfinch'], pred: []}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 5, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list',
-          edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-          props: {0: {[`2@${actor}`]: {value: now.getTime(), datatype: 'timestamp'}}}
+          edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [
+              'chaffinch',
+              'goldfinch',
+              'bullfinch',
+              'greenfinch',
+            ]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should use a multi-insert only for consecutive elemIds', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'birds', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, value: 'chaffinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, value: 'goldfinch', pred: []},
+        {action: 'set', obj: `1@${actor}`, elemId: '_head',      insert: true, values: ['bullfinch', 'greenfinch'], pred: []}
+      ]}
+      const s1 = Backend.loadChanges(Backend.init(), [change1].map(encodeChange))
+      assert.deepStrictEqual(Backend.getPatch(s1), {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 5, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `4@${actor}`, values: ['bullfinch', 'greenfinch']},
+            {action: 'multi-insert', index: 2, elemId: `2@${actor}`, values: ['chaffinch', 'goldfinch']}
+          ]
         }}}}
       })
     })

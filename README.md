@@ -1,8 +1,8 @@
-# Automerge
+<img src='./img/sign.svg' width='500' alt='Automerge logo' />
 
-💬 [Join the Automerge Slack community](https://communityinviter.com/apps/automerge/automerge)
+💬 [Join the Automerge Slack community](https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw)
 
-[![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=master)](https://travis-ci.org/automerge/automerge)
+[![Build Status](https://travis-ci.org/automerge/automerge.svg?branch=main)](https://travis-ci.org/automerge/automerge)
 [![Browser Test Status](https://app.saucelabs.com/buildstatus/automerge)](https://app.saucelabs.com/open_sauce/user/automerge/builds)
 
 Automerge is a library of data structures for building collaborative applications in JavaScript.
@@ -52,17 +52,27 @@ and merging**:
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
   functional reactive programming style of [React](https://reactjs.org) and
   [Redux](http://redux.js.org/), for example.
-- **Automatic merging**. Automerge is a _Conflict-Free Replicated Data Type_
-  ([CRDT](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)), which allows
-  concurrent changes on different devices to be merged automatically without requiring any central
-  server. It is based on [academic research on JSON CRDTs](https://arxiv.org/abs/1608.03960), but
+- **Automatic merging**. Automerge is a _Conflict-Free Replicated Data Type_ ([CRDT](https://crdt.tech/)),
+  which allows concurrent changes on different devices to be merged automatically without requiring any
+  central server. It is based on [academic research on JSON CRDTs](https://arxiv.org/abs/1608.03960), but
   the details of the algorithm in Automerge are different from the JSON CRDT paper, and we are
   planning to publish more detail about it in the future.
 - **Fairly portable**. We're not yet making an effort to support old platforms, but we have tested
   Automerge in Node.js, Chrome, Firefox, Safari, MS Edge, and [Electron](https://electron.atom.io/).
   For TypeScript users, Automerge comes with
-  [type definitions](https://github.com/automerge/automerge/blob/master/@types/automerge/index.d.ts)
+  [type definitions](https://github.com/automerge/automerge/blob/main/@types/automerge/index.d.ts)
   that allow you to use Automerge in a type-safe way.
+
+Automerge is designed for creating [local-first software](https://www.inkandswitch.com/local-first.html),
+i.e. software that treats a user's local copy of their data (on their own device) as primary, rather
+than centralising data in a cloud service. The local-first approach enables offline working while
+still allowing several users to collaborate in real-time and sync their data across multiple
+devices. By reducing the dependency on cloud services (which may disappear if someone stops paying
+for the servers), local-first software can have greater longevity, stronger privacy, and better
+performance, and it gives users more control over their data.
+The [essay on local-first software](https://www.inkandswitch.com/local-first.html) goes into more
+detail on the philosophy behind Automerge, and the pros and cons of this approach.
+
 
 ## Setup
 
@@ -82,7 +92,7 @@ Otherwise, clone this repository, and then you can use the following commands:
 
 For examples of real-life applications built upon Automerge, check out:
 
-- [PushPin](https://github.com/inkandswitch/pushpin), a mature React-based personal archiving application
+- [PushPin](https://github.com/automerge/pushpin), a mature React-based personal archiving application
 - [Farm](https://github.com/inkandswitch/farm), a programmable, collaborative computing environment
 - [Capstone](https://github.com/inkandswitch/capstone), a tablet-based note-taking and
   idea-development tool ([blog post](https://www.inkandswitch.com/capstone-manuscript.html))
@@ -271,6 +281,49 @@ unmodified. The only special things about it are:
   the same property concurrently (see [below](#conflicting-changes)). You can get conflicts using
   the `Automerge.getConflicts()` function.
 
+### Making fine-grained changes
+
+If you have previously worked with immutable state in JavaScript, you might be in the habit of
+using [idioms like these](https://redux.js.org/recipes/structuring-reducers/updating-normalized-data):
+
+```js
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
+  doc.cards = {
+    ids: [...doc.cards.ids, newItem.id],
+    entities: { ...doc.cards.entities, [newItem.id]: newItem }
+  }
+})
+```
+
+While this pattern works fine outside of Automerge, please **don't do this in Automerge**! Please
+use mutable idioms to update the state instead, like this:
+
+```js
+state = Automerge.change(state, 'Add card', doc => {
+  const newItem = { id: 123, title: 'Rewrite everything in Rust', done: false }
+  doc.cards.ids.push(newItem.id)
+  doc.cards.entities[newItem.id] = newItem
+})
+```
+
+Even though you are using mutating APIs, Automerge ensures that the code above does not actually
+mutate `state`, but returns a new copy of `state` in which the changes are reflected. The problem
+with the first example is that from Automerge's point of view, you are replacing the entire
+`doc.cards` object (and everything inside it) with a brand new object. Thus, if two users
+concurrently update the document, Automerge will not be able to merge those changes (instead, you
+will just get a conflict on the `doc.cards` property).
+
+The second example avoids this problem by making the changes at a fine-grained level: adding one
+item to the array of IDs with `ids.push(newItem.id)`, and adding one item to the map of entities
+with `entities[newItem.id] = newItem`. This code works much better, since it tells Automerge
+exactly which changes you are making to the state, and this information allows Automerge to deal
+much better with concurrent updates by different users.
+
+As a general principle with Automerge, you should make state updates at the most fine-grained
+level possible. Don't replace an entire object if you're only modifying one property of that
+object; just assign that one property instead.
+
 ### Persisting a document
 
 `Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
@@ -298,6 +351,8 @@ like a git repository).
 >
 > **Unless you know what you are doing, you should stick with the default**, and let `actorId` be
 > auto-generated.
+>
+> To get the `actorId` of the current node, call `Automerge.getActorId(doc)`.
 
 ### Sending and receiving changes
 
@@ -307,20 +362,11 @@ options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another.
-- [automerge-connection](https://github.com/automerge/automerge-connection) is an implementation
-  of a protocol that syncs up two nodes by determining missing changes and sending them to each
-  other. The [automerge-net](https://github.com/automerge/automerge-net) repository
-  contains an example that runs the automerge-connection protocol over a simple TCP connection.
-- [automerge-client-server](https://gitlab.com/codewitchbella/automerge-client-server)
-  ([usage example](https://github.com/automerge/automerge/issues/117)) runs the automerge-connection
-  protocol over [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API).
-- [MPL](https://github.com/automerge/mpl) runs the automerge-connection protocol over
-  [WebRTC](https://webrtc.org/).
-- [Hypermerge](https://github.com/automerge/hypermerge) is a peer-to-peer networking layer that
-  combines Automerge with [Hypercore](https://github.com/mafintosh/hypercore), part of the
-  [Dat project](https://datproject.org/).
-- [Perge](https://github.com/sammccord/perge) is a minimal library that runs the
-  automerge-connection protocol over [PeerJS](https://github.com/peers/peerjs).
+- Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protcol
+  (e.g. WebSocket), and call `Automerge.receiveSyncMessage()` on the recipient to process the
+  messages. TODO: need more documentation for this protocol.
+- There are also a number of external libraries that provide network sync for Automerge; these are
+  in the process of being updated for the Automerge 1.0 data format and sync protocol.
 
 The `getChanges()/applyChanges()` API works as follows:
 
@@ -562,6 +608,19 @@ database.publications.filter(pub => pub.title.startsWith('Designing'))
 database.publications.map(pub => pub.publisher)
 ```
 
+You can modify rows in a table like this:
+
+```js
+database = Automerge.change(database, doc => {
+  // Update a row
+  let book = doc.publications.byId('29f6cd15-61ff-460d-b7fb-39a5594f32d5')
+  book.isbn = '1449373321'
+
+  // Delete a row
+  doc.publications.remove('29f6cd15-61ff-460d-b7fb-39a5594f32d5')
+})
+```
+
 Note that currently the `Automerge.Table` type does not enforce a schema. By convention, the row
 objects that you add to a table should have the same properties (like columns in a table), but
 Automerge does not enforce this. This is because different users may be running different versions
@@ -569,15 +628,15 @@ of your app, which might be using different properties.
 
 ## Scope of Automerge
 
-Automerge is a data structure library, not a full network protocol.
-[automerge-connection](https://github.com/automerge/automerge-connection)
-provides a basic building block for a network protocol, but other protocol concerns (such as
-encryption, authentication, and access control) need to be handled by separate layers
+Automerge is an in-memory data structure library. It does not perform any I/O, neither disk access
+nor network communication. Automerge includes general-purpose building blocks for network protocols,
+but you need to use a separate library to perform the actual communication (including encryption,
+authentication, and access control). Similarly, disk persistence needs to happen in a separate layer
 outside of Automerge.
 
 ## Meta
 
-Copyright 2017–2020, the Automerge contributors. Released under the terms of the
+Copyright 2017–2021, the Automerge contributors. Released under the terms of the
 MIT license (see `LICENSE`).
 
 Created by [Martin Kleppmann](https://martin.kleppmann.com/) and

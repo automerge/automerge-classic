@@ -21,8 +21,8 @@ const { backendState } = require('./util')
 const Backend = require('./backend')
 const OpSet = require('./op_set')
 const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
-const { decodeChangeMeta, getChangeChecksum } = require('./columnar')
-const { copyObject, equalBytes } = require('../src/common')
+const { decodeChangeMeta } = require('./columnar')
+const { copyObject } = require('../src/common')
 
 const HASH_SIZE = 32 // 256 bits = 32 bytes
 const MESSAGE_TYPE_SYNC = 0x42 // first byte of a sync message, for identification
@@ -69,7 +69,7 @@ class BloomFilter {
    * Returns the Bloom filter state, encoded as a byte array.
    */
   get bytes() {
-    if (this.numEntries === 0) return Uint8Array.of()
+    if (this.numEntries === 0) return new Uint8Array(0)
     const encoder = new Encoder()
     encoder.appendUint32(this.numEntries)
     encoder.appendUint32(this.numBitsPerEntry)
@@ -167,7 +167,6 @@ function encodeSyncMessage(message) {
     encodeHashes(encoder, have.lastSync)
     encoder.appendPrefixedBytes(have.bloom)
   }
-  const changes = message.changes || []
   encoder.appendUint32(message.changes.length)
   for (let change of message.changes) {
     encoder.appendPrefixedBytes(change)
@@ -362,7 +361,7 @@ function generateSyncMessage(backend, syncState) {
     const lastSync = theirHave[0].lastSync
     if (!lastSync.every(hash => Backend.getChangeByHash(backend, hash))) {
       // we need to queue them to send us a fresh sync message, the one they sent is uninteligible so we don't know what they need
-      const resetMsg = {heads: ourHeads, need: [], have: [{ lastSync: [], bloom: Uint8Array.of() }], changes: []}
+      const resetMsg = {heads: ourHeads, need: [], have: [{ lastSync: [], bloom: new Uint8Array(0) }], changes: []}
       return [syncState, encodeSyncMessage(resetMsg)]
     }
   }
@@ -440,7 +439,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   // changes without applying them. The set of changes may also be incomplete if the sender decided
   // to break a large set of changes into chunks.
   if (message.changes.length > 0) {
-    ;[backend, patch] = Backend.applyChanges(backend, message.changes)
+    [backend, patch] = Backend.applyChanges(backend, message.changes)
     sharedHeads = advanceHeads(beforeHeads, Backend.getHeads(backend), sharedHeads)
   }
 

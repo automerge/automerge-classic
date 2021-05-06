@@ -8,7 +8,7 @@ describe('Automerge.Observable', () => {
     observable.observe(doc, (diff, before, after, local, changes) => {
       callbackChanges = changes
       assert.deepStrictEqual(diff, {
-        objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {value: 'Goldfinch'}}}
+        objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {type: 'value', value: 'Goldfinch'}}}
       })
       assert.deepStrictEqual(before, {})
       assert.deepStrictEqual(after, {bird: 'Goldfinch'})
@@ -29,14 +29,8 @@ describe('Automerge.Observable', () => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`},
-          {action: 'insert', index: 2, elemId: `4@${actor}`}
-        ], props: {
-          0: {[`2@${actor}`]: {value: 'a'}},
-          1: {[`3@${actor}`]: {value: 'b'}},
-          2: {[`4@${actor}`]: {value: 'c'}}
-        }
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b', 'c']}
+        ]
       })
       assert.deepStrictEqual(before.toString(), '')
       assert.deepStrictEqual(after.toString(), 'abc')
@@ -49,23 +43,23 @@ describe('Automerge.Observable', () => {
   it('should call the callback when applying remote changes', () => {
     let observable = new Automerge.Observable(), callbackChanges
     let local = Automerge.from({text: new Automerge.Text()}, {observable})
-    let remote = Automerge.init(), patch
+    let remote = Automerge.init()
     const localId = Automerge.getActorId(local), remoteId = Automerge.getActorId(remote)
     observable.observe(local.text, (diff, before, after, local, changes) => {
       callbackChanges = changes
       assert.deepStrictEqual(diff, {
-        objectId: `1@${localId}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${remoteId}`}],
-        props: {0: {[`2@${remoteId}`]: {value: 'a'}}}
+        objectId: `1@${localId}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${remoteId}`, opId: `2@${remoteId}`, value: {type: 'value', value: 'a'}}
+        ]
       })
       assert.deepStrictEqual(before.toString(), '')
       assert.deepStrictEqual(after.toString(), 'a')
       assert.deepStrictEqual(local, false)
     })
-    ;[remote, patch] = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
+    ;[remote] = Automerge.applyChanges(remote, Automerge.getAllChanges(local))
     remote = Automerge.change(remote, doc => doc.text.insertAt(0, 'a'))
     const allChanges = Automerge.getAllChanges(remote)
-    ;[local, patch] = Automerge.applyChanges(local, allChanges)
+    ;[local] = Automerge.applyChanges(local, allChanges)
     assert.strictEqual(callbackChanges, allChanges)
   })
 
@@ -76,7 +70,7 @@ describe('Automerge.Observable', () => {
     observable.observe(doc.todos[0], (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
-        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {type: 'value', value: true}}}
       })
       assert.deepStrictEqual(before, {title: 'Buy milk', done: false})
       assert.deepStrictEqual(after, {title: 'Buy milk', done: true})
@@ -86,22 +80,22 @@ describe('Automerge.Observable', () => {
     assert.strictEqual(callbackCalled, true)
   })
 
-  it('should not provide a "before" state if list indexes changed', () => {
+  it('should provide before and after states if list indexes changed', () => {
     let observable = new Automerge.Observable(), callbackCalled = false
     let doc = Automerge.from({todos: [{title: 'Buy milk', done: false}]}, {observable})
     const actor = Automerge.getActorId(doc)
     observable.observe(doc.todos[0], (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
-        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`8@${actor}`]: {type: 'value', value: true}}}
       })
-      assert.strictEqual(before, undefined)
+      assert.deepStrictEqual(before, {title: 'Buy milk', done: false})
       assert.deepStrictEqual(after, {title: 'Buy milk', done: true})
       assert.strictEqual(local, true)
     })
     doc = Automerge.change(doc, doc => {
-      doc.todos[0].done = true
       doc.todos.unshift({title: 'Water plants', done: false})
+      doc.todos[1].done = true
     })
     assert.strictEqual(callbackCalled, true)
   })
@@ -116,7 +110,7 @@ describe('Automerge.Observable', () => {
     observable.observe(doc.todos.byId(rowId), (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
-        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {value: true}}}
+        objectId: `2@${actor}`, type: 'map', props: {done: {[`5@${actor}`]: {type: 'value', value: true}}}
       })
       assert.deepStrictEqual(before, {id: rowId, title: 'Buy milk', done: false})
       assert.deepStrictEqual(after, {id: rowId, title: 'Buy milk', done: true})
@@ -128,7 +122,7 @@ describe('Automerge.Observable', () => {
 
   it('should observe nested objects inside text', () => {
     let observable = new Automerge.Observable(), callbackCalled = false
-    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc), rowId
+    let doc = Automerge.init({observable}), actor = Automerge.getActorId(doc)
     doc = Automerge.change(doc, doc => {
       doc.text = new Automerge.Text()
       doc.text.insertAt(0, 'a', 'b', {start: 'bold'}, 'c', {end: 'bold'})
@@ -136,7 +130,7 @@ describe('Automerge.Observable', () => {
     observable.observe(doc.text.get(2), (diff, before, after, local) => {
       callbackCalled = true
       assert.deepStrictEqual(diff, {
-        objectId: `4@${actor}`, type: 'map', props: {start: {[`9@${actor}`]: {value: 'italic'}}}
+        objectId: `4@${actor}`, type: 'map', props: {start: {[`9@${actor}`]: {type: 'value', value: 'italic'}}}
       })
       assert.deepStrictEqual(before, {start: 'bold'})
       assert.deepStrictEqual(after, {start: 'italic'})
@@ -147,7 +141,7 @@ describe('Automerge.Observable', () => {
   })
 
   it('should not allow observers on non-document objects', () => {
-    let observable = new Automerge.Observable(), callbackCalled = false
+    let observable = new Automerge.Observable()
     let doc = Automerge.init({observable})
     assert.throws(() => {
       Automerge.change(doc, doc => {
@@ -161,8 +155,8 @@ describe('Automerge.Observable', () => {
   it('should allow multiple observers', () => {
     let observable = new Automerge.Observable(), called1 = false, called2 = false
     let doc = Automerge.init({observable})
-    observable.observe(doc, patch => { called1 = true })
-    observable.observe(doc, patch => { called2 = true })
+    observable.observe(doc, () => { called1 = true })
+    observable.observe(doc, () => { called2 = true })
     Automerge.change(doc, doc => doc.foo = 'bar')
     assert.strictEqual(called1, true)
     assert.strictEqual(called2, true)
