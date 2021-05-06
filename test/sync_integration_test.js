@@ -5,10 +5,6 @@ const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require
 console.clear()
 
 describe('sync protocol - integration', () => {
-  beforeEach(() => {
-    iterations = 0
-  })
-
   function connect(a, b) {
     const channel = new Channel()
     a.connectTo(b.userId, channel)
