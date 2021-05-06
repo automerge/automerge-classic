@@ -254,7 +254,7 @@ class Channel extends EventEmitter {
   constructor() {
     super();
     this.peers = 0;
-    this.buffer = []
+    this.buffer = [];
   }
   join() {
     this.peers += 1;
