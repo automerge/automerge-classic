@@ -184,16 +184,12 @@ class ConnectedDoc extends EventEmitter {
   connectTo(peerId, channel) {
     const peer = new Peer(this.userId, peerId, channel)
     this.peers[peerId] = peer
-    channel.addListener('data', (senderId, msg) => {
-      if (senderId === this.userId) return // don't react to our own mesages
-      if (!this.online) return // don't react to messages while we're "offline"
+    channel.on('data', (senderId, msg) => {
+      if (senderId === this.userId) return // don't receive our own mesages
+      if (!this.online) return // don't receive messages while we're "offline"
 
-      // use the message received, along with the the sync state we're tracking for the peer,
-      // to create an updated version of our doc
-      const updatedDoc = peer.receive(this.doc, msg)
-
-      // update our doc and sync with all our peers
-      this.sync(updatedDoc)
+      this.doc = peer.receive(this.doc, msg)
+      this.sync()
     })
   }
 
@@ -202,11 +198,8 @@ class ConnectedDoc extends EventEmitter {
    * @param fn An Automerge.ChangeFn used to mutate the doc in place
    */
   change(fn) {
-    // apply the change function to get an updated version of our doc
-    const updatedDoc = A.change(this.doc, fn)
-
-    // update our doc and sync with all our peers
-    this.sync(updatedDoc)
+    this.doc = A.change(this.doc, fn)
+    this.sync()
   }
 
   /** Simulates going offline */
@@ -217,8 +210,7 @@ class ConnectedDoc extends EventEmitter {
   /** Simulates going back online */
   connect() {
     this.online = true
-    // ask everyone what happened while we were away
-    this.sync(this.doc)
+    this.sync()
   }
 
   // PRIVATE
@@ -228,10 +220,9 @@ class ConnectedDoc extends EventEmitter {
     return Object.values(this.peers)
   }
 
-  /** Updates our document and syncs with peers */
-  sync(updatedDoc) {
-    this.doc = updatedDoc
-    if (!this.online) return // only send updates if we're online
+  /** Syncs with all peers */
+  sync() {
+    if (!this.online) return // only send updates if we're "online"
     for (const peer of this._peerList) {
       peer.sync(this.doc)
     }
@@ -255,9 +246,9 @@ class Peer extends EventEmitter {
   }
 
   /**
-   * Compares the latest Automerge doc with the sync state we have for this peer,
+   * Compares the current Automerge doc with the sync state we have for this peer,
    * and sends the peer a sync message if anything has changed
-   * @param doc The latest version of the Automerge doc
+   * @param doc The current version of the Automerge doc
    */
   sync(doc) {
     const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
