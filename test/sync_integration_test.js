@@ -176,9 +176,9 @@ describe('sync protocol - integration', () => {
       const dwight = new ConnectedDoc('dwight', doc)
 
       connect(alice, bob)
-      connect(bob, charlie)
       connect(alice, charlie)
-      // connect(alice, dwight)
+      connect(alice, dwight)
+      connect(bob, charlie)
       connect(bob, dwight)
       connect(charlie, dwight)
 
@@ -198,11 +198,11 @@ describe('sync protocol - integration', () => {
       const dwight = new ConnectedDoc('dwight', doc)
 
       connect(alice, bob)
-      connect(bob, charlie)
       connect(alice, charlie)
       connect(alice, dwight)
-      // connect(bob, dwight)
-      // connect(charlie, dwight)
+      connect(bob, charlie)
+      connect(bob, dwight)
+      connect(charlie, dwight)
 
       // each one makes a change
       alice.change(s => (s.alice = 1))
@@ -225,11 +225,11 @@ describe('sync protocol - integration', () => {
       const dwight = new ConnectedDoc('dwight', doc)
 
       connect(alice, bob)
+      connect(alice, charlie)
+      connect(alice, dwight)
       connect(bob, charlie)
-      // connect(alice, charlie)
+      connect(bob, dwight)
       connect(charlie, dwight)
-      // connect(bob, dwight)
-      // connect(charlie, dwight)
 
       alice.disconnect()
       bob.disconnect()
@@ -385,7 +385,11 @@ class Peer extends EventEmitter {
   send(msg) {
     this.iterations += 1
     // console.log(`${this.userId}->${this.peerId} ${this.iterations}`)
-    if (this.iterations > 5) throw new Error('loop detected')
+    if (this.iterations > 20) {
+      const err = new Error('loop detected (failed to converge)')
+      err.stack = err.stack.split('\n').slice(0, 10).join('\n') // truncate repetitive stack
+      throw err
+    }
 
     this.channel.write(this.userId, msg)
   }
