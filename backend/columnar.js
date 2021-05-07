@@ -595,10 +595,16 @@ function decodeColumns(columns, actorIds, columnSpec) {
 }
 
 function decodeColumnInfo(decoder) {
+  // A number that is all 1 bits except for the bit that indicates whether a column is
+  // deflate-compressed. We ignore this bit when checking whether columns are sorted by ID.
+  const COLUMN_ID_MASK = (-1 ^ COLUMN_TYPE_DEFLATE) >>> 0
+
   let lastColumnId = -1, columns = [], numColumns = decoder.readUint53()
   for (let i = 0; i < numColumns; i++) {
     const columnId = decoder.readUint53(), bufferLen = decoder.readUint53()
-    if (columnId <= lastColumnId) throw new RangeError('Columns must be in ascending order')
+    if ((columnId & COLUMN_ID_MASK) <= (lastColumnId & COLUMN_ID_MASK)) {
+      throw new RangeError('Columns must be in ascending order')
+    }
     lastColumnId = columnId
     columns.push({columnId, bufferLen})
   }
