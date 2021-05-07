@@ -1,41 +1,33 @@
 ﻿const assert = require('assert')
-const { EventEmitter } = require('events')
-const A = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+const A = require('../src/automerge')
 
-describe('sync protocol - integration', () => {
-  console.clear()
-
+describe('sync protocol - integration ', () => {
   describe('2 peers', () => {
-    it(`syncs a single change`, async () => {
+    it('syncs a single change', () => {
       let doc = A.init()
 
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
+      const network = new Network()
+      const alice = new Peer('alice', doc)
+      const bob = new Peer('bob', doc)
 
-      const channel = new Channel()
-      alice.connectTo(bob.userId, channel)
-      bob.connectTo(alice.userId, channel)
+      network.connect(alice, bob)
 
       // alice makes a change
       alice.change(s => (s.alice = 1))
 
-      await pause()
+      network.deliverAll()
 
-      // bob gets the changes
       assert.deepStrictEqual(alice.doc, bob.doc)
     })
 
-    it('syncs divergent changes', async () => {
+    it('syncs divergent changes', () => {
       let doc = A.init()
 
-      const alice = new ConnectedDoc('alice', doc)
-      const bob = new ConnectedDoc('bob', doc)
+      const network = new Network()
+      const alice = new Peer('alice', doc)
+      const bob = new Peer('bob', doc)
 
-      const channel = new Channel()
-      alice.connectTo(bob.userId, channel)
-      bob.connectTo(alice.userId, channel)
-
-      alice.disconnect()
+      network.connect(alice, bob)
 
       // alice makes a change
       alice.change(s => (s.alice = 42))
@@ -43,273 +35,277 @@ describe('sync protocol - integration', () => {
       // bob makes a change
       bob.change(s => (s.bob = 13))
 
-      await pause()
-
       // while they're disconnected, they have divergent docs
       assert.notDeepStrictEqual(alice.doc, bob.doc)
 
-      alice.connect()
-      await pause()
+      network.deliverAll()
 
       // after connecting, their docs converge
       assert.deepStrictEqual(alice.doc, bob.doc)
     })
   })
 
-  describePeers(['alice', 'bob', 'charlie'])
-  describePeers(['alice', 'bob', 'charlie', 'dwight'])
-  describePeers(['alice', 'bob', 'charlie', 'dwight', 'eleanor'])
+  describePeers(['a', 'b', 'c'])
+  describePeers(['a', 'b', 'c', 'd'])
+
+  // these pass but are slow
+  // describePeers(['a', 'b', 'c', 'd', 'e'])
+  // describePeers(['a', 'b', 'c', 'd', 'e', 'f'])
+  // describePeers(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
 
   function describePeers(users) {
     describe(`${users.length} peers`, () => {
-      function connect(a, b) {
-        const channel = new Channel()
-        a.connectTo(b.userId, channel)
-        b.connectTo(a.userId, channel)
-      }
-
       function connectAll(peers) {
-        for (let i = 0; i < peers.length; i++) {
-          for (let j = i + 1; j < peers.length; j++) {
-            const a = peers[i]
-            const b = peers[j]
-            connect(a, b)
-          }
-        }
+        const network = new Network()
+        peers.forEach((a, i) => {
+          const followingPeers = peers.slice(i + 1)
+          followingPeers.forEach(b => {
+            network.connect(a, b)
+          })
+        })
+        return network
       }
 
-      function connectAllInDaisyChain(peers) {
-        peers.slice(0, peers.length - 1).forEach((peer, i) => {
-          const nextPeer = peers[i + 1]
-          connect(peer, nextPeer)
+      function connectDaisyChain(peers) {
+        const network = new Network()
+        peers.slice(0, peers.length - 1).forEach((a, i) => {
+          const b = peers[i + 1]
+          network.connect(a, b)
+        })
+        return network
+      }
+
+      function assertAllEqual(peers) {
+        peers.slice(0, peers.length - 1).forEach((a, i) => {
+          const b = peers[i + 1]
+          assert.deepStrictEqual(a.doc, b.doc)
         })
       }
 
-      async function assertAllEqual(peers) {
-        await pause(peers.length * 50)
-        peers.slice(0, peers.length - 1).forEach((peer, i) => {
-          const nextPeer = peers[i + 1]
-          assert.deepStrictEqual(peer.doc, nextPeer.doc)
+      function assertAllDifferent(peers) {
+        peers.slice(0, peers.length - 1).forEach((a, i) => {
+          const b = peers[i + 1]
+          assert.notDeepStrictEqual(a.doc, b.doc)
         })
       }
 
-      async function assertAllDifferent(peers) {
-        await pause(peers.length * 50)
-        peers.slice(0, peers.length - 1).forEach((peer, i) => {
-          const nextPeer = peers[i + 1]
-          assert.notDeepStrictEqual(peer.doc, nextPeer.doc)
-        })
-      }
-
-      it(`syncs a single change (direct connections)`, async () => {
+      it(`syncs a single change (direct connections)`, () => {
         const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAll(peers)
+        const peers = users.map(name => new Peer(name, doc))
+
+        const network = connectAll(peers)
 
         // first user makes a change
         peers[0].change(s => (s[users[0]] = 42))
+
+        network.deliverAll()
 
         // all peers have the same doc
         assertAllEqual(peers)
       })
 
-      it(`syncs a single change (indirect connections)`, async () => {
+      it(`syncs a single change (indirect connections)`, () => {
         const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAllInDaisyChain(peers)
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectDaisyChain(peers)
 
         // first user makes a change
         peers[0].change(s => (s[users[0]] = 42))
 
-        // all peers have the same doc
-        await assertAllEqual(peers)
-      })
-
-      it(`syncs multiple changes (direct connections)`, async () => {
-        const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAll(peers)
-
-        // first user makes a change
-        peers[0].change(s => (s[users[0]] = 42))
+        network.deliverAll()
 
         // all peers have the same doc
-        await assertAllEqual(peers)
+        assertAllEqual(peers)
       })
 
-      it(`syncs multiple changes (indirect connections)`, async () => {
+      it(`syncs multiple changes (direct connections)`, () => {
         const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAllInDaisyChain(peers)
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectAll(peers)
 
         // each user makes a change
-        peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
+        peers.forEach(peer => {
+          peer.change(s => (s[peer.id] = 42))
+          network.deliverAll()
+        })
 
         // all peers have the same doc
-        await assertAllEqual(peers)
+        assertAllEqual(peers)
       })
 
-      it('syncs multiple divergent changes (direct connections)', async () => {
+      it(`syncs multiple changes (indirect connections)`, () => {
         const doc = A.init()
-        const peers = users.map(name => new ConnectedDoc(name, doc))
-        connectAll(peers)
-
-        // everyone disconnects
-        peers.forEach(peer => peer.disconnect())
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectDaisyChain(peers)
 
         // each user makes a change
-        peers.forEach(peer => peer.change(s => (s[peer.userId] = 42)))
+        peers.forEach(peer => {
+          peer.change(s => (s[peer.id] = 42))
+          network.deliverAll()
+        })
+
+        // all peers have the same doc
+        assertAllEqual(peers)
+      })
+
+      it('syncs divergent changes (indirect connections)', function () {
+        const doc = A.init()
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectDaisyChain(peers)
+
+        // each user makes a change
+        peers.forEach(peer => {
+          peer.change(s => (s[peer.id] = 42))
+        })
 
         // while they're disconnected, they have divergent docs
-        await assertAllDifferent(peers)
+        assertAllDifferent(peers)
 
-        // everyone reconnects
-        peers.forEach(peer => peer.connect())
+        network.deliverAll()
 
         // after connecting, their docs converge
-        await assertAllEqual(peers)
+        assertAllEqual(peers)
+      })
+
+      it('syncs conflicting divergent changes (indirect connections)', function () {
+        const doc = A.init()
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectDaisyChain(peers)
+
+        // each user makes a change
+        peers.forEach(peer => {
+          peer.change(s => (s.foo = peer.id))
+        })
+
+        // while they're disconnected, they have divergent docs
+        assertAllDifferent(peers)
+
+        network.deliverAll()
+
+        // after connecting, their docs converge
+        assertAllEqual(peers)
+      })
+
+      it('syncs divergent changes (direct connections)', function () {
+        this.timeout(5 ** users.length)
+        const doc = A.init()
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectAll(peers)
+
+        // each user makes a change
+        peers.forEach(peer => {
+          peer.change(s => (s[peer.id] = 42))
+        })
+
+        // while they're disconnected, they have divergent docs
+        assertAllDifferent(peers)
+
+        network.deliverAll()
+
+        // after connecting, their docs converge
+        assertAllEqual(peers)
+      })
+
+      it('syncs conflicting divergent changes (direct connections)', function () {
+        this.timeout(5 ** users.length)
+        const doc = A.init()
+        const peers = users.map(name => new Peer(name, doc))
+        const network = connectAll(peers)
+
+        // each user makes a change
+        peers.forEach(peer => {
+          peer.change(s => (s.foo = peer.id))
+        })
+
+        // while they're disconnected, they have divergent docs
+        assertAllDifferent(peers)
+
+        network.deliverAll()
+
+        // after connecting, their docs converge
+        assertAllEqual(peers)
       })
     })
   }
 })
 
-class ConnectedDoc {
-  /** Tracks our simulated connection status */
-  online = true
-
-  /** Map of `Peer` objects (key is their peerId) */
+// Simulates a peer-to-peer network
+class Network {
   peers = {}
+  queue = []
 
-  /**
-   * Keeps the user's Automerge document in sync with any number of peers
-   * @param userId Unique identifier for the current user, e.g. `alice` or `herb@devresults.com`
-   * @param doc The Automerge document to keep in sync
-   */
-  constructor(userId, doc) {
-    this.userId = userId
+  registerPeer(peer) {
+    this.peers[peer.id] = peer
+    peer.network = this
+  }
+
+  // Establishes a bidirectionial connection between two peers
+  connect(a, b) {
+    this.registerPeer(a)
+    this.registerPeer(b)
+    a.connect(b.id)
+    b.connect(a.id)
+  }
+
+  // Enqueues one message to be sent from fromPeer to toPeer
+  sendMessage(from, to, body) {
+    this.queue.push({ from, to, body })
+  }
+
+  // Runs the protocol until all peers run out of things to say
+  deliverAll() {
+    let messageCount = 0
+    const peerCount = Object.keys(this.peers).length
+    const maxMessages = 5 ** peerCount // rough estimate
+
+    while (this.queue.length) {
+      const { to, from, body } = this.queue.shift()
+      const peer = this.peers[to]
+      peer.receiveMessage(from, body)
+
+      // catch failure to converge
+      if (messageCount++ > maxMessages) throw truncateStack(new Error('loop detected'))
+    }
+    // console.log(`${Object.keys(this.peers).length} peers, required ${messageCount} messages`)
+  }
+}
+
+// One peer, which may be connected to any number of other peers
+class Peer {
+  syncStates = {}
+
+  constructor(id, doc) {
+    this.id = id
     this.doc = A.clone(doc)
   }
 
-  /**
-   * Sets up the connection with a peer and listens for their messages
-   * @param peerId The id of the peer we're connecting to
-   * @param channel The channel used to connect to the peer (must expose a `write` method, and emit a `data` event)
-   */
-  connectTo(peerId, channel) {
-    const peer = new Peer(this.userId, peerId, channel)
-    this.peers[peerId] = peer
-    channel.on('data', (senderId, msg) => {
-      if (senderId === this.userId) return // don't receive our own mesages
-      if (!this.online) return // don't receive messages while we're "offline"
-
-      this.doc = peer.receive(this.doc, msg)
-      this.sync()
-    })
+  // Called by Network.connect when a connection is established with a remote peer
+  connect(peerId) {
+    this.syncStates[peerId] = A.initSyncState()
   }
 
-  /**
-   * By using this method to modify the doc, we ensure that all peers are automatically updated
-   * @param fn An Automerge.ChangeFn used to mutate the doc in place
-   */
+  // Performs a local change and then informs all peers
   change(fn) {
     this.doc = A.change(this.doc, fn)
     this.sync()
   }
 
-  /** Simulates going offline */
-  disconnect() {
-    this.online = false
-  }
-
-  /** Simulates going back online */
-  connect() {
-    this.online = true
-    this.sync()
-  }
-
-  // PRIVATE
-
-  /** Our set of peers as an array */
-  get _peerList() {
-    return Object.values(this.peers)
-  }
-
-  /** Syncs with all peers */
+  // Generates and enqueues messages to all peers we're connected to (unless there is nothing to send)
   sync() {
-    if (!this.online) return // only send updates if we're "online"
-    for (const peer of this._peerList) {
-      peer.sync(this.doc)
-    }
-  }
-}
-
-class Peer {
-  iterations = 0
-  syncState = A.initSyncState()
-
-  /**
-   *
-   * @param userId Current user's unique id
-   * @param peerId Remote peer's unique id
-   * @param channel Channel used to connect to the remote peer
-   */
-  constructor(userId, peerId, channel) {
-    this.userId = userId
-    this.peerId = peerId
-    this.channel = channel
-  }
-
-  /**
-   * Compares the current Automerge doc with the sync state we have for this peer,
-   * and sends the peer a sync message if anything has changed
-   * @param doc The current version of the Automerge doc
-   */
-  sync(doc) {
-    const [syncState, msg] = A.generateSyncMessage(doc, this.syncState)
-    this.syncState = syncState
-
-    // only send a sync message if something has changed
-    // (if msg is null, our docs have converged)
-    if (msg !== null) {
-      this.send(msg)
-    } else {
-      // we've converged
-      this.iterations = 0
+    for (const peerId in this.syncStates) {
+      const prevSyncState = this.syncStates[peerId]
+      const [syncState, message] = A.generateSyncMessage(this.doc, prevSyncState)
+      this.syncStates[peerId] = syncState
+      if (message !== null) this.network.sendMessage(this.id, peerId, message)
     }
   }
 
-  /**
-   * Use information in the message received, along with the the sync state
-   * we have for the peer, to return an updated version of our doc
-   * @param doc Document at the time the message was received
-   * @param msg Automerge sync message
-   * @returns an updated document
-   */
-  receive(doc, msg) {
-    const [updatedDoc, syncState] = A.receiveSyncMessage(doc, this.syncState, msg)
-    this.syncState = syncState
-    return updatedDoc
-  }
-
-  // PRIVATE
-
-  send(msg) {
-    this.iterations += 1
-    // console.log(`${this.userId}->${this.peerId} ${this.iterations}`)
-    if (this.iterations > 100) {
-      throw truncateStack(new Error('loop detected (failed to converge)'), 2)
-    }
-
-    this.channel.write(this.userId, msg)
-  }
-}
-
-// dummy 2-way channel for testing
-class Channel extends EventEmitter {
-  write(peerId, msg) {
-    setTimeout(() => {
-      this.emit('data', peerId, msg)
-    }, 1)
+  // Called by Network when we receive a message from another peer
+  receiveMessage(sender, message) {
+    const [doc, syncState] = A.receiveSyncMessage(this.doc, this.syncStates[sender], message)
+    this.doc = doc
+    this.syncStates[sender] = syncState
+    this.sync()
   }
 }
 
@@ -317,4 +313,3 @@ const truncateStack = (err, lines = 5) => {
   err.stack = err.stack.split('\n').slice(0, lines).join('\n') // truncate repetitive stack
   return err
 }
-const pause = (t = 50) => new Promise(resolve => setTimeout(() => resolve(), t))
