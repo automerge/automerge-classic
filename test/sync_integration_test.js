@@ -231,11 +231,13 @@ describe('sync protocol - integration ', () => {
 
 // Simulates a peer-to-peer network
 class Network {
-  registerPeer(peer) {
-    this.peers[peer.id] = peer
+  constructor() {
     this.peers = {}
     this.queue = []
+  }
 
+  registerPeer(peer) {
+    this.peers[peer.id] = peer
     peer.network = this
   }
 
