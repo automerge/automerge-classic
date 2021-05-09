@@ -1,4 +1,4 @@
-﻿const assert = require('assert')
+const assert = require('assert')
 const A = require('../src/automerge')
 
 describe('sync protocol - integration ', () => {
@@ -293,8 +293,7 @@ class Peer {
 
   // Generates and enqueues messages to all peers we're connected to (unless there is nothing to send)
   sync() {
-    for (const peerId in this.syncStates) {
-      const prevSyncState = this.syncStates[peerId]
+    for (const [peerId, prevSyncState] of Object.entries(this.syncStates)) {
       const [syncState, message] = A.generateSyncMessage(this.doc, prevSyncState)
       this.syncStates[peerId] = syncState
       if (message !== null) this.network.sendMessage(this.id, peerId, message)
@@ -310,7 +309,7 @@ class Peer {
   }
 }
 
-const truncateStack = (err, lines = 5) => {
+function truncateStack(err, lines = 5) {
   err.stack = err.stack.split('\n').slice(0, lines).join('\n') // truncate repetitive stack
   return err
 }
