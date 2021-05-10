@@ -564,7 +564,7 @@ function getMissingChanges(opSet, haveDeps) {
   return opSet.get('history')
     .filter(hash => !seenHashes[hash])
     .map(hash => getChangeByHash(opSet, hash))
-    .toJSON()
+    .toArray()
 }
 
 /**
