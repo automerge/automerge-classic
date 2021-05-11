@@ -378,14 +378,14 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
 
+      let n2AfterDataLoss = Automerge.init('89abcdef');
       // THIS WILL PASS
-      // let n2AfterDataLoss = Automerge.init('89abcdef');
       // const [goodN1, goodN2] = sync(n1, n2AfterDataLoss)
       // assert.deepStrictEqual(getHeads(goodN1), getHeads(goodN2))
       // assert.deepStrictEqual(n1, n2)
 
       // THIS WILL NOT
-      ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, s2)
+      ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, initSyncState())
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
       // save a copy of n2 as "r" to simulate recovering from crash
