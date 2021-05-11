@@ -363,11 +363,7 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(r))
       assert.deepStrictEqual(n1, r)
     })
-    it('different edge case from above test', () => {
-      // Scenario:     (r)                  (n2)                 (n1)
-      // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
-      // n2 has changes {c0, c1, c2}, n1's lastSync is c5, and n2's lastSync is c2.
-      // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
+    it('should resync after one node experiences data loss and needs to start from scratch', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
@@ -384,11 +380,9 @@ describe('Data sync protocol', () => {
       // assert.deepStrictEqual(getHeads(goodN1), getHeads(goodN2))
       // assert.deepStrictEqual(n1, n2)
 
-      // THIS WILL NOT
       ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, initSyncState())
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
-      // save a copy of n2 as "r" to simulate recovering from crash
     })
   })
 
