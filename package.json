@@ -7,7 +7,7 @@
   "scripts": {
     "browsertest": "karma start",
     "coverage": "nyc --reporter=html --reporter=text mocha",
-    "test": "mocha",
+    "test": "mocha --file test/sync_test.js",
     "testwasm": "mocha --file test/wasm.js",
     "build": "webpack && copyfiles --flat @types/automerge/index.d.ts dist",
     "prepublishOnly": "npm run-script build",
