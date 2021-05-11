@@ -844,7 +844,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {
-          counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+          counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
         }}
       })
     })
