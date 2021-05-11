@@ -107,8 +107,9 @@ function interopTests(sourceBackend, destBackend) {
       clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-        props: {0: {[`2@${actor}`]: {type: 'value', value: 'chaffinch'}}}
+        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`,
+          opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}
+        }],
       }}}}
     })
   })
