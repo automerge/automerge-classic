@@ -1003,19 +1003,19 @@ describe('BackendDoc applying changes', () => {
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
       maxOp: 1, clock: {[actor]: 1}, deps: [hash(change1)],
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 1, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 1, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
       maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)],
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
       maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)],
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 6, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 6, datatype: 'counter'}}
       }}
     })
     checkColumns(backend.docColumns, {
@@ -1051,14 +1051,14 @@ describe('BackendDoc applying changes', () => {
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list',
         edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-        props: {0: {[`2@${actor}`]: {value: 1, datatype: 'counter'}}}
+        props: {0: {[`2@${actor}`]: {type: 'value', value: 1, datatype: 'counter'}}}
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
       maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)],
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list', edits: [],
-        props: {0: {[`2@${actor}`]: {value: 3, datatype: 'counter'}}}
+        props: {0: {[`2@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}}
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -1095,7 +1095,7 @@ describe('BackendDoc applying changes', () => {
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
       maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)],
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
