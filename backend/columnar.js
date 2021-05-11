@@ -1225,7 +1225,7 @@ function addPatchProperty(objects, property) {
   // If the counter had any successor operation that was not an increment, that means the counter
   // must have been deleted, so we omit it from the patch.
   if (counter && Object.keys(counter.succ).length === 0) {
-    values[counter.opId] = {type: 'value', value: counter.value, datatype: 'counter'}
+    values[counter.opId] = {value: counter.value, datatype: 'counter'}
   }
 
   if (Object.keys(values).length > 0) {
@@ -1965,7 +1965,7 @@ class BackendDoc {
       delete counterState.succs[opId]
 
       if (Object.keys(counterState.succs).length === 0 && patch.props[key]) {
-        patch.props[key][counterState.opId] = {type: 'value', datatype: 'counter', value: counterState.value}
+        patch.props[key][counterState.opId] = {datatype: 'counter', value: counterState.value}
         // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
       }
 
