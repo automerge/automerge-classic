@@ -381,8 +381,8 @@ describe('Data sync protocol', () => {
       // assert.deepStrictEqual(n1, n2)
 
       ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, initSyncState())
-      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
-      assert.deepStrictEqual(n1, n2)
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2AfterDataLoss))
+      assert.deepStrictEqual(n1, n2AfterDataLoss)
     })
   })
 
