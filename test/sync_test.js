@@ -377,6 +377,7 @@ describe('Data sync protocol', () => {
 
       let n2AfterDataLoss = Automerge.init('89abcdef');
 
+      // "n2" now has no data, but n1 still thinks it does
       ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, initSyncState())
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
