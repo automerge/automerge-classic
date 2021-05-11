@@ -18,10 +18,7 @@ function sync(a, b, aSyncState = initSyncState(), bSyncState = initSyncState()) 
   do {
     [aSyncState, aToBmsg] = Automerge.generateSyncMessage(a, aSyncState)
     ;[bSyncState, bToAmsg] = Automerge.generateSyncMessage(b, bSyncState)
-    console.log(i)
-    console.log("A SYNC", aSyncState);
-    console.log("B SYNC", bSyncState);
-    console.log("\n\n\n");
+
 
     if (aToBmsg) {
       [b, bSyncState] = Automerge.receiveSyncMessage(b, bSyncState, aToBmsg)
@@ -367,12 +364,12 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(r))
       assert.deepStrictEqual(n1, r)
     })
-    it.only('should resync after one node experiences data loss and needs to start from scratch', () => {
+    it('should resync after one node experiences data loss and needs to start from scratch', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       // n1 makes three changes, which we sync to n2
-      for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+      for (let i = 0; i < 1; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
 
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))

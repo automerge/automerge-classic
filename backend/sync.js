@@ -430,7 +430,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     throw new Error("generateSyncMessage requires a syncState, which can be created with initSyncState()")
   }
 
-  let { sharedHeads, lastSentHeads } = oldSyncState, patch = null
+  let { sharedHeads, lastSentHeads, sentHashes } = oldSyncState, patch = null
   const message = decodeSyncMessage(binaryMessage)
   const beforeHeads = Backend.getHeads(backend)
 
@@ -453,6 +453,10 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   const knownHeads = message.heads.filter(head => Backend.getChangeByHash(backend, head))
   if (knownHeads.length === message.heads.length) {
     sharedHeads = message.heads
+    if (message.heads.length === 0) {
+      lastSentHeads = [];
+      sentHashes = [];
+    }
   } else {
     // If some remote heads are unknown to us, we add all the remote heads we know to
     // sharedHeads, but don't remove anything from sharedHeads. This might cause sharedHeads to
@@ -467,7 +471,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     theirHave: message.have, // the information we need to calculate the changes they need
     theirHeads: message.heads,
     theirNeed: message.need,
-    sentHashes: oldSyncState.sentHashes,
+    sentHashes: sentHashes,
   }
   return [backend, syncState, patch]
 }
