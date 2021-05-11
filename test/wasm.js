@@ -152,15 +152,8 @@ function interopTests(sourceBackend, destBackend) {
       clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 4, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`},
-          {action: 'insert', index: 2, elemId: `4@${actor}`}
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b', 'c']},
         ],
-        props: {
-          0: {[`2@${actor}`]: {type: 'value', value: 'a'}},
-          1: {[`3@${actor}`]: {type: 'value', value: 'b'}},
-          2: {[`4@${actor}`]: {type: 'value', value: 'c'}},
-        }
       }}}}
     })
   })
