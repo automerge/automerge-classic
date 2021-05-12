@@ -1231,7 +1231,7 @@ function addPatchProperty(objects, property) {
   // If the counter had any successor operation that was not an increment, that means the counter
   // must have been deleted, so we omit it from the patch.
   if (counter && Object.keys(counter.succ).length === 0) {
-    values[counter.opId] = {value: counter.value, datatype: 'counter'}
+    values[counter.opId] = {type: 'value', value: counter.value, datatype: 'counter'}
   }
 
   if (Object.keys(values).length > 0) {
