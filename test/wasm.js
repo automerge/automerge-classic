@@ -106,10 +106,10 @@ function interopTests(sourceBackend, destBackend) {
     assert.deepStrictEqual(patch1, {
       clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'list',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`,
-          opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}
-        }],
+        objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`,
+            value: {type: 'value', value: 'chaffinch'}}
+        ]
       }}}}
     })
   })
