@@ -19,7 +19,6 @@ function sync(a, b, aSyncState = initSyncState(), bSyncState = initSyncState()) 
     [aSyncState, aToBmsg] = Automerge.generateSyncMessage(a, aSyncState)
     ;[bSyncState, bToAmsg] = Automerge.generateSyncMessage(b, bSyncState)
 
-
     if (aToBmsg) {
       [b, bSyncState] = Automerge.receiveSyncMessage(b, bSyncState, aToBmsg)
     }
@@ -364,7 +363,8 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(r))
       assert.deepStrictEqual(n1, r)
     })
-    it('should resync after one node experiences data loss and needs to start from scratch', () => {
+
+    it('should resync after one node experiences data loss without disconnecting', () => {
       let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
@@ -375,9 +375,10 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
 
-      let n2AfterDataLoss = Automerge.init('89abcdef');
+      let n2AfterDataLoss = Automerge.init('89abcdef')
 
-      // "n2" now has no data, but n1 still thinks it does
+      // "n2" now has no data, but n1 still thinks it does. Note we don't do
+      // decodeSyncState(encodeSyncState(s1)) in order to simulate data loss without disconnecting
       ;[n1, n2, s1, s2] = sync(n1, n2AfterDataLoss, s1, initSyncState())
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)

@@ -453,9 +453,10 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
   const knownHeads = message.heads.filter(head => Backend.getChangeByHash(backend, head))
   if (knownHeads.length === message.heads.length) {
     sharedHeads = message.heads
+    // If the remote peer has lost all its data, reset our state to perform a full resync
     if (message.heads.length === 0) {
-      lastSentHeads = [];
-      sentHashes = [];
+      lastSentHeads = []
+      sentHashes = []
     }
   } else {
     // If some remote heads are unknown to us, we add all the remote heads we know to
@@ -471,7 +472,7 @@ function receiveSyncMessage(backend, oldSyncState, binaryMessage) {
     theirHave: message.have, // the information we need to calculate the changes they need
     theirHeads: message.heads,
     theirNeed: message.need,
-    sentHashes: sentHashes,
+    sentHashes
   }
   return [backend, syncState, patch]
 }
