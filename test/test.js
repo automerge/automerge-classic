@@ -1135,6 +1135,20 @@ describe('Automerge', () => {
       assert.deepStrictEqual(doc.foo, [1])
     })
 
+    it('should reload a document containing deflated columns', () => {
+      // In this test, the keyCtr column is long enough for deflate compression to kick in, but the
+      // keyStr column is short. Thus, the deflate bit gets set for keyCtr but not for keyStr.
+      // When checking whether the columns appear in ascending order, we must ignore the deflate bit.
+      let doc = Automerge.change(Automerge.init(), doc => {
+        doc.list = []
+        for (let i = 0; i < 200; i++) doc.list.insertAt(Math.floor(Math.random() * i), 'a')
+      })
+      Automerge.load(Automerge.save(doc))
+      let expected = []
+      for (let i = 0; i < 200; i++) expected.push('a')
+      assert.deepStrictEqual(doc, {list: expected})
+    })
+
     it('should call patchCallback if supplied', () => {
       const s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Goldfinch'])
       const s2 = Automerge.change(s1, doc => doc.birds.push('Chaffinch'))
