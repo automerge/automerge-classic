@@ -493,7 +493,7 @@ function addLocalChange(opSet, change, patch) {
  * that no other change depends on).
  */
 function getHeads(opSet) {
-  return opSet.get('deps').toJSON().sort()
+  return opSet.get('deps').toArray().sort()
 }
 
 /**
@@ -518,7 +518,7 @@ function getChangeByHash(opSet, hash) {
 function getMissingChanges(opSet, haveDeps) {
   // If the other replica has nothing, return all changes in history order
   if (haveDeps.isEmpty()) {
-    return opSet.get('history').toJSON().map(hash => getChangeByHash(opSet, hash))
+    return opSet.get('history').toArray().map(hash => getChangeByHash(opSet, hash))
   }
 
   // Fast path for the common case where all new changes depend only on haveDeps
@@ -564,7 +564,7 @@ function getMissingChanges(opSet, haveDeps) {
   return opSet.get('history')
     .filter(hash => !seenHashes[hash])
     .map(hash => getChangeByHash(opSet, hash))
-    .toJSON()
+    .toArray()
 }
 
 /**

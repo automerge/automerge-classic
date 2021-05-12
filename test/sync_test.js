@@ -383,6 +383,31 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
     })
+
+    it('should handle changes concurrent to the last sync heads', () => {
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('fedcba98')
+      let s12 = initSyncState(), s21 = initSyncState(), s23 = initSyncState(), s32 = initSyncState()
+
+      // Change 1 is known to all three nodes
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 1)
+      ;[n1, n2, s12, s21] = sync(n1, n2, s12, s21)
+      ;[n2, n3, s23, s32] = sync(n2, n3, s23, s32)
+
+      // Change 2 is known to n1 and n2
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 2)
+      ;[n1, n2, s12, s21] = sync(n1, n2, s12, s21)
+
+      // Each of the three nodes makes one change (changes 3, 4, 5)
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 3)
+      n2 = Automerge.change(n2, {time: 0}, doc => doc.x = 4)
+      n3 = Automerge.change(n3, {time: 0}, doc => doc.x = 5)
+
+      // Sync change 5 from n3 to n2, then sync n1 and n2
+      ;[n2, n3, s23, s32] = sync(n2, n3, s23, s32)
+      ;[n1, n2, s12, s21] = sync(n1, n2, s12, s21)
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(n1, n2)
+    })
   })
 
   describe('with false positives', () => {
