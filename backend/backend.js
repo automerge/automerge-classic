@@ -52,8 +52,8 @@ function free(backend) {
  * object modifications `diffs`.
  */
 function makePatch(state, diffs, request, isIncremental) {
-  const clock = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toJSON()
-  const deps  = state.getIn(['opSet', 'deps']).toJSON().sort()
+  const clock = state.getIn(['opSet', 'states']).map(seqs => seqs.size).toObject()
+  const deps  = state.getIn(['opSet', 'deps']).toArray().sort()
   const maxOp = state.getIn(['opSet', 'maxOp'], 0)
   const pendingChanges = OpSet.getMissingDeps(state.get('opSet')).length
   const patch = {clock, deps, diffs, maxOp, pendingChanges}
