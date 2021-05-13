@@ -2,8 +2,8 @@
   "name": "automerge",
   "version": "1.0.1-preview.1",
   "description": "Data structures for building collaborative applications",
-  "main": "dist/automerge.js",
-  "types": "dist/index.d.ts",
+  "main": "src/automerge.js",
+  "types": "@types/automerge/index.d.ts",
   "scripts": {
     "browsertest": "karma start",
     "coverage": "nyc --reporter=html --reporter=text mocha",
