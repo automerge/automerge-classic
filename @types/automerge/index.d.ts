@@ -60,6 +60,7 @@ declare module 'automerge' {
   function getChanges<T>(olddoc: Doc<T>, newdoc: Doc<T>): BinaryChange[]
   function getConflicts<T>(doc: Doc<T>, key: keyof T): any
   function getHistory<D, T = Proxy<D>>(doc: Doc<T>): State<T>[]
+  function getLastLocalChange<T>(doc: Doc<T>): BinaryChange
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
