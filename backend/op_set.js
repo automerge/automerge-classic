@@ -571,6 +571,27 @@ function getMissingChanges(opSet, haveDeps) {
 }
 
 /**
+ * Returns all changes that are present in `opSet2` but not present in `opSet1`.
+ */
+function getChangesAdded(opSet1, opSet2) {
+  // Depth-first traversal from the heads through the dependency graph,
+  // until we reach a change that is already present in opSet1
+  let stack = opSet2.get('deps').toArray(), seenHashes = {}, toReturn = []
+  while (stack.length > 0) {
+    const hash = stack.pop()
+    if (!seenHashes[hash] && !getChangeByHash(opSet1, hash)) {
+      seenHashes[hash] = true
+      toReturn.push(hash)
+      stack.push(...opSet2.getIn(['hashes', hash, 'depsPast']))
+    }
+  }
+
+  // Return those changes in the reverse of the order in which the depth-first search
+  // found them. This is not necessarily a topological sort, but should usually be close.
+  return toReturn.reverse().map(hash => getChangeByHash(opSet2, hash))
+}
+
+/**
  * Returns the hashes of any missing dependencies, i.e. where we have applied a
  * change that has a dependency on a change we have not seen.
  *
@@ -732,6 +753,6 @@ function constructObject(opSet, objectId) {
 
 module.exports = {
   init, addChange, addLocalChange, getHeads,
-  getChangeByHash, getMissingChanges, getMissingDeps,
+  getChangeByHash, getMissingChanges, getChangesAdded, getMissingDeps,
   constructObject, getFieldOps, getOperationKey, finalizePatch
 }

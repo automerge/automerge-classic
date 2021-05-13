@@ -146,6 +146,7 @@ declare module 'automerge' {
     function getAllChanges(state: BackendState): BinaryChange[]
     function getChangeByHash(state: BackendState, hash: Hash): BinaryChange
     function getChanges(state: BackendState, haveDeps: Hash[]): BinaryChange[]
+    function getChangesAdded(state1: BackendState, state2: BackendState): BinaryChange[]
     function getHeads(state: BackendState): Hash[]
     function getMissingDeps(state: BackendState, heads?: Hash[]): Hash[]
     function getPatch(state: BackendState): Patch
