@@ -30,11 +30,8 @@
     "uuid": "^3.4.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.13.1",
-    "@babel/preset-env": "^7.13.0",
     "@types/mocha": "^8.2.1",
     "@types/node": "^14.14.31",
-    "babel-loader": "^8.2.2",
     "copyfiles": "^2.4.1",
     "eslint": "^7.24.0",
     "jsverify": "^0.8.4",
