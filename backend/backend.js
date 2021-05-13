@@ -269,6 +269,20 @@ function getChanges(backend, haveDeps) {
 }
 
 /**
+ * Returns all changes that are present in `backend2` but not in `backend1`.
+ * Intended for use in situations where the two backends are for different actors.
+ * To get the changes added between an older and a newer document state of the same
+ * actor, use `getChanges()` instead. `getChangesAdded()` throws an exception if
+ * one of the backend states is frozen (i.e. if it is not the latest state of that
+ * backend instance; this distinction matters when the backend is mutable).
+ */
+function getChangesAdded(backend1, backend2) {
+  const opSet1 = backendState(backend1).get('opSet')
+  const opSet2 = backendState(backend2).get('opSet')
+  return OpSet.getChangesAdded(opSet1, opSet2)
+}
+
+/**
  * If the backend has applied a change with the given `hash` (given as a
  * hexadecimal string), returns that change (as a byte array). Returns undefined
  * if no change with that hash has been applied. A change with missing
@@ -304,5 +318,5 @@ function getMissingDeps(backend, heads = []) {
 
 module.exports = {
   init, clone, free, applyChanges, applyLocalChange, save, load, loadChanges, getPatch,
-  getHeads, getAllChanges, getChanges, getChangeByHash, getMissingDeps
+  getHeads, getAllChanges, getChanges, getChangesAdded, getChangeByHash, getMissingDeps
 }

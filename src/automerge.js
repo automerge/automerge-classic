@@ -62,8 +62,10 @@ function merge(localDoc, remoteDoc) {
   if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
     throw new RangeError('Cannot merge an actor with itself')
   }
-  // Just copy all changes from the remote doc; any duplicates will be ignored
-  const [updatedDoc] = applyChanges(localDoc, getAllChanges(remoteDoc))
+  const localState = Frontend.getBackendState(localDoc)
+  const remoteState = Frontend.getBackendState(remoteDoc)
+  const changes = backend.getChangesAdded(localState, remoteState)
+  const [updatedDoc] = applyChanges(localDoc, changes)
   return updatedDoc
 }
 
