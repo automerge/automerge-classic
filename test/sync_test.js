@@ -402,8 +402,13 @@ describe('Data sync protocol', () => {
       n2 = Automerge.change(n2, {time: 0}, doc => doc.x = 4)
       n3 = Automerge.change(n3, {time: 0}, doc => doc.x = 5)
 
-      // Sync change 5 from n3 to n2, then sync n1 and n2
-      ;[n2, n3, s23, s32] = sync(n2, n3, s23, s32)
+      // Apply n3's latest change to n2. If running in Node, turn the Uint8Array into a Buffer, to
+      // simulate transmission over a network (see https://github.com/automerge/automerge/pull/362)
+      let change = Automerge.getLastLocalChange(n3)
+      if (typeof Buffer === 'function') change = Buffer.from(change)
+      ;[n2] = Automerge.applyChanges(n2, [change])
+
+      // Now sync n1 and n2. n3's change is concurrent to n1 and n2's last sync heads
       ;[n1, n2, s12, s21] = sync(n1, n2, s12, s21)
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
