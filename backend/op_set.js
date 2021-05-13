@@ -555,10 +555,13 @@ function getMissingChanges(opSet, haveDeps) {
   stack = haveDeps; seenHashes = {}
   while (!stack.isEmpty()) {
     const hash = stack.last()
-    const deps = opSet.getIn(['hashes', hash, 'depsPast'])
-    if (!deps) throw new RangeError(`hash not found: ${hash}`)
-    stack = stack.pop().concat(deps)
-    seenHashes[hash] = true
+    stack = stack.pop()
+    if (!seenHashes[hash]) {
+      const deps = opSet.getIn(['hashes', hash, 'depsPast'])
+      if (!deps) throw new RangeError(`hash not found: ${hash}`)
+      stack = stack.concat(deps)
+      seenHashes[hash] = true
+    }
   }
 
   return opSet.get('history')

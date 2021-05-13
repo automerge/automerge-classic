@@ -413,6 +413,41 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
     })
+
+    it('should handle histories with lots of branching and merging', () => {
+      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('fedcba98')
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 0)
+      ;[n2] = Automerge.applyChanges(n2, [Automerge.getLastLocalChange(n1)])
+      ;[n3] = Automerge.applyChanges(n3, [Automerge.getLastLocalChange(n1)])
+      n3 = Automerge.change(n3, {time: 0}, doc => doc.x = 1)
+
+      //        - n1c1 <------ n1c2 <------ n1c3 <-- etc. <-- n1c20 <------ n1c21
+      //       /          \/           \/                              \/
+      //      /           /\           /\                              /\
+      // c0 <---- n2c1 <------ n2c2 <------ n2c3 <-- etc. <-- n2c20 <------ n2c21
+      //      \                                                          /
+      //       ---------------------------------------------- n3c1 <-----
+      for (let i = 1; i < 20; i++) {
+        n1 = Automerge.change(n1, {time: 0}, doc => doc.n1 = i)
+        n2 = Automerge.change(n2, {time: 0}, doc => doc.n2 = i)
+        const change1 = Automerge.getLastLocalChange(n1)
+        const change2 = Automerge.getLastLocalChange(n2)
+        ;[n1] = Automerge.applyChanges(n1, [change2])
+        ;[n2] = Automerge.applyChanges(n2, [change1])
+      }
+
+      let s1 = initSyncState(), s2 = initSyncState()
+      ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
+
+      // Having n3's last change concurrent to the last sync heads forces us into the slower code path
+      ;[n2] = Automerge.applyChanges(n2, [Automerge.getLastLocalChange(n3)])
+      n1 = Automerge.change(n1, {time: 0}, doc => doc.n1 = 'final')
+      n2 = Automerge.change(n2, {time: 0}, doc => doc.n2 = 'final')
+
+      ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
+      assert.deepStrictEqual(getHeads(n1), getHeads(n2))
+      assert.deepStrictEqual(n1, n2)
+    })
   })
 
   describe('with false positives', () => {
