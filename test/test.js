@@ -743,6 +743,34 @@ describe('Automerge', () => {
       })
     })
 
+    describe('numbers', () => {
+      it('should default to uint for positive numbers', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'uint', insert: false, key: 'number', obj: '_root', pred: [], value: 1 })
+      })
+      it('should default to int for negative numbers', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = -1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: -1 })
+      })
+      it.skip('should default to float32 for simple floats', () => {
+        // skipping this test because I could find no floating point value that fit our 32bit test
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1.1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float32', insert: false, key: 'number', obj: '_root', pred: [], value: 1.1 })
+      })
+      it('should default to float64 for complex floats', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1.1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float64', insert: false, key: 'number', obj: '_root', pred: [], value: 1.1 })
+      })
+    })
+
     describe('counters', () => {
       it('should allow deleting counters from maps', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})
