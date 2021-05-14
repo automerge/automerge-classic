@@ -771,6 +771,37 @@ describe('Automerge', () => {
       })
     })
 
+    describe('numbers', () => {
+      it('should default to uint for positive numbers', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'uint', insert: false, key: 'number', obj: '_root', pred: [], value: 1 })
+      })
+      it('should default to int for negative numbers', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = -1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: -1 })
+      })
+      it('should default to float32 for simple floats', () => {
+        // this is the only way I was able to generate a 32 bit float
+        const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
+        view32.setFloat32(0, 1.1, true)
+        let number = view32.getFloat32(0, true)
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = number)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float32', insert: false, key: 'number', obj: '_root', pred: [], value: number })
+      })
+      it('should default to float64 for complex floats', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1.1)
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float64', insert: false, key: 'number', obj: '_root', pred: [], value: 1.1 })
+      })
+    })
+
     describe('counters', () => {
       it('should allow deleting counters from maps', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.birds = {wrens: new Automerge.Counter(1)})
