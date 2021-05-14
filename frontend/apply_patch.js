@@ -20,10 +20,8 @@ function getValue(patch, object, updated) {
     return new Date(patch.value)
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
-  } else if (patch.datatype !== undefined) {
-    throw new TypeError(`Unknown datatype: ${patch.datatype}`)
   } else {
-    // Primitive value (number, string, boolean, or null)
+    // Primitive value (int, uint, float32, float64, string, boolean, or null)
     return patch.value
   }
 }
