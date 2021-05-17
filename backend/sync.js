@@ -154,7 +154,7 @@ function decodeHashes(decoder) {
 }
 
 /**
- * Takes a sync message of the form `{heads, need, have}` and encodes it as a byte array for
+ * Takes a sync message of the form `{heads, need, have, changes}` and encodes it as a byte array for
  * transmission.
  */
 function encodeSyncMessage(message) {
@@ -175,7 +175,7 @@ function encodeSyncMessage(message) {
 }
 
 /**
- * Takes a binary-encoded sync message and decodes it into the form `{heads, need, have}`.
+ * Takes a binary-encoded sync message and decodes it into the form `{heads, need, have, changes}`.
  */
 function decodeSyncMessage(bytes) {
   const decoder = new Decoder(bytes)
