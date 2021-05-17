@@ -41,12 +41,12 @@ function emptyChange(doc, options) {
 }
 
 function clone(doc, options = {}) {
-  const state = backend.clone(Frontend.getBackendState(doc))
+  const state = backend.clone(Frontend.getBackendState(doc, 'clone'))
   return applyPatch(init(options), backend.getPatch(state), state, [], options)
 }
 
 function free(doc) {
-  backend.free(Frontend.getBackendState(doc))
+  backend.free(Frontend.getBackendState(doc, 'free'))
 }
 
 function load(data, options = {}) {
@@ -55,28 +55,28 @@ function load(data, options = {}) {
 }
 
 function save(doc) {
-  return backend.save(Frontend.getBackendState(doc))
+  return backend.save(Frontend.getBackendState(doc, 'save'))
 }
 
 function merge(localDoc, remoteDoc) {
+  const localState = Frontend.getBackendState(localDoc, 'merge')
+  const remoteState = Frontend.getBackendState(remoteDoc, 'merge', 'second')
   if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
     throw new RangeError('Cannot merge an actor with itself')
   }
-  const localState = Frontend.getBackendState(localDoc)
-  const remoteState = Frontend.getBackendState(remoteDoc)
   const changes = backend.getChangesAdded(localState, remoteState)
   const [updatedDoc] = applyChanges(localDoc, changes)
   return updatedDoc
 }
 
 function getChanges(oldDoc, newDoc) {
-  const oldState = Frontend.getBackendState(oldDoc)
-  const newState = Frontend.getBackendState(newDoc)
+  const oldState = Frontend.getBackendState(oldDoc, 'getChanges')
+  const newState = Frontend.getBackendState(newDoc, 'getChanges', 'second')
   return backend.getChanges(newState, backend.getHeads(oldState))
 }
 
 function getAllChanges(doc) {
-  return backend.getAllChanges(Frontend.getBackendState(doc))
+  return backend.getAllChanges(Frontend.getBackendState(doc, 'getAllChanges'))
 }
 
 function applyPatch(doc, patch, backendState, changes, options) {
@@ -89,7 +89,7 @@ function applyPatch(doc, patch, backendState, changes, options) {
 }
 
 function applyChanges(doc, changes, options = {}) {
-  const oldState = Frontend.getBackendState(doc)
+  const oldState = Frontend.getBackendState(doc, 'applyChanges')
   const [newState, patch] = backend.applyChanges(oldState, changes)
   return [applyPatch(doc, patch, newState, changes, options), patch]
 }
@@ -121,11 +121,13 @@ function getHistory(doc) {
 }
 
 function generateSyncMessage(doc, syncState) {
-  return backend.generateSyncMessage(Frontend.getBackendState(doc), syncState)
+  const state = Frontend.getBackendState(doc, 'generateSyncMessage')
+  return backend.generateSyncMessage(state, syncState)
 }
 
 function receiveSyncMessage(doc, oldSyncState, message) {
-  const [backendState, syncState, patch] = backend.receiveSyncMessage(Frontend.getBackendState(doc), oldSyncState, message)
+  const oldBackendState = Frontend.getBackendState(doc, 'receiveSyncMessage')
+  const [backendState, syncState, patch] = backend.receiveSyncMessage(oldBackendState, oldSyncState, message)
   if (!patch) return [doc, syncState, patch]
 
   // The patchCallback is passed as argument all changes that are applied.

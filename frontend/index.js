@@ -261,6 +261,9 @@ function change(doc, options, callback) {
  * updated document, and `request` is the change request to send to the backend.
  */
 function emptyChange(doc, options) {
+  if (doc[OBJECT_ID] !== '_root') {
+    throw new TypeError('The first argument to Automerge.emptyChange must be the document root')
+  }
   if (typeof options === 'string') {
     options = {message: options}
   }
@@ -282,6 +285,9 @@ function emptyChange(doc, options) {
  * request should be included in the patch, so that we can match them up here.
  */
 function applyPatch(doc, patch, backendState = undefined) {
+  if (doc[OBJECT_ID] !== '_root') {
+    throw new TypeError('The first argument to Frontend.applyPatch must be the document root')
+  }
   const state = copyObject(doc[STATE])
 
   if (doc[OPTIONS].backend) {
@@ -375,7 +381,17 @@ function getConflicts(object, key) {
  * Returns the backend state associated with the document `doc` (only used if
  * a backend implementation is passed to `init()`).
  */
-function getBackendState(doc) {
+function getBackendState(doc, callerName = null, argPos = 'first') {
+  if (doc[OBJECT_ID] !== '_root') {
+    // Most likely cause of passing an array here is forgetting to deconstruct the return value of
+    // Automerge.applyChanges().
+    const extraMsg = Array.isArray(doc) ? '. Note: Automerge.applyChanges now returns an array.' : ''
+    if (callerName) {
+      throw new TypeError(`The ${argPos} argument to Automerge.${callerName} must be the document root${extraMsg}`)
+    } else {
+      throw new TypeError(`Argument is not an Automerge document root${extraMsg}`)
+    }
+  }
   return doc[STATE].backendState
 }
 
