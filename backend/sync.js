@@ -350,7 +350,7 @@ function generateSyncMessage(backend, syncState) {
   // field of the message empty because we just want to fill in the missing dependencies for now.
   // In case 2, or if ourNeed is empty, we send a Bloom filter to request any unsent changes.
   let ourHave = []
-  if (ourNeed.every(hash => theirHeads.includes(hash))) {
+  if (!theirHeads || ourNeed.every(hash => theirHeads.includes(hash))) {
     ourHave = [makeBloomFilter(state, sharedHeads)]
   }
 
