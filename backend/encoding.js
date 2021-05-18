@@ -1,33 +1,14 @@
 /**
- * UTF-8 decoding and encoding
+ * UTF-8 decoding and encoding using API that is supported in Node >= 12 and modern browsers:
+ * https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder/encode
+ * https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder/decode
+ * If you're running in an environment where it's not available, please use a polyfill, such as:
+ * https://github.com/anonyco/FastestSmallestTextEncoderDecoder
  */
-let stringToUtf8, utf8ToString
-
-if (typeof TextEncoder === 'function' && typeof TextDecoder === 'function') {
-  // Modern web browsers:
-  // https://developer.mozilla.org/en-US/docs/Web/API/TextEncoder/encode
-  // https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder/decode
-  const utf8encoder = new TextEncoder(), utf8decoder = new TextDecoder('utf-8')
-  stringToUtf8 = (string) => utf8encoder.encode(string)
-  utf8ToString = (buffer) => utf8decoder.decode(buffer)
-
-} else if (typeof Buffer === 'function') {
-  // Node.js:
-  // https://nodejs.org/api/buffer.html
-  // https://nodejs.org/api/string_decoder.html
-  const { StringDecoder } = require('string_decoder')
-  const utf8decoder = new StringDecoder('utf8')
-  stringToUtf8 = (string) => Buffer.from(string, 'utf8')
-  // In Node >= 10 we can simply do "utf8decoder.end(buffer)". However, in Node 8 there
-  // is a bug that causes an Uint8Array to be incorrectly decoded when passed directly to
-  // StringDecoder.end(). Wrapping in an additional "Buffer.from()" works around this bug.
-  utf8ToString = (buffer) => utf8decoder.end(Buffer.from(buffer))
-
-} else {
-  // Could use a polyfill? e.g. https://github.com/anonyco/FastestSmallestTextEncoderDecoder
-  throw new Error('Platform does not provide UTF-8 encoding/decoding feature')
-}
-
+const utf8encoder = new TextEncoder()
+const utf8decoder = new TextDecoder('utf-8')
+const stringToUtf8 = (string) => utf8encoder.encode(string)
+const utf8ToString = (buffer) => utf8decoder.decode(buffer)
 
 /**
  * Converts a string consisting of hexadecimal digits into an Uint8Array.
