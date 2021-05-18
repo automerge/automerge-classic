@@ -7,8 +7,14 @@
  */
 const utf8encoder = new TextEncoder()
 const utf8decoder = new TextDecoder('utf-8')
-const stringToUtf8 = (string) => utf8encoder.encode(string)
-const utf8ToString = (buffer) => utf8decoder.decode(buffer)
+
+function stringToUtf8(string) {
+  return utf8encoder.encode(string)
+}
+
+function utf8ToString(buffer) {
+  return utf8decoder.decode(buffer)
+}
 
 /**
  * Converts a string consisting of hexadecimal digits into an Uint8Array.
