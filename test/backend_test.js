@@ -760,6 +760,22 @@ describe('Automerge.Backend', () => {
         }}}}
       })
     })
+
+    it('should allow list operations relative to ops in the same change', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'a', pred: [], insert: false},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], value: null}
+      ]}
+      const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+        {action: 'set', obj: `1@${actor}`, insert: false, elemId: `2@${actor}`, pred: [`2@${actor}`], value: 0}, // set the first value to be 0
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: `3@${actor}`, pred: [], value: false}, // insert after the thing we've just updated
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, change1)
+      const [s2, patch2] = Backend.applyLocalChange(s1, change2)
+      // fails with: Missing index entry for list element 3@${actor}
+    })
   })
 
   describe('save() and load()', () => {
