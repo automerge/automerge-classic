@@ -10,16 +10,25 @@ Upon receiving a message, the developer calls `receiveSyncMessage(doc, syncState
 
 Automerge synchronization occurs at a per-document level. Most automerge-based applications will be built around more than one document, so in our example code here we will assume these documents are identified by a string `docId`.
 
+Throughout the example code below we're going to assume a couple of global variables exist, described here:
+
+```
+// global variables (but maybe don't use global variables)
+const syncStates = {} // a hash of [source][docId] containing in-memory sync states
+const backends = {} // a hash by [docId] of current backend values
+```
+
 ### Connecting: `loadSyncState()` or `initSyncState()`
 
 When a peer is discovered, first create a new `syncState` with `initSyncState()` and store the result somewhere associated with that peer. These `syncState` objects can be persisted between program executions as an optimization, but it is not required. All subsequent sync operations with that peer will produce a new `syncState` to replace the previous one.
 
 If you've already seen a peer, you should load your old `syncState` for them via `loadSyncState()`. This is not strictly necessary, but will reduce unnecessary computation and network traffic.
 
-```
+```  
   if (data.type === 'HELLO') {
     if (syncStates[source] === undefined) {
-      syncStates[source] = loadSyncState(db.getSyncState(docId, source))
+      syncStates[source] = {}
+      syncStates[source][docId] = loadSyncState(db.getSyncState(docId, source))
       sendMessage({ source: workerId, target: source, type: 'HELLO' })
     }
     return
