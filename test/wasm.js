@@ -236,7 +236,7 @@ function interopTests(sourceBackend, destBackend) {
         {action: 'set', obj: '_root', key: 'longString', value: longString, pred: []}
       ]
     })
-    assert.ok(change1.byteLength < 100)
+    assert.ok(change1.byteLength < 105)
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
       clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 1, pendingChanges: 0,
