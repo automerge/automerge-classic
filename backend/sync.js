@@ -313,7 +313,7 @@ function initSyncState() {
   return {
     sharedHeads: [],
     lastSentHeads: [],
-    theirHeads: null,
+    theirHeads: [],
     theirNeed: null,
     theirHave: null,
     sentHashes: {},
@@ -342,7 +342,7 @@ function generateSyncMessage(backend, syncState) {
 
   // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
   // changes, and any of the remote peer's heads that we don't know about
-  const ourNeed = Backend.getMissingDeps(backend, theirHeads || [])
+  const ourNeed = Backend.getMissingDeps(backend, theirHeads)
 
   // There are two reasons why ourNeed may be nonempty: 1. we might be missing dependencies due to
   // Bloom filter false positives; 2. we might be missing heads that the other peer mentioned
