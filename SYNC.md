@@ -93,10 +93,16 @@ When you create a local change to a document, simply call `generateSyncMessage()
 Here's a sample implementation:
 
 ```
+// sample message data format for sending from a renderer to a worker in a browser  
+interface FrontendMessage {
+  docId: string
+  type: "OPEN" | "LOCAL_CHANGE"
+  payload: Uint8Array
+} 
 
 // Respond to messages from the frontend document
-self.addEventListener('message', (evt: any) => {
-  const { data } = evt
+self.addEventListener('message', (event: Event) => {
+  const { data: FrontendMessage } = event
   const { docId } = data
 
   if (data.type === 'OPEN') {
