@@ -1,6 +1,6 @@
 # Automerge Sync Protocol Documentation
 
-The automerge network sync protocol is designed to bring two documents into sync by exchanging messages between peers until both documents they have the same contents. It does this by exchanging rounds of sync messages. These sync messages contain two parts: 
+The automerge network sync protocol is designed to bring two documents into sync by exchanging messages between peers until both documents have the same contents. It does this by exchanging rounds of sync messages. These sync messages contain two parts: 
  * a lossily-compressed list of changes it already has (implicitly requesting the remainder)
  * changes it believe the other peer needs
 
