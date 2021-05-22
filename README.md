@@ -326,12 +326,9 @@ object; just assign that one property instead.
 
 ### Persisting a document
 
-`Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
-write to disk. The string contains an encoding of the full change history of the document (a bit
-like a git repository).
+`Automerge.save(doc)`serializes the state of Automerge document`doc`to a bit array (Uint8Array), which you can write to disk. The array contains an encoding of the full change history of the document (a bit like a git repository).
 
-`Automerge.load(str)` unserializes an Automerge document from a string that was produced by
-`Automerge.save()`.
+`Automerge.load(bitArray)`unserializes an Automerge document from a bit array that was produced by`Automerge.save()`.
 
 > ### Note: Specifying `actorId`
 >
@@ -371,15 +368,17 @@ options, with more under development:
 The `getChanges()/applyChanges()` API works as follows:
 
 ```js
-// On one node
-newDoc = Automerge.change(currentDoc, doc => {
-  // make arbitrary change to the document
+// On one node 
+newDoc = Automerge.change(currentDoc, (doc) => { 
+  // make arbitrary change to the document 
 })
-let changes = Automerge.getChanges(currentDoc, newDoc)
-network.broadcast(JSON.stringify(changes))
+let changes = Automerge.getChanges(currentDoc, newDoc) 
 
-// On another node
-let changes = JSON.parse(network.receive())
+// broadcast changes as a bit array 
+network.broadcast(changes) 
+
+// On another node, receive the bit array  
+let changes = network.receive() 
 newDoc = Automerge.applyChanges(currentDoc, changes)
 ```
 
