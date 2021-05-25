@@ -760,6 +760,34 @@ describe('Automerge.Backend', () => {
         }}}}
       })
     })
+
+    it('should allow a conflict to be resolved', () => {
+      const change1 = {actor: '111111', seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'magpie', pred: []}
+      ]}
+      const change2 = {actor: '222222', seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'blackbird', pred: []}
+      ]}
+      const change3 = {actor: '333333', seq: 1, startOp: 2, time: 0, deps: [hash(change1), hash(change2)], ops: [
+        {action: 'set', obj: '_root', key: 'bird', value: 'robin', pred: ['1@111111', '1@222222']}
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1), encodeChange(change2)])
+      const [s2, patch2] = Backend.applyLocalChange(s1, change3)
+      assert.deepStrictEqual(patch2, {
+        clock: {111111: 1, 222222: 1, 333333: 1}, deps: [], actor: '333333', seq: 1, maxOp: 2, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {
+          bird: {'2@333333': {type: 'value', value: 'robin'}}
+        }}
+      })
+
+      // Check that we can change the order of `pred` without affecting the outcome
+      change3.ops[0].pred.reverse()
+      const s3 = Backend.init()
+      const [s4, patch4] = Backend.applyChanges(s3, [encodeChange(change1), encodeChange(change2)])
+      const [s5, patch5] = Backend.applyLocalChange(s4, change3)
+      assert.deepStrictEqual(Backend.getHeads(s2), Backend.getHeads(s5))
+    })
   })
 
   describe('save() and load()', () => {
