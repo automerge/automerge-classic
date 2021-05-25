@@ -44,9 +44,12 @@ and merging**:
 ## Features and design principles
 
 - **Network-agnostic**. Automerge is a pure data structure library that does not care about what
-  kind of network you use: client/server, peer-to-peer, Bluetooth, USB drive in the mail, whatever,
-  anything goes. Bindings to particular networking technologies are handled by separate libraries;
+  kind of network you use. It works with any connection-oriented network protocol, which could be
+  client/server (e.g. WebSocket), peer-to-peer (e.g. WebRTC), or entirely local (e.g. Bluetooth).
+  Bindings to particular networking technologies are handled by separate libraries;
   see the section on [Sending and receiving changes](#sending-and-receiving-changes) for examples.
+  It also works with unidirectional messaging: you can send an Automerge file as email attachment,
+  or on a USB drive in the mail, and the recipient will be able to merge it with their version.
 - **Immutable state**. An Automerge object is an immutable snapshot of the application state at one
   point in time. Whenever you make a change, or merge in a change that came from the network, you
   get back a new state object reflecting that change. This fact makes Automerge compatible with the
