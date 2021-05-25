@@ -326,12 +326,13 @@ object; just assign that one property instead.
 
 ### Persisting a document
 
-`Automerge.save(doc)` serializes the state of Automerge document `doc` to a string, which you can
-write to disk. The string contains an encoding of the full change history of the document (a bit
-like a git repository).
+`Automerge.save(doc)` serializes the state of Automerge document `doc` to a byte array
+(`Uint8Array`), which you can write to disk (e.g. as a file on the filesystem if you're using
+Node.js, or to IndexedDB if you're running in a browser). The serialized data contains the full
+change history of the document (a bit like a Git repository).
 
-`Automerge.load(str)` unserializes an Automerge document from a string that was produced by
-`Automerge.save()`.
+`Automerge.load(byteArray)` unserializes an Automerge document from a byte array that was produced
+by `Automerge.save()`.
 
 > ### Note: Specifying `actorId`
 >
@@ -361,7 +362,8 @@ communication mechanism you like to get changes from one node to another. There 
 options, with more under development:
 
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
-  node and apply them on another.
+  node and apply them on another. These changes are encoded as byte arrays (`Uint8Array`). You can
+  also store a log of these changes on disk in order to persist them.
 - Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protcol
   (e.g. WebSocket), and call `Automerge.receiveSyncMessage()` on the recipient to process the
   messages. TODO: need more documentation for this protocol.
@@ -372,15 +374,18 @@ The `getChanges()/applyChanges()` API works as follows:
 
 ```js
 // On one node
-newDoc = Automerge.change(currentDoc, doc => {
+let newDoc = Automerge.change(currentDoc, doc => {
   // make arbitrary change to the document
 })
 let changes = Automerge.getChanges(currentDoc, newDoc)
-network.broadcast(JSON.stringify(changes))
 
-// On another node
-let changes = JSON.parse(network.receive())
-newDoc = Automerge.applyChanges(currentDoc, changes)
+// broadcast changes as a byte array
+network.broadcast(changes)
+
+// On another node, receive the byte array
+let changes = network.receive()
+let [newDoc, patch] = Automerge.applyChanges(currentDoc, changes)
+// `patch` is a description of the changes that were applied (a kind of diff)
 ```
 
 Note that `Automerge.getChanges(oldDoc, newDoc)` takes two documents as arguments: an old state and
