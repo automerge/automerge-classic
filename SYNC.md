@@ -1,18 +1,20 @@
 # Automerge Sync Protocol Documentation
 
-The automerge network sync protocol is designed to bring two documents into sync by exchanging messages between peers until both documents have the same contents. It does this by exchanging rounds of sync messages. These sync messages contain two parts: 
+The Automerge network sync protocol is designed to bring two documents into sync by exchanging messages between peers until both documents have the same contents. The protocol can run on top of any connection-based network link that supports bidirectional messages, including WebSocket, WebRTC, or plain TCP. It can be used in any network topology: client/server, peer-to-peer, or server-to-server sync are all supported.
+
+The protocol works by exchanging rounds of sync messages. These sync messages contain two parts: 
  * a lossily-compressed list of changes it already has (implicitly requesting the remainder)
  * changes it believe the other peer needs
 
-Each node will also maintain a local `syncState` for each peer they want to synchronize with, which keeps track of what the local nodes knows about that peer. This sync state has to be kept around during synchronization, and can be saved to disk between executions as a performance optimization, but will be automatically regenerated if the protocol detects any problems.
+Each node will also maintain a local `syncState` for each peer they want to synchronize with, which keeps track of what the local node knows about that peer. This sync state has to be kept around during synchronization, and can be saved to disk between executions as a performance optimization, but will be automatically regenerated if the protocol detects any problems.
 
-On connection, each peer should start the exchange with an initial message via `generateSyncMessage(doc, syncState)`. This first message generally does not include changes, but provides recipient with the information it needs to respond with any missing changes. Upon receiving any message, a peer should always call `receiveSyncMessage(doc, syncState, message)`. This will update the `syncState` with the information necessary to calculate what changes to send, and also cause Automerge to apply any changes it received. The developer can now call `generateSyncMessage(doc, syncState)` to produce the next message to a peer. 
+On connection, each peer should start the exchange with an initial message via `generateSyncMessage(doc, syncState)`. This first message generally does not include changes, but provides the recipient with the information it needs to determine which changes it should send. Upon receiving any message, a peer should always call `receiveSyncMessage(doc, syncState, message)`. This will update the `syncState` with the information necessary to calculate what changes to send, and also cause Automerge to apply any changes it received. The developer can now call `generateSyncMessage(doc, syncState)` to produce the next message to a peer. 
 
-From then on, a peer should continue to call these messages until `generateSyncMessage()` returns a `null` value indicating both peers are synchronized and no further communication is necessary.
+From then on, a peer should continue to call these functions until `generateSyncMessage()` returns a `null` value, indicating both peers are synchronized and no further communication is necessary.
 
 ## How to use the Sync Protocol
 
-Automerge synchronization occurs at a per-document level. Most automerge-based applications will be built around more than one document, so in our example code here we will assume these documents are identified by a string `docId`.
+Automerge synchronization occurs at a per-document level. Most Automerge-based applications will be built around more than one document, so in our example code here we will assume these documents are identified by a string `docId`.
 
 Throughout the example code below we're going to assume a couple of global variables exist, described here:
 
@@ -22,19 +24,19 @@ const syncStates = {} // a hash of [source][docId] containing in-memory sync sta
 const backends = {} // a hash by [docId] of current backend values
 ```
 
-### Connecting: `loadSyncState()` or `initSyncState()`
+### Connecting: `decodeSyncState()` or `initSyncState()`
 
 Automerge keeps track of ongoing exchanges with another peer using a `syncState` data structure. During synchronization, Automerge uses a probabilistic structure known as a Bloom filter to avoid having to send the full descriptions of every local change to peers. To reduce the size and cost of this structure, it is only built for changes the other peer has not already told us they have. This is described in more detail later in the "how it works" section of this document.
 
-To maintain this structure, when a peer is discovered, first create a new `syncState` via `initSyncState()` and store the result somewhere associated with that peer. These `syncState` objects can be persisted between program executions as an optimization, but it is not required. All subsequent sync operations with that peer will produce a new `syncState` to replace the previous one.
+To maintain this structure, when a peer is discovered, first create a new `syncState` via `initSyncState()` and store the result somewhere associated with that peer. These `syncState` objects can be persisted between program executions as an optimization, but it is not required. All subsequent sync operations with that peer will return a new `syncState` to replace the previous one.
 
-If you've already seen a peer, you should load your old `syncState` for them via `loadSyncState()`. This is not strictly necessary, but will reduce unnecessary computation and network traffic.
+If you've already seen a peer, you should load your old `syncState` for them via `decodeSyncState()`. This is not strictly necessary, but will reduce unnecessary computation and network traffic.
 
 ```  
   if (data.type === 'HELLO') {
     if (syncStates[source] === undefined) {
       syncStates[source] = {}
-      syncStates[source][docId] = loadSyncState(db.getSyncState(docId, source))
+      syncStates[source][docId] = Automerge.Backend.decodeSyncState(db.getSyncState(docId, source))
       sendMessage({ source: workerId, target: source, type: 'HELLO' })
     }
     return
@@ -51,9 +53,9 @@ Here is a simple example:
 ```
 function updatePeers(docId: string) {
   Object.entries(syncStates).forEach(([peer, syncState]) => {
-    const [nextSyncState, syncMessage] = Backend.generateSyncMessage(
+    const [nextSyncState, syncMessage] = Automerge.Backend.generateSyncMessage(
       backends[docId],
-      syncState[docId] || Backend.initSyncState(),
+      syncState[docId] || Automerge.Backend.initSyncState(),
     )
     syncStates[peer] = { ...syncStates[peer], [docId]: nextSyncState }
     if (syncMessage) {
@@ -64,15 +66,17 @@ function updatePeers(docId: string) {
   })
 }
 ```
+
 ### Receiving sync messages
+
 Receiving sync messages is also simple. Just pass the document, syncState, and incoming message to `receiveSyncMessage()`, and keep the updated results. Calling `receiveSyncMessage` may also produce a `patch`, which you must forward to the frontend.
 
-After receiving a sync message, you should check if you need to send new sync messages to any connected peers using the code above. In our example code below this is represented by a call to `updatePeers()`
+After receiving a sync message, you should check if you need to send new sync messages to any connected peers using the code above. In our example code below this is represented by a call to `updatePeers()`:
 
 ```
-  const [nextBackend, nextSyncState, patch] = Backend.receiveSyncMessage(
+  const [nextBackend, nextSyncState, patch] = Automerge.Backend.receiveSyncMessage(
     backends[docId],
-    syncStates[source][docId] || Backend.initSyncState(),
+    syncStates[source][docId] || Automerge.Backend.initSyncState(),
     syncMessage,
   )
   backends[docId] = nextBackend
@@ -88,7 +92,7 @@ After receiving a sync message, you should check if you need to send new sync me
 
 ### Applying and distributing local changes
 
-When you create a local change to a document, simply call `generateSyncMessage()` for each peer to produce a message to send them. In general, you can use the same `updatePeers()` implementation for both receiving messages or creating local changes. You may want to rate limit or debounce these communications to reduce network traffic, but this isn't required. *Remember, after applying a local change to the backend you will need to forward the resulting patch to your frontend!*
+When you create a local change to a document, simply call `generateSyncMessage()` for each peer to produce a message to send them. In general, you can use the same `updatePeers()` implementation for both receiving messages and creating local changes. You may want to rate limit or debounce these communications to reduce network traffic, but this isn't required. *Remember, after applying a local change to the backend you will need to forward the resulting patch to your frontend!*
 
 Here's a sample implementation:
 
@@ -106,11 +110,11 @@ self.addEventListener('message', (event: Event) => {
   const { docId } = data
 
   if (data.type === 'OPEN') {
-    backends[docId] = Backend.init()
+    backends[docId] = Automerge.Backend.init()
   }
 
   if (data.type === 'LOCAL_CHANGE') {
-    const [newBackend, patch] = Backend.applyLocalChange(backends[docId], data.payload)
+    const [newBackend, patch] = Automerge.Backend.applyLocalChange(backends[docId], data.payload)
     backends[docId] = newBackend
     sendMessageToRenderer({ docId, patch })
   }
@@ -123,19 +127,21 @@ self.addEventListener('message', (event: Event) => {
 
 ### Handling disconnection
 
-Remember to save your syncState object for a peer upon disconnection via `saveSyncState()`. That might look like this:
+Remember to save your syncState object for a peer upon disconnection via `encodeSyncState()`. That might look like this:
 
 ```
-db.storeSyncState(docId, source, saveSyncState(syncStates[source]))
+db.storeSyncState(docId, source, encodeSyncState(syncStates[source]))
 ```
 
 ## How it works
+
+The algorithm is described in more detail in [this paper](https://arxiv.org/abs/2012.00472) and [this blog post](https://martin.kleppmann.com/2020/12/02/bloom-filter-hash-graph-sync.html).
 
 ### The first exchanges
 If we don't already have any existing sync state with a peer, the first call to `generateSyncMessage()` will create a Bloom filter which contains encoded hashes of all the changes in the document. The recipient of this message will walk their local graph of changes backwards from each "head" in their document until the Bloom filter indicates the other peer has the change in question. Everything from that point forward is collected and sent in a response message -- along with a new bloom filter so the other peer can reciprocate.
 
 ### On the Bloom Filter
-Conceptually, the most straightforward way to synchronize the two sets of changes would be to send over the complete list of changes from one peer to another, which could then exactly request the changes it was needed and offer any changes only it had. Unfortunately, this approach is prohibitively expensive. Every change is notionally represented by a 128-bit hash, which in cases like text editing can be larger than the actual change. By sending the compressed list of changes a document already `has` to the other peer, the recipient can then reply with their own changes they believe the sender is lacking. To reiterate because this was counter-intuitive: the receiver cannot determine which changes it needs by looking at the Bloom filter, only (estimate) what changes the sender needs.
+Conceptually, the most straightforward way to synchronize the two sets of changes would be to send over the complete list of changes from one peer to another, which could then exactly request the changes it was needed and offer any changes only it had. Unfortunately, this approach is prohibitively expensive. Every change is notionally represented by a 256-bit hash, which in cases like text editing can be larger than the actual change. By sending the compressed list of changes a document already *has* to the other peer, the recipient can then reply with their own changes they believe the sender is lacking. To reiterate because this was counter-intuitive: the receiver cannot determine which changes it needs by looking at the Bloom filter, only (estimate) what changes the sender needs.
 
 ### False positives
 
@@ -158,9 +164,19 @@ Upon receipt, `b` would check the Bloom filter for each of its local changes beg
 ### Error Recovery
 Finally, Automerge helps recover failed peer nodes by resetting the list of `sharedHeads` in the document and beginning sync again from scratch. This can come in handy if one of the peers crashes after confirming data but before writing it to disk.
 
+If the connection times out due to packet loss, when you reconnect, you should reset the sync state as follows, if you haven't already:
+
+```
+for (let docId of Object.keys(syncStates[peer])) {
+  syncStates[peer][docId] = decodeSyncState(encodeSyncState(syncStates[peer][docId]))
+}
+```
+
+This tells the sync protocol that the last message it sent may have been lost, and restarts the sync protocol from the last known "greatest common document".
+
 ### Multiple Peers, Multiple Documents
 
-The Automerge sync protocol behaves correctly when synchronizing with multiple peers at once, though specific implementation details will vary by domain. Synchronizing multiple documents is not currently supported by the protocol, and must be handled at a layer above by the user.
+The Automerge sync protocol behaves correctly when synchronizing with multiple peers at once, though specific implementation details will vary by domain. Synchronizing multiple documents is not currently supported by the protocol, and must be handled by the user at a layer above.
 
 ### Sequencing Network Communication
-Many communication protocols require that only one of the two peers initiates the exchange. With automerge this is not the case: messages between peers can interleave arbitrarily, though each peer's messages should be delivered in-order to the recipient.
+Many communication protocols require that only one of the two peers initiates the exchange. With Automerge this is not the case: messages between peers can interleave arbitrarily, though each peer's messages should be delivered in-order to the recipient.

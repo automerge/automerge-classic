@@ -364,7 +364,8 @@ options, with more under development:
   node and apply them on another.
 - Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protcol
   (e.g. WebSocket), and call `Automerge.receiveSyncMessage()` on the recipient to process the
-  messages. TODO: need more documentation for this protocol.
+  messages. The sync protocol is documented in
+  [SYNC.md](https://github.com/automerge/automerge/blob/main/SYNC.md).
 - There are also a number of external libraries that provide network sync for Automerge; these are
   in the process of being updated for the Automerge 1.0 data format and sync protocol.
 
