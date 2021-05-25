@@ -326,9 +326,9 @@ object; just assign that one property instead.
 
 ### Persisting a document
 
-`Automerge.save(doc)`serializes the state of Automerge document`doc`to a bit array (Uint8Array), which you can write to disk. The array contains an encoding of the full change history of the document (a bit like a git repository).
+`Automerge.save(doc)`serializes the state of Automerge document`doc`to a byte array (Uint8Array), which you can write to disk. The array contains an encoding of the full change history of the document (a bit like a git repository).
 
-`Automerge.load(bitArray)`unserializes an Automerge document from a bit array that was produced by`Automerge.save()`.
+`Automerge.load(bitArray)`unserializes an Automerge document from a byte array that was produced by`Automerge.save()`.
 
 > ### Note: Specifying `actorId`
 >
@@ -374,10 +374,10 @@ newDoc = Automerge.change(currentDoc, (doc) => {
 })
 let changes = Automerge.getChanges(currentDoc, newDoc) 
 
-// broadcast changes as a bit array 
+// broadcast changes as a byte array 
 network.broadcast(changes) 
 
-// On another node, receive the bit array  
+// On another node, receive the byte array  
 let changes = network.receive() 
 newDoc = Automerge.applyChanges(currentDoc, changes)
 ```
