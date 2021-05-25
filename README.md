@@ -41,6 +41,11 @@ and merging**:
 
   (Different from git: **no merge conflicts to resolve!**)
 
+- Automerge keeps track of the changes you make to the state, so that you can view old versions,
+  compare versions, create branches, and choose when to merge them.
+
+  (Similar to git, which allows diffing, branching, merging, and pull request workflows.)
+
 ## Features and design principles
 
 - **Network-agnostic**. Automerge is a pure data structure library that does not care about what
@@ -76,6 +81,9 @@ performance, and it gives users more control over their data.
 The [essay on local-first software](https://www.inkandswitch.com/local-first.html) goes into more
 detail on the philosophy behind Automerge, and the pros and cons of this approach.
 
+However, if you want to use Automerge with a centralised server, that works fine too! You still get
+useful benefits, such as being able to inspect the change history of your app's data, and support
+branching and merging workflows.
 
 ## Setup
 
@@ -447,13 +455,14 @@ not lost. They are merely relegated to a conflicts object. Suppose `doc.x = 2` i
 ```js
 doc1 // {x: 2}
 doc2 // {x: 2}
-Automerge.getConflicts(doc1, 'x') // {'actor-1': 1}
-Automerge.getConflicts(doc2, 'x') // {'actor-1': 1}
+Automerge.getConflicts(doc1, 'x') // {'1@01234567': 1, '1@89abcdef': 2}
+Automerge.getConflicts(doc2, 'x') // {'1@01234567': 1, '1@89abcdef': 2}
 ```
 
-Here, we've recorded a conflict on property `x`. The key `actor-1` is the actor ID that "lost" the
-conflict. The associated value is the value `actor-1` assigned to the property `x`. You might use
-the information in the conflicts object to show the conflict in the user interface.
+Here, we've recorded a conflict on property `x`. The object returned by `getConflicts` contains the
+conflicting values, both the "winner" and the "loser". You might use the information in the
+conflicts object to show the conflict in the user interface. The keys in the conflicts object are
+the internal IDs of the operations that updated the property `x`.
 
 The next time you assign to a conflicting property, the conflict is automatically considered to be
 resolved, and the conflict disappears from the object returned by `Automerge.getConflicts()`.
