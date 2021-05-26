@@ -1,6 +1,7 @@
 const { Map, List } = require('immutable')
 const OpSet = require('./op_set')
-const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch, BackendDoc } = require('./columnar')
+const { splitContainers, encodeChange, decodeChanges, encodeDocument, constructPatch } = require('./columnar')
+const { BackendDoc } = require('./new')
 const { backendState } = require('./util')
 
 // Feature flag: false uses old Immutable.js-based backend data structures, true uses new
