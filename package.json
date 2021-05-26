@@ -57,9 +57,15 @@
   "resolutions": {
     "karma-sauce-launcher/selenium-webdriver": "4.0.0-alpha.7"
   },
-  "browserslist": [
-    "defaults",
-    "not IE 11",
-    "maintained node versions"
-  ]
+  "browserslist": {
+    "production": [
+      "defaults",
+      "not IE 11",
+      "maintained node versions"
+    ],
+    "web": [
+      "defaults",
+      "not IE 11"
+    ]
+  }
 }
