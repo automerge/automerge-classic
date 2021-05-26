@@ -34,6 +34,7 @@
     "@types/node": "^14.14.31",
     "copyfiles": "^2.4.1",
     "eslint": "^7.24.0",
+    "eslint-plugin-compat": "^3.9.0",
     "jsverify": "^0.8.4",
     "karma": "^6.1.1",
     "karma-chrome-launcher": "^3.1.0",
@@ -55,5 +56,10 @@
   },
   "resolutions": {
     "karma-sauce-launcher/selenium-webdriver": "4.0.0-alpha.7"
-  }
+  },
+  "browserslist": [
+    "defaults",
+    "not IE 11",
+    "maintained node versions"
+  ]
 }
