@@ -82,7 +82,8 @@ The [essay on local-first software](https://www.inkandswitch.com/local-first.htm
 detail on the philosophy behind Automerge, and the pros and cons of this approach.
 
 However, if you want to use Automerge with a centralised server, that works fine too! You still get
-useful benefits, such as being able to inspect the change history of your app's data, and support
+useful benefits, such as allowing several clients to concurrently update the data, easy sync between
+clients and server, being able to inspect the change history of your app's data, and support for
 branching and merging workflows.
 
 ## Setup
