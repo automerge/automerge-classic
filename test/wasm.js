@@ -82,14 +82,14 @@ function interopTests(sourceBackend, destBackend) {
     const [source1, p1, change1] = sourceBackend.applyLocalChange(source, {
       actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeMap', obj: '_root', key: 'birds', pred: []},
-        {action: 'set', obj: `1@${actor}`, key: 'wrens', value: 3, pred: []}
+        {action: 'set', obj: `1@${actor}`, key: 'wrens', datatype: 'int', value: 3, pred: []}
       ]
     })
     const [dest1, patch1] = destBackend.applyChanges(dest, [change1])
     assert.deepStrictEqual(patch1, {
       clock: {[actor]: 1}, deps: [decodeChange(change1).hash], maxOp: 2, pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {type: 'value', value: 3}}}
+        objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {type: 'value', datatype: 'int', value: 3}}}
       }}}}
     })
   })

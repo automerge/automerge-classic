@@ -23,7 +23,7 @@ class Uint {
 
 class Float32 {
   constructor(value) {
-    if (!isNumber(value)) {
+    if (typeof value !== 'number') {
       throw new RangeError(`Value ${value} cannot be a float32`)
     }
     const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
@@ -36,20 +36,12 @@ class Float32 {
 
 class Float64 {
   constructor(value) {
-    if (!isNumber(value)) {
+    if (typeof value !== 'number') {
       throw new RangeError(`Value ${value} cannot be a float64`)
     }
     this.value = value || 0.0
     Object.freeze(this)
   }
-}
-
-function isNumber(value) {
-  return typeof value === 'number'
-}
-
-function isInt(value) {
-    return (Number.isInteger(value) && value <= Number.MAX_SAFE_INTEGER && value >= Number.MIN_SAFE_INTEGER)
 }
 
 module.exports = { Int, Uint, Float32, Float64 }
