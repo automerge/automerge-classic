@@ -2,14 +2,14 @@
     "env": {
         "browser": true,
         "commonjs": true,
-        "es2021": true,
+        "es2015": true,
         "node": true,
         "mocha": true
     },
     "ignorePatterns": "dist/**",
-    "extends": "eslint:recommended",
+    "extends": ["eslint:recommended", "plugin:compat/recommended"],
     "parserOptions": {
-        "ecmaVersion": 12
+        "ecmaVersion": 2015
     },
     "rules": {
         "accessor-pairs": "error",

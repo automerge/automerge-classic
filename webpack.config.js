@@ -12,5 +12,6 @@ module.exports = {
     globalObject: 'this',
   },
   devtool: 'source-map',
-  module: {rules: []}
+  module: {rules: []},
+  target: "browserslist:web"
 }
