@@ -249,7 +249,7 @@ function makeBloomFilter(backend, lastSync) {
 function getChangesToSend(backend, have, need) {
   const opSet = backend.get('opSet')
   if (have.length === 0) {
-    return need.map(hash => OpSet.getChangeByHash(opSet, hash)).filter(change => change)
+    return need.map(hash => OpSet.getChangeByHash(opSet, hash)).filter(change => change !== undefined)
   }
 
   let lastSyncHashes = {}, bloomFilters = []
