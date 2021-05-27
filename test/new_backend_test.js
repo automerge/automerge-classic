@@ -1161,6 +1161,156 @@ describe('BackendDoc applying changes', () => {
     })
   })
 
+  it('should allow conflicts to arise on a multi-inserted element', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',          insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: `2@${actor}`, insert: true,  value: 'b', pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor}`, elemId: `3@${actor}`, insert: false, value: 'x', pred: [`3@${actor}`]},
+      {action: 'set',      obj: `1@${actor}`, elemId: `3@${actor}`, insert: false, value: 'y', pred: [`3@${actor}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change1), encodeChange(change2)]), {
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a']},
+          {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `4@${actor}`, value: {type: 'value', value: 'x'}},
+          {action: 'update', index: 1, opId: `5@${actor}`, value: {type: 'value', value: 'y'}}
+        ]
+      }}}}
+    })
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [0, 2, 3, 0],
+      keyCtr:   [0, 1, 0x7c, 0, 2, 1, 0], // null, 0, 2, 3, 3
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+      idActor:  [5, 0],
+      idCtr:    [5, 1], // 1, 2, 3, 4, 5
+      insert:   [1, 2, 2], // false, true, true, false, false
+      action:   [0x7f, 4, 4, 1], // makeText, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x62, 0x78, 0x79], // 'a', 'b', 'x', 'y'
+      succNum:  [2, 0, 0x7f, 2, 2, 0], // 0, 0, 2, 0, 0
+      succActor: [2, 0],
+      succCtr:   [0x7e, 4, 1] // 4, 5
+    })
+  })
+
+  it('should convert inserts to updates when needed', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',       key: 'text',           insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'c', pred: []}
+    ]}
+    const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'a', pred: []},
+      {action: 'set',      obj: `1@${actor1}`, elemId: `3@${actor1}`, insert: true,  value: 'b', pred: []},
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'C', pred: [`2@${actor1}`]}
+    ]}
+    const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', pred: [`2@${actor1}`]},
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'y', pred: [`2@${actor1}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change1), encodeChange(change2)]), {
+      maxOp: 5, clock: {[actor1]: 2}, deps: [hash(change2)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 'c'}},
+          {action: 'multi-insert', index: 0, elemId: `3@${actor1}`, values: ['a', 'b']},
+          {action: 'update', index: 2, opId: `5@${actor1}`, value: {type: 'value', value: 'C'}}
+        ]
+      }}}}
+    })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
+      maxOp: 5, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'update', index: 2, opId: `3@${actor2}`, value: {type: 'value', value: 'x'}},
+          {action: 'update', index: 2, opId: `4@${actor2}`, value: {type: 'value', value: 'y'}},
+          {action: 'update', index: 2, opId: `5@${actor1}`, value: {type: 'value', value: 'C'}}
+        ]
+      }}}}
+    })
+    // Order of operations in the document:
+    // {action: 'makeText', id: `1@${actor1}`, obj: '_root',       key: 'text',           insert: false,             succ: []},
+    // {action: 'set',      id: `3@${actor1}`, obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'a', succ: []},
+    // {action: 'set',      id: `4@${actor1}`, obj: `1@${actor1}`, elemId: `3@${actor1}`, insert: true,  value: 'b', succ: []},
+    // {action: 'set',      id: `2@${actor1}`, obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'c', succ: [`3@${actor2}`, `4@${actor2}`, `5@${actor1}`]},
+    // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
+    // {action: 'set',      id: `4@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'y', succ: []},
+    // {action: 'set',      id: `5@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'C', succ: []}
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 6, 0],
+      objCtr:   [0, 1, 6, 1],
+      keyActor: [0, 2, 0x7f, 0, 0, 1, 3, 0], // null, null, 0, null, 0, 0, 0
+      keyCtr:   [0, 1, 0x7c, 0, 3, 0x7d, 2, 2, 0], // null, 0, 3, 0, 2, 2, 2
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 6], // 'text', 6x null
+      idActor:  [4, 0, 2, 1, 0x7f, 0], // 4x actor1, 2x actor2, 1x actor1
+      idCtr:    [0x7c, 1, 2, 1, 0x7e, 3, 1], // 1, 3, 4, 2, 3, 4, 5
+      insert:   [1, 3, 3], // 1x false, 3x true, 3x false
+      action:   [0x7f, 4, 6, 1], // makeText, 6x set
+      valLen:   [0x7f, 0, 6, 0x16], // null, 6x 1-byte string
+      valRaw:   [0x61, 0x62, 0x63, 0x78, 0x79, 0x43], // 'a', 'b', 'c', 'x', 'y', 'C'
+      succNum:  [3, 0, 0x7f, 3, 3, 0], // 0, 0, 0, 3, 0, 0, 0
+      succActor: [2, 1, 0x7f, 0], // actor2, actor2, actor1
+      succCtr:   [0x7f, 3, 2, 1] // 3, 4, 5
+    })
+  })
+
+  it('should allow a further conflict to be added to an existing conflict', () => {
+    const actor1 = '01234567', actor2 = '89abcdef'
+    const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',       key: 'text',           insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'a', pred: []}
+    ]}
+    const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'b', pred: [`2@${actor1}`]},
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'c', pred: [`2@${actor1}`]}
+    ]}
+    const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', pred: [`2@${actor1}`]}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([change1, change2, change3].map(encodeChange)), {
+      maxOp: 4, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'b'}},
+          {action: 'update', index: 0, opId: `3@${actor2}`, value: {type: 'value', value: 'x'}},
+          {action: 'update', index: 0, opId: `4@${actor1}`, value: {type: 'value', value: 'c'}}
+        ]
+      }}}}
+    })
+    // Order of operations in the document:
+    // {action: 'makeText', id: `1@${actor1}`, obj: '_root',       key: 'text',           insert: false,             succ: []},
+    // {action: 'set',      id: `2@${actor1}`, obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 'a', succ: [`3@${actor1}`, `3@${actor2}`, `4@${actor1}`]},
+    // {action: 'set',      id: `3@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'b', succ: []},
+    // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
+    // {action: 'set',      id: `4@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'c', succ: []}
+    checkColumns(backend.docColumns, {
+      objActor: [0, 1, 4, 0],
+      objCtr:   [0, 1, 4, 1],
+      keyActor: [0, 2, 3, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, 2, 0], // null, 0, 2, 2, 2
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 4], // 'text', 4x null
+      idActor:  [3, 0, 0x7e, 1, 0], // 3x actor1, 1x actor2, 1x actor1
+      idCtr:    [3, 1, 0x7e, 0, 1], // 1, 2, 3, 3, 4
+      insert:   [1, 1, 3], // false, true, false, false, false
+      action:   [0x7f, 4, 4, 1], // makeText, 4x set
+      valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
+      valRaw:   [0x61, 0x62, 0x78, 0x63], // 'a', 'b', 'x', 'c'
+      succNum:  [0x7e, 0, 3, 3, 0], // 0, 3, 0, 0, 0
+      succActor: [0x7d, 0, 1, 0], // actor1, actor2, actor1
+      succCtr:   [0x7d, 3, 0, 1] // 3, 3, 4
+    })
+  })
+
   it('should handle updates inside conflicted properties', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [

@@ -493,16 +493,19 @@ function convertInsertToUpdate(edits, index, elemId) {
       if (lastEdit.index !== index) throw new RangeError('last edit has unexpected index')
       updates.unshift(edits.pop())
       break
-    } else if (lastEdit.action === 'multi-insert') {
-      if (lastEdit.index + lastEdit.values.length - 1 !== index) {
-        throw new RangeError('last edit has unexpected index')
-      }
-      updates.unshift({opId: elemId, value: lastEdit.values.pop()})
-      break
     } else if (lastEdit.action === 'update') {
       if (lastEdit.index !== index) throw new RangeError('last edit has unexpected index')
       updates.unshift(edits.pop())
     } else {
+      // It's impossible to encounter a remove edit here because the state machine in
+      // updatePatchProperty() ensures that a property can have either an insert or a remove edit,
+      // but not both. It's impossible to encounter a multi-insert here because multi-inserts always
+      // have equal elemId and opId (i.e. they can only be used for the operation that first inserts
+      // an element, but not for any subsequent assignments to that list element); moreover,
+      // convertInsertToUpdate is only called if an insert action is followed by a non-overwritten
+      // document op. The fact that there is a non-overwritten document op after another op on the
+      // same list element implies that the original insertion op for that list element must be
+      // overwritten, and thus the original insertion op cannot have given rise to a multi-insert.
       throw new RangeError('last edit has unexpected action')
     }
   }
