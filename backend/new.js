@@ -671,10 +671,8 @@ class BackendDoc {
     if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, docState.objectMeta[objectId].type)
     const patch = patches[objectId]
 
+    // Updating a list or text object (with elemId key)
     if (op[keyStr] === null) {
-      // Updating a list or text object (with elemId key)
-      if (!patch.edits) patch.edits = []
-
       // If we come across any document op that was previously non-overwritten/non-deleted, that
       // means the current list element already had a value before this change was applied, and
       // therefore the current element cannot be an insert. If we already registered an insert, we
