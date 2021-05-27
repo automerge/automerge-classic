@@ -507,12 +507,27 @@ function decodeOps(ops, forDocument) {
     if (forDocument) {
       newOp.id = `${op.idCtr}@${op.idActor}`
       newOp.succ = op.succNum.map(succ => `${succ.succCtr}@${succ.succActor}`)
+      checkSortedOpIds(op.succNum.map(succ => ({counter: succ.succCtr, actorId: succ.succActor})))
     } else {
       newOp.pred = op.predNum.map(pred => `${pred.predCtr}@${pred.predActor}`)
+      checkSortedOpIds(op.predNum.map(pred => ({counter: pred.predCtr, actorId: pred.predActor})))
     }
     newOps.push(newOp)
   }
   return newOps
+}
+
+/**
+ * Throws an exception if the opIds in the given array are not in sorted order.
+ */
+function checkSortedOpIds(opIds) {
+  let last = null
+  for (let opId of opIds) {
+    if (last && compareParsedOpIds(last, opId) !== -1) {
+      throw new RangeError('operation IDs are not in ascending order')
+    }
+    last = opId
+  }
 }
 
 function encoderByColumnId(columnId) {

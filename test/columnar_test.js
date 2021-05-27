@@ -52,6 +52,18 @@ describe('change encoding', () => {
     assert.deepStrictEqual(decoded, Object.assign({hash: decoded.hash}, change1))
   })
 
+  it('should require strict ordering of preds', () => {
+    const change = new Uint8Array([
+      133, 111, 74, 131, 31, 229, 112, 44, 1, 105, 1, 58, 30, 190, 100, 253, 180, 180, 66, 49, 126,
+      81, 142, 10, 3, 35, 140, 189, 231, 34, 145, 57, 66, 23, 224, 149, 64, 97, 88, 140, 168, 194,
+      229, 4, 244, 209, 58, 138, 67, 140, 1, 152, 236, 250, 2, 0, 1, 4, 55, 234, 66, 242, 8, 21, 11,
+      52, 1, 66, 2, 86, 3, 87, 10, 112, 2, 113, 3, 115, 4, 127, 9, 99, 111, 109, 109, 111, 110, 86,
+      97, 114, 1, 127, 1, 127, 166, 1, 52, 48, 57, 49, 52, 57, 52, 53, 56, 50, 127, 2, 126, 0, 1,
+      126, 139, 1, 0
+    ])
+    assert.throws(() => { decodeChange(change) }, /operation IDs are not in ascending order/)
+  })
+
   describe('with trailing bytes', () => {
     let change = new Uint8Array([
       0x85, 0x6f, 0x4a, 0x83, // magic bytes
