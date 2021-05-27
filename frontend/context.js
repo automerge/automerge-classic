@@ -3,6 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
+const { Int, Uint, Float32, Float64 } = require('./numbers')
 const { isObject, parseOpId } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -59,6 +60,14 @@ class Context {
         // Date object, represented as milliseconds since epoch
         return {type: 'value', value: value.getTime(), datatype: 'timestamp'}
 
+      } else if (value instanceof Int) {
+        return {type: 'value', value: value.value, datatype: 'int'}
+      } else if (value instanceof Uint) {
+        return {type: 'value', value: value.value, datatype: 'uint'}
+      } else if (value instanceof Float32) {
+        return {type: 'value', value: value.value, datatype: 'float32'}
+      } else if (value instanceof Float64) {
+        return {type: 'value', value: value.value, datatype: 'float64'}
       } else if (value instanceof Counter) {
         // Counter object
         return {type: 'value', value: value.value, datatype: 'counter'}
@@ -75,8 +84,14 @@ class Context {
           return {objectId, type, props: {}}
         }
       }
+    } else if (typeof value === 'number') {
+      if (Number.isInteger(value) && value <= Number.MAX_SAFE_INTEGER && value >= Number.MIN_SAFE_INTEGER) {
+        return { type: 'value', value, datatype: 'int' }
+      } else {
+        return { type: 'value', value, datatype: 'float64' }
+      }
     } else {
-      // Primitive value (number, string, boolean, or null)
+      // Primitive value (string, boolean, or null)
       return {type: 'value', value}
     }
   }
@@ -282,7 +297,7 @@ class Context {
       throw new RangeError('The key of a map entry must not be an empty string')
     }
 
-    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
+    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter) && !(value instanceof Int) && !(value instanceof Uint) && !(value instanceof Float32) && !(value instanceof Float64)) {
       // Nested object (map, list, text, or table)
       return this.createNestedObjects(objectId, key, value, insert, pred, elemId)
     } else {

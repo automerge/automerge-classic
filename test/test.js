@@ -744,11 +744,11 @@ describe('Automerge', () => {
     })
 
     describe('numbers', () => {
-      it('should default to uint for positive numbers', () => {
+      it('should default to int for positive numbers', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1)
         const binChange = Automerge.getLastLocalChange(s1)
         const change = decodeChange(binChange)
-        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'uint', insert: false, key: 'number', obj: '_root', pred: [], value: 1 })
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: 1 })
       })
       it('should default to int for negative numbers', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.number = -1)
@@ -784,15 +784,29 @@ describe('Automerge', () => {
         const change = decodeChange(binChange)
         assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: -1 })
       })
-      it('should default to float32 for simple floats', () => {
-        // this is the only way I was able to generate a 32 bit float
-        const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
-        view32.setFloat32(0, 1.1, true)
-        let number = view32.getFloat32(0, true)
-        const s1 = Automerge.change(Automerge.init(), doc => doc.number = number)
+      it('float32 can be specificed manually', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Float32(3))
         const binChange = Automerge.getLastLocalChange(s1)
         const change = decodeChange(binChange)
-        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float32', insert: false, key: 'number', obj: '_root', pred: [], value: number })
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float32', insert: false, key: 'number', obj: '_root', pred: [], value: 3 })
+      })
+      it('float64 can be specificed manually', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Float64(3))
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float64', insert: false, key: 'number', obj: '_root', pred: [], value: 3 })
+      })
+      it('int can be specificed manually', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Int(3))
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: 3 })
+      })
+      it('uint can be specificed manually', () => {
+        const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Uint(3))
+        const binChange = Automerge.getLastLocalChange(s1)
+        const change = decodeChange(binChange)
+        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'uint', insert: false, key: 'number', obj: '_root', pred: [], value: 3 })
       })
       it('should default to float64 for complex floats', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.number = 1.1)

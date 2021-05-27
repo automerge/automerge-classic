@@ -88,11 +88,11 @@ describe('BackendDoc applying changes', () => {
   it('should overwrite root object properties (1)', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 3, pred: []},
-      {action: 'set', obj: '_root', key: 'y', value: 4, pred: []}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 3, pred: []},
+      {action: 'set', obj: '_root', key: 'y', datatype: 'uint', value: 4, pred: []}
     ]}
     const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 5, pred: [`1@${actor}`]}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 5, pred: [`1@${actor}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -129,12 +129,12 @@ describe('BackendDoc applying changes', () => {
   it('should overwrite root object properties (2)', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 3, pred: []},
-      {action: 'set', obj: '_root', key: 'y', value: 4, pred: []}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 3, pred: []},
+      {action: 'set', obj: '_root', key: 'y', datatype: 'uint', value: 4, pred: []}
     ]}
     const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set', obj: '_root', key: 'y', value: 5, pred: [`2@${actor}`]},
-      {action: 'set', obj: '_root', key: 'z', value: 6, pred: []}
+      {action: 'set', obj: '_root', key: 'y', datatype: 'uint', value: 5, pred: [`2@${actor}`]},
+      {action: 'set', obj: '_root', key: 'z', datatype: 'uint', value: 6, pred: []}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -172,16 +172,16 @@ describe('BackendDoc applying changes', () => {
   it('should allow concurrent overwrites of the same value', () => {
     const actor1 = '01234567', actor2 = '89abcdef', actor3 = 'fedcba98'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 1, pred: []}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 1, pred: []}
     ]}
     const change2 = {actor: actor1, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 2, pred: [`1@${actor1}`]}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 2, pred: [`1@${actor1}`]}
     ]}
     const change3 = {actor: actor2, seq: 1, startOp: 2, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 3, pred: [`1@${actor1}`]}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 3, pred: [`1@${actor1}`]}
     ]}
     const change4 = {actor: actor3, seq: 1, startOp: 2, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 4, pred: [`1@${actor1}`]}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 4, pred: [`1@${actor1}`]}
     ]}
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     backend1.applyChanges([encodeChange(change1)])
@@ -259,13 +259,13 @@ describe('BackendDoc applying changes', () => {
   it('should allow a conflict to be resolved', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 1, pred: []}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 1, pred: []}
     ]}
     const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 2, pred: []}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 2, pred: []}
     ]}
     const change3 = {actor: actor1, seq: 2, startOp: 2, time: 0, deps: [hash(change1), hash(change2)], ops: [
-      {action: 'set', obj: '_root', key: 'x', value: 3, pred: [`1@${actor1}`, `1@${actor2}`]}
+      {action: 'set', obj: '_root', key: 'x', datatype: 'uint', value: 3, pred: [`1@${actor1}`, `1@${actor2}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -384,10 +384,10 @@ describe('BackendDoc applying changes', () => {
       {action: 'makeMap', obj: '_root',      key: 'a',           pred: []},
       {action: 'makeMap', obj: `1@${actor}`, key: 'b',           pred: []},
       {action: 'makeMap', obj: `2@${actor}`, key: 'c',           pred: []},
-      {action: 'set',     obj: `3@${actor}`, key: 'd', value: 1, pred: []}
+      {action: 'set',     obj: `3@${actor}`, key: 'd', datatype: 'uint', value: 1, pred: []}
     ]}
     const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set',     obj: `3@${actor}`, key: 'd', value: 2, pred: [`4@${actor}`]}
+      {action: 'set',     obj: `3@${actor}`, key: 'd', datatype: 'uint', value: 2, pred: [`4@${actor}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -943,11 +943,11 @@ describe('BackendDoc applying changes', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeList', obj: '_root',      key: 'list',          insert: false,           pred: []},
-      {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true,  value: 1, pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true,  datatype: 'uint', value: 1, pred: []},
       {action: 'makeMap',  obj: `1@${actor}`, elemId: `2@${actor}`, insert: true,            pred: []}
     ]}
     const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set',      obj: `3@${actor}`, key: 'x',          insert: false, value: 2, pred: []}
+      {action: 'set',      obj: `3@${actor}`, key: 'x',          insert: false, datatype: 'uint', value: 2, pred: []}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -994,10 +994,10 @@ describe('BackendDoc applying changes', () => {
       {action: 'set', obj: '_root', key: 'counter', value: 1, datatype: 'counter', pred: []}
     ]}
     const change2 = {actor, seq: 2, startOp: 2, time: 0, deps: [hash(change1)], ops: [
-      {action: 'inc', obj: '_root', key: 'counter', value: 2, pred: [`1@${actor}`]}
+      {action: 'inc', obj: '_root', key: 'counter', datatype: 'uint', value: 2, pred: [`1@${actor}`]}
     ]}
     const change3 = {actor, seq: 3, startOp: 3, time: 0, deps: [hash(change2)], ops: [
-      {action: 'inc', obj: '_root', key: 'counter', value: 3, pred: [`1@${actor}`]}
+      {action: 'inc', obj: '_root', key: 'counter', datatype: 'uint', value: 3, pred: [`1@${actor}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -1043,7 +1043,7 @@ describe('BackendDoc applying changes', () => {
       {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true,  pred: [], value: 1, datatype: 'counter'}
     ]}
     const change2 = {actor, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-      {action: 'inc',      obj: `1@${actor}`, elemId: `2@${actor}`, value: 2, pred: [`2@${actor}`]}
+      {action: 'inc',      obj: `1@${actor}`, elemId: `2@${actor}`, datatype: 'uint', value: 2, pred: [`2@${actor}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -1108,13 +1108,13 @@ describe('BackendDoc applying changes', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeList', obj: '_root',       key: 'list',           insert: false,           pred: []},
-      {action: 'set',      obj: `1@${actor1}`, elemId: '_head',       insert: true,  value: 1, pred: []}
+      {action: 'set',      obj: `1@${actor1}`, elemId: '_head',       insert: true,  datatype: 'uint', value: 1, pred: []}
     ]}
     const change2 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 2, pred: [`2@${actor1}`]}
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, datatype: 'uint', value: 2, pred: [`2@${actor1}`]}
     ]}
     const change3 = {actor: actor2, seq: 1, startOp: 3, time: 0, deps: [hash(change1)], ops: [
-      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 3, pred: [`2@${actor1}`]}
+      {action: 'set',      obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, datatype: 'uint', value: 3, pred: [`2@${actor1}`]}
     ]}
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change1)]), {
@@ -1225,14 +1225,14 @@ describe('BackendDoc applying changes', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeMap', obj: '_root',       key: 'map',         pred: []},
-      {action: 'set',     obj: `1@${actor1}`, key: 'x', value: 1, pred: []}
+      {action: 'set',     obj: `1@${actor1}`, key: 'x', datatype: 'uint', value: 1, pred: []}
     ]}
     const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeMap', obj: '_root',       key: 'map',         pred: []},
-      {action: 'set',     obj: `1@${actor2}`, key: 'y', value: 2, pred: []}
+      {action: 'set',     obj: `1@${actor2}`, key: 'y', datatype: 'uint', value: 2, pred: []}
     ]}
     const change3 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1), hash(change2)], ops: [
-      {action: 'set',     obj: `1@${actor1}`, key: 'x', value: 3, pred: [`2@${actor1}`]}
+      {action: 'set',     obj: `1@${actor1}`, key: 'x', datatype: 'uint', value: 3, pred: [`2@${actor1}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
@@ -1277,13 +1277,13 @@ describe('BackendDoc applying changes', () => {
     const actor1 = '01234567', actor2 = '89abcdef'
     const change1 = {actor: actor1, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeMap', obj: '_root',       key: 'x',           pred: []},
-      {action: 'set',     obj: `1@${actor1}`, key: 'y', value: 2, pred: []}
+      {action: 'set',     obj: `1@${actor1}`, key: 'y', datatype: 'uint', value: 2, pred: []}
     ]}
     const change2 = {actor: actor2, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'set',     obj: '_root',       key: 'x', value: 1, pred: []}
+      {action: 'set',     obj: '_root',       key: 'x', datatype: 'uint', value: 1, pred: []}
     ]}
     const change3 = {actor: actor1, seq: 2, startOp: 3, time: 0, deps: [hash(change1), hash(change2)], ops: [
-      {action: 'set',     obj: `1@${actor1}`, key: 'y', value: 3, pred: [`2@${actor1}`]}
+      {action: 'set',     obj: `1@${actor1}`, key: 'y', datatype: 'uint', value: 3, pred: [`2@${actor1}`]}
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {

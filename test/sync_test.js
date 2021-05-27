@@ -146,12 +146,12 @@ describe('Data sync protocol', () => {
         ;[n1, s1, patch] = Automerge.receiveSyncMessage(n1, s1, message)
         ;[s1, message] = Automerge.generateSyncMessage(n1, s1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
-        assert.deepStrictEqual(patch.diffs.props, {y: {'5@def456': {type: 'value', value: 4, datatype: "uint"}}}) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {y: {'5@def456': {type: 'value', value: 4, datatype: "int"}}}) // changes arrived
 
         // n2 applies the changes and sends confirmation ending the exchange
         ;[n2, s2, patch] = Automerge.receiveSyncMessage(n2, s2, message)
         ;[s2, message] = Automerge.generateSyncMessage(n2, s2)
-        assert.deepStrictEqual(patch.diffs.props, {x: {'5@abc123': {type: 'value', value: 4, datatype: "uint"}}}) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {x: {'5@abc123': {type: 'value', value: 4, datatype: "int"}}}) // changes arrived
 
         // n1 receives the message and has nothing more to say
         ;[n1, s1, patch] = Automerge.receiveSyncMessage(n1, s1, message)

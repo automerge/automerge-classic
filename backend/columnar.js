@@ -241,27 +241,6 @@ function encodeOperationAction(op, columns) {
 }
 
 /**
- *  If no datatype is given find the best fit.  The float Array Buff is calculated here
- *  to prevent having to calculate it a second time by the caller
- */
-
-function guessNumberTypeAndValue(op) {
-  if (Number.isInteger(op.value) && op.value <= Number.MAX_SAFE_INTEGER && op.value >= Number.MIN_SAFE_INTEGER) {
-    return op.value < 0 ? [ VALUE_TYPE.LEB128_INT, op.value ] : [ VALUE_TYPE.LEB128_UINT, op.value ]
-  } else {
-    const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
-    view32.setFloat32(0, op.value, true) // true means little-endian
-    if (view32.getFloat32(0, true) === op.value) {
-      return [ VALUE_TYPE.IEEE754, new Uint8Array(buf32) ]
-    } else {
-      const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
-      view64.setFloat64(0, op.value, true)
-      return [ VALUE_TYPE.IEEE754, new Uint8Array(buf64) ]
-    }
-  }
-}
-
-/**
  *  Given the datatype for a number, determine the typeTag and the value to encode
  *  otherwise guess
  */
@@ -287,7 +266,14 @@ function getNumberTypeAndValue(op) {
       return [ VALUE_TYPE.IEEE754,  new Uint8Array(buf64) ]
     }
     default:
-      return guessNumberTypeAndValue(op)
+      // increment operators get resolved here ...
+      if (Number.isInteger(op.value) && op.value <= Number.MAX_SAFE_INTEGER && op.value >= Number.MIN_SAFE_INTEGER) {
+        return [ VALUE_TYPE.LEB128_INT, op.value ]
+      } else {
+        const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
+        view64.setFloat64(0, op.value, true)
+        return [ VALUE_TYPE.IEEE754,  new Uint8Array(buf64) ]
+      }
   }
 }
 
