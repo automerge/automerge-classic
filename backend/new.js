@@ -1,7 +1,8 @@
 const { parseOpId } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
-  encodeChange, decodeChangeColumns, decodeChanges, decodeDocumentHeader, encodeDocument } = require('./columnar')
+  encodeChange, decodeChangeColumns, decodeChanges, decodeDocumentHeader, encodeDocument,
+  appendEdit } = require('./columnar')
 
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
   .reduce((acc, [k, v]) => { acc[v] = k; return acc }, [])
@@ -422,9 +423,102 @@ function groupRelatedOps(change, changeCols, objectMeta) {
   return {opSequences, objectIds: Object.keys(objectIds)}
 }
 
+function emptyObjectPatch(objectId, type) {
+  if (type === 'list' || type === 'text') {
+    return {objectId, type, edits: []}
+  } else {
+    return {objectId, type, props: {}}
+  }
+}
+
+/**
+ * `edits` is an array of (SingleInsertEdit | MultiInsertEdit | UpdateEdit | RemoveEdit) list edits
+ * for a patch. This function appends an UpdateEdit to this array. A conflict is represented by
+ * having several consecutive edits with the same index, and this can be realised by calling
+ * `appendUpdate` several times for the same list element. On the first such call, `firstUpdate`
+ * must be true.
+ *
+ * It is possible that coincidentally the previous edit (potentially arising from a different
+ * change) is for the same index. If this is the case, to avoid accidentally treating consecutive
+ * updates for the same index as a conflict, we remove the previous edit for the same index. This is
+ * safe because the previous edit is overwritten by the new edit being appended, and we know that
+ * it's for the same list elements because there are no intervening insertions/deletions that could
+ * have changed the indexes.
+ */
+function appendUpdate(edits, index, elemId, opId, value, firstUpdate) {
+  let insert = false
+  if (firstUpdate) {
+    // Pop all edits for the same index off the end of the edits array. This sequence may begin with
+    // either an insert or an update. If it's an insert, we remember that fact, and use it below.
+    while (!insert && edits.length > 0) {
+      const lastEdit = edits[edits.length - 1]
+      if ((lastEdit.action === 'insert' || lastEdit.action === 'update') && lastEdit.index === index) {
+        edits.pop()
+        insert = (lastEdit.action === 'insert')
+      } else if (lastEdit.action === 'multi-insert' && lastEdit.index + lastEdit.values.length - 1 === index) {
+        lastEdit.values.pop()
+        insert = true
+      } else {
+        break
+      }
+    }
+  }
+
+  // If we popped an insert edit off the edits array, we need to turn the new update into an insert
+  // in order to ensure the list element still gets inserted (just with a new value).
+  if (insert) {
+    appendEdit(edits, {action: 'insert', index, elemId, opId, value})
+  } else {
+    appendEdit(edits, {action: 'update', index, opId, value})
+  }
+}
+
+/**
+ * `edits` is an array of (SingleInsertEdit | MultiInsertEdit | UpdateEdit | RemoveEdit) list edits
+ * for a patch. We assume that there is a suffix of this array that consists of an insertion at
+ * position `index`, followed by zero or more UpdateEdits at the same index. This function rewrites
+ * that suffix to be all updates instead. This is needed because sometimes when generating a patch
+ * we think we are performing a list insertion, but then it later turns out that there was already
+ * an existing value at that list element, and so we actually need to do an update, not an insert.
+ *
+ * If the suffix is preceded by one or more updates at the same index, those earlier updates are
+ * removed by `appendUpdate()` to ensure we don't inadvertently treat them as part of the same
+ * conflict.
+ */
+function convertInsertToUpdate(edits, index, elemId) {
+  let updates = []
+  while (edits.length > 0) {
+    let lastEdit = edits[edits.length - 1]
+    if (lastEdit.action === 'insert') {
+      if (lastEdit.index !== index) throw new RangeError('last edit has unexpected index')
+      updates.unshift(edits.pop())
+      break
+    } else if (lastEdit.action === 'multi-insert') {
+      if (lastEdit.index + lastEdit.values.length - 1 !== index) {
+        throw new RangeError('last edit has unexpected index')
+      }
+      updates.unshift({opId: elemId, value: lastEdit.values.pop()})
+      break
+    } else if (lastEdit.action === 'update') {
+      if (lastEdit.index !== index) throw new RangeError('last edit has unexpected index')
+      updates.unshift(edits.pop())
+    } else {
+      throw new RangeError('last edit has unexpected action')
+    }
+  }
+
+  // Now take the edits we popped off and push them back onto the list again
+  let firstUpdate = true
+  for (let update of updates) {
+    appendUpdate(edits, index, elemId, update.opId, update.value, firstUpdate)
+    firstUpdate = false
+  }
+}
+
 class BackendDoc {
   constructor(buffer) {
     this.maxOp = 0
+    this.pendingChanges = 0
     this.changes = []
     this.changeByHash = {}
     this.hashesByActor = {}
@@ -492,52 +586,15 @@ class BackendDoc {
                               : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                                            : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
-    // An operation to be overwritten if it is a document operation that has at least one successor
+    // An operation is overwritten if it is a document operation that has at least one successor
     const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
-
-    if (!patches[objectId]) patches[objectId] = {objectId, type: docState.objectMeta[objectId].type, props: {}}
-    let patch = patches[objectId]
-
-    if (op[keyStr] === null) {
-      // Updating a list or text object (with opId key)
-      if (!patch.edits) patch.edits = []
-
-      // If the property has a non-overwritten/non-deleted value, it's either an insert or an update
-      if (!isOverwritten) {
-        if (!propState[elemId]) {
-          patch.edits.push({action: 'insert', index: listIndex, elemId})
-          propState[elemId] = {action: 'insert', visibleOps: [], hasChild: false}
-        } else if (propState[elemId].action === 'remove') {
-          patch.edits.pop()
-          propState[elemId].action = 'update'
-        }
-      }
-
-      // If the property formerly had a non-overwritten value, it's either a remove or an update
-      if (oldSuccNum === 0) {
-        if (!propState[elemId]) {
-          patch.edits.push({action: 'remove', index: listIndex})
-          propState[elemId] = {action: 'remove', visibleOps: [], hasChild: false}
-        } else if (propState[elemId].action === 'insert') {
-          patch.edits.pop()
-          propState[elemId].action = 'update'
-        }
-      }
-
-      if (!patch.props[listIndex] && propState[elemId] && ['insert', 'update'].includes(propState[elemId].action)) {
-        patch.props[listIndex] = {}
-      }
-    } else {
-      // Updating a map or table (with string key)
-      if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
-    }
+    if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
 
     // If one or more of the values of the property is a child object, we update objectMeta to store
     // all of the visible values of the property (even the non-child-object values). Then, when we
     // subsequently process an update within that child object, we can construct the patch to
     // contain the conflicting values.
     if (!isOverwritten) {
-      if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
       propState[elemId].visibleOps.push(op)
       propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
 
@@ -546,10 +603,10 @@ class BackendDoc {
         for (let visible of propState[elemId].visibleOps) {
           const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
           if (ACTIONS[visible[action]] === 'set') {
-            values[opId] = decodeValue(visible[valLen], visible[valRaw])
+            values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
           } else if (visible[action] % 2 === 0) {
             const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
-            values[opId] = {objectId: opId, type, props: {}}
+            values[opId] = emptyObjectPatch(opId, type)
           }
         }
 
@@ -559,7 +616,7 @@ class BackendDoc {
     }
 
     const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-    const key = op[keyStr] !== null ? op[keyStr] : listIndex
+    let patchKey, patchValue
 
     // For counters, increment operations are succs to the set operation that created the counter,
     // but in this case we want to add the values rather than overwriting them.
@@ -587,22 +644,77 @@ class BackendDoc {
       counterState.value += decodeValue(op[valLen], op[valRaw]).value
       delete counterState.succs[opId]
 
-      if (Object.keys(counterState.succs).length === 0 && patch.props[key]) {
-        patch.props[key][counterState.opId] = {datatype: 'counter', value: counterState.value}
+      if (Object.keys(counterState.succs).length === 0) {
+        patchKey = counterState.opId
+        patchValue = {type: 'value', datatype: 'counter', value: counterState.value}
         // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
       }
 
-    } else if (patch.props[key] && !isOverwritten) {
+    } else if (!isOverwritten) {
       // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
       if (ACTIONS[op[action]] === 'set') {
-        patch.props[key][opId] = decodeValue(op[valLen], op[valRaw])
+        patchKey = opId
+        patchValue = Object.assign({type: 'value'}, decodeValue(op[valLen], op[valRaw]))
       } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
         if (!patches[opId]) {
           const type = op[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[action]]] : null
-          patches[opId] = {objectId: opId, type, props: {}}
+          patches[opId] = emptyObjectPatch(opId, type)
         }
-        patch.props[key][opId] = patches[opId]
+        patchKey = opId
+        patchValue = patches[opId]
       }
+    }
+
+    if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, docState.objectMeta[objectId].type)
+    const patch = patches[objectId]
+
+    if (op[keyStr] === null) {
+      // Updating a list or text object (with elemId key)
+      if (!patch.edits) patch.edits = []
+
+      // If we come across any document op that was previously non-overwritten/non-deleted, that
+      // means the current list element already had a value before this change was applied, and
+      // therefore the current element cannot be an insert. If we already registered an insert, we
+      // have to convert it into an update.
+      if (oldSuccNum === 0 && propState[elemId].action === 'insert') {
+        propState[elemId].action = 'update'
+        convertInsertToUpdate(patch.edits, listIndex, elemId)
+      }
+
+      if (patchValue) {
+        // If the op has a non-overwritten value and it came from the change, it's an insert.
+        // (It's not necessarily the case that op[insert] is true: if a list element is concurrently
+        // deleted and updated, the node that first processes the deletion and then the update will
+        // observe the update as a re-insertion of the deleted list element.)
+        if (oldSuccNum === undefined && !propState[elemId].action) {
+          propState[elemId].action = 'insert'
+          appendEdit(patch.edits, {action: 'insert', index: listIndex, elemId, opId: patchKey, value: patchValue})
+
+        // If the property has a value and it's not an insert, then it must be an update.
+        // We might have previously registered it as a remove, in which case we convert it to update.
+        } else if (propState[elemId].action === 'remove') {
+          let lastEdit = patch.edits[patch.edits.length - 1]
+          if (lastEdit.action !== 'remove') throw new RangeError('last edit has unexpected type')
+          if (lastEdit.count > 1) lastEdit.count -= 1; else patch.edits.pop()
+          propState[elemId].action = 'update'
+          appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, true)
+
+        } else {
+          // A 'normal' update
+          appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, !propState[elemId].action)
+          if (!propState[elemId].action) propState[elemId].action = 'update'
+        }
+
+      } else if (oldSuccNum === 0 && !propState[elemId].action) {
+        // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
+        propState[elemId].action = 'remove'
+        appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
+      }
+
+    } else {
+      // Updating a map or table (with string key)
+      if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
+      if (patchValue) patch.props[op[keyStr]][patchKey] = patchValue
     }
   }
 
@@ -922,39 +1034,61 @@ class BackendDoc {
     for (let objectId of objectIds) {
       let meta = docState.objectMeta[objectId], childMeta = null, patchExists = false
       while (true) {
-        if (!patches[objectId]) patches[objectId] = {objectId, type: meta.type, props: {}}
+        if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, meta.type)
 
         if (childMeta) {
-          // key is the property name being updated. In maps and table objects, this is just q
-          // string, while in list and text objects, we need to translate the elemID into an index
-          let key = childMeta.parentKey
           if (meta.type === 'list' || meta.type === 'text') {
-            const obj = parseOpId(objectId), elem = parseOpId(key)
-            const seekPos = {
-              objActor: obj.actorId,  objCtr: obj.counter,
-              keyActor: elem.actorId, keyCtr: elem.counter,
-              keyStr:   null,         insert: false
+            // In list/text objects, parentKey is an elemID. First see if it already appears in an edit
+            for (let edit of patches[objectId].edits) {
+              if (edit.opId && meta.children[childMeta.parentKey][edit.opId]) {
+                patchExists = true
+              }
             }
-            const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
-            key = visibleCount
-          }
-          if (!patches[objectId].props[key]) patches[objectId].props[key] = {}
 
-          let values = patches[objectId].props[key]
-          for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
-            if (values[opId]) {
-              patchExists = true
-            } else if (value.objectId) {
-              if (!patches[value.objectId]) patches[value.objectId] = Object.assign({}, value, {props: {}})
-              values[opId] = patches[value.objectId]
-            } else {
-              values[opId] = value
+            // If we need to add an edit, we first have to translate the elemId into an index
+            if (!patchExists) {
+              const obj = parseOpId(objectId), elem = parseOpId(childMeta.parentKey)
+              const seekPos = {
+                objActor: obj.actorId,  objCtr: obj.counter,
+                keyActor: elem.actorId, keyCtr: elem.counter,
+                keyStr:   null,         insert: false
+              }
+              const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
+
+              for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
+                let patchValue = value
+                if (value.objectId) {
+                  if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
+                  patchValue = patches[value.objectId]
+                }
+                const edit = {action: 'update', index: visibleCount, opId, value: patchValue}
+                appendEdit(patches[objectId].edits, edit)
+              }
             }
-          }
-          if (!values[childMeta.opId]) {
-            throw new RangeError(`object metadata did not contain child entry for ${childMeta.opId}`)
+
+          } else {
+            // Non-list object: parentKey is the name of the property being updated (a string)
+            if (!patches[objectId].props[childMeta.parentKey]) {
+              patches[objectId].props[childMeta.parentKey] = {}
+            }
+            let values = patches[objectId].props[childMeta.parentKey]
+
+            for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
+              if (values[opId]) {
+                patchExists = true
+              } else if (value.objectId) {
+                if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
+                values[opId] = patches[value.objectId]
+              } else {
+                values[opId] = value
+              }
+            }
+            if (!values[childMeta.opId]) {
+              throw new RangeError(`object metadata did not contain child entry for ${childMeta.opId}`)
+            }
           }
         }
+
         if (patchExists || !meta.parentObj) break
         childMeta = meta
         objectId = meta.parentObj
@@ -1033,7 +1167,7 @@ class BackendDoc {
       this.hashesByActor[change.actor].push(change.hash)
     }
 
-    let patch = {maxOp, clock, deps: this.heads, diffs: patches._root}
+    let patch = {maxOp, clock, deps: this.heads, pendingChanges: this.pendingChanges, diffs: patches._root}
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
       patch.seq = decodedChanges[0].seq

@@ -228,6 +228,7 @@ function getPatch(backend) {
       maxOp: state.maxOp,
       clock: state.clock,
       deps: state.heads,
+      pendingChanges: state.pendingChanges,
       diffs
     }
   } else {

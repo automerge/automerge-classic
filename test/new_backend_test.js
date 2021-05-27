@@ -30,16 +30,16 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`1@${actor}`]: {value: 3}},
-        y: {[`2@${actor}`]: {value: 4}}
+        x: {[`1@${actor}`]: {type: 'value', value: 3}},
+        y: {[`2@${actor}`]: {type: 'value', value: 4}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`3@${actor}`]: {value: 5}}
+        x: {[`3@${actor}`]: {type: 'value', value: 5}}
       }}
     })
     checkColumns(backend.docColumns, {
@@ -72,17 +72,17 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`1@${actor}`]: {value: 3}},
-        y: {[`2@${actor}`]: {value: 4}}
+        x: {[`1@${actor}`]: {type: 'value', value: 3}},
+        y: {[`2@${actor}`]: {type: 'value', value: 4}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 4, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 4, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        y: {[`3@${actor}`]: {value: 5}},
-        z: {[`4@${actor}`]: {value: 6}}
+        y: {[`3@${actor}`]: {type: 'value', value: 5}},
+        z: {[`4@${actor}`]: {type: 'value', value: 6}}
       }}
     })
     checkColumns(backend.docColumns, {
@@ -120,40 +120,50 @@ describe('BackendDoc applying changes', () => {
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     backend1.applyChanges([encodeChange(change1)])
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor1]: 2}, deps: [hash(change2)],
-      diffs: {objectId: '_root', type: 'map', props: {x: {[`2@${actor1}`]: {value: 2}}}}
+      maxOp: 2, clock: {[actor1]: 2}, deps: [hash(change2)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor1}`]: {type: 'value', value: 2}
+      }}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change3)]), {
-      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
-      diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`2@${actor1}`]: {value: 2}, [`2@${actor2}`]: {value: 3}}
-      }}
+      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: { x: {
+        [`2@${actor1}`]: {type: 'value', value: 2},
+        [`2@${actor2}`]: {type: 'value', value: 3}
+      }}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change4)]), {
-      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1, [actor3]: 1},
+      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1, [actor3]: 1}, pendingChanges: 0,
       deps: [hash(change2), hash(change3), hash(change4)].sort(),
-      diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`2@${actor1}`]: {value: 2}, [`2@${actor2}`]: {value: 3}, [`2@${actor3}`]: {value: 4}}
-      }}
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor1}`]: {type: 'value', value: 2},
+        [`2@${actor2}`]: {type: 'value', value: 3},
+        [`2@${actor3}`]: {type: 'value', value: 4}
+      }}}
     })
     backend2.applyChanges([encodeChange(change1)])
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change4)]), {
-      maxOp: 2, clock: {[actor1]: 1, [actor3]: 1}, deps: [hash(change4)],
-      diffs: {objectId: '_root', type: 'map', props: {x: {[`2@${actor3}`]: {value: 4}}}}
+      maxOp: 2, clock: {[actor1]: 1, [actor3]: 1}, deps: [hash(change4)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor3}`]: {type: 'value', value: 4}
+      }}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change3)]), {
-      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1, [actor3]: 1},
+      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1, [actor3]: 1}, pendingChanges: 0,
       deps: [hash(change3), hash(change4)].sort(),
-      diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`2@${actor2}`]: {value: 3}, [`2@${actor3}`]: {value: 4}}
-      }}
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor2}`]: {type: 'value', value: 3},
+        [`2@${actor3}`]: {type: 'value', value: 4}
+      }}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1, [actor3]: 1},
+      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1, [actor3]: 1}, pendingChanges: 0,
       deps: [hash(change2), hash(change3), hash(change4)].sort(),
-      diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`2@${actor1}`]: {value: 2}, [`2@${actor2}`]: {value: 3}, [`2@${actor3}`]: {value: 4}}
-      }}
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor1}`]: {type: 'value', value: 2},
+        [`2@${actor2}`]: {type: 'value', value: 3},
+        [`2@${actor3}`]: {type: 'value', value: 4}
+      }}}
     })
     checkColumns(backend1.docColumns, {
       objActor: [],
@@ -203,18 +213,23 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 1, clock: {[actor1]: 1}, deps: [hash(change1)],
-      diffs: {objectId: '_root', type: 'map', props: {x: {[`1@${actor1}`]: {value: 1}}}}
+      maxOp: 1, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`1@${actor1}`]: {type: 'value', value: 1}
+      }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 1, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(),
-      diffs: {objectId: '_root', type: 'map', props: {
-        x: {[`1@${actor1}`]: {value: 1}, [`1@${actor2}`]: {value: 2}}
-      }}
+      maxOp: 1, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(), pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`1@${actor1}`]: {type: 'value', value: 1},
+        [`1@${actor2}`]: {type: 'value', value: 2}
+      }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
-      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)],
-      diffs: {objectId: '_root', type: 'map', props: {x: {[`2@${actor1}`]: {value: 3}}}}
+      maxOp: 2, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {
+        [`2@${actor1}`]: {type: 'value', value: 3}
+      }}}
     })
     checkColumns(backend.docColumns, {
       objActor: [],
@@ -279,19 +294,19 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {map: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'map', props: {
-          x: {[`2@${actor}`]: {value: 'a'}},
-          y: {[`3@${actor}`]: {value: 'b'}},
-          z: {[`4@${actor}`]: {value: 'c'}}
+          x: {[`2@${actor}`]: {type: 'value', value: 'a'}},
+          y: {[`3@${actor}`]: {type: 'value', value: 'b'}},
+          z: {[`4@${actor}`]: {type: 'value', value: 'c'}}
         }
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {map: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'map', props: {y: {[`5@${actor}`]: {value: 'B'}}}
+        objectId: `1@${actor}`, type: 'map', props: {y: {[`5@${actor}`]: {type: 'value', value: 'B'}}}
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -325,21 +340,21 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {a: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'map', props: {b: {[`2@${actor}`]: {
           objectId: `2@${actor}`, type: 'map', props: {c: {[`3@${actor}`]: {
-            objectId: `3@${actor}`, type: 'map', props: {d: {[`4@${actor}`]: {value: 1}}}
+            objectId: `3@${actor}`, type: 'map', props: {d: {[`4@${actor}`]: {type: 'value', value: 1}}}
           }}}
         }}}
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {a: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'map', props: {b: {[`2@${actor}`]: {
           objectId: `2@${actor}`, type: 'map', props: {c: {[`3@${actor}`]: {
-            objectId: `3@${actor}`, type: 'map', props: {d: {[`5@${actor}`]: {value: 2}}}
+            objectId: `3@${actor}`, type: 'map', props: {d: {[`5@${actor}`]: {type: 'value', value: 2}}}
           }}}
         }}}
       }}}}
@@ -370,11 +385,11 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}}
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'a'}}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -406,23 +421,19 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`}
-        ],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}}
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 2, elemId: `4@${actor}`},
-          {action: 'insert', index: 3, elemId: `5@${actor}`}
-        ],
-        props: {2: {[`4@${actor}`]: {value: 'c'}}, 3: {[`5@${actor}`]: {value: 'd'}}}
+          {action: 'multi-insert', index: 2, elemId: `4@${actor}`, values: ['c', 'd']}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -455,17 +466,15 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 5, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 5, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
         text: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'text', edits: [
-            {action: 'insert', index: 0, elemId: `2@${actor}`},
-            {action: 'insert', index: 1, elemId: `3@${actor}`}
-          ],
-          props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}}
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b']}
+          ]
         }},
         map: {[`4@${actor}`]: {objectId: `4@${actor}`, type: 'map', props: {
-          foo: {[`5@${actor}`]: {value: 'c'}}
+          foo: {[`5@${actor}`]: {type: 'value', value: 'c'}}
         }}}
       }}
     })
@@ -485,23 +494,20 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`}
-        ],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'c'}}}
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'c']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 1, elemId: `4@${actor}`},
-          {action: 'insert', index: 3, elemId: `5@${actor}`}
-        ],
-        props: {1: {[`4@${actor}`]: {value: 'b'}}, 3: {[`5@${actor}`]: {value: 'd'}}}
+          {action: 'insert', index: 1, elemId: `4@${actor}`, opId: `4@${actor}`, value: {type: 'value', value: 'b'}},
+          {action: 'insert', index: 3, elemId: `5@${actor}`, opId: `5@${actor}`, value: {type: 'value', value: 'd'}}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -547,17 +553,17 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}}
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'a'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 0}], props: {}
+        objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 0, count: 1}]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -591,24 +597,17 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`},
-          {action: 'insert', index: 2, elemId: `4@${actor}`}
-        ],
-        props: {
-          0: {[`2@${actor}`]: {value: 'a'}},
-          1: {[`3@${actor}`]: {value: 'b'}},
-          2: {[`4@${actor}`]: {value: 'c'}}
-        }
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b', 'c']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 1}], props: {}
+        objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 1, count: 1}]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -658,51 +657,51 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor1}`}],
-        props: {0: {[`2@${actor1}`]: {value: 'a'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 'a'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 1, elemId: `3@${actor1}`}],
-        props: {1: {[`3@${actor1}`]: {value: 'c'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 1, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'c'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 1, elemId: `3@${actor2}`}],
-        props: {1: {[`3@${actor2}`]: {value: 'b'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 1, elemId: `3@${actor2}`, opId: `3@${actor2}`, value: {type: 'value', value: 'b'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor1}`}],
-        props: {0: {[`2@${actor1}`]: {value: 'a'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 'a'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 1, elemId: `3@${actor2}`}],
-        props: {1: {[`3@${actor2}`]: {value: 'b'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 1, elemId: `3@${actor2}`, opId: `3@${actor2}`, value: {type: 'value', value: 'b'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 2, elemId: `3@${actor1}`}],
-        props: {2: {[`3@${actor1}`]: {value: 'c'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 2, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'c'}}
+        ]
       }}}}
     })
     for (let backend of [backend1, backend2]) {
@@ -738,55 +737,51 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor1}`}],
-        props: {0: {[`2@${actor1}`]: {value: 'd'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 'd'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `3@${actor1}`}],
-        props: {0: {[`3@${actor1}`]: {value: 'c'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'c'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change3)]), {
-      maxOp: 4, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 4, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
         objectId: `1@${actor1}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `3@${actor2}`},
-          {action: 'insert', index: 1, elemId: `4@${actor2}`}
-        ],
-        props: {0: {[`3@${actor2}`]: {value: 'a'}}, 1: {[`4@${actor2}`]: {value: 'b'}}}
+          {action: 'multi-insert', index: 0, elemId: `3@${actor2}`, values: ['a', 'b']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor1}`}],
-        props: {0: {[`2@${actor1}`]: {value: 'd'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 'd'}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change3)]), {
-      maxOp: 4, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)],
+      maxOp: 4, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
         objectId: `1@${actor1}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `3@${actor2}`},
-          {action: 'insert', index: 1, elemId: `4@${actor2}`}
-        ],
-        props: {0: {[`3@${actor2}`]: {value: 'a'}}, 1: {[`4@${actor2}`]: {value: 'b'}}}
+          {action: 'multi-insert', index: 0, elemId: `3@${actor2}`, values: ['a', 'b']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change2)]), {
-      maxOp: 4, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 4, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'text',
-        edits: [{action: 'insert', index: 2, elemId: `3@${actor1}`}],
-        props: {2: {[`3@${actor1}`]: {value: 'c'}}}
+        objectId: `1@${actor1}`, type: 'text', edits: [
+          {action: 'insert', index: 2, elemId: `3@${actor1}`, opId: `3@${actor1}`, value: {type: 'value', value: 'c'}}
+        ]
       }}}}
     })
     for (let backend of [backend1, backend2]) {
@@ -821,21 +816,20 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`},
-          {action: 'insert', index: 2, elemId: `4@${actor}`}
-        ],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}, 2: {[`4@${actor}`]: {value: 'c'}}}
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b', 'c']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 6, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 6, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text', edits: [],
-        props: {0: {[`5@${actor}`]: {value: 'A'}}, 2: {[`6@${actor}`]: {value: 'C'}}}
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'update', index: 0, opId: `5@${actor}`, value: {type: 'value', value: 'A'}},
+          {action: 'update', index: 2, opId: `6@${actor}`, value: {type: 'value', value: 'C'}}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -885,23 +879,24 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'list', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`}
-        ],
-        props: {0: {[`2@${actor}`]: {value: 1}}, 1: {[`3@${actor}`]: {
-          objectId: `3@${actor}`, type: 'map', props: {}
-        }}}
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 1}},
+          {action: 'insert', index: 1, elemId: `3@${actor}`, opId: `3@${actor}`, value: {
+            objectId: `3@${actor}`, type: 'map', props: {}
+          }}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 4, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 4, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'list', props: {1: {[`3@${actor}`]: {
-          objectId: `3@${actor}`, type: 'map', props: {x: {[`4@${actor}`]: {value: 2}}}
-        }}}
+        objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'update', index: 1, opId: `3@${actor}`, value: {
+            objectId: `3@${actor}`, type: 'map', props: {x: {[`4@${actor}`]: {type: 'value', value: 2}}}
+          }}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -935,21 +930,21 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 1, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 1, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 1, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 1, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 6, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 6, datatype: 'counter'}}
       }}
     })
     checkColumns(backend.docColumns, {
@@ -981,18 +976,23 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'list',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor}`}],
-        props: {0: {[`2@${actor}`]: {value: 1, datatype: 'counter'}}}
+        objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {
+            type: 'value', value: 1, datatype: 'counter'
+          }}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'list', edits: [],
-        props: {0: {[`2@${actor}`]: {value: 3, datatype: 'counter'}}}
+        objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'update', index: 0, opId: `2@${actor}`, value: {
+            type: 'value', value: 3, datatype: 'counter'
+          }}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -1027,13 +1027,13 @@ describe('BackendDoc applying changes', () => {
     const backend = new BackendDoc()
     backend.applyChanges([encodeChange(change1)])
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 2, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {
-        counter: {[`1@${actor}`]: {value: 3, datatype: 'counter'}}
+        counter: {[`1@${actor}`]: {type: 'value', value: 3, datatype: 'counter'}}
       }}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {counter: {}}}
     })
   })
@@ -1052,40 +1052,46 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend1 = new BackendDoc(), backend2 = new BackendDoc()
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'list',
-        edits: [{action: 'insert', index: 0, elemId: `2@${actor1}`}],
-        props: {0: {[`2@${actor1}`]: {value: 1}}}
+        objectId: `1@${actor1}`, type: 'list', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor1}`, opId: `2@${actor1}`, value: {type: 'value', value: 1}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)],
+      maxOp: 3, clock: {[actor1]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'list', edits: [],
-        props: {0: {[`3@${actor1}`]: {value: 2}}}
+        objectId: `1@${actor1}`, type: 'list', edits: [
+          {action: 'update', index: 0, opId: `3@${actor1}`, value: {type: 'value', value: 2}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend1.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'list', edits: [],
-        props: {0: {[`3@${actor1}`]: {value: 2}, [`3@${actor2}`]: {value: 3}}}
+        objectId: `1@${actor1}`, type: 'list', edits: [
+          {action: 'update', index: 0, opId: `3@${actor1}`, value: {type: 'value', value: 2}},
+          {action: 'update', index: 0, opId: `3@${actor2}`, value: {type: 'value', value: 3}}
+        ]
       }}}}
     })
     backend2.applyChanges([encodeChange(change1)])
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'list', edits: [],
-        props: {0: {[`3@${actor2}`]: {value: 3}}}
+        objectId: `1@${actor1}`, type: 'list', edits: [
+          {action: 'update', index: 0, opId: `3@${actor2}`, value: {type: 'value', value: 3}}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend2.applyChanges([encodeChange(change2)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(),
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {list: {[`1@${actor1}`]: {
-        objectId: `1@${actor1}`, type: 'list', edits: [],
-        props: {0: {[`3@${actor1}`]: {value: 2}, [`3@${actor2}`]: {value: 3}}}
+        objectId: `1@${actor1}`, type: 'list', edits: [
+          {action: 'update', index: 0, opId: `3@${actor1}`, value: {type: 'value', value: 2}},
+          {action: 'update', index: 0, opId: `3@${actor2}`, value: {type: 'value', value: 3}}
+        ]
       }}}}
     })
     for (let backend of [backend1, backend2]) {
@@ -1121,20 +1127,20 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)],
+      maxOp: 3, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
         objectId: `1@${actor}`, type: 'text', edits: [
-          {action: 'insert', index: 0, elemId: `2@${actor}`},
-          {action: 'insert', index: 1, elemId: `3@${actor}`}
-        ],
-        props: {0: {[`2@${actor}`]: {value: 'a'}}, 1: {[`3@${actor}`]: {value: 'b'}}}
+          {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: ['a', 'b']}
+        ]
       }}}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)],
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
-        objectId: `1@${actor}`, type: 'text', edits: [],
-        props: {0: {[`4@${actor}`]: {value: 'x'}, [`5@${actor}`]: {value: 'y'}}}
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'update', index: 0, opId: `4@${actor}`, value: {type: 'value', value: 'x'}},
+          {action: 'update', index: 0, opId: `5@${actor}`, value: {type: 'value', value: 'y'}}
+        ]
       }}}}
     })
     checkColumns(backend.docColumns, {
@@ -1170,22 +1176,22 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {map: {
-        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`2@${actor1}`]: {value: 1}}}}
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`2@${actor1}`]: {type: 'value', value: 1}}}}
       }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(),
+      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {map: {
         [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {}},
-        [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {y: {[`2@${actor2}`]: {value: 2}}}}
+        [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {y: {[`2@${actor2}`]: {type: 'value', value: 2}}}}
       }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {map: {
-        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`3@${actor1}`]: {value: 3}}}},
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {x: {[`3@${actor1}`]: {type: 'value', value: 3}}}},
         [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {}}
       }}}
     })
@@ -1221,23 +1227,23 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
-      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)],
+      maxOp: 2, clock: {[actor1]: 1}, deps: [hash(change1)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {x: {
-        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {y: {[`2@${actor1}`]: {value: 2}}}}
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {y: {[`2@${actor1}`]: {type: 'value', value: 2}}}}
       }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
-      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(),
+      maxOp: 2, clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change1), hash(change2)].sort(), pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {x: {
         [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {}},
-        [`1@${actor2}`]: {value: 1}
+        [`1@${actor2}`]: {type: 'value', value: 1}
       }}}
     })
     assert.deepStrictEqual(backend.applyChanges([encodeChange(change3)]), {
-      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)],
+      maxOp: 3, clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {x: {
-        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {y: {[`3@${actor1}`]: {value: 3}}}},
-        [`1@${actor2}`]: {value: 1}
+        [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {y: {[`3@${actor1}`]: {type: 'value', value: 3}}}},
+        [`1@${actor2}`]: {type: 'value', value: 1}
       }}}
     })
     checkColumns(backend.docColumns, {
