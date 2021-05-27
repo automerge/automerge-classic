@@ -249,7 +249,7 @@ function makeBloomFilter(backend, lastSync) {
 function getChangesToSend(backend, have, need) {
   const opSet = backend.get('opSet')
   if (have.length === 0) {
-    return need.map(hash => OpSet.getChangeByHash(opSet, hash))
+    return need.map(hash => OpSet.getChangeByHash(opSet, hash)).filter(change => change !== undefined)
   }
 
   let lastSyncHashes = {}, bloomFilters = []
@@ -373,7 +373,7 @@ function generateSyncMessage(backend, syncState) {
   // If the heads are equal, we're in sync and don't need to do anything further
   const headsUnchanged = Array.isArray(lastSentHeads) && compareArrays(ourHeads, lastSentHeads)
   const headsEqual = Array.isArray(theirHeads) && compareArrays(ourHeads, theirHeads)
-  if (headsUnchanged && headsEqual && changesToSend.length === 0 && ourNeed.length === 0) {
+  if (headsUnchanged && headsEqual && changesToSend.length === 0) {
     // no need to send a sync message if we know we're synced!
     return [syncState, null]
   }

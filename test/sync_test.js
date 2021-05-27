@@ -485,36 +485,75 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n2), allHeads)
     })
 
-    it('should handle a false-positive dependency', () => {
-      // Scenario:                                                            ,-- n1c1 <-- n1c2
-      // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
-      //                                                                      `-- n2c1 <-- n2c2
-      // where n2c1 is a false positive in the Bloom filter containing {n1c1, n1c2}.
-      // lastSync is c9.
+    describe('with a false-positive dependency', () => {
+      let n1, n2, s1, s2, n1hash2, n2hash2
 
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
-      let s1 = initSyncState(), s2 = initSyncState()
+      beforeEach(() => {
+        // Scenario:                                                            ,-- n1c1 <-- n1c2
+        // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
+        //                                                                      `-- n2c1 <-- n2c2
+        // where n2c1 is a false positive in the Bloom filter containing {n1c1, n1c2}.
+        // lastSync is c9.
+        n1 = Automerge.init('01234567')
+        n2 = Automerge.init('89abcdef')
+        s1 = initSyncState()
+        s2 = initSyncState()
+        for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
+        ;[n1, n2, s1, s2] = sync(n1, n2)
 
-      for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
-      ;[n1, n2, s1, s2] = sync(n1, n2)
-      let n1hash1, n1hash2, n2hash1, n2hash2
-      for (let i = 34; ; i++) { // search for false positive; see comment above
-        const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
-        const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
-        n1hash1 = getHeads(n1us1)[0]; n2hash1 = getHeads(n2us1)[0]
-        const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = 'final @ n1')
-        const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = 'final @ n2')
-        n1hash2 = getHeads(n1us2)[0]; n2hash2 = getHeads(n2us2)[0]
-        if (new BloomFilter([n1hash1, n1hash2]).containsHash(n2hash1)) {
-          n1 = n1us2; n2 = n2us2; break
+        let n1hash1, n2hash1
+        for (let i = 34; ; i++) { // search for false positive; see comment above
+          const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
+          const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+          n1hash1 = getHeads(n1us1)[0]; n2hash1 = getHeads(n2us1)[0]
+          const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = 'final @ n1')
+          const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = 'final @ n2')
+          n1hash2 = getHeads(n1us2)[0]; n2hash2 = getHeads(n2us2)[0]
+          if (new BloomFilter([n1hash1, n1hash2]).containsHash(n2hash1)) {
+            n1 = n1us2; n2 = n2us2; break
+          }
         }
-      }
-      const bothHeads = [n1hash2, n2hash2].sort()
-      s1 = decodeSyncState(encodeSyncState(s1))
-      s2 = decodeSyncState(encodeSyncState(s2))
-      ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
-      assert.deepStrictEqual(getHeads(n1), bothHeads)
-      assert.deepStrictEqual(getHeads(n2), bothHeads)
+      })
+
+      it('should sync two nodes without connection reset', () => {
+        [n1, n2, s1, s2] = sync(n1, n2, s1, s2)
+        assert.deepStrictEqual(getHeads(n1), [n1hash2, n2hash2].sort())
+        assert.deepStrictEqual(getHeads(n2), [n1hash2, n2hash2].sort())
+      })
+
+      it('should sync two nodes with connection reset', () => {
+        s1 = decodeSyncState(encodeSyncState(s1))
+        s2 = decodeSyncState(encodeSyncState(s2))
+        ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
+        assert.deepStrictEqual(getHeads(n1), [n1hash2, n2hash2].sort())
+        assert.deepStrictEqual(getHeads(n2), [n1hash2, n2hash2].sort())
+      })
+
+      it('should sync three nodes', () => {
+        s1 = decodeSyncState(encodeSyncState(s1))
+        s2 = decodeSyncState(encodeSyncState(s2))
+
+        // First n1 and n2 exchange Bloom filters
+        let m1, m2
+        ;[s1, m1] = Automerge.generateSyncMessage(n1, s1)
+        ;[s2, m2] = Automerge.generateSyncMessage(n2, s2)
+        ;[n1, s1] = Automerge.receiveSyncMessage(n1, s1, m2)
+        ;[n2, s2] = Automerge.receiveSyncMessage(n2, s2, m1)
+
+        // Then n1 and n2 send each other their changes, except for the false positive
+        ;[s1, m1] = Automerge.generateSyncMessage(n1, s1)
+        ;[s2, m2] = Automerge.generateSyncMessage(n2, s2)
+        ;[n1, s1] = Automerge.receiveSyncMessage(n1, s1, m2)
+        ;[n2, s2] = Automerge.receiveSyncMessage(n2, s2, m1)
+        assert.strictEqual(decodeSyncMessage(m1).changes.length, 2) // n1c1 and n1c2
+        assert.strictEqual(decodeSyncMessage(m2).changes.length, 1) // only n2c2; change n2c1 is not sent
+
+        // n3 is a node that doesn't have the missing change. Nevertheless n1 is going to ask n3 for it
+        let n3 = Automerge.init('fedcba98'), s13 = initSyncState(), s31 = initSyncState()
+        ;[n1, n3, s13, s31] = sync(n1, n3, s13, s31)
+        assert.deepStrictEqual(getHeads(n1), [n1hash2])
+        assert.deepStrictEqual(getHeads(n3), [n1hash2])
+      })
     })
 
     it('should not require an additional request when a false-positive depends on a true-negative', () => {
