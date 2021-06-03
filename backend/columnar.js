@@ -1309,8 +1309,11 @@ function appendEdit(existingEdits, nextEdit) {
       lastEdit.index === nextEdit.index - 1 &&
       lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
       lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId &&
-      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1)) {
+      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1) &&
+      lastEdit.value.datatype === nextEdit.value.datatype &&
+      typeof lastEdit.value.value === typeof nextEdit.value.value) {
     lastEdit.action = 'multi-insert'
+    if (nextEdit.value.datatype) { lastEdit.datatype = nextEdit.value.datatype }
     lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
     delete lastEdit.value
     delete lastEdit.opId
@@ -1318,7 +1321,9 @@ function appendEdit(existingEdits, nextEdit) {
   } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
              lastEdit.index + lastEdit.values.length === nextEdit.index &&
              nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId &&
-             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length)) {
+             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length) &&
+             lastEdit.datatype === nextEdit.value.datatype &&
+             typeof lastEdit.values[0] === typeof nextEdit.value.value) {
     lastEdit.values.push(nextEdit.value.value)
 
   } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&

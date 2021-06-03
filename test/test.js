@@ -267,6 +267,21 @@ describe('Automerge', () => {
         assert.strictEqual(s2.list[0].getTime(), now.getTime())
       })
 
+      it('should support many Date objects in lists', () => {
+        const now1 = new Date()
+        const now2 = new Date()
+        const now3 = new Date()
+        s1 = Automerge.change(s1, doc => doc.list = [now1, now2, now3])
+        let changes = Automerge.getAllChanges(s1)
+        ;[s2] = Automerge.applyChanges(Automerge.init(), changes)
+        assert.strictEqual(s2.list[0] instanceof Date, true)
+        assert.strictEqual(s2.list[0].getTime(), now1.getTime())
+        assert.strictEqual(s2.list[1] instanceof Date, true)
+        assert.strictEqual(s2.list[1].getTime(), now2.getTime())
+        assert.strictEqual(s2.list[2] instanceof Date, true)
+        assert.strictEqual(s2.list[2].getTime(), now3.getTime())
+      })
+
       it('should call patchCallback if supplied', () => {
         const callbacks = [], actor = Automerge.getActorId(s1)
         const s2 = Automerge.change(s1, {
@@ -819,6 +834,17 @@ describe('Automerge', () => {
         const s2 = Automerge.change(s1, doc => doc.recordings[0].increment(2))
         assert.deepStrictEqual(s2, {recordings: [new Automerge.Counter(3)]})
         assert.throws(() => { Automerge.change(s2, doc => doc.recordings.deleteAt(0)) }, /Unsupported operation/)
+      })
+
+      it('should allow putting multiple counters in a list', () => {
+        const s1 = Automerge.from({ counters: [ new Automerge.Counter(1), new Automerge.Counter(2) ] })
+        assert.deepStrictEqual(s1, {counters: [ new Automerge.Counter(1), new Automerge.Counter(2) ] })
+      })
+
+      it('should allow putting counters in a list with non counters', () => {
+        let date = new Date()
+        const s1 = Automerge.from({ counters: [ new Automerge.Counter(1), -1, new Automerge.Counter(2), 2.2, true, date ] })
+        assert.deepStrictEqual(s1, {counters: [ new Automerge.Counter(1), -1, new Automerge.Counter(2), 2.2, true, date ] })
       })
     })
   })

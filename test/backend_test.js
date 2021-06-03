@@ -491,7 +491,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'int', values: [1, 2, 3, 4, 5]}
           ]
         }}}}
       })
@@ -733,7 +733,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [], maxOp: 6, actor, seq: 1, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [1, 2, 3, 4, 5]}
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'int', values: [1, 2, 3, 4, 5]}
           ]
         }}}}
       })
