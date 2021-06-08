@@ -374,14 +374,28 @@ class Context {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
 
+    if (values.length === 0) {
+      return
+    }
+
     let elemId = getElemId(list, index, true)
     const allPrimitive = values.every(v => typeof v === 'string' || typeof v === 'number' ||
-                                      typeof v === 'boolean' || v === null)
+                                   typeof v === 'boolean' || v === null)
+    const allValueDescriptions = allPrimitive ? values.map(v => this.getValueDescription(v)) : []
+    const allDatatypesSame = allValueDescriptions.every(t => t.datatype === allValueDescriptions[0].datatype)
 
-    if (allPrimitive && values.length > 1) {
+    if (allPrimitive && allDatatypesSame && values.length > 1) {
       let nextElemId = this.nextOpId()
-      this.addOp({action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []})
-      subpatch.edits.push({action: 'multi-insert', elemId: nextElemId, index, values})
+      let datatype = allValueDescriptions[0].datatype
+      let values = allValueDescriptions.map(v => v.value)
+      let op = {action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []}
+      let edit = {action: 'multi-insert', elemId: nextElemId, index, values}
+      if (datatype) {
+        op.datatype = datatype
+        edit.datatype = datatype
+      }
+      this.addOp(op)
+      subpatch.edits.push(edit)
     } else {
       for (let offset = 0; offset < values.length; offset++) {
         let nextElemId = this.nextOpId()

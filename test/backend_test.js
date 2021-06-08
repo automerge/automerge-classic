@@ -479,11 +479,11 @@ describe('Automerge.Backend', () => {
       })
     })
 
-    it('should support inserting multiple elements in one op', () => {
+    it('should support inserting multiple elements in one op (int)', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, 2, 3,  4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -492,6 +492,78 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'int', values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op (bool)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [true, true, false, true, false]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [true, true, false, true, false]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op (null)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [null, null, null ]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 4, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [null, null, null ]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op (uint)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'uint', values: [1, 2, 3,  4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'uint', values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op (float64)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'float64', values: [1, 2, 3,  4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'float64', values: [1, 2, 3, 4, 5]}
           ]
         }}}}
       })
