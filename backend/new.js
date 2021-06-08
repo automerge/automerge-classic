@@ -1060,21 +1060,22 @@ function setupPatches(patches, objectIds, docState) {
  * object is mutated; all nested objects within it are treated as immutable.
  */
 function applyChanges(patches, changeBuffers, docState) {
-  let allObjectIds = {}, changeByHash = copyObject(docState.changeByHash)
-  let heads = {}, clock = copyObject(docState.clock)
+  let allObjectIds = {}, heads = {}, clock = copyObject(docState.clock)
   for (let head of docState.heads) heads[head] = true
 
-  let decodedChanges = []
+  let decodedChanges = [], changeHashes = {}
   for (let changeBuffer of changeBuffers) {
     const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
     decodedChanges.push(change)
+    changeHashes[change.hash] = true
 
     for (let dep of change.deps) {
       // TODO enqueue changes that are not yet causally ready rather than throwing an exception
-      if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
+      if (!docState.changeByHash[dep] && !changeHashes[dep]) {
+        throw new RangeError(`missing dependency ${dep}`)
+      }
       delete heads[dep]
     }
-    changeByHash[change.hash] = changeBuffer
     heads[change.hash] = true
 
     const expectedSeq = (clock[change.actor] || 0) + 1
@@ -1085,8 +1086,11 @@ function applyChanges(patches, changeBuffers, docState) {
 
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
     docState.allCols = getAllColumns(changeCols)
-    Object.assign(docState, getActorTable(docState.actorIds, change))
+    const {actorIds, actorTable} = getActorTable(docState.actorIds, change)
+    docState.actorIds = actorIds
+    docState.actorTable = actorTable
     const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
+
     const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
     for (let id of objectIds) allObjectIds[id] = true
     const lastOps = opSequences[opSequences.length - 1]
@@ -1101,7 +1105,6 @@ function applyChanges(patches, changeBuffers, docState) {
 
   setupPatches(patches, Object.keys(allObjectIds), docState)
 
-  docState.changeByHash = changeByHash
   docState.heads = Object.keys(heads).sort()
   docState.clock = clock
   return decodedChanges
@@ -1143,23 +1146,21 @@ class BackendDoc {
    * Makes a copy of this BackendDoc that can be independently modified.
    */
   clone() {
-    // It's sufficient to just copy the object's member variables because we don't mutate the
-    // contents of those variables (so no deep cloning is needed)
     let copy = new BackendDoc()
     copy.maxOp = this.maxOp
-    copy.changes = this.changes
-    copy.changeByHash = this.changeByHash
-    copy.actorIds = this.actorIds
-    copy.heads = this.heads
-    copy.clock = this.clock
-    copy.docColumns = this.docColumns
+    copy.changes = this.changes.slice()
+    copy.changeByHash = copyObject(this.changeByHash)
+    copy.actorIds = this.actorIds // immutable, no copying needed
+    copy.heads = this.heads // immutable, no copying needed
+    copy.clock = this.clock // immutable, no copying needed
+    copy.docColumns = this.docColumns // immutable, no copying needed
     copy.numOps = this.numOps
-    copy.objectMeta = this.objectMeta
+    copy.objectMeta = this.objectMeta // immutable, no copying needed
     return copy
   }
 
   /**
-   * Parses the change given as a Uint8Array in `changeBuffer`, and applies it to the current
+   * Parses the changes given as Uint8Arrays in `changeBuffers`, and applies them to the current
    * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
    * object is not modified.
    */
@@ -1176,24 +1177,26 @@ class BackendDoc {
       objectMeta: Object.assign({}, this.objectMeta),
       lastIndex: {}
     }
+
     const decodedChanges = applyChanges(patches, changeBuffers, docState)
 
-    // Update the document state at the end, so that if any of the earlier code throws an exception,
-    // the document is not modified (making `applyChanges` atomic in the ACID sense).
+    // Update the document state only if `applyChanges` does not throw an exception
+    let newChangesByHash = {}
+    for (let i = 0; i < decodedChanges.length; i++) {
+      const change = decodedChanges[i]
+      if (change.seq === 1) this.hashesByActor[change.actor] = []
+      this.hashesByActor[change.actor].push(change.hash)
+      this.changeByHash[change.hash] = changeBuffers[i]
+    }
+
+    this.changes.push(...changeBuffers)
     this.maxOp        = docState.maxOp
-    this.changes      = this.changes.concat(changeBuffers)
-    this.changeByHash = docState.changeByHash
     this.actorIds     = docState.actorIds
     this.heads        = docState.heads
     this.clock        = docState.clock
     this.docColumns   = docState.opsCols
     this.numOps       = docState.numOps
     this.objectMeta   = docState.objectMeta
-
-    for (let change of decodedChanges) {
-      if (change.seq === 1) this.hashesByActor[change.actor] = []
-      this.hashesByActor[change.actor].push(change.hash)
-    }
 
     let patch = {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
