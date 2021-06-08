@@ -589,33 +589,38 @@ class BackendDoc {
                               : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
                                            : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
 
+    // firstOp is true if the current operation is the first of a sequence of ops for the same key
+    const firstOp = !propState[elemId]
+    if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+
     // An operation is overwritten if it is a document operation that has at least one successor
     const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
-    if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+
+    // Record all visible values for the property, and whether it has any child object
+    if (!isOverwritten) {
+      propState[elemId].visibleOps.push(op)
+      propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
+    }
 
     // If one or more of the values of the property is a child object, we update objectMeta to store
     // all of the visible values of the property (even the non-child-object values). Then, when we
     // subsequently process an update within that child object, we can construct the patch to
     // contain the conflicting values.
-    if (!isOverwritten) {
-      propState[elemId].visibleOps.push(op)
-      propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
-
-      if (propState[elemId].hasChild) {
-        let values = {}
-        for (let visible of propState[elemId].visibleOps) {
-          const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
-          if (ACTIONS[visible[action]] === 'set') {
-            values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
-          } else if (visible[action] % 2 === 0) {
-            const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
-            values[opId] = emptyObjectPatch(opId, type)
-          }
+    const prevChildren = docState.objectMeta[objectId].children[elemId]
+    if (propState[elemId].hasChild || (prevChildren && Object.keys(prevChildren).length > 0)) {
+      let values = {}
+      for (let visible of propState[elemId].visibleOps) {
+        const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
+        if (ACTIONS[visible[action]] === 'set') {
+          values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
+        } else if (visible[action] % 2 === 0) {
+          const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
+          values[opId] = emptyObjectPatch(opId, type)
         }
-
-        // Copy so that objectMeta is not modified if an exception is thrown while applying change
-        deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
       }
+
+      // Copy so that objectMeta is not modified if an exception is thrown while applying change
+      deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
     }
 
     const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
@@ -714,7 +719,7 @@ class BackendDoc {
 
     } else {
       // Updating a map or table (with string key)
-      if (!patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
+      if (firstOp || !patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
       if (patchValue) patch.props[op[keyStr]][patchKey] = patchValue
     }
   }
@@ -1035,9 +1040,10 @@ class BackendDoc {
     for (let objectId of objectIds) {
       let meta = docState.objectMeta[objectId], childMeta = null, patchExists = false
       while (true) {
+        const hasChildren = childMeta && Object.keys(meta.children[childMeta.parentKey]).length > 0
         if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, meta.type)
 
-        if (childMeta) {
+        if (childMeta && hasChildren) {
           if (meta.type === 'list' || meta.type === 'text') {
             // In list/text objects, parentKey is an elemID. First see if it already appears in an edit
             for (let edit of patches[objectId].edits) {
@@ -1084,13 +1090,10 @@ class BackendDoc {
                 values[opId] = value
               }
             }
-            if (!values[childMeta.opId]) {
-              throw new RangeError(`object metadata did not contain child entry for ${childMeta.opId}`)
-            }
           }
         }
 
-        if (patchExists || !meta.parentObj) break
+        if (patchExists || !meta.parentObj || (childMeta && !hasChildren)) break
         childMeta = meta
         objectId = meta.parentObj
         meta = docState.objectMeta[objectId]
