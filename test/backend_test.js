@@ -605,7 +605,7 @@ describe('Automerge.Backend', () => {
       })
     })
 
-    it('should thorw an error if the datatype does not match the values', () => {
+    it('should throw an error if the datatype does not match the values', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
