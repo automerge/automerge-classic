@@ -21,19 +21,6 @@ class Uint {
   }
 }
 
-class Float32 {
-  constructor(value) {
-    if (typeof value !== 'number') {
-      throw new RangeError(`Value ${value} cannot be a float32`)
-    }
-    const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
-    view32.setFloat32(0, value, true)
-    this.value = view32.getFloat32(0, true)
-    Object.freeze(this)
-  }
-}
-
-
 class Float64 {
   constructor(value) {
     if (typeof value !== 'number') {
@@ -44,4 +31,4 @@ class Float64 {
   }
 }
 
-module.exports = { Int, Uint, Float32, Float64 }
+module.exports = { Int, Uint, Float64 }

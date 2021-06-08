@@ -255,11 +255,6 @@ function getNumberTypeAndValue(op) {
       return [ VALUE_TYPE.LEB128_UINT, op.value ]
     case "int":
       return [ VALUE_TYPE.LEB128_INT, op.value ]
-    case "float32": {
-      const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
-      view32.setFloat32(0, op.value, true) // true means little-endian
-      return [ VALUE_TYPE.IEEE754, new Uint8Array(buf32) ]
-    }
     case "float64": {
       const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
       view64.setFloat64(0, op.value, true)
@@ -338,9 +333,7 @@ function decodeValue(sizeTag, bytes) {
       return {value: new Decoder(bytes).readInt53(), datatype: "int"}
     } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-      if (bytes.byteLength === 4) {
-        return {value: view.getFloat32(0, true), datatype: "float32"} // true means little-endian
-      } else if (bytes.byteLength === 8) {
+      if (bytes.byteLength === 8) {
         return {value: view.getFloat64(0, true), datatype: "float64"}
       } else {
         throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)

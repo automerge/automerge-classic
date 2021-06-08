@@ -7,7 +7,7 @@ const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
-const { Float32, Float64, Int, Uint } = require('./numbers')
+const { Float64, Int, Uint } = require('./numbers')
 const { Observable } = require('./observable')
 
 /**
@@ -412,5 +412,5 @@ module.exports = {
   init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
-  Text, Table, Counter, Observable, Float32, Float64, Int, Uint
+  Text, Table, Counter, Observable, Float64, Int, Uint
 }

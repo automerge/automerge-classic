@@ -3,7 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
-const { Int, Uint, Float32, Float64 } = require('./numbers')
+const { Int, Uint, Float64 } = require('./numbers')
 const { isObject, parseOpId } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -64,8 +64,6 @@ class Context {
         return {type: 'value', value: value.value, datatype: 'int'}
       } else if (value instanceof Uint) {
         return {type: 'value', value: value.value, datatype: 'uint'}
-      } else if (value instanceof Float32) {
-        return {type: 'value', value: value.value, datatype: 'float32'}
       } else if (value instanceof Float64) {
         return {type: 'value', value: value.value, datatype: 'float64'}
       } else if (value instanceof Counter) {
@@ -297,7 +295,7 @@ class Context {
       throw new RangeError('The key of a map entry must not be an empty string')
     }
 
-    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter) && !(value instanceof Int) && !(value instanceof Uint) && !(value instanceof Float32) && !(value instanceof Float64)) {
+    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter) && !(value instanceof Int) && !(value instanceof Uint) && !(value instanceof Float64)) {
       // Nested object (map, list, text, or table)
       return this.createNestedObjects(objectId, key, value, insert, pred, elemId)
     } else {

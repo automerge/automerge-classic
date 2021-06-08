@@ -786,14 +786,6 @@ describe('Automerge', () => {
         const change = decodeChange(binChange)
         assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'int', insert: false, key: 'number', obj: '_root', pred: [], value: -1 })
       })
-      it.skip('float32 can be specificed manually', () => {
-        // this does not work on wasm - 3.3 is able to round trip
-        const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Float32(3.3))
-        const binChange = Automerge.getLastLocalChange(s1)
-        const change = decodeChange(binChange)
-        assert.notEqual(change.ops[0].value, 3.3)
-        assert.deepStrictEqual(change.ops[0], { action: 'set', datatype: 'float32', insert: false, key: 'number', obj: '_root', pred: [], value: s1.number })
-      })
       it('float64 can be specificed manually', () => {
         const s1 = Automerge.change(Automerge.init(), doc => doc.number = new Automerge.Float64(3))
         const binChange = Automerge.getLastLocalChange(s1)
