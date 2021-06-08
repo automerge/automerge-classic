@@ -569,6 +569,42 @@ describe('Automerge.Backend', () => {
       })
     })
 
+    it('should support inserting multiple elements in one op (timestamp)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'timestamp', values: [1, 2, 3,  4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'timestamp', values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one op (counter)', () => {
+      const actor = uuid()
+      const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'counter', values: [1, 2, 3,  4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 6, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'counter', values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
     it('should thorw an error if the datatype does not match the values', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
