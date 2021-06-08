@@ -1,4 +1,4 @@
-const { parseOpId } = require('../src/common')
+const { parseOpId, copyObject } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   encodeChange, decodeChangeColumns, decodeChanges, decodeDocumentHeader, encodeDocument,
@@ -518,6 +518,596 @@ function convertInsertToUpdate(edits, index, elemId) {
   }
 }
 
+/**
+ * Updates `patches` to reflect the operation `op` within the document with state `docState`.
+ * `ops` is the operation sequence (as per `groupRelatedOps`) that we're currently processing.
+ * Can be called multiple times if there are multiple operations for the same property (e.g. due
+ * to a conflict). `propState` is an object that carries over state between such successive
+ * invocations for the same property. If the current object is a list, `listIndex` is the index
+ * into that list (counting only visible elements). If the operation `op` was already previously
+ * in the document, `oldSuccNum` is the value of `op[succNum]` before the current change was
+ * applied (allowing us to determine whether this operation was overwritten or deleted in the
+ * current change). `oldSuccNum` must be undefined if the operation came from the current change.
+ */
+function updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
+  // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
+  const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8, // eslint-disable-line
+    valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15 // eslint-disable-line
+
+  const objectId = ops.objId
+  const elemId = op[keyStr] ? op[keyStr]
+                            : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+                                         : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
+
+  // firstOp is true if the current operation is the first of a sequence of ops for the same key
+  const firstOp = !propState[elemId]
+  if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+
+  // An operation is overwritten if it is a document operation that has at least one successor
+  const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
+
+  // Record all visible values for the property, and whether it has any child object
+  if (!isOverwritten) {
+    propState[elemId].visibleOps.push(op)
+    propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
+  }
+
+  // If one or more of the values of the property is a child object, we update objectMeta to store
+  // all of the visible values of the property (even the non-child-object values). Then, when we
+  // subsequently process an update within that child object, we can construct the patch to
+  // contain the conflicting values.
+  const prevChildren = docState.objectMeta[objectId].children[elemId]
+  if (propState[elemId].hasChild || (prevChildren && Object.keys(prevChildren).length > 0)) {
+    let values = {}
+    for (let visible of propState[elemId].visibleOps) {
+      const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
+      if (ACTIONS[visible[action]] === 'set') {
+        values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
+      } else if (visible[action] % 2 === 0) {
+        const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
+        values[opId] = emptyObjectPatch(opId, type)
+      }
+    }
+
+    // Copy so that objectMeta is not modified if an exception is thrown while applying change
+    deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
+  }
+
+  const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+  let patchKey, patchValue
+
+  // For counters, increment operations are succs to the set operation that created the counter,
+  // but in this case we want to add the values rather than overwriting them.
+  if (isOverwritten && ACTIONS[op[action]] === 'set' && (op[valLen] & 0x0f) === VALUE_TYPE.COUNTER) {
+    // This is the initial set operation that creates a counter. Initialise the counter state
+    // to contain all successors of the set operation. Only if we later find that each of these
+    // successor operations is an increment, we make the counter visible in the patch.
+    if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
+    if (!propState[elemId].counterStates) propState[elemId].counterStates = {}
+    let counterStates = propState[elemId].counterStates
+    let counterState = {opId, value: decodeValue(op[valLen], op[valRaw]).value, succs: {}}
+
+    for (let i = 0; i < op[succNum]; i++) {
+      const succOp = `${op[succCtr][i]}@${docState.actorIds[op[succActor][i]]}`
+      counterStates[succOp] = counterState
+      counterState.succs[succOp] = true
+    }
+
+  } else if (ACTIONS[op[action]] === 'inc') {
+    // Incrementing a previously created counter.
+    if (!propState[elemId] || !propState[elemId].counterStates || !propState[elemId].counterStates[opId]) {
+      throw new RangeError(`increment operation ${opId} for unknown counter`)
+    }
+    let counterState = propState[elemId].counterStates[opId]
+    counterState.value += decodeValue(op[valLen], op[valRaw]).value
+    delete counterState.succs[opId]
+
+    if (Object.keys(counterState.succs).length === 0) {
+      patchKey = counterState.opId
+      patchValue = {type: 'value', datatype: 'counter', value: counterState.value}
+      // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
+    }
+
+  } else if (!isOverwritten) {
+    // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
+    if (ACTIONS[op[action]] === 'set') {
+      patchKey = opId
+      patchValue = Object.assign({type: 'value'}, decodeValue(op[valLen], op[valRaw]))
+    } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
+      if (!patches[opId]) {
+        const type = op[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[action]]] : null
+        patches[opId] = emptyObjectPatch(opId, type)
+      }
+      patchKey = opId
+      patchValue = patches[opId]
+    }
+  }
+
+  if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, docState.objectMeta[objectId].type)
+  const patch = patches[objectId]
+
+  // Updating a list or text object (with elemId key)
+  if (op[keyStr] === null) {
+    // If we come across any document op that was previously non-overwritten/non-deleted, that
+    // means the current list element already had a value before this change was applied, and
+    // therefore the current element cannot be an insert. If we already registered an insert, we
+    // have to convert it into an update.
+    if (oldSuccNum === 0 && propState[elemId].action === 'insert') {
+      propState[elemId].action = 'update'
+      convertInsertToUpdate(patch.edits, listIndex, elemId)
+    }
+
+    if (patchValue) {
+      // If the op has a non-overwritten value and it came from the change, it's an insert.
+      // (It's not necessarily the case that op[insert] is true: if a list element is concurrently
+      // deleted and updated, the node that first processes the deletion and then the update will
+      // observe the update as a re-insertion of the deleted list element.)
+      if (oldSuccNum === undefined && !propState[elemId].action) {
+        propState[elemId].action = 'insert'
+        appendEdit(patch.edits, {action: 'insert', index: listIndex, elemId, opId: patchKey, value: patchValue})
+
+      // If the property has a value and it's not an insert, then it must be an update.
+      // We might have previously registered it as a remove, in which case we convert it to update.
+      } else if (propState[elemId].action === 'remove') {
+        let lastEdit = patch.edits[patch.edits.length - 1]
+        if (lastEdit.action !== 'remove') throw new RangeError('last edit has unexpected type')
+        if (lastEdit.count > 1) lastEdit.count -= 1; else patch.edits.pop()
+        propState[elemId].action = 'update'
+        appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, true)
+
+      } else {
+        // A 'normal' update
+        appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, !propState[elemId].action)
+        if (!propState[elemId].action) propState[elemId].action = 'update'
+      }
+
+    } else if (oldSuccNum === 0 && !propState[elemId].action) {
+      // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
+      propState[elemId].action = 'remove'
+      appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
+    }
+
+  } else {
+    // Updating a map or table (with string key)
+    if (firstOp || !patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
+    if (patchValue) patch.props[op[keyStr]][patchKey] = patchValue
+  }
+}
+
+/**
+ * Applies a sequence of change operations to the document. `changeCols` contains the columns of
+ * the change. Assumes that the decoders of both sets of columns are at the position where we want
+ * to start merging. `patches` is mutated to reflect the effect of the change operations. `ops` is
+ * the operation sequence to apply (as decoded by `groupRelatedOps()`). `docState` is as
+ * documented in `applyOps()`. If the operations are updating a list or text object, `listIndex`
+ * is the number of visible elements that precede the position at which we start merging.
+ */
+function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
+  // Check the first couple of columns are in the positions where we expect them to be
+  const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
+    valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
+  if (docState.opsCols[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
+      docState.opsCols[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
+      docState.opsCols[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
+      docState.opsCols[keyCtr   ].columnId !== DOC_OPS_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
+      docState.opsCols[keyStr   ].columnId !== DOC_OPS_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
+      docState.opsCols[idActor  ].columnId !== DOC_OPS_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
+      docState.opsCols[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
+      docState.opsCols[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
+      docState.opsCols[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
+      docState.opsCols[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
+      docState.opsCols[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
+      docState.opsCols[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
+      docState.opsCols[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
+      docState.opsCols[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
+    throw new RangeError('unexpected columnId')
+  }
+
+  let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
+  let foundListElem = false, elemVisible = false, propState = {}
+  let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
+  let docOpsConsumed = (docOp === null ? 0 : 1)
+  let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
+  let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
+
+  // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
+  // At each iteration, we either output the doc's op (possibly updated based on the change's ops)
+  // or output an op from the change.
+  while (true) {
+    // Read operations from the change, and fill the array `changeOps` with all the operations
+    // that pertain to the same property (the same key or list element). If the operation
+    // sequence consists of consecutive list insertions, `changeOps` contains all of the ops.
+    if (changeOps.length === 0) {
+      foundListElem = false
+      while (changeOps.length === 0 || ops.insert ||
+             (nextChangeOp[keyStr] !== null && nextChangeOp[keyStr] === changeOps[0][keyStr]) ||
+             (nextChangeOp[keyStr] === null && nextChangeOp[keyActor] === changeOps[0][keyActor] &&
+              nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
+        if (nextChangeOp !== null) {
+          changeOps.push(nextChangeOp)
+          predSeen.push(new Array(nextChangeOp[predNum]))
+        }
+        if (opCount === 0) {
+          nextChangeOp = null
+          break
+        }
+
+        nextChangeOp = readOperation(changeCols, docState.actorTable)
+        nextChangeOp[idActor] = ops.idActorIndex
+        nextChangeOp[idCtr] = opIdCtr
+        opCount--
+        opIdCtr++
+      }
+    }
+
+    if (changeOps.length > 0) changeOp = changeOps[0]
+    const inCorrectObject = docOp && docOp[objActor] === changeOp[objActor] && docOp[objCtr] === changeOp[objCtr]
+    const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
+    const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
+      ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
+        (docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
+
+    // We keep going until we run out of ops in the change, except that even when we run out, we
+    // keep going until we have processed all doc ops for the current key/list element.
+    if (changeOps.length === 0 && !(inCorrectObject && (keyMatches || listElemMatches))) break
+
+    let takeDocOp = false, takeChangeOps = 0
+
+    // The change operations come first if we are inserting list elements (seekToOp already
+    // determines the correct insertion position), if there is no document operation, if the next
+    // document operation is for a different object, or if the change op's string key is
+    // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
+    if (ops.insert || !inCorrectObject ||
+        (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
+        (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
+      // Take the operations from the change
+      takeChangeOps = changeOps.length
+      if (!inCorrectObject && !foundListElem && changeOp[keyStr] === null && !changeOp[insert]) {
+        // This can happen if we first update one list element, then another one earlier in the
+        // list. That is not allowed: list element updates must occur in ascending order.
+        throw new RangeError("could not find list element with ID: " +
+                             `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
+      }
+
+    } else if (keyMatches || listElemMatches || foundListElem) {
+      // The doc operation is for the same key or list element in the same object as the change
+      // ops, so we merge them. First, if any of the change ops' `pred` matches the opId of the
+      // document operation, we update the document operation's `succ` accordingly.
+      for (let opIndex = 0; opIndex < changeOps.length; opIndex++) {
+        const op = changeOps[opIndex]
+        for (let i = 0; i < op[predNum]; i++) {
+          if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
+            // Insert into the doc op's succ list such that the lists remains sorted
+            let j = 0
+            while (j < docOp[succNum] && (docOp[succCtr][j] < op[idCtr] ||
+                   docOp[succCtr][j] === op[idCtr] && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
+            docOp[succCtr].splice(j, 0, op[idCtr])
+            docOp[succActor].splice(j, 0, ops.idActorIndex)
+            docOp[succNum]++
+            predSeen[opIndex][i] = true
+            break
+          }
+        }
+      }
+
+      if (listElemMatches) foundListElem = true
+
+      if (foundListElem && !listElemMatches) {
+        // If the previous docOp was for the correct list element, and the current docOp is for
+        // the wrong list element, then place the current changeOp before the docOp.
+        takeChangeOps = changeOps.length
+
+      } else if (changeOps.length === 0 || docOp[idCtr] < changeOp[idCtr] ||
+          (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] < ops.idActor)) {
+        // When we have several operations for the same object and the same key, we want to keep
+        // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
+        // output it first.
+        takeDocOp = true
+        updatePatchProperty(patches, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
+
+        // A deletion op in the change is represented in the document only by its entries in the
+        // succ list of the operations it overwrites; it has no separate row in the set of ops.
+        for (let i = changeOps.length - 1; i >= 0; i--) {
+          let deleted = true
+          for (let j = 0; j < changeOps[i][predNum]; j++) {
+            if (!predSeen[i][j]) deleted = false
+          }
+          if (ACTIONS[changeOps[i][action]] === 'del' && deleted) {
+            changeOps.splice(i, 1)
+            predSeen.splice(i, 1)
+          }
+        }
+
+      } else if (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] === ops.idActor) {
+        throw new RangeError(`duplicate operation ID: ${changeOp[idCtr]}@${ops.idActor}`)
+      } else {
+        // The changeOp has the lower opId, so we output it first.
+        takeChangeOps = 1
+      }
+    } else {
+      // The document operation comes first if its string key is lexicographically first, or if
+      // we're using opId keys and the keys don't match (i.e. we scan the document until we find a
+      // matching key).
+      takeDocOp = true
+    }
+
+    if (takeDocOp) {
+      appendOperation(outCols, docState.opsCols, docOp)
+      if (docOp[insert] && elemVisible) {
+        elemVisible = false
+        listIndex++
+      }
+      if (docOp[succNum] === 0) elemVisible = true
+      opsAppended++
+      docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
+      if (docOp !== null) {
+        docOpsConsumed++
+        docOpOldSuccNum = docOp[succNum]
+      }
+    }
+
+    if (takeChangeOps > 0) {
+      for (let i = 0; i < takeChangeOps; i++) {
+        let op = changeOps[i]
+        // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
+        // the change op's own opId, so we must have seen them already)
+        for (let j = 0; j < op[predNum]; j++) {
+          if (!predSeen[i][j]) {
+            throw new RangeError(`no matching operation for pred: ${op[predCtr][j]}@${docState.actorIds[op[predActor][j]]}`)
+          }
+        }
+        updatePatchProperty(patches, ops, op, docState, propState, listIndex)
+        appendOperation(outCols, changeCols, op)
+        if (op[insert]) {
+          elemVisible = false
+          listIndex++
+        } else {
+          elemVisible = true
+        }
+      }
+
+      if (takeChangeOps === changeOps.length) {
+        changeOps.length = 0
+        predSeen.length = 0
+      } else {
+        changeOps.splice(0, takeChangeOps)
+        predSeen.splice(0, takeChangeOps)
+      }
+      opsAppended += takeChangeOps
+    }
+  }
+
+  if (docOp) {
+    appendOperation(outCols, docState.opsCols, docOp)
+    opsAppended++
+  }
+  return {opsAppended, docOpsConsumed}
+}
+
+/**
+ * Applies the operation sequence in `ops` (as produced by `groupRelatedOps()`) from the change
+ * with columns `changeCols` to the document `docState`. `docState` is an object with keys:
+ *   - `actorIds` is an array of actorIds (as hex strings) occurring in the document (values in
+ *     the document's objActor/keyActor/idActor/... columns are indexes into this array).
+ *   - `actorTable` is an array of integers where `actorTable[i]` contains the document's actor
+ *     index for the actor that has index `i` in the change (`i == 0` is the author of the change).
+ *   - `allCols` is an array of all the columnIds in either the document or the change.
+ *   - `opsCols` is an array of columns containing the operations in the document.
+ *   - `numOps` is an integer, the number of operations in the document.
+ *   - `objectMeta` is a map from objectId to metadata about that object.
+ *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
+ *     accessed in that object. This is used to check that accesses occur in ascending order
+ *     (which makes it easier to generate patches for lists).
+ *
+ * `docState` is mutated to contain the updated document state.
+ * `patches` is a patch object that is mutated to reflect the operations applied by this function.
+ */
+function applyOps(patches, ops, changeCols, docState) {
+  for (let col of docState.opsCols) col.decoder.reset()
+  const {skipCount, visibleCount} = seekToOp(ops, docState.opsCols, docState.actorIds)
+  if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
+    throw new RangeError('list element accesses must occur in ascending order')
+  }
+  docState.lastIndex[ops.objId] = visibleCount
+  for (let col of docState.opsCols) col.decoder.reset()
+
+  let outCols = docState.allCols.map(columnId => ({columnId, encoder: encoderByColumnId(columnId)}))
+  copyColumns(outCols, docState.opsCols, skipCount)
+  const {opsAppended, docOpsConsumed} = mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount)
+  copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)
+  for (let col of docState.opsCols) {
+    if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
+  }
+
+  docState.opsCols = outCols.map(col => {
+    const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
+    return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
+  })
+  docState.numOps = docState.numOps + opsAppended - docOpsConsumed
+}
+
+/**
+ * Takes `changeCols`, a list of `{columnId, columnName, decoder}` objects for a change, and
+ * checks that it has the expected structure. Returns an array of column IDs (integers) of the
+ * columns that occur either in the document or in the change.
+ */
+function getAllColumns(changeCols) {
+  const expectedCols = [
+    'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
+    'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr'
+  ]
+  let allCols = {}
+  for (let i = 0; i < expectedCols.length; i++) {
+    if (changeCols[i].columnName !== expectedCols[i]) {
+      throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${changeCols[i].columnName}`)
+    }
+  }
+  for (let col of changeCols) allCols[col.columnId] = true
+  for (let columnId of Object.values(DOC_OPS_COLUMNS)) allCols[columnId] = true
+
+  // Final document should contain any columns in either the document or the change, except for
+  // pred, since the document encoding uses succ instead of pred
+  delete allCols[CHANGE_COLUMNS.predNum]
+  delete allCols[CHANGE_COLUMNS.predActor]
+  delete allCols[CHANGE_COLUMNS.predCtr]
+  return Object.keys(allCols).map(id => parseInt(id, 10)).sort((a, b) => a - b)
+}
+
+/**
+ * Takes a decoded change header, including an array of actorIds. Returns an object of the form
+ * `{actorIds, actorTable}`, where `actorIds` is an updated array of actorIds appearing in the
+ * document (including the new change's actorId), and `actorTable` is an array for translating
+ * the change's actor indexes into the document's actor indexes.
+ */
+function getActorTable(actorIds, change) {
+  if (actorIds.indexOf(change.actorIds[0]) < 0) {
+    if (change.seq !== 1) {
+      throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
+    }
+    // Use concat, not push, so that the original array is not mutated
+    actorIds = actorIds.concat([change.actorIds[0]])
+  }
+  const actorTable = [] // translate from change's actor index to doc's actor index
+  for (let actorId of change.actorIds) {
+    const index = actorIds.indexOf(actorId)
+    if (index < 0) {
+      throw new RangeError(`actorId ${actorId} is not known to document`)
+    }
+    actorTable.push(index)
+  }
+  return {actorIds, actorTable}
+}
+
+/**
+ * Finalises the patch for a change. `patches` is a map from objectIds to patch for that
+ * particular object, `objectIds` is the array of IDs of objects that are created or updated in the
+ * change, and `docState` is an object containing various bits of document state, including
+ * `objectMeta`, a map from objectIds to metadata about that object (such as its parent in the
+ * document tree). Mutates `patches` such that child objects are linked into their parent object,
+ * all the way to the root object.
+ */
+function setupPatches(patches, objectIds, docState) {
+  for (let objectId of objectIds) {
+    let meta = docState.objectMeta[objectId], childMeta = null, patchExists = false
+    while (true) {
+      const hasChildren = childMeta && Object.keys(meta.children[childMeta.parentKey]).length > 0
+      if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, meta.type)
+
+      if (childMeta && hasChildren) {
+        if (meta.type === 'list' || meta.type === 'text') {
+          // In list/text objects, parentKey is an elemID. First see if it already appears in an edit
+          for (let edit of patches[objectId].edits) {
+            if (edit.opId && meta.children[childMeta.parentKey][edit.opId]) {
+              patchExists = true
+            }
+          }
+
+          // If we need to add an edit, we first have to translate the elemId into an index
+          if (!patchExists) {
+            const obj = parseOpId(objectId), elem = parseOpId(childMeta.parentKey)
+            const seekPos = {
+              objActor: obj.actorId,  objCtr: obj.counter,
+              keyActor: elem.actorId, keyCtr: elem.counter,
+              keyStr:   null,         insert: false
+            }
+            const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
+
+            for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
+              let patchValue = value
+              if (value.objectId) {
+                if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
+                patchValue = patches[value.objectId]
+              }
+              const edit = {action: 'update', index: visibleCount, opId, value: patchValue}
+              appendEdit(patches[objectId].edits, edit)
+            }
+          }
+
+        } else {
+          // Non-list object: parentKey is the name of the property being updated (a string)
+          if (!patches[objectId].props[childMeta.parentKey]) {
+            patches[objectId].props[childMeta.parentKey] = {}
+          }
+          let values = patches[objectId].props[childMeta.parentKey]
+
+          for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
+            if (values[opId]) {
+              patchExists = true
+            } else if (value.objectId) {
+              if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
+              values[opId] = patches[value.objectId]
+            } else {
+              values[opId] = value
+            }
+          }
+        }
+      }
+
+      if (patchExists || !meta.parentObj || (childMeta && !hasChildren)) break
+      childMeta = meta
+      objectId = meta.parentObj
+      meta = docState.objectMeta[objectId]
+    }
+  }
+  return patches
+}
+
+/**
+ * Takes an array of binary-encoded changes (`changeBuffers`) and applies them to a document.
+ * `docState` contains a bunch of fields describing the document state. This function returns an
+ * array of decoded change headers, mutates `docState` to contain the updated document state, and
+ * mutates `patches` to contain a patch to return to the frontend. Only the top-level `docState`
+ * object is mutated; all nested objects within it are treated as immutable.
+ */
+function applyChanges(patches, changeBuffers, docState) {
+  let allObjectIds = {}, changeByHash = copyObject(docState.changeByHash)
+  let heads = {}, clock = copyObject(docState.clock)
+  for (let head of docState.heads) heads[head] = true
+
+  let decodedChanges = []
+  for (let changeBuffer of changeBuffers) {
+    const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
+    decodedChanges.push(change)
+
+    for (let dep of change.deps) {
+      // TODO enqueue changes that are not yet causally ready rather than throwing an exception
+      if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
+      delete heads[dep]
+    }
+    changeByHash[change.hash] = changeBuffer
+    heads[change.hash] = true
+
+    const expectedSeq = (clock[change.actor] || 0) + 1
+    if (change.seq !== expectedSeq) {
+      throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+    }
+    clock[change.actor] = change.seq
+
+    const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+    docState.allCols = getAllColumns(changeCols)
+    Object.assign(docState, getActorTable(docState.actorIds, change))
+    const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
+    const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
+    for (let id of objectIds) allObjectIds[id] = true
+    const lastOps = opSequences[opSequences.length - 1]
+    if (lastOps) docState.maxOp = Math.max(docState.maxOp, lastOps.idCtr + lastOps.consecutiveOps - 1)
+
+    for (let col of changeCols) col.decoder.reset()
+    for (let op of opSequences) {
+      op.idActorIndex = actorIndex
+      applyOps(patches, op, changeCols, docState)
+    }
+  }
+
+  setupPatches(patches, Object.keys(allObjectIds), docState)
+
+  docState.changeByHash = changeByHash
+  docState.heads = Object.keys(heads).sort()
+  docState.clock = clock
+  return decodedChanges
+}
+
+
 class BackendDoc {
   constructor(buffer) {
     this.maxOp = 0
@@ -569,540 +1159,6 @@ class BackendDoc {
   }
 
   /**
-   * Updates `patches` to reflect the operation `op` within the document with state `docState`.
-   * `ops` is the operation sequence (as per `groupRelatedOps`) that we're currently processing.
-   * Can be called multiple times if there are multiple operations for the same property (e.g. due
-   * to a conflict). `propState` is an object that carries over state between such successive
-   * invocations for the same property. If the current object is a list, `listIndex` is the index
-   * into that list (counting only visible elements). If the operation `op` was already previously
-   * in the document, `oldSuccNum` is the value of `op[succNum]` before the current change was
-   * applied (allowing us to determine whether this operation was overwritten or deleted in the
-   * current change). `oldSuccNum` must be undefined if the operation came from the current change.
-   */
-  updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
-    // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
-    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8, // eslint-disable-line
-      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15 // eslint-disable-line
-
-    const objectId = ops.objId
-    const elemId = op[keyStr] ? op[keyStr]
-                              : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-                                           : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
-
-    // firstOp is true if the current operation is the first of a sequence of ops for the same key
-    const firstOp = !propState[elemId]
-    if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
-
-    // An operation is overwritten if it is a document operation that has at least one successor
-    const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
-
-    // Record all visible values for the property, and whether it has any child object
-    if (!isOverwritten) {
-      propState[elemId].visibleOps.push(op)
-      propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
-    }
-
-    // If one or more of the values of the property is a child object, we update objectMeta to store
-    // all of the visible values of the property (even the non-child-object values). Then, when we
-    // subsequently process an update within that child object, we can construct the patch to
-    // contain the conflicting values.
-    const prevChildren = docState.objectMeta[objectId].children[elemId]
-    if (propState[elemId].hasChild || (prevChildren && Object.keys(prevChildren).length > 0)) {
-      let values = {}
-      for (let visible of propState[elemId].visibleOps) {
-        const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
-        if (ACTIONS[visible[action]] === 'set') {
-          values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
-        } else if (visible[action] % 2 === 0) {
-          const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
-          values[opId] = emptyObjectPatch(opId, type)
-        }
-      }
-
-      // Copy so that objectMeta is not modified if an exception is thrown while applying change
-      deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
-    }
-
-    const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-    let patchKey, patchValue
-
-    // For counters, increment operations are succs to the set operation that created the counter,
-    // but in this case we want to add the values rather than overwriting them.
-    if (isOverwritten && ACTIONS[op[action]] === 'set' && (op[valLen] & 0x0f) === VALUE_TYPE.COUNTER) {
-      // This is the initial set operation that creates a counter. Initialise the counter state
-      // to contain all successors of the set operation. Only if we later find that each of these
-      // successor operations is an increment, we make the counter visible in the patch.
-      if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
-      if (!propState[elemId].counterStates) propState[elemId].counterStates = {}
-      let counterStates = propState[elemId].counterStates
-      let counterState = {opId, value: decodeValue(op[valLen], op[valRaw]).value, succs: {}}
-
-      for (let i = 0; i < op[succNum]; i++) {
-        const succOp = `${op[succCtr][i]}@${docState.actorIds[op[succActor][i]]}`
-        counterStates[succOp] = counterState
-        counterState.succs[succOp] = true
-      }
-
-    } else if (ACTIONS[op[action]] === 'inc') {
-      // Incrementing a previously created counter.
-      if (!propState[elemId] || !propState[elemId].counterStates || !propState[elemId].counterStates[opId]) {
-        throw new RangeError(`increment operation ${opId} for unknown counter`)
-      }
-      let counterState = propState[elemId].counterStates[opId]
-      counterState.value += decodeValue(op[valLen], op[valRaw]).value
-      delete counterState.succs[opId]
-
-      if (Object.keys(counterState.succs).length === 0) {
-        patchKey = counterState.opId
-        patchValue = {type: 'value', datatype: 'counter', value: counterState.value}
-        // TODO if the counter is in a list element, we need to add a 'remove' action when deleted
-      }
-
-    } else if (!isOverwritten) {
-      // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
-      if (ACTIONS[op[action]] === 'set') {
-        patchKey = opId
-        patchValue = Object.assign({type: 'value'}, decodeValue(op[valLen], op[valRaw]))
-      } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
-        if (!patches[opId]) {
-          const type = op[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[action]]] : null
-          patches[opId] = emptyObjectPatch(opId, type)
-        }
-        patchKey = opId
-        patchValue = patches[opId]
-      }
-    }
-
-    if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, docState.objectMeta[objectId].type)
-    const patch = patches[objectId]
-
-    // Updating a list or text object (with elemId key)
-    if (op[keyStr] === null) {
-      // If we come across any document op that was previously non-overwritten/non-deleted, that
-      // means the current list element already had a value before this change was applied, and
-      // therefore the current element cannot be an insert. If we already registered an insert, we
-      // have to convert it into an update.
-      if (oldSuccNum === 0 && propState[elemId].action === 'insert') {
-        propState[elemId].action = 'update'
-        convertInsertToUpdate(patch.edits, listIndex, elemId)
-      }
-
-      if (patchValue) {
-        // If the op has a non-overwritten value and it came from the change, it's an insert.
-        // (It's not necessarily the case that op[insert] is true: if a list element is concurrently
-        // deleted and updated, the node that first processes the deletion and then the update will
-        // observe the update as a re-insertion of the deleted list element.)
-        if (oldSuccNum === undefined && !propState[elemId].action) {
-          propState[elemId].action = 'insert'
-          appendEdit(patch.edits, {action: 'insert', index: listIndex, elemId, opId: patchKey, value: patchValue})
-
-        // If the property has a value and it's not an insert, then it must be an update.
-        // We might have previously registered it as a remove, in which case we convert it to update.
-        } else if (propState[elemId].action === 'remove') {
-          let lastEdit = patch.edits[patch.edits.length - 1]
-          if (lastEdit.action !== 'remove') throw new RangeError('last edit has unexpected type')
-          if (lastEdit.count > 1) lastEdit.count -= 1; else patch.edits.pop()
-          propState[elemId].action = 'update'
-          appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, true)
-
-        } else {
-          // A 'normal' update
-          appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, !propState[elemId].action)
-          if (!propState[elemId].action) propState[elemId].action = 'update'
-        }
-
-      } else if (oldSuccNum === 0 && !propState[elemId].action) {
-        // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
-        propState[elemId].action = 'remove'
-        appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
-      }
-
-    } else {
-      // Updating a map or table (with string key)
-      if (firstOp || !patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
-      if (patchValue) patch.props[op[keyStr]][patchKey] = patchValue
-    }
-  }
-
-  /**
-   * Applies a sequence of change operations to the document. `changeCols` contains the columns of
-   * the change. Assumes that the decoders of both sets of columns are at the position where we want
-   * to start merging. `patches` is mutated to reflect the effect of the change operations. `ops` is
-   * the operation sequence to apply (as decoded by `groupRelatedOps()`). `docState` is as
-   * documented in `applyOps()`. If the operations are updating a list or text object, `listIndex`
-   * is the number of visible elements that precede the position at which we start merging.
-   */
-  mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
-    // Check the first couple of columns are in the positions where we expect them to be
-    const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
-      valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
-    if (docState.opsCols[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
-        docState.opsCols[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
-        docState.opsCols[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
-        docState.opsCols[keyCtr   ].columnId !== DOC_OPS_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
-        docState.opsCols[keyStr   ].columnId !== DOC_OPS_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
-        docState.opsCols[idActor  ].columnId !== DOC_OPS_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
-        docState.opsCols[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
-        docState.opsCols[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
-        docState.opsCols[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
-        docState.opsCols[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
-        docState.opsCols[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
-        docState.opsCols[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
-        docState.opsCols[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
-        docState.opsCols[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
-      throw new RangeError('unexpected columnId')
-    }
-
-    let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
-    let foundListElem = false, elemVisible = false, propState = {}
-    let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
-    let docOpsConsumed = (docOp === null ? 0 : 1)
-    let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
-    let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
-
-    // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
-    // At each iteration, we either output the doc's op (possibly updated based on the change's ops)
-    // or output an op from the change.
-    while (true) {
-      // Read operations from the change, and fill the array `changeOps` with all the operations
-      // that pertain to the same property (the same key or list element). If the operation
-      // sequence consists of consecutive list insertions, `changeOps` contains all of the ops.
-      if (changeOps.length === 0) {
-        foundListElem = false
-        while (changeOps.length === 0 || ops.insert ||
-               (nextChangeOp[keyStr] !== null && nextChangeOp[keyStr] === changeOps[0][keyStr]) ||
-               (nextChangeOp[keyStr] === null && nextChangeOp[keyActor] === changeOps[0][keyActor] &&
-                nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
-          if (nextChangeOp !== null) {
-            changeOps.push(nextChangeOp)
-            predSeen.push(new Array(nextChangeOp[predNum]))
-          }
-          if (opCount === 0) {
-            nextChangeOp = null
-            break
-          }
-
-          nextChangeOp = readOperation(changeCols, docState.actorTable)
-          nextChangeOp[idActor] = ops.idActorIndex
-          nextChangeOp[idCtr] = opIdCtr
-          opCount--
-          opIdCtr++
-        }
-      }
-
-      if (changeOps.length > 0) changeOp = changeOps[0]
-      const inCorrectObject = docOp && docOp[objActor] === changeOp[objActor] && docOp[objCtr] === changeOp[objCtr]
-      const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
-      const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
-        ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
-          (docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
-
-      // We keep going until we run out of ops in the change, except that even when we run out, we
-      // keep going until we have processed all doc ops for the current key/list element.
-      if (changeOps.length === 0 && !(inCorrectObject && (keyMatches || listElemMatches))) break
-
-      let takeDocOp = false, takeChangeOps = 0
-
-      // The change operations come first if we are inserting list elements (seekToOp already
-      // determines the correct insertion position), if there is no document operation, if the next
-      // document operation is for a different object, or if the change op's string key is
-      // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
-      if (ops.insert || !inCorrectObject ||
-          (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
-          (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
-        // Take the operations from the change
-        takeChangeOps = changeOps.length
-        if (!inCorrectObject && !foundListElem && changeOp[keyStr] === null && !changeOp[insert]) {
-          // This can happen if we first update one list element, then another one earlier in the
-          // list. That is not allowed: list element updates must occur in ascending order.
-          throw new RangeError("could not find list element with ID: " +
-                               `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
-        }
-
-      } else if (keyMatches || listElemMatches || foundListElem) {
-        // The doc operation is for the same key or list element in the same object as the change
-        // ops, so we merge them. First, if any of the change ops' `pred` matches the opId of the
-        // document operation, we update the document operation's `succ` accordingly.
-        for (let opIndex = 0; opIndex < changeOps.length; opIndex++) {
-          const op = changeOps[opIndex]
-          for (let i = 0; i < op[predNum]; i++) {
-            if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
-              // Insert into the doc op's succ list such that the lists remains sorted
-              let j = 0
-              while (j < docOp[succNum] && (docOp[succCtr][j] < op[idCtr] ||
-                     docOp[succCtr][j] === op[idCtr] && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
-              docOp[succCtr].splice(j, 0, op[idCtr])
-              docOp[succActor].splice(j, 0, ops.idActorIndex)
-              docOp[succNum]++
-              predSeen[opIndex][i] = true
-              break
-            }
-          }
-        }
-
-        if (listElemMatches) foundListElem = true
-
-        if (foundListElem && !listElemMatches) {
-          // If the previous docOp was for the correct list element, and the current docOp is for
-          // the wrong list element, then place the current changeOp before the docOp.
-          takeChangeOps = changeOps.length
-
-        } else if (changeOps.length === 0 || docOp[idCtr] < changeOp[idCtr] ||
-            (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] < ops.idActor)) {
-          // When we have several operations for the same object and the same key, we want to keep
-          // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
-          // output it first.
-          takeDocOp = true
-          this.updatePatchProperty(patches, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
-
-          // A deletion op in the change is represented in the document only by its entries in the
-          // succ list of the operations it overwrites; it has no separate row in the set of ops.
-          for (let i = changeOps.length - 1; i >= 0; i--) {
-            let deleted = true
-            for (let j = 0; j < changeOps[i][predNum]; j++) {
-              if (!predSeen[i][j]) deleted = false
-            }
-            if (ACTIONS[changeOps[i][action]] === 'del' && deleted) {
-              changeOps.splice(i, 1)
-              predSeen.splice(i, 1)
-            }
-          }
-
-        } else if (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] === ops.idActor) {
-          throw new RangeError(`duplicate operation ID: ${changeOp[idCtr]}@${ops.idActor}`)
-        } else {
-          // The changeOp has the lower opId, so we output it first.
-          takeChangeOps = 1
-        }
-      } else {
-        // The document operation comes first if its string key is lexicographically first, or if
-        // we're using opId keys and the keys don't match (i.e. we scan the document until we find a
-        // matching key).
-        takeDocOp = true
-      }
-
-      if (takeDocOp) {
-        appendOperation(outCols, docState.opsCols, docOp)
-        if (docOp[insert] && elemVisible) {
-          elemVisible = false
-          listIndex++
-        }
-        if (docOp[succNum] === 0) elemVisible = true
-        opsAppended++
-        docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
-        if (docOp !== null) {
-          docOpsConsumed++
-          docOpOldSuccNum = docOp[succNum]
-        }
-      }
-
-      if (takeChangeOps > 0) {
-        for (let i = 0; i < takeChangeOps; i++) {
-          let op = changeOps[i]
-          // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
-          // the change op's own opId, so we must have seen them already)
-          for (let j = 0; j < op[predNum]; j++) {
-            if (!predSeen[i][j]) {
-              throw new RangeError(`no matching operation for pred: ${op[predCtr][j]}@${docState.actorIds[op[predActor][j]]}`)
-            }
-          }
-          this.updatePatchProperty(patches, ops, op, docState, propState, listIndex)
-          appendOperation(outCols, changeCols, op)
-          if (op[insert]) {
-            elemVisible = false
-            listIndex++
-          } else {
-            elemVisible = true
-          }
-        }
-
-        if (takeChangeOps === changeOps.length) {
-          changeOps.length = 0
-          predSeen.length = 0
-        } else {
-          changeOps.splice(0, takeChangeOps)
-          predSeen.splice(0, takeChangeOps)
-        }
-        opsAppended += takeChangeOps
-      }
-    }
-
-    if (docOp) {
-      appendOperation(outCols, docState.opsCols, docOp)
-      opsAppended++
-    }
-    return {opsAppended, docOpsConsumed}
-  }
-
-  /**
-   * Applies the operation sequence in `ops` (as produced by `groupRelatedOps()`) from the change
-   * with columns `changeCols` to the document `docState`. `docState` is an object with keys:
-   *   - `actorIds` is an array of actorIds (as hex strings) occurring in the document (values in
-   *     the document's objActor/keyActor/idActor/... columns are indexes into this array).
-   *   - `actorTable` is an array of integers where `actorTable[i]` contains the document's actor
-   *     index for the actor that has index `i` in the change (`i == 0` is the author of the change).
-   *   - `allCols` is an array of all the columnIds in either the document or the change.
-   *   - `opsCols` is an array of columns containing the operations in the document.
-   *   - `numOps` is an integer, the number of operations in the document.
-   *   - `objectMeta` is a map from objectId to metadata about that object.
-   *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
-   *     accessed in that object. This is used to check that accesses occur in ascending order
-   *     (which makes it easier to generate patches for lists).
-   *
-   * `docState` is mutated to contain the updated document state.
-   * `patches` is a patch object that is mutated to reflect the operations applied by this function.
-   */
-  applyOps(patches, ops, changeCols, docState) {
-    for (let col of docState.opsCols) col.decoder.reset()
-    const {skipCount, visibleCount} = seekToOp(ops, docState.opsCols, docState.actorIds)
-    if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
-      throw new RangeError('list element accesses must occur in ascending order')
-    }
-    docState.lastIndex[ops.objId] = visibleCount
-    for (let col of docState.opsCols) col.decoder.reset()
-
-    let outCols = docState.allCols.map(columnId => ({columnId, encoder: encoderByColumnId(columnId)}))
-    copyColumns(outCols, docState.opsCols, skipCount)
-    const {opsAppended, docOpsConsumed} = this.mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount)
-    copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)
-    for (let col of docState.opsCols) {
-      if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
-    }
-
-    docState.opsCols = outCols.map(col => {
-      const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
-      return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
-    })
-    docState.numOps = docState.numOps + opsAppended - docOpsConsumed
-  }
-
-  /**
-   * Takes `changeCols`, a list of `{columnId, columnName, decoder}` objects for a change, and
-   * checks that it has the expected structure. Returns an array of column IDs (integers) of the
-   * columns that occur either in the document or in the change.
-   */
-  getAllColumns(changeCols) {
-    const expectedCols = [
-      'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
-      'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr'
-    ]
-    let allCols = {}
-    for (let i = 0; i < expectedCols.length; i++) {
-      if (changeCols[i].columnName !== expectedCols[i]) {
-        throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${changeCols[i].columnName}`)
-      }
-    }
-    for (let col of changeCols) allCols[col.columnId] = true
-    for (let columnId of Object.values(DOC_OPS_COLUMNS)) allCols[columnId] = true
-
-    // Final document should contain any columns in either the document or the change, except for
-    // pred, since the document encoding uses succ instead of pred
-    delete allCols[CHANGE_COLUMNS.predNum]
-    delete allCols[CHANGE_COLUMNS.predActor]
-    delete allCols[CHANGE_COLUMNS.predCtr]
-    return Object.keys(allCols).map(id => parseInt(id, 10)).sort((a, b) => a - b)
-  }
-
-  /**
-   * Takes a decoded change header, including an array of actorIds. Returns an object of the form
-   * `{actorIds, actorTable}`, where `actorIds` is an updated array of actorIds appearing in the
-   * document (including the new change's actorId), and `actorTable` is an array for translating
-   * the change's actor indexes into the document's actor indexes.
-   */
-  getActorTable(actorIds, change) {
-    if (actorIds.indexOf(change.actorIds[0]) < 0) {
-      if (change.seq !== 1) {
-        throw new RangeError(`Seq ${change.seq} is the first change for actor ${change.actorIds[0]}`)
-      }
-      // Use concat, not push, so that the original array is not mutated
-      actorIds = actorIds.concat([change.actorIds[0]])
-    }
-    const actorTable = [] // translate from change's actor index to doc's actor index
-    for (let actorId of change.actorIds) {
-      const index = actorIds.indexOf(actorId)
-      if (index < 0) {
-        throw new RangeError(`actorId ${actorId} is not known to document`)
-      }
-      actorTable.push(index)
-    }
-    return {actorIds, actorTable}
-  }
-
-  /**
-   * Finalises the patch for a change. `patches` is a map from objectIds to patch for that
-   * particular object, `objectIds` is the array of IDs of objects that are created or updated in the
-   * change, and `docState` is an object containing various bits of document state, including
-   * `objectMeta`, a map from objectIds to metadata about that object (such as its parent in the
-   * document tree). Mutates `patches` such that child objects are linked into their parent object,
-   * all the way to the root object.
-   */
-  setupPatches(patches, objectIds, docState) {
-    for (let objectId of objectIds) {
-      let meta = docState.objectMeta[objectId], childMeta = null, patchExists = false
-      while (true) {
-        const hasChildren = childMeta && Object.keys(meta.children[childMeta.parentKey]).length > 0
-        if (!patches[objectId]) patches[objectId] = emptyObjectPatch(objectId, meta.type)
-
-        if (childMeta && hasChildren) {
-          if (meta.type === 'list' || meta.type === 'text') {
-            // In list/text objects, parentKey is an elemID. First see if it already appears in an edit
-            for (let edit of patches[objectId].edits) {
-              if (edit.opId && meta.children[childMeta.parentKey][edit.opId]) {
-                patchExists = true
-              }
-            }
-
-            // If we need to add an edit, we first have to translate the elemId into an index
-            if (!patchExists) {
-              const obj = parseOpId(objectId), elem = parseOpId(childMeta.parentKey)
-              const seekPos = {
-                objActor: obj.actorId,  objCtr: obj.counter,
-                keyActor: elem.actorId, keyCtr: elem.counter,
-                keyStr:   null,         insert: false
-              }
-              const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
-
-              for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
-                let patchValue = value
-                if (value.objectId) {
-                  if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
-                  patchValue = patches[value.objectId]
-                }
-                const edit = {action: 'update', index: visibleCount, opId, value: patchValue}
-                appendEdit(patches[objectId].edits, edit)
-              }
-            }
-
-          } else {
-            // Non-list object: parentKey is the name of the property being updated (a string)
-            if (!patches[objectId].props[childMeta.parentKey]) {
-              patches[objectId].props[childMeta.parentKey] = {}
-            }
-            let values = patches[objectId].props[childMeta.parentKey]
-
-            for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
-              if (values[opId]) {
-                patchExists = true
-              } else if (value.objectId) {
-                if (!patches[value.objectId]) patches[value.objectId] = emptyObjectPatch(value.objectId, value.type)
-                values[opId] = patches[value.objectId]
-              } else {
-                values[opId] = value
-              }
-            }
-          }
-        }
-
-        if (patchExists || !meta.parentObj || (childMeta && !hasChildren)) break
-        childMeta = meta
-        objectId = meta.parentObj
-        meta = docState.objectMeta[objectId]
-      }
-    }
-    return patches
-  }
-
-  /**
    * Parses the change given as a Uint8Array in `changeBuffer`, and applies it to the current
    * document. Returns a patch to apply to the frontend. If an exception is thrown, the document
    * object is not modified.
@@ -1110,68 +1166,39 @@ class BackendDoc {
   applyChanges(changeBuffers, isLocal = false) {
     let patches = {_root: {objectId: '_root', type: 'map', props: {}}}
     let docState = {
-      actorIds: this.actorIds, opsCols: this.docColumns, numOps: this.numOps,
-      objectMeta: Object.assign({}, this.objectMeta), lastIndex: {}
+      maxOp: this.maxOp,
+      changeByHash: this.changeByHash,
+      actorIds: this.actorIds,
+      heads: this.heads,
+      clock: this.clock,
+      opsCols: this.docColumns,
+      numOps: this.numOps,
+      objectMeta: Object.assign({}, this.objectMeta),
+      lastIndex: {}
     }
-    let allObjectIds = {}, changeByHash = Object.assign({}, this.changeByHash)
-    let maxOp = this.maxOp, heads = {}, clock = Object.assign({}, this.clock)
-    for (let head of this.heads) heads[head] = true
-
-    let decodedChanges = []
-    for (let changeBuffer of changeBuffers) {
-      const change = decodeChangeColumns(changeBuffer) // { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
-      decodedChanges.push(change)
-
-      for (let dep of change.deps) {
-        // TODO enqueue changes that are not yet causally ready rather than throwing an exception
-        if (!changeByHash[dep]) throw new RangeError(`missing dependency ${dep}`)
-        delete heads[dep]
-      }
-      changeByHash[change.hash] = changeBuffer
-      heads[change.hash] = true
-
-      const expectedSeq = (clock[change.actor] || 0) + 1
-      if (change.seq !== expectedSeq) {
-        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
-      }
-      clock[change.actor] = change.seq
-
-      const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
-      docState.allCols = this.getAllColumns(changeCols)
-      Object.assign(docState, this.getActorTable(docState.actorIds, change))
-      const actorIndex = docState.actorIds.indexOf(change.actorIds[0])
-      const {opSequences, objectIds} = groupRelatedOps(change, changeCols, docState.objectMeta)
-      for (let id of objectIds) allObjectIds[id] = true
-      const lastOps = opSequences[opSequences.length - 1]
-      if (lastOps) maxOp = Math.max(maxOp, lastOps.idCtr + lastOps.consecutiveOps - 1)
-
-      for (let col of changeCols) col.decoder.reset()
-      for (let op of opSequences) {
-        op.idActorIndex = actorIndex
-        this.applyOps(patches, op, changeCols, docState)
-      }
-    }
-
-    this.setupPatches(patches, Object.keys(allObjectIds), docState)
+    const decodedChanges = applyChanges(patches, changeBuffers, docState)
 
     // Update the document state at the end, so that if any of the earlier code throws an exception,
     // the document is not modified (making `applyChanges` atomic in the ACID sense).
-    this.maxOp      = maxOp
-    this.changes    = this.changes.concat(changeBuffers)
-    this.changeByHash = changeByHash
-    this.actorIds   = docState.actorIds
-    this.heads      = Object.keys(heads).sort()
-    this.clock      = clock
-    this.docColumns = docState.opsCols
-    this.numOps     = docState.numOps
-    this.objectMeta = docState.objectMeta
+    this.maxOp        = docState.maxOp
+    this.changes      = this.changes.concat(changeBuffers)
+    this.changeByHash = docState.changeByHash
+    this.actorIds     = docState.actorIds
+    this.heads        = docState.heads
+    this.clock        = docState.clock
+    this.docColumns   = docState.opsCols
+    this.numOps       = docState.numOps
+    this.objectMeta   = docState.objectMeta
 
     for (let change of decodedChanges) {
       if (change.seq === 1) this.hashesByActor[change.actor] = []
       this.hashesByActor[change.actor].push(change.hash)
     }
 
-    let patch = {maxOp, clock, deps: this.heads, pendingChanges: this.pendingChanges, diffs: patches._root}
+    let patch = {
+      maxOp: this.maxOp, clock: this.clock, deps: this.heads,
+      pendingChanges: this.pendingChanges, diffs: patches._root
+    }
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
       patch.seq = decodedChanges[0].seq
