@@ -734,6 +734,7 @@ function encodeChange(changeObj) {
 }
 
 function decodeChangeColumns(buffer) {
+  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const decoder = new Decoder(buffer)
   const header = decodeContainerHeader(decoder, true)
   const chunkDecoder = new Decoder(header.chunkData)
@@ -762,7 +763,6 @@ function decodeChangeColumns(buffer) {
  * Decodes one change in binary format into its JS object representation.
  */
 function decodeChange(buffer) {
-  if (buffer[8] === CHUNK_TYPE_DEFLATE) buffer = inflateChange(buffer)
   const change = decodeChangeColumns(buffer)
   change.ops = decodeOps(decodeColumns(change.columns, change.actorIds, CHANGE_COLUMNS), false)
   delete change.actorIds
