@@ -279,9 +279,13 @@ function getChanges(backend, haveDeps) {
  * backend instance; this distinction matters when the backend is mutable).
  */
 function getChangesAdded(backend1, backend2) {
-  const opSet1 = backendState(backend1).get('opSet')
-  const opSet2 = backendState(backend2).get('opSet')
-  return OpSet.getChangesAdded(opSet1, opSet2)
+  if (USE_NEW_BACKEND) {
+    return backendState(backend2).getChangesAdded(backendState(backend1))
+  } else {
+    const opSet1 = backendState(backend1).get('opSet')
+    const opSet2 = backendState(backend2).get('opSet')
+    return OpSet.getChangesAdded(opSet1, opSet2)
+  }
 }
 
 /**

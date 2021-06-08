@@ -1,7 +1,7 @@
 const { parseOpId, copyObject } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
-  encodeChange, decodeChangeColumns, decodeChanges, decodeDocumentHeader, encodeDocument,
+  encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocument,
   appendEdit } = require('./columnar')
 
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
@@ -1117,6 +1117,8 @@ class BackendDoc {
     this.pendingChanges = 0
     this.changes = []
     this.changeByHash = {}
+    this.dependenciesByHash = {}
+    this.dependentsByHash = {}
     this.hashesByActor = {}
     this.actorIds = []
     this.heads = []
@@ -1150,6 +1152,8 @@ class BackendDoc {
     copy.maxOp = this.maxOp
     copy.changes = this.changes.slice()
     copy.changeByHash = copyObject(this.changeByHash)
+    copy.dependenciesByHash = copyObject(this.dependenciesByHash)
+    copy.dependentsByHash = Object.entries(this.dependentsByHash).reduce((acc, [k, v]) => { acc[k] = v.slice(); return acc })
     copy.actorIds = this.actorIds // immutable, no copying needed
     copy.heads = this.heads // immutable, no copying needed
     copy.clock = this.clock // immutable, no copying needed
@@ -1181,12 +1185,14 @@ class BackendDoc {
     const decodedChanges = applyChanges(patches, changeBuffers, docState)
 
     // Update the document state only if `applyChanges` does not throw an exception
-    let newChangesByHash = {}
     for (let i = 0; i < decodedChanges.length; i++) {
       const change = decodedChanges[i]
       if (change.seq === 1) this.hashesByActor[change.actor] = []
       this.hashesByActor[change.actor].push(change.hash)
       this.changeByHash[change.hash] = changeBuffers[i]
+      this.dependenciesByHash[change.hash] = change.deps
+      this.dependentsByHash[change.hash] = []
+      for (let dep of change.deps) this.dependentsByHash[dep].push(change.hash)
     }
 
     this.changes.push(...changeBuffers)
@@ -1210,30 +1216,84 @@ class BackendDoc {
   }
 
   /**
-   * Returns all the changes that need to be sent to another replica. `hashes` is a list of change
-   * hashes known to the other replica. The changes in `hashes` and any of their transitive
-   * dependencies will not be returned; any changes later than or concurrent to the hashes will be
-   * returned. If `hashes` is an empty list, all changes are returned.
-   *
-   * NOTE: This function throws an exception if any of the given hashes are not known to this
-   * replica. This means that if the other replica is ahead of us, this function cannot be used
-   * directly to find the changes to send. TODO need to fix this.
+   * Returns all the changes that need to be sent to another replica. `haveDeps` is a list of change
+   * hashes (as hex strings) of the heads that the other replica has. The changes in `haveDeps` and
+   * any of their transitive dependencies will not be returned; any changes later than or concurrent
+   * to the hashes in `haveDeps` will be returned. If `haveDeps` is an empty array, all changes are
+   * returned. Throws an exception if any of the given hashes are not known to this replica.
    */
-  getChanges(hashes) {
-    const haveHashes = {}, changes = this.changes.map(decodeChangeColumns)
-    for (let hash of hashes) haveHashes[hash] = true
-    for (let i = changes.length - 1; i >= 0; i--) {
-      if (haveHashes[changes[i].hash]) {
-        for (let dep of changes[i].deps) haveHashes[dep] = true
+  getChanges(haveDeps) {
+    // If the other replica has nothing, return all changes in history order
+    if (haveDeps.length === 0) {
+      return this.changes
+    }
+
+    // Fast path for the common case where all new changes depend only on haveDeps
+    let stack = [], seenHashes = {}, toReturn = []
+    for (let hash of haveDeps) {
+      seenHashes[hash] = true
+      const successors = this.dependentsByHash[hash]
+      if (!successors) throw new RangeError(`hash not found: ${hash}`)
+      stack.push(...successors)
+    }
+
+    // Depth-first traversal of the hash graph to find all changes that depend on `haveDeps`
+    while (stack.length > 0) {
+      const hash = stack.pop()
+      seenHashes[hash] = true
+      toReturn.push(hash)
+      if (!this.dependenciesByHash[hash].every(dep => seenHashes[dep])) {
+        // If a change depends on a hash we have not seen, abort the traversal and fall back to the
+        // slower algorithm. This will sometimes abort even if all new changes depend on `haveDeps`,
+        // because our depth-first traversal is not necessarily a topological sort of the graph.
+        break
+      }
+      stack.push(...this.dependentsByHash[hash])
+    }
+
+    // If the traversal above has encountered all the heads, and was not aborted early due to
+    // a missing dependency, then the set of changes it has found is complete, so we can return it
+    if (stack.length === 0 && this.heads.every(head => seenHashes[head])) {
+      return toReturn.map(hash => this.changeByHash[hash])
+    }
+
+    // If we haven't encountered all of the heads, we have to search harder. This will happen if
+    // changes were added that are concurrent to `haveDeps`
+    stack = haveDeps.slice()
+    seenHashes = {}
+    while (stack.length > 0) {
+      const hash = stack.pop()
+      if (!seenHashes[hash]) {
+        const deps = this.dependenciesByHash[hash]
+        if (!deps) throw new RangeError(`hash not found: ${hash}`)
+        stack.push(...deps)
+        seenHashes[hash] = true
       }
     }
-    let result = []
-    for (let i = 0; i < changes.length; i++) {
-      if (!haveHashes[changes[i].hash]) {
-        result.push(this.changes[i])
+
+    return this.changes.filter(change => !seenHashes[decodeChangeMeta(change, true).hash])
+  }
+
+  /**
+   * Returns all changes that are present in this BackendDoc, but not present in the `other`
+   * BackendDoc.
+   */
+  getChangesAdded(other) {
+    // Depth-first traversal from the heads through the dependency graph,
+    // until we reach a change that is already present in opSet1
+    let stack = this.heads.slice(), seenHashes = {}, toReturn = []
+    while (stack.length > 0) {
+      const hash = stack.pop()
+      if (!seenHashes[hash] && !other.changeByHash[hash]) {
+        seenHashes[hash] = true
+        toReturn.push(hash)
+        stack.push(...this.dependenciesByHash[hash])
       }
     }
-    return result
+
+    // Return those changes in the reverse of the order in which the depth-first search
+    // found them. This is not necessarily a topological sort, but should usually be close.
+    return toReturn.reverse().map(hash => this.changeByHash[hash])
   }
 
   /**
