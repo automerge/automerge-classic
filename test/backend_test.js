@@ -838,7 +838,7 @@ describe('Automerge.Backend', () => {
       })
     })
 
-    it('should support inserting multiple elements in one change', () => {
+    it('should support inserting multiple elements in one change (int)', () => {
       const actor = uuid()
       const localChange = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
@@ -852,6 +852,25 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'int', values: [1, 2, 3, 4, 5]}
+          ]
+        }}}}
+      })
+    })
+
+    it('should support inserting multiple elements in one change (float64)', () => {
+      const actor = uuid()
+      const localChange = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+        {action: 'makeList', obj: '_root', key: 'todos', pred: []},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'float64', values: [1, 2, 3.3, 4, 5]},
+      ]}
+      const s0 = Backend.init()
+      const [s1, patch1] = Backend.applyLocalChange(s0, localChange)
+      const changes = Backend.getChanges(s1, []).map(decodeChange)
+      assert.deepStrictEqual(patch1, {
+        clock: {[actor]: 1}, deps: [], maxOp: 6, actor, seq: 1, pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'list', edits: [
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, datatype: 'float64', values: [1, 2, 3.3, 4, 5]}
           ]
         }}}}
       })
