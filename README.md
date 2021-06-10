@@ -376,7 +376,7 @@ options, with more under development:
 - Use `Automerge.getChanges()` and `Automerge.applyChanges()` to manually capture changes on one
   node and apply them on another. These changes are encoded as byte arrays (`Uint8Array`). You can
   also store a log of these changes on disk in order to persist them.
-- Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protcol
+- Use `Automerge.generateSyncMessage()` to generate messages, send them over any transport protocol
   (e.g. WebSocket), and call `Automerge.receiveSyncMessage()` on the recipient to process the
   messages. The sync protocol is documented in
   [SYNC.md](https://github.com/automerge/automerge/blob/main/SYNC.md).
