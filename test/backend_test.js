@@ -612,7 +612,7 @@ describe('Automerge.Backend', () => {
         {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, true, "hello"]},
       ]}
       const s0 = Backend.init()
-      assert.throws(() => { Backend.applyLocalChange(s0, change1) }, /bad value\/datatype association/)
+      assert.throws(() => { Backend.applyLocalChange(s0, change1) }, /Decode failed/)
     })
 
     it('should support deleting multiple elements in one op', () => {

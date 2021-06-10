@@ -472,7 +472,7 @@ function expandMultiOps(ops, startOp, actor) {
       let lastElemId = op.elemId
       const datatype = op.datatype
       for (const value of op.values) {
-        if (!validDatatype(value, datatype)) throw new RangeError(`bad value/datatype association (${value},${datatype})`)
+        if (!validDatatype(value, datatype)) throw new RangeError(`Decode failed: bad value/datatype association (${value},${datatype})`)
         expandedOps.push({action: 'set', obj: op.obj, elemId: lastElemId, datatype, value, pred: [], insert: true})
         lastElemId = `${opNum}@${actor}`
         opNum += 1
