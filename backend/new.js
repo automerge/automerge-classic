@@ -927,30 +927,33 @@ function applyOps(patches, ops, changeCols, docState) {
 }
 
 /**
- * Takes `changeCols`, a list of `{columnId, columnName, decoder}` objects for a change, and
- * checks that it has the expected structure. Returns an array of column IDs (integers) of the
- * columns that occur either in the document or in the change.
+ * `docCols` is an array of column IDs (integers) that appear in a document.
+ * `changeCols` is an array of `{columnId, columnName, decoder}` objects for a change.
+ * This function checks that `changeCols` has the expected structure, and then adds any new column
+ * IDs from `changeCols` to `docCols`, returning the updated `docCols` containing all columns.
  */
-function getAllColumns(changeCols) {
+function getAllColumns(docCols, changeCols) {
   const expectedCols = [
     'objActor', 'objCtr', 'keyActor', 'keyCtr', 'keyStr', 'idActor', 'idCtr', 'insert',
     'action', 'valLen', 'valRaw', 'chldActor', 'chldCtr', 'predNum', 'predActor', 'predCtr'
   ]
-  let allCols = {}
   for (let i = 0; i < expectedCols.length; i++) {
     if (changeCols[i].columnName !== expectedCols[i]) {
       throw new RangeError(`Expected column ${expectedCols[i]} at index ${i}, got ${changeCols[i].columnName}`)
     }
   }
-  for (let col of changeCols) allCols[col.columnId] = true
-  for (let columnId of Object.values(DOC_OPS_COLUMNS)) allCols[columnId] = true
+  let allCols = docCols ? new Set(docCols) : new Set()
+  for (let columnId of Object.values(DOC_OPS_COLUMNS)) allCols.add(columnId)
 
   // Final document should contain any columns in either the document or the change, except for
   // pred, since the document encoding uses succ instead of pred
-  delete allCols[CHANGE_COLUMNS.predNum]
-  delete allCols[CHANGE_COLUMNS.predActor]
-  delete allCols[CHANGE_COLUMNS.predCtr]
-  return Object.keys(allCols).map(id => parseInt(id, 10)).sort((a, b) => a - b)
+  for (let column of changeCols) {
+    const { columnId } = column
+    if (columnId !== CHANGE_COLUMNS.predNum && columnId !== CHANGE_COLUMNS.predActor &&
+        columnId !== CHANGE_COLUMNS.predCtr) allCols.add(columnId)
+  }
+
+  return [...allCols].sort((a, b) => a - b)
 }
 
 /**
@@ -1085,7 +1088,7 @@ function applyChanges(patches, changeBuffers, docState) {
     clock[change.actor] = change.seq
 
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
-    docState.allCols = getAllColumns(changeCols)
+    docState.allCols = getAllColumns(docState.allCols, changeCols)
     const {actorIds, actorTable} = getActorTable(docState.actorIds, change)
     docState.actorIds = actorIds
     docState.actorTable = actorTable
