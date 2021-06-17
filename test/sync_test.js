@@ -126,7 +126,7 @@ describe('Data sync protocol', () => {
 
       it('should not generate messages once synced', () => {
         // create & synchronize two nodes
-        let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
+        let n1 = Automerge.init('abcd1234abcd1234abcd1234abcd1234'), n2 = Automerge.init('cdef4567cdef4567cdef4567cdef4567')
         let s1 = initSyncState(), s2 = initSyncState()
 
         let message, patch
@@ -146,12 +146,12 @@ describe('Data sync protocol', () => {
         ;[n1, s1, patch] = Automerge.receiveSyncMessage(n1, s1, message)
         ;[s1, message] = Automerge.generateSyncMessage(n1, s1)
         assert.deepStrictEqual(decodeSyncMessage(message).changes.length, 5)
-        assert.deepStrictEqual(patch.diffs.props, {y: {'5@def456': {type: 'value', value: 4}}}) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {y: {'5@cdef4567cdef4567cdef4567cdef4567': {type: 'value', value: 4}}}) // changes arrived
 
         // n2 applies the changes and sends confirmation ending the exchange
         ;[n2, s2, patch] = Automerge.receiveSyncMessage(n2, s2, message)
         ;[s2, message] = Automerge.generateSyncMessage(n2, s2)
-        assert.deepStrictEqual(patch.diffs.props, {x: {'5@abc123': {type: 'value', value: 4}}}) // changes arrived
+        assert.deepStrictEqual(patch.diffs.props, {x: {'5@abcd1234abcd1234abcd1234abcd1234': {type: 'value', value: 4}}}) // changes arrived
 
         // n1 receives the message and has nothing more to say
         ;[n1, s1, patch] = Automerge.receiveSyncMessage(n1, s1, message)
@@ -166,7 +166,7 @@ describe('Data sync protocol', () => {
 
       it('should allow simultaneous messages during synchronization', () => {
         // create & synchronize two nodes
-        let n1 = Automerge.init('abc123'), n2 = Automerge.init('def456')
+        let n1 = Automerge.init('abcd1234abcd1234abcd1234abcd1234'), n2 = Automerge.init('cdef4567cdef4567cdef4567cdef4567')
         let s1 = initSyncState(), s2 = initSyncState()
         for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
         for (let i = 0; i < 5; i++) n2 = Automerge.change(n2, {time: 0}, doc => doc.y = i)
@@ -233,7 +233,7 @@ describe('Data sync protocol', () => {
       })
 
       it('should assume sent changes were recieved until we hear otherwise', () => {
-        let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+        let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
         let s1 = initSyncState(), message = null
 
         n1 = Automerge.change(n1, {time: 0}, doc => doc.items = [])
@@ -278,7 +278,7 @@ describe('Data sync protocol', () => {
       // lastSync is undefined.
 
       // create two peers both with divergent commits
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
 
       ;[n1, n2] = sync(n1, n2)
@@ -299,7 +299,7 @@ describe('Data sync protocol', () => {
       // lastSync is c9.
 
       // create two peers both with divergent commits
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
@@ -317,7 +317,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should ensure non-empty state after sync', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       for (let i = 0; i < 3; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
@@ -332,7 +332,7 @@ describe('Data sync protocol', () => {
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
       // n2 has changes {c0, c1, c2}, n1's lastSync is c5, and n2's lastSync is c2.
       // we want to successfully sync (n1) with (r), even though (n1) believes it's talking to (n2)
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       // n1 makes three changes, which we sync to n2
@@ -365,7 +365,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should resync after one node experiences data loss without disconnecting', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       // n1 makes three changes, which we sync to n2
@@ -375,7 +375,7 @@ describe('Data sync protocol', () => {
       assert.deepStrictEqual(getHeads(n1), getHeads(n2))
       assert.deepStrictEqual(n1, n2)
 
-      let n2AfterDataLoss = Automerge.init('89abcdef')
+      let n2AfterDataLoss = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
 
       // "n2" now has no data, but n1 still thinks it does. Note we don't do
       // decodeSyncState(encodeSyncState(s1)) in order to simulate data loss without disconnecting
@@ -385,7 +385,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should handle changes concurrent to the last sync heads', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('fedcba98')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef'), n3 = Automerge.init('fedcba98fedcba98fedcba98fedcba98')
       let s12 = initSyncState(), s21 = initSyncState(), s23 = initSyncState(), s32 = initSyncState()
 
       // Change 1 is known to all three nodes
@@ -415,7 +415,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should handle histories with lots of branching and merging', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('fedcba98')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef'), n3 = Automerge.init('fedcba98fedcba98fedcba98fedcba98')
       n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 0)
       ;[n2] = Automerge.applyChanges(n2, [Automerge.getLastLocalChange(n1)])
       ;[n3] = Automerge.applyChanges(n3, [Automerge.getLastLocalChange(n1)])
@@ -465,14 +465,14 @@ describe('Data sync protocol', () => {
       //                                                                      `-- n2
       // where n2 is a false positive in the Bloom filter containing {n1}.
       // lastSync is c9.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
       for (let i = 440; ; i++) { // search for false positive; see comment above
-        const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
-        const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+        const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567012345670123456701234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
+        const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         if (new BloomFilter(getHeads(n1up)).containsHash(getHeads(n2up)[0])) {
           n1 = n1up; n2 = n2up; break
         }
@@ -494,8 +494,8 @@ describe('Data sync protocol', () => {
         //                                                                      `-- n2c1 <-- n2c2
         // where n2c1 is a false positive in the Bloom filter containing {n1c1, n1c2}.
         // lastSync is c9.
-        n1 = Automerge.init('01234567')
-        n2 = Automerge.init('89abcdef')
+        n1 = Automerge.init('01234567012345670123456701234567')
+        n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
         s1 = initSyncState()
         s2 = initSyncState()
         for (let i = 0; i < 10; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
@@ -503,8 +503,8 @@ describe('Data sync protocol', () => {
 
         let n1hash1, n2hash1
         for (let i = 34; ; i++) { // search for false positive; see comment above
-          const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
-          const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+          const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567012345670123456701234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
+          const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
           n1hash1 = getHeads(n1us1)[0]; n2hash1 = getHeads(n2us1)[0]
           const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = 'final @ n1')
           const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = 'final @ n2')
@@ -549,7 +549,7 @@ describe('Data sync protocol', () => {
         assert.strictEqual(decodeSyncMessage(m2).changes.length, 1) // only n2c2; change n2c1 is not sent
 
         // n3 is a node that doesn't have the missing change. Nevertheless n1 is going to ask n3 for it
-        let n3 = Automerge.init('fedcba98'), s13 = initSyncState(), s31 = initSyncState()
+        let n3 = Automerge.init('fedcba98fedcba98fedcba98fedcba98'), s13 = initSyncState(), s31 = initSyncState()
         ;[n1, n3, s13, s31] = sync(n1, n3, s13, s31)
         assert.deepStrictEqual(getHeads(n1), [n1hash2])
         assert.deepStrictEqual(getHeads(n3), [n1hash2])
@@ -562,15 +562,15 @@ describe('Data sync protocol', () => {
       //                                   `-- n2c1 <-- n2c2 <-- n2c3
       // where n2c2 is a false positive in the Bloom filter containing {n1c1, n1c2, n1c3}.
       // lastSync is c4.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
       let n1hash3, n2hash3
 
       for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2)
       for (let i = 80; ; i++) { // search for false positive; see comment above
-        const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
-        const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+        const n1us1 = Automerge.change(Automerge.clone(n1, {actorId: '01234567012345670123456701234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
+        const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         const n1hash1 = getHeads(n1us1)[0]
         const n1us2 = Automerge.change(n1us1, {time: 0}, doc => doc.x = `${i + 1} @ n1`)
         const n2us2 = Automerge.change(n2us1, {time: 0}, doc => doc.x = `${i + 1} @ n2`)
@@ -596,20 +596,20 @@ describe('Data sync protocol', () => {
       //                                   `-- n2c1 <-- n2c2 <-- n2c3
       // where n2c1 and n2c2 are both false positives in the Bloom filter containing {c5}.
       // lastSync is c4.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
 
       for (let i = 0; i < 5; i++) n1 = Automerge.change(n1, {time: 0}, doc => doc.x = i)
       ;[n1, n2, s1, s2] = sync(n1, n2, s1, s2)
       n1 = Automerge.change(n1, {time: 0}, doc => doc.x = 5)
       for (let i = 608; ; i++) { // search for false positive; see comment above
-        const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+        const n2us1 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         if (new BloomFilter(getHeads(n1)).containsHash(getHeads(n2us1)[0])) {
           n2 = n2us1; break
         }
       }
       for (let i = 19; ; i++) { // search for false positive; see comment above
-        const n2us2 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} again`)
+        const n2us2 = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} again`)
         if (new BloomFilter(getHeads(n1)).containsHash(getHeads(n2us2)[0])) {
           n2 = n2us2; break
         }
@@ -629,7 +629,7 @@ describe('Data sync protocol', () => {
       // c0 <-- c1 <-- c2 <-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8 <-- c9 <-+
       //                                                                      `-- n2
       // where n2 causes a false positive in the Bloom filter containing {n1}.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
       let message
 
@@ -639,8 +639,8 @@ describe('Data sync protocol', () => {
       s2 = decodeSyncState(encodeSyncState(s2))
 
       for (let i = 440; ; i++) { // brute-force search for false positive; see comment above
-        const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
-        const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
+        const n1up = Automerge.change(Automerge.clone(n1, {actorId: '01234567012345670123456701234567'}), {time: 0}, doc => doc.x = `${i} @ n1`)
+        const n2up = Automerge.change(Automerge.clone(n2, {actorId: '89abcdef89abcdef89abcdef89abcdef'}), {time: 0}, doc => doc.x = `${i} @ n2`)
         // check if the bloom filter on n2 will believe n1 already has a particular hash
         // this will mean n2 won't offer that data to n2 by receiving a sync message from n1
         if (new BloomFilter(getHeads(n1up)).containsHash(getHeads(n2up)[0])) {
@@ -681,7 +681,7 @@ describe('Data sync protocol', () => {
       // n1 has {c0, c1, c2, n1c1, n1c2, n1c3, n2c1, n2c2};
       // n2 has {c0, c1, c2, n1c1, n1c2, n2c1, n2c2, n2c3};
       // n3 has {c0, c1, c2, n3c1, n3c2, n3c3}.
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef'), n3 = Automerge.init('76543210765432107654321076543210')
       let s13 = initSyncState(), s12 = initSyncState(), s21 = initSyncState()
       let s32 = initSyncState(), s31 = initSyncState(), s23 = initSyncState()
       let message1, message2, message3
@@ -735,7 +735,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should allow any change to be requested', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
       let message = null
 
@@ -755,7 +755,7 @@ describe('Data sync protocol', () => {
     })
 
     it('should ignore requests for a nonexistent change', () => {
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef')
       let s1 = initSyncState(), s2 = initSyncState()
       let message = null
 
@@ -772,7 +772,7 @@ describe('Data sync protocol', () => {
       //       ,-- c1 <-- c2
       // c0 <-+
       //       `-- c3 <-- c4 <-- c5 <-- c6 <-- c7 <-- c8
-      let n1 = Automerge.init('01234567'), n2 = Automerge.init('89abcdef'), n3 = Automerge.init('76543210')
+      let n1 = Automerge.init('01234567012345670123456701234567'), n2 = Automerge.init('89abcdef89abcdef89abcdef89abcdef'), n3 = Automerge.init('76543210765432107654321076543210')
       let s1 = initSyncState(), s2 = initSyncState()
       let msg, decodedMsg
 

@@ -15,7 +15,7 @@ describe('Automerge proxy API', () => {
       Automerge.change(Automerge.init(), doc => {
         assert(UUID_PATTERN.test(Automerge.getActorId(doc).toString()))
         assert.notEqual(Automerge.getActorId(doc), '_root')
-        assert.strictEqual(Automerge.getActorId(Automerge.init('01234567')), '01234567')
+        assert.strictEqual(Automerge.getActorId(Automerge.init('01234567012345670123456701234567')), '01234567012345670123456701234567')
       })
     })
 

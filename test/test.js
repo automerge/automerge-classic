@@ -26,9 +26,9 @@ describe('Automerge', () => {
     })
 
     it('should allow passing an actorId when instantiating from an existing object', () => {
-      const actorId = '1234'
+      const actorId = '12341234123412341234123412341234'
       let doc = Automerge.from({ foo: 1 }, actorId)
-      assert.strictEqual(Automerge.getActorId(doc), '1234')
+      assert.strictEqual(Automerge.getActorId(doc), '12341234123412341234123412341234')
     })
 
     it('accepts an empty object as initial state', () => {
@@ -1023,8 +1023,8 @@ describe('Automerge', () => {
 
     describe('multiple insertions at the same list position', () => {
       it('should handle insertion by greater actor ID', () => {
-        s1 = Automerge.init('aaaa')
-        s2 = Automerge.init('bbbb')
+        s1 = Automerge.init('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+        s2 = Automerge.init('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
         s1 = Automerge.change(s1, doc => doc.list = ['two'])
         s2 = Automerge.merge(s2, s1)
         s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, 'one'))
@@ -1032,8 +1032,8 @@ describe('Automerge', () => {
       })
 
       it('should handle insertion by lesser actor ID', () => {
-        s1 = Automerge.init('bbbb')
-        s2 = Automerge.init('aaaa')
+        s1 = Automerge.init('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+        s2 = Automerge.init('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
         s1 = Automerge.change(s1, doc => doc.list = ['two'])
         s2 = Automerge.merge(s2, s1)
         s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, 'one'))
@@ -1075,8 +1075,8 @@ describe('Automerge', () => {
     })
 
     it('should allow a custom actor ID to be set', () => {
-      let s = Automerge.load(Automerge.save(Automerge.init()), '333333')
-      assert.strictEqual(Automerge.getActorId(s), '333333')
+      let s = Automerge.load(Automerge.save(Automerge.init()), '33333333333333333333333333333333')
+      assert.strictEqual(Automerge.getActorId(s), '33333333333333333333333333333333')
     })
 
     it('should reconstitute complex datatypes', () => {
@@ -1092,35 +1092,35 @@ describe('Automerge', () => {
     })
 
     it('should reconstitute conflicts', () => {
-      let s1 = Automerge.change(Automerge.init('111111'), doc => doc.x = 3)
-      let s2 = Automerge.change(Automerge.init('222222'), doc => doc.x = 5)
+      let s1 = Automerge.change(Automerge.init('11111111111111111111111111111111'), doc => doc.x = 3)
+      let s2 = Automerge.change(Automerge.init('22222222222222222222222222222222'), doc => doc.x = 5)
       s1 = Automerge.merge(s1, s2)
       let s3 = Automerge.load(Automerge.save(s1))
       assert.strictEqual(s1.x, 5)
       assert.strictEqual(s3.x, 5)
-      assert.deepStrictEqual(Automerge.getConflicts(s1, 'x'), {'1@111111': 3, '1@222222': 5})
-      assert.deepStrictEqual(Automerge.getConflicts(s3, 'x'), {'1@111111': 3, '1@222222': 5})
+      assert.deepStrictEqual(Automerge.getConflicts(s1, 'x'), {'1@11111111111111111111111111111111': 3, '1@22222222222222222222222222222222': 5})
+      assert.deepStrictEqual(Automerge.getConflicts(s3, 'x'), {'1@11111111111111111111111111111111': 3, '1@22222222222222222222222222222222': 5})
     })
 
     it('should reconstitute element ID counters', () => {
-      const s1 = Automerge.init('01234567')
+      const s1 = Automerge.init('01234567012345670123456701234567')
       const s2 = Automerge.change(s1, doc => doc.list = ['a'])
       const listId = Automerge.getObjectId(s2.list)
       const changes12 = Automerge.getAllChanges(s2).map(decodeChange)
       assert.deepStrictEqual(changes12, [{
-        hash: changes12[0].hash, actor: '01234567', seq: 1, startOp: 1,
+        hash: changes12[0].hash, actor: '01234567012345670123456701234567', seq: 1, startOp: 1,
         time: changes12[0].time, message: '', deps: [], ops: [
           {obj: '_root', action: 'makeList', key: 'list', insert: false, pred: []},
           {obj: listId,  action: 'set', elemId: '_head', insert: true, value: 'a', pred: []}
         ]
       }])
       const s3 = Automerge.change(s2, doc => doc.list.deleteAt(0))
-      const s4 = Automerge.load(Automerge.save(s3), '01234567')
+      const s4 = Automerge.load(Automerge.save(s3), '01234567012345670123456701234567')
       const s5 = Automerge.change(s4, doc => doc.list.push('b'))
       const changes45 = Automerge.getAllChanges(s5).map(decodeChange)
       assert.deepStrictEqual(s5, {list: ['b']})
       assert.deepStrictEqual(changes45[2], {
-        hash: changes45[2].hash, actor: '01234567', seq: 3, startOp: 4,
+        hash: changes45[2].hash, actor: '01234567012345670123456701234567', seq: 3, startOp: 4,
         time: changes45[2].time, message: '', deps: [changes45[1].hash], ops: [
           {obj: listId, action: 'set', elemId: '_head', insert: true, value: 'b', pred: []}
         ]

@@ -56,16 +56,16 @@ describe('TypeScript support', () => {
     })
 
     it('should allow passing options when initializing with `from`', () => {
-      const actorId = '1234'
+      const actorId = '12341234123412341234123412341234'
       const s1 = Automerge.from<BirdList>({ birds: [] }, actorId)
-      assert.strictEqual(Automerge.getActorId(s1), '1234')
+      assert.strictEqual(Automerge.getActorId(s1), '12341234123412341234123412341234')
       const s2 = Automerge.from<BirdList>({ birds: [] }, { actorId })
-      assert.strictEqual(Automerge.getActorId(s2), '1234')
+      assert.strictEqual(Automerge.getActorId(s2), '12341234123412341234123412341234')
     })
 
     it('should allow the actorId to be configured', () => {
-      let s1 = Automerge.init<BirdList>('111111')
-      assert.strictEqual(Automerge.getActorId(s1), '111111')
+      let s1 = Automerge.init<BirdList>('11111111111111111111111111111111')
+      assert.strictEqual(Automerge.getActorId(s1), '11111111111111111111111111111111')
       let s2 = Automerge.init<BirdList>()
       assert.strictEqual(UUID_PATTERN.test(Automerge.getActorId(s2)), true)
     })
@@ -93,14 +93,14 @@ describe('TypeScript support', () => {
     })
 
     it('should allow a frontend actorId to be configured', () => {
-      const s0 = Frontend.init<NumberBox>('111111')
-      assert.strictEqual(Frontend.getActorId(s0), '111111')
+      const s0 = Frontend.init<NumberBox>('11111111111111111111111111111111')
+      assert.strictEqual(Frontend.getActorId(s0), '11111111111111111111111111111111')
     })
 
     it('should allow frontend actorId assignment to be deferred', () => {
       const s0 = Frontend.init<NumberBox>({ deferActorId: true })
       assert.strictEqual(Frontend.getActorId(s0), undefined)
-      const s1 = Frontend.setActorId(s0, 'abcdef1234')
+      const s1 = Frontend.setActorId(s0, 'abcdef12abcdef12abcdef12abcdef12')
       const [s2, req] = Frontend.change(s1, doc => (doc.number = 15))
       assert.deepStrictEqual(s2, { number: 15 })
     })
@@ -113,11 +113,11 @@ describe('TypeScript support', () => {
     })
 
     it('should allow options to be passed to Frontend.from()', () => {
-      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '1234' })
-      assert.strictEqual(Frontend.getActorId(s1), '1234')
+      const [s1, req1] = Frontend.from<BirdList>({ birds: []}, { actorId: '12341234123412341234123412341234' })
+      assert.strictEqual(Frontend.getActorId(s1), '12341234123412341234123412341234')
       assert.deepStrictEqual(s1, { birds: [] })
-      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '1234')
-      assert.strictEqual(Frontend.getActorId(s2), '1234')
+      const [s2, req2] = Frontend.from<BirdList>({ birds: []}, '12341234123412341234123412341234')
+      assert.strictEqual(Frontend.getActorId(s2), '12341234123412341234123412341234')
     })
   })
 
@@ -140,10 +140,11 @@ describe('TypeScript support', () => {
     })
 
     it('should allow the actorId to be configured', () => {
+      let actorId1 = '11111111111111111111111111111111'
       let s1 = Automerge.init<BirdList>()
       s1 = Automerge.change(s1, doc => (doc.birds = ['goldfinch']))
-      let s2 = Automerge.load<BirdList>(Automerge.save(s1), '111111')
-      assert.strictEqual(Automerge.getActorId(s2), '111111')
+      let s2 = Automerge.load<BirdList>(Automerge.save(s1), actorId1)
+      assert.strictEqual(Automerge.getActorId(s2), actorId1)
     })
 
     it('should allow the freeze option to be passed in', () => {
@@ -180,15 +181,15 @@ describe('TypeScript support', () => {
     })
 
     it('should allow inspection of conflicts', () => {
-      let s1 = Automerge.init<NumberBox>('111111')
+      let s1 = Automerge.init<NumberBox>('11111111111111111111111111111111')
       s1 = Automerge.change(s1, doc => (doc.number = 3))
-      let s2 = Automerge.init<NumberBox>('222222')
+      let s2 = Automerge.init<NumberBox>('22222222222222222222222222222222')
       s2 = Automerge.change(s2, doc => (doc.number = 42))
       let s3 = Automerge.merge(s1, s2)
       assert.strictEqual(s3.number, 42)
       assert.deepStrictEqual(
         Automerge.getConflicts(s3, 'number'),
-        { '1@111111': 3, '1@222222': 42 })
+        { '1@11111111111111111111111111111111': 3, '1@22222222222222222222222222222222': 42 })
     })
 
     it('should allow changes in the frontend', () => {
@@ -426,7 +427,7 @@ describe('TypeScript support', () => {
       // new type e.g. without the `ts-ignore` flag, this would throw a type error:
 
       // @ts-ignore - Property 'publisher' does not exist on type book
-      const p2 = s1.books.byId(id).publisher 
+      const p2 = s1.books.byId(id).publisher
 
       // So we need to create new types
       interface BookDeluxe extends Book {

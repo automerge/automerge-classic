@@ -20,8 +20,8 @@ function checkActorId(actorId) {
   if (!/^[0-9a-f]+$/.test(actorId)) {
     throw new RangeError('actorId must consist only of lowercase hex digits')
   }
-  if (actorId.length % 2 !== 0) {
-    throw new RangeError('actorId must consist of an even number of digits')
+  if (actorId.length !== 32) {
+    throw new RangeError(`actorId must be 32 characters in length but found ${actorId.length}`)
   }
 }
 
