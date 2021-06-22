@@ -1,4 +1,3 @@
-
 // Convience classes to allow users to stricly specify the number type they want
 
 class Int {
