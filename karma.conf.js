@@ -35,6 +35,11 @@ module.exports = function(config) {
     // Webpack can handle Typescript via ts-loader
     karmaTypescriptConfig: {
       tsconfig: './tsconfig.json',
+      bundlerOptions: {
+        resolve: {
+          alias: { automerge: './src/automerge.js' }
+        }
+      },
       compilerOptions: {
         allowJs: true,
         sourceMap: true,
