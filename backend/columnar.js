@@ -241,10 +241,9 @@ function encodeOperationAction(op, columns) {
 }
 
 /**
- *  Given the datatype for a number, determine the typeTag and the value to encode
- *  otherwise guess
+ * Given the datatype for a number, determine the typeTag and the value to encode
+ * otherwise guess
  */
-
 function getNumberTypeAndValue(op) {
   switch (op.datatype) {
     case "counter":

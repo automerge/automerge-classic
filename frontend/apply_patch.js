@@ -21,7 +21,7 @@ function getValue(patch, object, updated) {
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
   } else {
-    // Primitive value (int, uint, float32, float64, string, boolean, or null)
+    // Primitive value (int, uint, float64, string, boolean, or null)
     return patch.value
   }
 }

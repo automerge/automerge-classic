@@ -94,7 +94,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {type: 'value', value: 3, datatype: "int"}}}
+          objectId: `1@${actor}`, type: 'map', props: {wrens: {[`2@${actor}`]: {type: 'value', value: 3, datatype: 'int'}}}
         }}}}
       })
     })
@@ -114,7 +114,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`3@${actor}`]: {type: 'value', value: 15, datatype: "int"}}}
+          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`3@${actor}`]: {type: 'value', value: 15, datatype: 'int'}}}
         }}}}
       })
     })
@@ -139,10 +139,10 @@ describe('Automerge.Backend', () => {
         clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), maxOp: 4, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {
           [`3@${actor1}`]: {objectId: `3@${actor1}`, type: 'map', props: {
-            hawks: {[`4@${actor1}`]: {type: 'value', value: 1, datatype: "int"}}
+            hawks: {[`4@${actor1}`]: {type: 'value', value: 1, datatype: 'int'}}
           }},
           [`3@${actor2}`]: {objectId: `3@${actor2}`, type: 'map', props: {
-            sparrows: {[`4@${actor2}`]: {type: 'value', value: 15, datatype: "int"}}
+            sparrows: {[`4@${actor2}`]: {type: 'value', value: 15, datatype: 'int'}}
           }}
         }}}
       })
@@ -169,7 +169,7 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {
           [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'map', props: {}},
           [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {
-            sparrows: {[`3@${actor1}`]: {type: 'value', value: 17, datatype: "int"}}
+            sparrows: {[`3@${actor1}`]: {type: 'value', value: 17, datatype: 'int'}}
           }}
         }}}
       })
@@ -387,7 +387,7 @@ describe('Automerge.Backend', () => {
         deps: [hash(change1), hash(change3)].sort(),
         diffs: {objectId: '_root', type: 'map', props: {conflict: {
           [`1@${actor1}`]: {objectId: `1@${actor1}`, type: 'list', edits: []},
-          [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {type: 'value', value: 12, datatype: "int"}}}}
+          [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {sparrows: {[`2@${actor2}`]: {type: 'value', value: 12, datatype: 'int'}}}}
         }}}
       })
     })
@@ -483,7 +483,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -519,7 +519,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [null, null, null ]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], values: [null, null, null]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -527,7 +527,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 1}, deps: [hash(change1)], maxOp: 4, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [null, null, null ]}
+            {action: 'multi-insert', index: 0, elemId: `2@${actor}`, values: [null, null, null]}
           ]
         }}}}
       })
@@ -537,7 +537,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'uint', values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'uint', values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -555,7 +555,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'float64', values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'float64', values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -573,7 +573,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'timestamp', values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'timestamp', values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -591,7 +591,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'counter', values: [1, 2, 3,  4, 5]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'counter', values: [1, 2, 3, 4, 5]},
       ]}
       const s0 = Backend.init()
       const [s1, patch1] = Backend.applyChanges(s0, [encodeChange(change1)])
@@ -609,7 +609,7 @@ describe('Automerge.Backend', () => {
       const actor = uuid()
       const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
         {action: 'makeList', obj: '_root', key: 'todos', pred: []},
-        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, true, "hello"]},
+        {action: 'set', obj: `1@${actor}`, insert: true, elemId: '_head', pred: [], datatype: 'int', values: [1, true, 'hello']},
       ]}
       const s0 = Backend.init()
       assert.throws(() => { Backend.applyLocalChange(s0, change1) }, /Decode failed/)
@@ -1034,7 +1034,7 @@ describe('Automerge.Backend', () => {
       assert.deepStrictEqual(Backend.getPatch(s1), {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 4, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
-          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`4@${actor}`]: {type: 'value', value: 15, datatype: "int"}}}
+          objectId: `1@${actor}`, type: 'map', props: {sparrows: {[`4@${actor}`]: {type: 'value', value: 15, datatype: 'int'}}}
         }}}}
       })
     })
