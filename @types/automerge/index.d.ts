@@ -113,6 +113,10 @@ declare module 'automerge' {
     value: number
   }
 
+  class Int { constructor(value: number) }
+  class Uint { constructor(value: number) }
+  class Float64 { constructor(value: number) }
+
   // Readonly variants
 
   type ReadonlyTable<T> = ReadonlyArray<T> & Table<T>
@@ -282,7 +286,8 @@ declare module 'automerge' {
     action: 'multi-insert'
     index: number   // the list index at which to insert the first value
     elemId: OpId    // the unique ID of the first inserted element
-    values: (number | boolean | string | null)[] // list of values to insert
+    values: number[] | boolean[] | string[] | null[] // list of values to insert
+    datatype?: DataType // all values must be of the same datatype
   }
 
   // Describes the update of the value or nested object at a particular index
@@ -329,7 +334,10 @@ declare module 'automerge' {
     | 'text'
 
   type DataType =
-    | 'counter' //..
+    | 'int'
+    | 'uint'
+    | 'float64'
+    | 'counter'
     | 'timestamp'
 
   // TYPE UTILITY FUNCTIONS
