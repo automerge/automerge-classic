@@ -3,6 +3,7 @@ const { interpretPatch } = require('./apply_patch')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
+const { Int, Uint, Float64 } = require('./numbers')
 const { isObject, parseOpId } = require('../src/common')
 const uuid = require('../src/uuid')
 
@@ -59,6 +60,12 @@ class Context {
         // Date object, represented as milliseconds since epoch
         return {type: 'value', value: value.getTime(), datatype: 'timestamp'}
 
+      } else if (value instanceof Int) {
+        return {type: 'value', value: value.value, datatype: 'int'}
+      } else if (value instanceof Uint) {
+        return {type: 'value', value: value.value, datatype: 'uint'}
+      } else if (value instanceof Float64) {
+        return {type: 'value', value: value.value, datatype: 'float64'}
       } else if (value instanceof Counter) {
         // Counter object
         return {type: 'value', value: value.value, datatype: 'counter'}
@@ -75,8 +82,14 @@ class Context {
           return {objectId, type, props: {}}
         }
       }
+    } else if (typeof value === 'number') {
+      if (Number.isInteger(value) && value <= Number.MAX_SAFE_INTEGER && value >= Number.MIN_SAFE_INTEGER) {
+        return {type: 'value', value, datatype: 'int'}
+      } else {
+        return {type: 'value', value, datatype: 'float64'}
+      }
     } else {
-      // Primitive value (number, string, boolean, or null)
+      // Primitive value (string, boolean, or null)
       return {type: 'value', value}
     }
   }
@@ -282,7 +295,7 @@ class Context {
       throw new RangeError('The key of a map entry must not be an empty string')
     }
 
-    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter)) {
+    if (isObject(value) && !(value instanceof Date) && !(value instanceof Counter) && !(value instanceof Int) && !(value instanceof Uint) && !(value instanceof Float64)) {
       // Nested object (map, list, text, or table)
       return this.createNestedObjects(objectId, key, value, insert, pred, elemId)
     } else {
@@ -360,15 +373,28 @@ class Context {
     if (index < 0 || index > list.length) {
       throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
     }
+    if (values.length === 0) return
 
     let elemId = getElemId(list, index, true)
     const allPrimitive = values.every(v => typeof v === 'string' || typeof v === 'number' ||
-                                      typeof v === 'boolean' || v === null)
+                                           typeof v === 'boolean' || v === null ||
+                                           (isObject(v) && (v instanceof Date || v instanceof Counter || v instanceof Int ||
+                                                            v instanceof Uint || v instanceof Float64)))
+    const allValueDescriptions = allPrimitive ? values.map(v => this.getValueDescription(v)) : []
+    const allDatatypesSame = allValueDescriptions.every(t => t.datatype === allValueDescriptions[0].datatype)
 
-    if (allPrimitive && values.length > 1) {
-      let nextElemId = this.nextOpId()
-      this.addOp({action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []})
-      subpatch.edits.push({action: 'multi-insert', elemId: nextElemId, index, values})
+    if (allPrimitive && allDatatypesSame && values.length > 1) {
+      const nextElemId = this.nextOpId()
+      const datatype = allValueDescriptions[0].datatype
+      const values = allValueDescriptions.map(v => v.value)
+      const op = {action: 'set', obj: subpatch.objectId, elemId, insert: true, values, pred: []}
+      const edit = {action: 'multi-insert', elemId: nextElemId, index, values}
+      if (datatype) {
+        op.datatype = datatype
+        edit.datatype = datatype
+      }
+      this.addOp(op)
+      subpatch.edits.push(edit)
     } else {
       for (let offset = 0; offset < values.length; offset++) {
         let nextElemId = this.nextOpId()

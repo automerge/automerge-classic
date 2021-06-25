@@ -20,10 +20,8 @@ function getValue(patch, object, updated) {
     return new Date(patch.value)
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
-  } else if (patch.datatype !== undefined) {
-    throw new TypeError(`Unknown datatype: ${patch.datatype}`)
   } else {
-    // Primitive value (number, string, boolean, or null)
+    // Primitive value (int, uint, float64, string, boolean, or null)
     return patch.value
   }
 }
@@ -193,10 +191,12 @@ function updateListObject(patch, obj, updated) {
 
     } else if (edit.action === 'multi-insert') {
       const startElemId = parseOpId(edit.elemId), newElems = [], newValues = [], newConflicts = []
+      const datatype = edit.datatype
       edit.values.forEach((value, index) => {
         const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
+        value = getValue({ value, datatype }, undefined, updated)
         newValues.push(value)
-        newConflicts.push({[elemId]: {value, type: 'value'}})
+        newConflicts.push({[elemId]: {value, datatype, type: 'value'}})
         newElems.push(elemId)
       })
       list.splice(edit.index, 0, ...newValues)
@@ -236,7 +236,9 @@ function updateTextObject(patch, obj, updated) {
 
     } else if (edit.action === 'multi-insert') {
       const startElemId = parseOpId(edit.elemId)
+      const datatype = edit.datatype
       const newElems = edit.values.map((value, index) => {
+        value = getValue({ datatype, value }, undefined, updated)
         const elemId = `${startElemId.counter + index}@${startElemId.actorId}`
         return {elemId, pred: [elemId], value}
       })

@@ -241,21 +241,34 @@ function encodeOperationAction(op, columns) {
 }
 
 /**
- * Encodes the integer `value` into the two columns `valLen` and `valRaw`,
- * with the datatype tag set to `typeTag`. If `typeTag` is zero, it is set
- * automatically to signed or unsigned depending on the sign of the value.
- * Values with non-zero type tags are always encoded as signed integers.
+ * Given the datatype for a number, determine the typeTag and the value to encode
+ * otherwise guess
  */
-function encodeInteger(value, typeTag, columns) {
-  let numBytes
-  if (value < 0 || typeTag > 0) {
-    numBytes = columns.valRaw.appendInt53(value)
-    if (!typeTag) typeTag = VALUE_TYPE.LEB128_INT
-  } else {
-    numBytes = columns.valRaw.appendUint53(value)
-    typeTag = VALUE_TYPE.LEB128_UINT
+function getNumberTypeAndValue(op) {
+  switch (op.datatype) {
+    case "counter":
+      return [ VALUE_TYPE.COUNTER, op.value ]
+    case "timestamp":
+      return [ VALUE_TYPE.TIMESTAMP, op.value ]
+    case "uint":
+      return [ VALUE_TYPE.LEB128_UINT, op.value ]
+    case "int":
+      return [ VALUE_TYPE.LEB128_INT, op.value ]
+    case "float64": {
+      const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
+      view64.setFloat64(0, op.value, true)
+      return [ VALUE_TYPE.IEEE754,  new Uint8Array(buf64) ]
+    }
+    default:
+      // increment operators get resolved here ...
+      if (Number.isInteger(op.value) && op.value <= Number.MAX_SAFE_INTEGER && op.value >= Number.MIN_SAFE_INTEGER) {
+        return [ VALUE_TYPE.LEB128_INT, op.value ]
+      } else {
+        const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
+        view64.setFloat64(0, op.value, true)
+        return [ VALUE_TYPE.IEEE754,  new Uint8Array(buf64) ]
+      }
   }
-  columns.valLen.appendValue(numBytes << 4 | typeTag)
 }
 
 /**
@@ -275,33 +288,23 @@ function encodeValue(op, columns) {
   } else if (ArrayBuffer.isView(op.value)) {
     const numBytes = columns.valRaw.appendRawBytes(new Uint8Array(op.value.buffer))
     columns.valLen.appendValue(numBytes << 4 | VALUE_TYPE.BYTES)
-  } else if (op.datatype === 'counter' && typeof op.value === 'number') {
-    encodeInteger(op.value, VALUE_TYPE.COUNTER, columns)
-  } else if (op.datatype === 'timestamp' && typeof op.value === 'number') {
-    encodeInteger(op.value, VALUE_TYPE.TIMESTAMP, columns)
+  } else if (typeof op.value === 'number') {
+    let [typeTag, value] = getNumberTypeAndValue(op)
+    let numBytes
+    if (typeTag === VALUE_TYPE.LEB128_UINT) {
+      numBytes = columns.valRaw.appendUint53(value)
+    } else if (typeTag === VALUE_TYPE.IEEE754) {
+      numBytes = columns.valRaw.appendRawBytes(value)
+    } else {
+      numBytes = columns.valRaw.appendInt53(value)
+    }
+    columns.valLen.appendValue(numBytes << 4 | typeTag)
   } else if (typeof op.datatype === 'number' && op.datatype >= VALUE_TYPE.MIN_UNKNOWN &&
              op.datatype <= VALUE_TYPE.MAX_UNKNOWN && op.value instanceof Uint8Array) {
     const numBytes = columns.valRaw.appendRawBytes(op.value)
     columns.valLen.appendValue(numBytes << 4 | op.datatype)
   } else if (op.datatype) {
       throw new RangeError(`Unknown datatype ${op.datatype} for value ${op.value}`)
-  } else if (typeof op.value === 'number') {
-    if (Number.isInteger(op.value) && op.value <= Number.MAX_SAFE_INTEGER && op.value >= Number.MIN_SAFE_INTEGER) {
-      encodeInteger(op.value, 0, columns)
-    } else {
-      // Encode number in 32-bit float if this can be done without loss of precision
-      const buf32 = new ArrayBuffer(4), view32 = new DataView(buf32)
-      view32.setFloat32(0, op.value, true) // true means little-endian
-      if (view32.getFloat32(0, true) === op.value) {
-        columns.valRaw.appendRawBytes(new Uint8Array(buf32))
-        columns.valLen.appendValue(4 << 4 | VALUE_TYPE.IEEE754)
-      } else {
-        const buf64 = new ArrayBuffer(8), view64 = new DataView(buf64)
-        view64.setFloat64(0, op.value, true) // true means little-endian
-        columns.valRaw.appendRawBytes(new Uint8Array(buf64))
-        columns.valLen.appendValue(8 << 4 | VALUE_TYPE.IEEE754)
-      }
-    }
   } else {
     throw new RangeError(`Unsupported value in operation: ${op.value}`)
   }
@@ -324,15 +327,13 @@ function decodeValue(sizeTag, bytes) {
     return {value: utf8ToString(bytes)}
   } else {
     if (sizeTag % 16 === VALUE_TYPE.LEB128_UINT) {
-      return {value: new Decoder(bytes).readUint53()}
+      return {value: new Decoder(bytes).readUint53(), datatype: "uint"}
     } else if (sizeTag % 16 === VALUE_TYPE.LEB128_INT) {
-      return {value: new Decoder(bytes).readInt53()}
+      return {value: new Decoder(bytes).readInt53(), datatype: "int"}
     } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-      if (bytes.byteLength === 4) {
-        return {value: view.getFloat32(0, true)} // true means little-endian
-      } else if (bytes.byteLength === 8) {
-        return {value: view.getFloat64(0, true)}
+      if (bytes.byteLength === 8) {
+        return {value: view.getFloat64(0, true), datatype: "float64"}
       } else {
         throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
       }
@@ -453,6 +454,14 @@ function encodeOps(ops, forDocument) {
   return columnList.sort((a, b) => a.id - b.id)
 }
 
+function validDatatype(value, datatype) {
+  if (datatype === undefined) {
+    return (typeof value === 'string' || typeof value === 'boolean' || value === null)
+  } else {
+    return typeof value === 'number'
+  }
+}
+
 function expandMultiOps(ops, startOp, actor) {
   let opNum = startOp
   let expandedOps = []
@@ -460,8 +469,10 @@ function expandMultiOps(ops, startOp, actor) {
     if (op.action === 'set' && op.values && op.insert) {
       if (op.pred.length !== 0) throw new RangeError('multi-insert pred must be empty')
       let lastElemId = op.elemId
+      const datatype = op.datatype
       for (const value of op.values) {
-        expandedOps.push({action: 'set', obj: op.obj, elemId: lastElemId, value, pred: [], insert: true})
+        if (!validDatatype(value, datatype)) throw new RangeError(`Decode failed: bad value/datatype association (${value},${datatype})`)
+        expandedOps.push({action: 'set', obj: op.obj, elemId: lastElemId, datatype, value, pred: [], insert: true})
         lastElemId = `${opNum}@${actor}`
         opNum += 1
       }
@@ -1315,8 +1326,11 @@ function appendEdit(existingEdits, nextEdit) {
       lastEdit.index === nextEdit.index - 1 &&
       lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
       lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId &&
-      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1)) {
+      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1) &&
+      lastEdit.value.datatype === nextEdit.value.datatype &&
+      typeof lastEdit.value.value === typeof nextEdit.value.value) {
     lastEdit.action = 'multi-insert'
+    if (nextEdit.value.datatype) { lastEdit.datatype = nextEdit.value.datatype }
     lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
     delete lastEdit.value
     delete lastEdit.opId
@@ -1324,7 +1338,9 @@ function appendEdit(existingEdits, nextEdit) {
   } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
              lastEdit.index + lastEdit.values.length === nextEdit.index &&
              nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId &&
-             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length)) {
+             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length) &&
+             lastEdit.datatype === nextEdit.value.datatype &&
+             typeof lastEdit.values[0] === typeof nextEdit.value.value) {
     lastEdit.values.push(nextEdit.value.value)
 
   } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&

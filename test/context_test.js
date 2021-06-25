@@ -20,10 +20,10 @@ describe('Proxying context', () => {
       context.setMapKey([], 'sparrows', 5)
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
-        sparrows: {[`1@${context.actorId}`]: {value: 5, type: 'value'}}
+        sparrows: {[`1@${context.actorId}`]: {value: 5, datatype: 'int', type: 'value'}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: '_root', action: 'set', key: 'sparrows', insert: false, value: 5, pred: []}
+        {obj: '_root', action: 'set', key: 'sparrows', insert: false, datatype: 'int', value: 5, pred: []}
       ])
     })
 
@@ -39,10 +39,10 @@ describe('Proxying context', () => {
       context.setMapKey([], 'goldfinches', 3)
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
-        goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value'}}
+        goldfinches: {[`1@${context.actorId}`]: {value: 3, datatype: 'int', type: 'value'}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: '_root', action: 'set', key: 'goldfinches', insert: false, value: 3, pred: ['1@actor1', '2@actor2']}
+        {obj: '_root', action: 'set', key: 'goldfinches', insert: false, datatype: 'int', value: 3, pred: ['1@actor1', '2@actor2']}
       ])
     })
 
@@ -52,12 +52,12 @@ describe('Proxying context', () => {
       const objectId = applyPatch.firstCall.args[0].props.birds[`1@${context.actorId}`].objectId
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {[`1@${context.actorId}`]: {objectId, type: 'map', props: {
-          goldfinches: {[`2@${context.actorId}`]: {value: 3, type: 'value'}}
+          goldfinches: {[`2@${context.actorId}`]: {value: 3, datatype: 'int', type: 'value'}}
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
         {obj: '_root', action: 'makeMap', key: 'birds', insert: false, pred: []},
-        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3, pred: []}
+        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, datatype: 'int', value: 3, pred: []}
       ])
     })
 
@@ -69,11 +69,11 @@ describe('Proxying context', () => {
       assert(applyPatch.calledOnce)
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {
         birds: {'1@actor1': {objectId, type: 'map', props: {
-          goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value'}}
+          goldfinches: {[`1@${context.actorId}`]: {value: 3, datatype: 'int', type: 'value'}}
         }}}
       }})
       assert.deepStrictEqual(context.ops, [
-        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3, pred: []}
+        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, datatype: 'int', value: 3, pred: []}
       ])
     })
 
@@ -89,11 +89,11 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {birds: {
         '1@actor1': {objectId: objectId1, type: 'map', props: {}},
         '1@actor2': {objectId: objectId2, type: 'map', props: {
-          goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value'}}
+          goldfinches: {[`1@${context.actorId}`]: {value: 3, datatype: 'int', type: 'value'}}
         }}
       }}})
       assert.deepStrictEqual(context.ops, [
-        {obj: objectId2, action: 'set', key: 'goldfinches', insert: false, value: 3, pred: []}
+        {obj: objectId2, action: 'set', key: 'goldfinches', insert: false, datatype: 'int', value: 3, pred: []}
       ])
     })
 
@@ -108,12 +108,12 @@ describe('Proxying context', () => {
       assert.deepStrictEqual(applyPatch.firstCall.args[0], {objectId: '_root', type: 'map', props: {values: {
         '1@actor1': {value: dateValue.getTime(), datatype: 'timestamp', type: 'value'},
         '1@actor2': {value: 0, datatype: 'counter', type: 'value'},
-        '1@actor3': {value: 42, type: 'value'},
+        '1@actor3': {value: 42, datatype: 'int', type: 'value'},
         '1@actor4': {value: null, type: 'value'},
-        '1@actor5': {objectId, type: 'map', props: {goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value'}}}}
+        '1@actor5': {objectId, type: 'map', props: {goldfinches: {[`1@${context.actorId}`]: {value: 3, type: 'value', datatype: 'int' }}}}
       }}})
       assert.deepStrictEqual(context.ops, [
-        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, value: 3, pred: []}
+        {obj: objectId, action: 'set', key: 'goldfinches', insert: false, datatype: 'int', value: 3, pred: []}
       ])
     })
 
