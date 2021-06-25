@@ -6,7 +6,7 @@
     "lib": ["dom", "esnext.asynciterable", "es2017", "es2016", "es2015"],
     "module": "commonjs",
     "moduleResolution": "node",
-    "paths": { "*": ["src/*", "*", "frontend/*", "backend/*"] },
+    "paths": { "automerge": ["*"]},
     "rootDir": "",
     "target": "es2016",
     "typeRoots": ["./@types", "./node_modules/@types"]
