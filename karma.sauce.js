@@ -66,7 +66,13 @@ module.exports = function(config) {
     webpack: webpackConfig,
     karmaTypescriptConfig: {
       tsconfig: './tsconfig.json',
+      bundlerOptions: {
+        resolve: {
+          alias: { automerge: './src/automerge.js' }
+        }
+      },
       compilerOptions: {
+        allowJs: true,
         sourceMap: true,
       }
     },
