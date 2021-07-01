@@ -13,6 +13,14 @@ function parseListIndex(key) {
   return key
 }
 
+function createArrayOfNulls(length) {
+  const array = Array(length)
+  for (let i = 0; i < length; i++) {
+    array[i] = null;
+  }
+  return array;
+}
+
 function listMethods(context, listId, path) {
   const methods = {
     deleteAt(index, numDelete) {
@@ -173,8 +181,20 @@ const ListHandler = {
   },
 
   set (target, key, value) {
-    const [context, /* objectId */, path] = target
-    context.setListIndex(path, parseListIndex(key), value)
+    const [context, objectId, path] = target
+    if (key === 'length') {
+      if (typeof value !== 'number') {
+        throw new RangeError("Invalid array length");
+      }
+      const length = context.getObject(objectId).length
+      if (length > value) {
+        context.splice(path, value, length - value, []);
+      } else {
+        context.splice(path, length, 0, createArrayOfNulls(value - length))
+      }
+    } else {
+      context.setListIndex(path, parseListIndex(key), value)
+    }
     return true
   },
 
