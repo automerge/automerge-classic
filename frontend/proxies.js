@@ -14,11 +14,9 @@ function parseListIndex(key) {
 }
 
 function createArrayOfNulls(length) {
-  const array = Array(length)
-  for (let i = 0; i < length; i++) {
-    array[i] = null;
-  }
-  return array;
+  const array = new Array(length)
+  for (let i = 0; i < length; i++) array[i] = null
+  return array
 }
 
 function listMethods(context, listId, path) {
@@ -184,11 +182,11 @@ const ListHandler = {
     const [context, objectId, path] = target
     if (key === 'length') {
       if (typeof value !== 'number') {
-        throw new RangeError("Invalid array length");
+        throw new RangeError("Invalid array length")
       }
       const length = context.getObject(objectId).length
       if (length > value) {
-        context.splice(path, value, length - value, []);
+        context.splice(path, value, length - value, [])
       } else {
         context.splice(path, length, 0, createArrayOfNulls(value - length))
       }

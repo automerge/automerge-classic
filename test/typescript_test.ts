@@ -122,28 +122,24 @@ describe('TypeScript support', () => {
 
     it('should allow the length of the array to be increased', () => {
       let s1: Doc<BirdList> = Automerge.from({ birds: []})
-      let s2 = Automerge.change(s1, doc => {
-        doc.birds.length = 1;
-      })
+      let s2 = Automerge.change(s1, doc => doc.birds.length = 1)
       assert.deepStrictEqual(s2.birds, [null])
     })
 
     it('should allow the length of the array to be decreased', () => {
       let s1: Doc<BirdList> = Automerge.from({ birds: ['1234']})
-      let s2 = Automerge.change(s1, doc => {
-        doc.birds.length = 0;
-      })
+      let s2 = Automerge.change(s1, doc => doc.birds.length = 0)
       assert.deepStrictEqual(s2.birds, [])
     })
 
     it('should throw error if length is invalid', () => {
       let s1: Doc<BirdList> = Automerge.from({ birds: ['1234']})
       assert.throws(() => Automerge.change(s1, doc => {
-        doc.birds.length = undefined;
-      }), "array length");
+        doc.birds.length = undefined
+      }), "array length")
       assert.throws(() => Automerge.change(s1, doc => {
-        doc.birds.length = NaN;
-      }), "array length");
+        doc.birds.length = NaN
+      }), "array length")
     })
   })
 
