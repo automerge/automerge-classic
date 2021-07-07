@@ -5,6 +5,7 @@ const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
 const { Int, Uint, Float64 } = require('./numbers')
 const { isObject, parseOpId } = require('../src/common')
+const { createArrayOfNulls } = require('./proxies')
 const uuid = require('../src/uuid')
 
 
@@ -414,9 +415,10 @@ class Context {
     const list = this.getObject(objectId)
     if (index === list.length) {
       return this.splice(path, index, 0, [value])
-    }
-    if (index < 0 || index > list.length) {
-      throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
+    } else if (index > list.length) {
+      const insertions = createArrayOfNulls(index - list.length)
+      insertions.push(value)
+      return this.splice(path, list.length, 0, insertions)
     }
     if (list[index] instanceof Counter) {
       throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')

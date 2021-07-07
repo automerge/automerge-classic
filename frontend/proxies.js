@@ -265,4 +265,4 @@ function rootObjectProxy(context) {
   return mapProxy(context, '_root', [])
 }
 
-module.exports = { rootObjectProxy }
+module.exports = { rootObjectProxy, createArrayOfNulls }
