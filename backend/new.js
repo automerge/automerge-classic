@@ -7,6 +7,33 @@ const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_C
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
   .reduce((acc, [k, v]) => { acc[v] = k; return acc }, [])
 
+const objActorIdx = 0, objCtrIdx = 1, keyActorIdx = 2, keyCtrIdx = 3, keyStrIdx = 4,
+  idActorIdx = 5, idCtrIdx = 6, insertIdx = 7, actionIdx = 8, valLenIdx = 9, valRawIdx = 10,
+  predNumIdx = 13, predActorIdx = 14, predCtrIdx = 15, succNumIdx = 13, succActorIdx = 14, succCtrIdx = 15
+
+/**
+ * Check that the columns of a change appear at the index at which we expect them to be, according
+ * to the *Idx constants above.
+ */
+function checkColumnIds(columns) {
+  if (columns[objActorIdx ].columnId !== CHANGE_COLUMNS.objActor  ||
+      columns[objCtrIdx   ].columnId !== CHANGE_COLUMNS.objCtr    ||
+      columns[keyActorIdx ].columnId !== CHANGE_COLUMNS.keyActor  ||
+      columns[keyCtrIdx   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
+      columns[keyStrIdx   ].columnId !== CHANGE_COLUMNS.keyStr    ||
+      columns[idActorIdx  ].columnId !== CHANGE_COLUMNS.idActor   ||
+      columns[idCtrIdx    ].columnId !== CHANGE_COLUMNS.idCtr     ||
+      columns[insertIdx   ].columnId !== CHANGE_COLUMNS.insert    ||
+      columns[actionIdx   ].columnId !== CHANGE_COLUMNS.action    ||
+      columns[valLenIdx   ].columnId !== CHANGE_COLUMNS.valLen    ||
+      columns[valRawIdx   ].columnId !== CHANGE_COLUMNS.valRaw    ||
+      columns[predNumIdx  ].columnId !== CHANGE_COLUMNS.predNum   ||
+      columns[predActorIdx].columnId !== CHANGE_COLUMNS.predActor ||
+      columns[predCtrIdx  ].columnId !== CHANGE_COLUMNS.predCtr) {
+    throw new RangeError('unexpected columnId')
+  }
+}
+
 /**
  * Updates `objectTree`, which is a tree of nested objects, so that afterwards
  * `objectTree[path[0]][path[1]][...] === value`. Only the root object is mutated, whereas any
@@ -530,26 +557,22 @@ function convertInsertToUpdate(edits, index, elemId) {
  * current change). `oldSuccNum` must be undefined if the operation came from the current change.
  */
 function updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
-  // FIXME: these constants duplicate those at the beginning of mergeDocChangeOps()
-  const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8, // eslint-disable-line
-    valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15 // eslint-disable-line
-
   const objectId = ops.objId
-  const elemId = op[keyStr] ? op[keyStr]
-                            : op[insert] ? `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
-                                         : `${op[keyCtr]}@${docState.actorIds[op[keyActor]]}`
+  const elemId = op[keyStrIdx] ? op[keyStrIdx]
+                               : op[insertIdx] ? `${op[idCtrIdx]}@${docState.actorIds[op[idActorIdx]]}`
+                                               : `${op[keyCtrIdx]}@${docState.actorIds[op[keyActorIdx]]}`
 
   // firstOp is true if the current operation is the first of a sequence of ops for the same key
   const firstOp = !propState[elemId]
   if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
 
   // An operation is overwritten if it is a document operation that has at least one successor
-  const isOverwritten = (oldSuccNum !== undefined && op[succNum] > 0)
+  const isOverwritten = (oldSuccNum !== undefined && op[succNumIdx] > 0)
 
   // Record all visible values for the property, and whether it has any child object
   if (!isOverwritten) {
     propState[elemId].visibleOps.push(op)
-    propState[elemId].hasChild = propState[elemId].hasChild || (op[action] % 2) === 0 // even-numbered action == make* operation
+    propState[elemId].hasChild = propState[elemId].hasChild || (op[actionIdx] % 2) === 0 // even-numbered action == make* operation
   }
 
   // If one or more of the values of the property is a child object, we update objectMeta to store
@@ -560,11 +583,11 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
   if (propState[elemId].hasChild || (prevChildren && Object.keys(prevChildren).length > 0)) {
     let values = {}
     for (let visible of propState[elemId].visibleOps) {
-      const opId = `${visible[idCtr]}@${docState.actorIds[visible[idActor]]}`
-      if (ACTIONS[visible[action]] === 'set') {
-        values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLen], visible[valRaw]))
-      } else if (visible[action] % 2 === 0) {
-        const type = visible[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[action]]] : null
+      const opId = `${visible[idCtrIdx]}@${docState.actorIds[visible[idActorIdx]]}`
+      if (ACTIONS[visible[actionIdx]] === 'set') {
+        values[opId] = Object.assign({type: 'value'}, decodeValue(visible[valLenIdx], visible[valRawIdx]))
+      } else if (visible[actionIdx] % 2 === 0) {
+        const type = visible[actionIdx] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[visible[actionIdx]]] : null
         values[opId] = emptyObjectPatch(opId, type)
       }
     }
@@ -573,33 +596,33 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
     deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId], values)
   }
 
-  const opId = `${op[idCtr]}@${docState.actorIds[op[idActor]]}`
+  const opId = `${op[idCtrIdx]}@${docState.actorIds[op[idActorIdx]]}`
   let patchKey, patchValue
 
   // For counters, increment operations are succs to the set operation that created the counter,
   // but in this case we want to add the values rather than overwriting them.
-  if (isOverwritten && ACTIONS[op[action]] === 'set' && (op[valLen] & 0x0f) === VALUE_TYPE.COUNTER) {
+  if (isOverwritten && ACTIONS[op[actionIdx]] === 'set' && (op[valLenIdx] & 0x0f) === VALUE_TYPE.COUNTER) {
     // This is the initial set operation that creates a counter. Initialise the counter state
     // to contain all successors of the set operation. Only if we later find that each of these
     // successor operations is an increment, we make the counter visible in the patch.
     if (!propState[elemId]) propState[elemId] = {visibleOps: [], hasChild: false}
     if (!propState[elemId].counterStates) propState[elemId].counterStates = {}
     let counterStates = propState[elemId].counterStates
-    let counterState = {opId, value: decodeValue(op[valLen], op[valRaw]).value, succs: {}}
+    let counterState = {opId, value: decodeValue(op[valLenIdx], op[valRawIdx]).value, succs: {}}
 
-    for (let i = 0; i < op[succNum]; i++) {
-      const succOp = `${op[succCtr][i]}@${docState.actorIds[op[succActor][i]]}`
+    for (let i = 0; i < op[succNumIdx]; i++) {
+      const succOp = `${op[succCtrIdx][i]}@${docState.actorIds[op[succActorIdx][i]]}`
       counterStates[succOp] = counterState
       counterState.succs[succOp] = true
     }
 
-  } else if (ACTIONS[op[action]] === 'inc') {
+  } else if (ACTIONS[op[actionIdx]] === 'inc') {
     // Incrementing a previously created counter.
     if (!propState[elemId] || !propState[elemId].counterStates || !propState[elemId].counterStates[opId]) {
       throw new RangeError(`increment operation ${opId} for unknown counter`)
     }
     let counterState = propState[elemId].counterStates[opId]
-    counterState.value += decodeValue(op[valLen], op[valRaw]).value
+    counterState.value += decodeValue(op[valLenIdx], op[valRawIdx]).value
     delete counterState.succs[opId]
 
     if (Object.keys(counterState.succs).length === 0) {
@@ -610,12 +633,12 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
 
   } else if (!isOverwritten) {
     // Add the value to the patch if it is not overwritten (i.e. if it has no succs).
-    if (ACTIONS[op[action]] === 'set') {
+    if (ACTIONS[op[actionIdx]] === 'set') {
       patchKey = opId
-      patchValue = Object.assign({type: 'value'}, decodeValue(op[valLen], op[valRaw]))
-    } else if (op[action] % 2 === 0) { // even-numbered action == make* operation
+      patchValue = Object.assign({type: 'value'}, decodeValue(op[valLenIdx], op[valRawIdx]))
+    } else if (op[actionIdx] % 2 === 0) { // even-numbered action == make* operation
       if (!patches[opId]) {
-        const type = op[action] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[action]]] : null
+        const type = op[actionIdx] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[actionIdx]]] : null
         patches[opId] = emptyObjectPatch(opId, type)
       }
       patchKey = opId
@@ -627,7 +650,7 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
   const patch = patches[objectId]
 
   // Updating a list or text object (with elemId key)
-  if (op[keyStr] === null) {
+  if (op[keyStrIdx] === null) {
     // If we come across any document op that was previously non-overwritten/non-deleted, that
     // means the current list element already had a value before this change was applied, and
     // therefore the current element cannot be an insert. If we already registered an insert, we
@@ -639,7 +662,7 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
 
     if (patchValue) {
       // If the op has a non-overwritten value and it came from the change, it's an insert.
-      // (It's not necessarily the case that op[insert] is true: if a list element is concurrently
+      // (It's not necessarily the case that op[insertIdx] is true: if a list element is concurrently
       // deleted and updated, the node that first processes the deletion and then the update will
       // observe the update as a re-insertion of the deleted list element.)
       if (oldSuccNum === undefined && !propState[elemId].action) {
@@ -669,8 +692,8 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
 
   } else {
     // Updating a map or table (with string key)
-    if (firstOp || !patch.props[op[keyStr]]) patch.props[op[keyStr]] = {}
-    if (patchValue) patch.props[op[keyStr]][patchKey] = patchValue
+    if (firstOp || !patch.props[op[keyStrIdx]]) patch.props[op[keyStrIdx]] = {}
+    if (patchValue) patch.props[op[keyStrIdx]][patchKey] = patchValue
   }
 }
 
@@ -683,31 +706,11 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
  * is the number of visible elements that precede the position at which we start merging.
  */
 function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
-  // Check the first couple of columns are in the positions where we expect them to be
-  const objActor = 0, objCtr = 1, keyActor = 2, keyCtr = 3, keyStr = 4, idActor = 5, idCtr = 6, insert = 7, action = 8,
-    valLen = 9, valRaw = 10, predNum = 13, predActor = 14, predCtr = 15, succNum = 13, succActor = 14, succCtr = 15
-  if (docState.opsCols[objActor ].columnId !== DOC_OPS_COLUMNS.objActor  || changeCols[objActor ].columnId !== CHANGE_COLUMNS.objActor  ||
-      docState.opsCols[objCtr   ].columnId !== DOC_OPS_COLUMNS.objCtr    || changeCols[objCtr   ].columnId !== CHANGE_COLUMNS.objCtr    ||
-      docState.opsCols[keyActor ].columnId !== DOC_OPS_COLUMNS.keyActor  || changeCols[keyActor ].columnId !== CHANGE_COLUMNS.keyActor  ||
-      docState.opsCols[keyCtr   ].columnId !== DOC_OPS_COLUMNS.keyCtr    || changeCols[keyCtr   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
-      docState.opsCols[keyStr   ].columnId !== DOC_OPS_COLUMNS.keyStr    || changeCols[keyStr   ].columnId !== CHANGE_COLUMNS.keyStr    ||
-      docState.opsCols[idActor  ].columnId !== DOC_OPS_COLUMNS.idActor   || changeCols[idActor  ].columnId !== CHANGE_COLUMNS.idActor   ||
-      docState.opsCols[idCtr    ].columnId !== DOC_OPS_COLUMNS.idCtr     || changeCols[idCtr    ].columnId !== CHANGE_COLUMNS.idCtr     ||
-      docState.opsCols[insert   ].columnId !== DOC_OPS_COLUMNS.insert    || changeCols[insert   ].columnId !== CHANGE_COLUMNS.insert    ||
-      docState.opsCols[action   ].columnId !== DOC_OPS_COLUMNS.action    || changeCols[action   ].columnId !== CHANGE_COLUMNS.action    ||
-      docState.opsCols[valLen   ].columnId !== DOC_OPS_COLUMNS.valLen    || changeCols[valLen   ].columnId !== CHANGE_COLUMNS.valLen    ||
-      docState.opsCols[valRaw   ].columnId !== DOC_OPS_COLUMNS.valRaw    || changeCols[valRaw   ].columnId !== CHANGE_COLUMNS.valRaw    ||
-      docState.opsCols[succNum  ].columnId !== DOC_OPS_COLUMNS.succNum   || changeCols[predNum  ].columnId !== CHANGE_COLUMNS.predNum   ||
-      docState.opsCols[succActor].columnId !== DOC_OPS_COLUMNS.succActor || changeCols[predActor].columnId !== CHANGE_COLUMNS.predActor ||
-      docState.opsCols[succCtr  ].columnId !== DOC_OPS_COLUMNS.succCtr   || changeCols[predCtr  ].columnId !== CHANGE_COLUMNS.predCtr) {
-    throw new RangeError('unexpected columnId')
-  }
-
   let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
   let foundListElem = false, elemVisible = false, propState = {}
-  let docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
+  let docOp = docState.opsCols[actionIdx].decoder.done ? null : readOperation(docState.opsCols)
   let docOpsConsumed = (docOp === null ? 0 : 1)
-  let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNum])
+  let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNumIdx])
   let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
 
   // Merge the two inputs: the sequence of ops in the doc, and the sequence of ops in the change.
@@ -720,12 +723,12 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
     if (changeOps.length === 0) {
       foundListElem = false
       while (changeOps.length === 0 || ops.insert ||
-             (nextChangeOp[keyStr] !== null && nextChangeOp[keyStr] === changeOps[0][keyStr]) ||
-             (nextChangeOp[keyStr] === null && nextChangeOp[keyActor] === changeOps[0][keyActor] &&
-              nextChangeOp[keyCtr] === changeOps[0][keyCtr])) {
+             (nextChangeOp[keyStrIdx] !== null && nextChangeOp[keyStrIdx] === changeOps[0][keyStrIdx]) ||
+             (nextChangeOp[keyStrIdx] === null && nextChangeOp[keyActorIdx] === changeOps[0][keyActorIdx] &&
+              nextChangeOp[keyCtrIdx] === changeOps[0][keyCtrIdx])) {
         if (nextChangeOp !== null) {
           changeOps.push(nextChangeOp)
-          predSeen.push(new Array(nextChangeOp[predNum]))
+          predSeen.push(new Array(nextChangeOp[predNumIdx]))
         }
         if (opCount === 0) {
           nextChangeOp = null
@@ -733,19 +736,19 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         }
 
         nextChangeOp = readOperation(changeCols, docState.actorTable)
-        nextChangeOp[idActor] = ops.idActorIndex
-        nextChangeOp[idCtr] = opIdCtr
+        nextChangeOp[idActorIdx] = ops.idActorIndex
+        nextChangeOp[idCtrIdx] = opIdCtr
         opCount--
         opIdCtr++
       }
     }
 
     if (changeOps.length > 0) changeOp = changeOps[0]
-    const inCorrectObject = docOp && docOp[objActor] === changeOp[objActor] && docOp[objCtr] === changeOp[objCtr]
-    const keyMatches      = docOp && docOp[keyStr] !== null && docOp[keyStr] === changeOp[keyStr]
-    const listElemMatches = docOp && docOp[keyStr] === null && changeOp[keyStr] === null &&
-      ((!docOp[insert] && docOp[keyActor] === changeOp[keyActor] && docOp[keyCtr] === changeOp[keyCtr]) ||
-        (docOp[insert] && docOp[idActor]  === changeOp[keyActor] && docOp[idCtr]  === changeOp[keyCtr]))
+    const inCorrectObject = docOp && docOp[objActorIdx] === changeOp[objActorIdx] && docOp[objCtrIdx] === changeOp[objCtrIdx]
+    const keyMatches      = docOp && docOp[keyStrIdx] !== null && docOp[keyStrIdx] === changeOp[keyStrIdx]
+    const listElemMatches = docOp && docOp[keyStrIdx] === null && changeOp[keyStrIdx] === null &&
+      ((!docOp[insertIdx] && docOp[keyActorIdx] === changeOp[keyActorIdx] && docOp[keyCtrIdx] === changeOp[keyCtrIdx]) ||
+        (docOp[insertIdx] && docOp[idActorIdx]  === changeOp[keyActorIdx] && docOp[idCtrIdx]  === changeOp[keyCtrIdx]))
 
     // We keep going until we run out of ops in the change, except that even when we run out, we
     // keep going until we have processed all doc ops for the current key/list element.
@@ -758,15 +761,15 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
     // document operation is for a different object, or if the change op's string key is
     // lexicographically first (TODO check ordering of keys beyond the basic multilingual plane).
     if (ops.insert || !inCorrectObject ||
-        (docOp[keyStr] === null && changeOp[keyStr] !== null) ||
-        (docOp[keyStr] !== null && changeOp[keyStr] !== null && changeOp[keyStr] < docOp[keyStr])) {
+        (docOp[keyStrIdx] === null && changeOp[keyStrIdx] !== null) ||
+        (docOp[keyStrIdx] !== null && changeOp[keyStrIdx] !== null && changeOp[keyStrIdx] < docOp[keyStrIdx])) {
       // Take the operations from the change
       takeChangeOps = changeOps.length
-      if (!inCorrectObject && !foundListElem && changeOp[keyStr] === null && !changeOp[insert]) {
+      if (!inCorrectObject && !foundListElem && changeOp[keyStrIdx] === null && !changeOp[insertIdx]) {
         // This can happen if we first update one list element, then another one earlier in the
         // list. That is not allowed: list element updates must occur in ascending order.
         throw new RangeError("could not find list element with ID: " +
-                             `${changeOp[keyCtr]}@${docState.actorIds[changeOp[keyActor]]}`)
+                             `${changeOp[keyCtrIdx]}@${docState.actorIds[changeOp[keyActorIdx]]}`)
       }
 
     } else if (keyMatches || listElemMatches || foundListElem) {
@@ -775,15 +778,15 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
       // document operation, we update the document operation's `succ` accordingly.
       for (let opIndex = 0; opIndex < changeOps.length; opIndex++) {
         const op = changeOps[opIndex]
-        for (let i = 0; i < op[predNum]; i++) {
-          if (op[predActor][i] === docOp[idActor] && op[predCtr][i] === docOp[idCtr]) {
+        for (let i = 0; i < op[predNumIdx]; i++) {
+          if (op[predActorIdx][i] === docOp[idActorIdx] && op[predCtrIdx][i] === docOp[idCtrIdx]) {
             // Insert into the doc op's succ list such that the lists remains sorted
             let j = 0
-            while (j < docOp[succNum] && (docOp[succCtr][j] < op[idCtr] ||
-                   docOp[succCtr][j] === op[idCtr] && docState.actorIds[docOp[succActor][j]] < ops.idActor)) j++
-            docOp[succCtr].splice(j, 0, op[idCtr])
-            docOp[succActor].splice(j, 0, ops.idActorIndex)
-            docOp[succNum]++
+            while (j < docOp[succNumIdx] && (docOp[succCtrIdx][j] < op[idCtrIdx] ||
+                   docOp[succCtrIdx][j] === op[idCtrIdx] && docState.actorIds[docOp[succActorIdx][j]] < ops.idActor)) j++
+            docOp[succCtrIdx].splice(j, 0, op[idCtrIdx])
+            docOp[succActorIdx].splice(j, 0, ops.idActorIndex)
+            docOp[succNumIdx]++
             predSeen[opIndex][i] = true
             break
           }
@@ -797,8 +800,8 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         // the wrong list element, then place the current changeOp before the docOp.
         takeChangeOps = changeOps.length
 
-      } else if (changeOps.length === 0 || docOp[idCtr] < changeOp[idCtr] ||
-          (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] < ops.idActor)) {
+      } else if (changeOps.length === 0 || docOp[idCtrIdx] < changeOp[idCtrIdx] ||
+          (docOp[idCtrIdx] === changeOp[idCtrIdx] && docState.actorIds[docOp[idActorIdx]] < ops.idActor)) {
         // When we have several operations for the same object and the same key, we want to keep
         // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
         // output it first.
@@ -809,17 +812,17 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         // succ list of the operations it overwrites; it has no separate row in the set of ops.
         for (let i = changeOps.length - 1; i >= 0; i--) {
           let deleted = true
-          for (let j = 0; j < changeOps[i][predNum]; j++) {
+          for (let j = 0; j < changeOps[i][predNumIdx]; j++) {
             if (!predSeen[i][j]) deleted = false
           }
-          if (ACTIONS[changeOps[i][action]] === 'del' && deleted) {
+          if (ACTIONS[changeOps[i][actionIdx]] === 'del' && deleted) {
             changeOps.splice(i, 1)
             predSeen.splice(i, 1)
           }
         }
 
-      } else if (docOp[idCtr] === changeOp[idCtr] && docState.actorIds[docOp[idActor]] === ops.idActor) {
-        throw new RangeError(`duplicate operation ID: ${changeOp[idCtr]}@${ops.idActor}`)
+      } else if (docOp[idCtrIdx] === changeOp[idCtrIdx] && docState.actorIds[docOp[idActorIdx]] === ops.idActor) {
+        throw new RangeError(`duplicate operation ID: ${changeOp[idCtrIdx]}@${ops.idActor}`)
       } else {
         // The changeOp has the lower opId, so we output it first.
         takeChangeOps = 1
@@ -833,16 +836,16 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
 
     if (takeDocOp) {
       appendOperation(outCols, docState.opsCols, docOp)
-      if (docOp[insert] && elemVisible) {
+      if (docOp[insertIdx] && elemVisible) {
         elemVisible = false
         listIndex++
       }
-      if (docOp[succNum] === 0) elemVisible = true
+      if (docOp[succNumIdx] === 0) elemVisible = true
       opsAppended++
-      docOp = docState.opsCols[action].decoder.done ? null : readOperation(docState.opsCols)
+      docOp = docState.opsCols[actionIdx].decoder.done ? null : readOperation(docState.opsCols)
       if (docOp !== null) {
         docOpsConsumed++
-        docOpOldSuccNum = docOp[succNum]
+        docOpOldSuccNum = docOp[succNumIdx]
       }
     }
 
@@ -851,14 +854,14 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         let op = changeOps[i]
         // Check that we've seen all ops mentioned in `pred` (they must all have lower opIds than
         // the change op's own opId, so we must have seen them already)
-        for (let j = 0; j < op[predNum]; j++) {
+        for (let j = 0; j < op[predNumIdx]; j++) {
           if (!predSeen[i][j]) {
-            throw new RangeError(`no matching operation for pred: ${op[predCtr][j]}@${docState.actorIds[op[predActor][j]]}`)
+            throw new RangeError(`no matching operation for pred: ${op[predCtrIdx][j]}@${docState.actorIds[op[predActorIdx][j]]}`)
           }
         }
         updatePatchProperty(patches, ops, op, docState, propState, listIndex)
         appendOperation(outCols, changeCols, op)
-        if (op[insert]) {
+        if (op[insertIdx]) {
           elemVisible = false
           listIndex++
         } else {
@@ -1088,6 +1091,7 @@ function applyChanges(patches, changeBuffers, docState) {
     clock[change.actor] = change.seq
 
     const changeCols = makeDecoders(change.columns, CHANGE_COLUMNS)
+    checkColumnIds(changeCols)
     docState.allCols = getAllColumns(docState.allCols, changeCols)
     const {actorIds, actorTable} = getActorTable(docState.actorIds, change)
     docState.actorIds = actorIds
