@@ -4,8 +4,8 @@ const { DOC_OPS_COLUMNS, encodeChange, decodeChange } = require('../backend/colu
 const { BackendDoc } = require('../backend/new')
 const uuid = require('../src/uuid')
 
-function checkColumns(actualCols, expectedCols) {
-  for (let actual of actualCols) {
+function checkColumns(backend, expectedCols) {
+  for (let actual of backend.blocks[0].columns) {
     const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId)
     if (expectedCols[colName]) {
       checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
@@ -42,7 +42,7 @@ describe('BackendDoc applying changes', () => {
         x: {[`3@${actor}`]: {type: 'value', value: 5}}
       }}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -85,7 +85,7 @@ describe('BackendDoc applying changes', () => {
         z: {[`4@${actor}`]: {type: 'value', value: 6}}
       }}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -165,7 +165,7 @@ describe('BackendDoc applying changes', () => {
         [`2@${actor3}`]: {type: 'value', value: 4}
       }}}
     })
-    checkColumns(backend1.docColumns, {
+    checkColumns(backend1, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -182,7 +182,7 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
     // The two backends are not identical because actors appear in a different order
-    checkColumns(backend2.docColumns, {
+    checkColumns(backend2, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -231,7 +231,7 @@ describe('BackendDoc applying changes', () => {
         [`2@${actor1}`]: {type: 'value', value: 3}
       }}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -309,7 +309,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'map', props: {y: {[`5@${actor}`]: {type: 'value', value: 'B'}}}
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [],
@@ -359,7 +359,7 @@ describe('BackendDoc applying changes', () => {
         }}}
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 0x7e, 1, 2, 2, 3], // null, 1, 2, 3, 3
       keyActor: [],
@@ -392,7 +392,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [],
@@ -436,7 +436,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -510,7 +510,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -566,7 +566,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 0, count: 1}]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [],
@@ -610,7 +610,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 1, count: 1}]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 3, 1],
       keyActor: [0, 2, 2, 0],
@@ -705,7 +705,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend.docColumns, {
+      checkColumns(backend, {
         objActor: [0, 1, 3, 0],
         objCtr:   [0, 1, 3, 1],
         keyActor: [0, 2, 2, 0],
@@ -785,7 +785,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend.docColumns, {
+      checkColumns(backend, {
         objActor: [0, 1, 4, 0],
         objCtr:   [0, 1, 4, 1],
         keyActor: [0, 2, 0x7f, 1, 0, 2], // null, null, 1, null, null
@@ -832,7 +832,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 5, 0],
       objCtr:   [0, 1, 5, 1],
       keyActor: [0, 2, 4, 0],
@@ -899,7 +899,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 2, 1, 0x7f, 3], // null, 1, 1, 3
       keyActor: [0, 2, 0x7f, 0, 0, 1], // null, null, 0, null
@@ -947,7 +947,7 @@ describe('BackendDoc applying changes', () => {
         counter: {[`1@${actor}`]: {type: 'value', value: 6, datatype: 'counter'}}
       }}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -995,7 +995,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 2, 0],
       objCtr:   [0, 1, 2, 1],
       keyActor: [0, 2, 0x7f, 0], // null, null, 0
@@ -1095,7 +1095,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend.docColumns, {
+      checkColumns(backend, {
         objActor: [0, 1, 3, 0],
         objCtr:   [0, 1, 3, 1],
         keyActor: [0, 2, 2, 0],
@@ -1143,7 +1143,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1183,7 +1183,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1245,7 +1245,7 @@ describe('BackendDoc applying changes', () => {
     // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
     // {action: 'set',      id: `4@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'y', succ: []},
     // {action: 'set',      id: `5@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'C', succ: []}
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 6, 0],
       objCtr:   [0, 1, 6, 1],
       keyActor: [0, 2, 0x7f, 0, 0, 1, 3, 0], // null, null, 0, null, 0, 0, 0
@@ -1293,7 +1293,7 @@ describe('BackendDoc applying changes', () => {
     // {action: 'set',      id: `3@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'b', succ: []},
     // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
     // {action: 'set',      id: `4@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'c', succ: []}
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1333,7 +1333,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 3, 1],
       keyActor: [0, 2, 2, 0],
@@ -1398,7 +1398,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend.docColumns, {
+      checkColumns(backend, {
         objActor: [0, 1, 2, 0], // null, actor1, actor1
         objCtr:   [0, 1, 2, 1], // null, 1, 1
         keyActor: [0, 2, 0x7f, 0], // null, null, actor1
@@ -1451,7 +1451,7 @@ describe('BackendDoc applying changes', () => {
         [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {}}
       }}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 2, 2, 0, 0x7f, 1],
       objCtr:   [0, 2, 3, 1],
       keyActor: [],
@@ -1502,7 +1502,7 @@ describe('BackendDoc applying changes', () => {
         [`1@${actor2}`]: {type: 'value', value: 1}
       }}}
     })
-    checkColumns(backend.docColumns, {
+    checkColumns(backend, {
       objActor: [0, 2, 2, 0],
       objCtr:   [0, 2, 2, 1],
       keyActor: [],

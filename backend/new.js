@@ -59,6 +59,7 @@ function deepCopyUpdate(objectTree, path, value) {
  *     elements that precede the position where the new operations should be applied.
  */
 function seekToOp(ops, docCols, actorIds) {
+  for (let col of docCols) col.decoder.reset()
   const { objActor, objCtr, keyActor, keyCtr, keyStr, idActor, idCtr, insert } = ops
   const [objActorD, objCtrD, /* keyActorD */, /* keyCtrD */, keyStrD, idActorD, idCtrD, insertD, actionD,
     /* valLenD */, /* valRawD */, /* chldActorD */, /* chldCtrD */, succNumD] = docCols.map(col => col.decoder)
@@ -342,6 +343,26 @@ function appendOperation(outCols, inCols, operation) {
       if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_LEN) blankValue = 0
       outCol.encoder.appendValue(blankValue, count)
     }
+  }
+}
+
+/**
+ * Parses the next operation from block `blockIndex` of the document. Returns an object of the form
+ * `{docOp, blockIndex}` where `docOp` is an operation in the form returned by `readOperation()`,
+ * and `blockIndex` is the block number to use on the next call (it moves on to the next block when
+ * we reach the end of the current block). `docOp` is null if there are no more operations.
+ */
+function readNextDocOp(docState, blockIndex) {
+  let block = docState.blocks[blockIndex]
+  if (!block.columns[actionIdx].decoder.done) {
+    return {docOp: readOperation(block.columns), blockIndex}
+  } else if (blockIndex === docState.blocks.length - 1) {
+    return {docOp: null, blockIndex}
+  } else {
+    blockIndex += 1
+    block = docState.blocks[blockIndex]
+    for (let col of block.columns) col.decoder.reset()
+    return {docOp: readOperation(block.columns), blockIndex}
   }
 }
 
@@ -705,10 +726,10 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
  * documented in `applyOps()`. If the operations are updating a list or text object, `listIndex`
  * is the number of visible elements that precede the position at which we start merging.
  */
-function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex) {
+function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex, blockIndex) {
   let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
-  let foundListElem = false, elemVisible = false, propState = {}
-  let docOp = docState.opsCols[actionIdx].decoder.done ? null : readOperation(docState.opsCols)
+  let foundListElem = false, elemVisible = false, propState = {}, docOp
+  ({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
   let docOpsConsumed = (docOp === null ? 0 : 1)
   let docOpOldSuccNum = (docOp === null ? 0 : docOp[succNumIdx])
   let changeOp = null, nextChangeOp = null, changeOps = [], predSeen = []
@@ -835,14 +856,14 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
     }
 
     if (takeDocOp) {
-      appendOperation(outCols, docState.opsCols, docOp)
+      appendOperation(outCols, docState.blocks[blockIndex].columns, docOp)
       if (docOp[insertIdx] && elemVisible) {
         elemVisible = false
         listIndex++
       }
       if (docOp[succNumIdx] === 0) elemVisible = true
       opsAppended++
-      docOp = docState.opsCols[actionIdx].decoder.done ? null : readOperation(docState.opsCols)
+      ({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
       if (docOp !== null) {
         docOpsConsumed++
         docOpOldSuccNum = docOp[succNumIdx]
@@ -881,10 +902,10 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
   }
 
   if (docOp) {
-    appendOperation(outCols, docState.opsCols, docOp)
+    appendOperation(outCols, docState.blocks[blockIndex].columns, docOp)
     opsAppended++
   }
-  return {opsAppended, docOpsConsumed}
+  return {opsAppended, docOpsConsumed, blockIndex}
 }
 
 /**
@@ -895,8 +916,7 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
  *   - `actorTable` is an array of integers where `actorTable[i]` contains the document's actor
  *     index for the actor that has index `i` in the change (`i == 0` is the author of the change).
  *   - `allCols` is an array of all the columnIds in either the document or the change.
- *   - `opsCols` is an array of columns containing the operations in the document.
- *   - `numOps` is an integer, the number of operations in the document.
+ *   - `blocks` is an array of all the blocks of operations in the document.
  *   - `objectMeta` is a map from objectId to metadata about that object.
  *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
  *     accessed in that object. This is used to check that accesses occur in ascending order
@@ -906,27 +926,29 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
  * `patches` is a patch object that is mutated to reflect the operations applied by this function.
  */
 function applyOps(patches, ops, changeCols, docState) {
-  for (let col of docState.opsCols) col.decoder.reset()
-  const {skipCount, visibleCount} = seekToOp(ops, docState.opsCols, docState.actorIds)
+  const block = docState.blocks[0] // TODO support multiple blocks
+  const {skipCount, visibleCount} = seekToOp(ops, block.columns, docState.actorIds)
   if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
     throw new RangeError('list element accesses must occur in ascending order')
   }
   docState.lastIndex[ops.objId] = visibleCount
-  for (let col of docState.opsCols) col.decoder.reset()
+  for (let col of block.columns) col.decoder.reset()
 
   let outCols = docState.allCols.map(columnId => ({columnId, encoder: encoderByColumnId(columnId)}))
-  copyColumns(outCols, docState.opsCols, skipCount)
-  const {opsAppended, docOpsConsumed} = mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount)
-  copyColumns(outCols, docState.opsCols, docState.numOps - skipCount - docOpsConsumed)
-  for (let col of docState.opsCols) {
+  copyColumns(outCols, block.columns, skipCount)
+  const {opsAppended, docOpsConsumed} = mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount, 0)
+  copyColumns(outCols, block.columns, block.numOps - skipCount - docOpsConsumed)
+  for (let col of block.columns) {
     if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
   }
 
-  docState.opsCols = outCols.map(col => {
-    const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
-    return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
-  })
-  docState.numOps = docState.numOps + opsAppended - docOpsConsumed
+  docState.blocks[0] = {
+    numOps: block.numOps + opsAppended - docOpsConsumed,
+    columns: outCols.map(col => {
+      const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
+      return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
+    })
+  }
 }
 
 /**
@@ -1016,7 +1038,7 @@ function setupPatches(patches, objectIds, docState) {
               keyActor: elem.actorId, keyCtr: elem.counter,
               keyStr:   null,         insert: false
             }
-            const { visibleCount } = seekToOp(seekPos, docState.opsCols, docState.actorIds)
+            const { visibleCount } = seekToOp(seekPos, docState.blocks[0].columns, docState.actorIds)
 
             for (let [opId, value] of Object.entries(meta.children[childMeta.parentKey])) {
               let patchValue = value
@@ -1141,12 +1163,10 @@ class BackendDoc {
       }
       this.actorIds = doc.actorIds
       this.heads = doc.heads
-      this.docColumns = makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)
-      this.numOps = 0 // TODO count actual number of ops in the document
+      this.blocks = [{numOps: 0, columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
       this.objectMeta = {} // TODO fill this in
     } else {
-      this.docColumns = makeDecoders([], DOC_OPS_COLUMNS)
-      this.numOps = 0
+      this.blocks = [{numOps: 0, columns: makeDecoders([], DOC_OPS_COLUMNS)}]
       this.objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
   }
@@ -1164,8 +1184,7 @@ class BackendDoc {
     copy.actorIds = this.actorIds // immutable, no copying needed
     copy.heads = this.heads // immutable, no copying needed
     copy.clock = this.clock // immutable, no copying needed
-    copy.docColumns = this.docColumns // immutable, no copying needed
-    copy.numOps = this.numOps
+    copy.blocks = this.blocks // immutable, no copying needed
     copy.objectMeta = this.objectMeta // immutable, no copying needed
     return copy
   }
@@ -1183,8 +1202,7 @@ class BackendDoc {
       actorIds: this.actorIds,
       heads: this.heads,
       clock: this.clock,
-      opsCols: this.docColumns,
-      numOps: this.numOps,
+      blocks: this.blocks.slice(),
       objectMeta: Object.assign({}, this.objectMeta),
       lastIndex: {}
     }
@@ -1207,8 +1225,7 @@ class BackendDoc {
     this.actorIds     = docState.actorIds
     this.heads        = docState.heads
     this.clock        = docState.clock
-    this.docColumns   = docState.opsCols
-    this.numOps       = docState.numOps
+    this.blocks       = docState.blocks
     this.objectMeta   = docState.objectMeta
 
     let patch = {
