@@ -7,6 +7,10 @@ const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_C
 const DOC_OPS_COLUMNS_REV = Object.entries(DOC_OPS_COLUMNS)
   .reduce((acc, [k, v]) => { acc[v] = k; return acc }, [])
 
+const MAX_BLOCK_SIZE = 100 // operations
+const BLOOM_BITS_PER_ENTRY = 10, BLOOM_NUM_PROBES = 7 // 1% false positive rate
+const BLOOM_FILTER_SIZE = Math.floor(BLOOM_BITS_PER_ENTRY * MAX_BLOCK_SIZE / 8) // bytes
+
 const objActorIdx = 0, objCtrIdx = 1, keyActorIdx = 2, keyCtrIdx = 3, keyStrIdx = 4,
   idActorIdx = 5, idCtrIdx = 6, insertIdx = 7, actionIdx = 8, valLenIdx = 9, valRawIdx = 10,
   predNumIdx = 13, predActorIdx = 14, predCtrIdx = 15, succNumIdx = 13, succActorIdx = 14, succCtrIdx = 15
@@ -198,6 +202,127 @@ function seekToOp(ops, docCols, actorIds) {
     }
   }
   return {skipCount, visibleCount}
+}
+
+/**
+ * Updates Bloom filter `bloom`, given as a Uint8Array, to contain the list element ID consisting of
+ * counter `elemIdCtr` and actor number `elemIdActor`. We don't actually bother computing a hash
+ * function, since those two integers serve perfectly fine as input. We turn the two integers into a
+ * sequence of probe indexes using the triple hashing algorithm from the following paper:
+ *
+ * Peter C. Dillinger and Panagiotis Manolios. Bloom Filters in Probabilistic Verification.
+ * 5th International Conference on Formal Methods in Computer-Aided Design (FMCAD), November 2004.
+ * http://www.ccis.northeastern.edu/home/pete/pub/bloom-filters-verification.pdf
+ */
+function bloomFilterAdd(bloom, elemIdActor, elemIdCtr) {
+  let modulo = 8 * bloom.byteLength, x = elemIdCtr % modulo, y = elemIdActor % modulo
+
+  // Use one step of FNV-1a to compute a third value from the two inputs.
+  // Taken from http://www.isthe.com/chongo/tech/comp/fnv/index.html
+  // The prime is just over 2^24, so elemIdCtr can be up to about 2^29 = 500 million before the
+  // result of the multiplication exceeds 2^53. And even if it does exceed 2^53 and loses precision,
+  // that shouldn't be a problem as it should still be deterministic, and the Bloom filter
+  // computation only needs to be internally consistent within this library.
+  let z = ((elemIdCtr ^ elemIdActor) * 16777619 >>> 0) % modulo
+
+  for (let i = 0; i < BLOOM_NUM_PROBES; i++) {
+    bloom[x >>> 3] |= 1 << (x & 7)
+    x = (x + y) % modulo
+    y = (y + z) % modulo
+  }
+}
+
+/**
+ * Returns true if the list element ID consisting of counter `elemIdCtr` and actor number
+ * `elemIdActor` is likely to be contained in the Bloom filter `bloom`.
+ */
+function bloomFilterContains(bloom, elemIdActor, elemIdCtr) {
+  let modulo = 8 * bloom.byteLength, x = elemIdCtr % modulo, y = elemIdActor % modulo
+  let z = ((elemIdCtr ^ elemIdActor) * 16777619 >>> 0) % modulo
+
+  // See comments in the bloomFilterAdd function for an explanation
+  for (let i = 0; i < BLOOM_NUM_PROBES; i++) {
+    if ((bloom[x >>> 3] & (1 << (x & 7))) === 0) {
+      return false
+    }
+    x = (x + y) % modulo
+    y = (y + z) % modulo
+  }
+  return true
+}
+
+/**
+ * Reads the relevant columns of a block of operations and updates that block to contain the
+ * metadata we need to efficiently figure out where to insert new operations.
+ */
+function updateBlockMetadata(block, actorIds) {
+  block.bloom = new Uint8Array(BLOOM_FILTER_SIZE)
+  block.lastKey = {}
+  block.numVisible = {}
+  block.numOps = 0
+  block.firstVisibleActor = undefined
+  block.firstVisibleCtr = undefined
+  block.lastVisibleActor = undefined
+  block.lastVisibleCtr = undefined
+
+  for (let col of block.columns) col.decoder.reset()
+  const [objActorD, objCtrD, keyActorD, keyCtrD, keyStrD, idActorD, idCtrD, insertD, /* actionD */,
+    /* valLenD */, /* valRawD */, /* chldActorD */, /* chldCtrD */, succNumD] = block.columns.map(col => col.decoder)
+
+  while (!idCtrD.done) {
+    block.numOps += 1
+    const objActor = objActorD.readValue(), objCtr = objCtrD.readValue()
+    const keyActor = keyActorD.readValue(), keyCtr = keyCtrD.readValue(), keyStr = keyStrD.readValue()
+    const idActor = idActorD.readValue(), idCtr = idCtrD.readValue()
+    const insert = insertD.readValue(), succNum = succNumD.readValue()
+    const objectId = objActor === null ? '_root' : `${objCtr}@${actorIds[objActor]}`
+
+    if (keyStr !== null) {
+      // Map key: for each object, record the highest key contained in the block
+      block.lastKey[objectId] = keyStr
+    } else if (insert || keyCtr !== null) {
+      // List element
+      if (block.numVisible[objectId] === undefined) block.numVisible[objectId] = 0
+      const elemIdActor = insert ? idActor : keyActor
+      const elemIdCtr = insert ? idCtr : keyCtr
+      bloomFilterAdd(block.bloom, elemIdActor, elemIdCtr)
+
+      // If the list element is visible, update the block metadata accordingly
+      if (succNum === 0) {
+        if (block.firstVisibleActor === undefined) block.firstVisibleActor = elemIdActor
+        if (block.firstVisibleCtr === undefined) block.firstVisibleCtr = elemIdCtr
+        if (block.lastVisibleActor !== elemIdActor || block.lastVisibleCtr !== elemIdCtr) {
+          block.numVisible[objectId] += 1
+        }
+        block.lastVisibleActor = elemIdActor
+        block.lastVisibleCtr = elemIdCtr
+      }
+    }
+  }
+}
+
+/**
+ * Updates a block's metadata based on an operation being added to a block.
+ */
+function addBlockOperation(block, op, objectId, isChangeOp) {
+  if (op[keyStrIdx] !== null) {
+    // TODO this comparison should use UTF-8 encoding, not JavaScript's UTF-16
+    if (block.lastKey[objectId] === undefined || block.lastKey[objectId] < op[keyStrIdx]) {
+      block.lastKey[objectId] = op[keyStrIdx]
+    }
+  } else {
+    // List element
+    const elemIdActor = op[insertIdx] ? op[idActorIdx] : op[keyActorIdx]
+    const elemIdCtr = op[insertIdx] ? op[idCtrIdx] : op[keyCtrIdx]
+    bloomFilterAdd(block.bloom, elemIdActor, elemIdCtr)
+
+    if (op[succNumIdx] === 0 || isChangeOp) {
+      if (block.firstVisibleActor === undefined) block.firstVisibleActor = elemIdActor
+      if (block.firstVisibleCtr === undefined) block.firstVisibleCtr = elemIdCtr
+      block.lastVisibleActor = elemIdActor
+      block.lastVisibleCtr = elemIdCtr
+    }
+  }
 }
 
 /**
@@ -573,15 +698,15 @@ function convertInsertToUpdate(edits, index, elemId) {
  * to a conflict). `propState` is an object that carries over state between such successive
  * invocations for the same property. If the current object is a list, `listIndex` is the index
  * into that list (counting only visible elements). If the operation `op` was already previously
- * in the document, `oldSuccNum` is the value of `op[succNum]` before the current change was
+ * in the document, `oldSuccNum` is the value of `op[succNumIdx]` before the current change was
  * applied (allowing us to determine whether this operation was overwritten or deleted in the
  * current change). `oldSuccNum` must be undefined if the operation came from the current change.
  */
-function updatePatchProperty(patches, ops, op, docState, propState, listIndex, oldSuccNum) {
+function updatePatchProperty(patches, newBlock, ops, op, docState, propState, listIndex, oldSuccNum) {
   const objectId = ops.objId
-  const elemId = op[keyStrIdx] ? op[keyStrIdx]
-                               : op[insertIdx] ? `${op[idCtrIdx]}@${docState.actorIds[op[idActorIdx]]}`
-                                               : `${op[keyCtrIdx]}@${docState.actorIds[op[keyActorIdx]]}`
+  const elemIdActor = op[insertIdx] ? op[idActorIdx] : op[keyActorIdx]
+  const elemIdCtr = op[insertIdx] ? op[idCtrIdx] : op[keyCtrIdx]
+  const elemId = op[keyStrIdx] ? op[keyStrIdx] : `${elemIdCtr}@${docState.actorIds[elemIdActor]}`
 
   // firstOp is true if the current operation is the first of a sequence of ops for the same key
   const firstOp = !propState[elemId]
@@ -679,6 +804,7 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
     if (oldSuccNum === 0 && propState[elemId].action === 'insert') {
       propState[elemId].action = 'update'
       convertInsertToUpdate(patch.edits, listIndex, elemId)
+      newBlock.numVisible[objectId] -= 1
     }
 
     if (patchValue) {
@@ -689,6 +815,8 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
       if (oldSuccNum === undefined && !propState[elemId].action) {
         propState[elemId].action = 'insert'
         appendEdit(patch.edits, {action: 'insert', index: listIndex, elemId, opId: patchKey, value: patchValue})
+        if (newBlock.numVisible[objectId] === undefined) newBlock.numVisible[objectId] = 0
+        newBlock.numVisible[objectId] += 1
 
       // If the property has a value and it's not an insert, then it must be an update.
       // We might have previously registered it as a remove, in which case we convert it to update.
@@ -698,6 +826,7 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
         if (lastEdit.count > 1) lastEdit.count -= 1; else patch.edits.pop()
         propState[elemId].action = 'update'
         appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, true)
+        newBlock.numVisible[objectId] += 1
 
       } else {
         // A 'normal' update
@@ -709,6 +838,7 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
       // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
       propState[elemId].action = 'remove'
       appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
+      newBlock.numVisible[objectId] -= 1
     }
 
   } else {
@@ -726,8 +856,8 @@ function updatePatchProperty(patches, ops, op, docState, propState, listIndex, o
  * documented in `applyOps()`. If the operations are updating a list or text object, `listIndex`
  * is the number of visible elements that precede the position at which we start merging.
  */
-function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listIndex, blockIndex) {
-  let opCount = ops.consecutiveOps, opsAppended = 0, opIdCtr = ops.idCtr
+function mergeDocChangeOps(patches, newBlock, outCols, ops, changeCols, docState, listIndex, blockIndex) {
+  let opCount = ops.consecutiveOps, opIdCtr = ops.idCtr
   let foundListElem = false, elemVisible = false, propState = {}, docOp
   ({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
   let docOpsConsumed = (docOp === null ? 0 : 1)
@@ -827,7 +957,7 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         // them sorted in ascending order by opId. Here we have docOp with a lower opId, so we
         // output it first.
         takeDocOp = true
-        updatePatchProperty(patches, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
+        updatePatchProperty(patches, newBlock, ops, docOp, docState, propState, listIndex, docOpOldSuccNum)
 
         // A deletion op in the change is represented in the document only by its entries in the
         // succ list of the operations it overwrites; it has no separate row in the set of ops.
@@ -857,12 +987,14 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
 
     if (takeDocOp) {
       appendOperation(outCols, docState.blocks[blockIndex].columns, docOp)
+      addBlockOperation(newBlock, docOp, ops.objId, false)
+
       if (docOp[insertIdx] && elemVisible) {
         elemVisible = false
         listIndex++
       }
       if (docOp[succNumIdx] === 0) elemVisible = true
-      opsAppended++
+      newBlock.numOps++
       ({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
       if (docOp !== null) {
         docOpsConsumed++
@@ -880,8 +1012,10 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
             throw new RangeError(`no matching operation for pred: ${op[predCtrIdx][j]}@${docState.actorIds[op[predActorIdx][j]]}`)
           }
         }
-        updatePatchProperty(patches, ops, op, docState, propState, listIndex)
+        updatePatchProperty(patches, newBlock, ops, op, docState, propState, listIndex)
         appendOperation(outCols, changeCols, op)
+        addBlockOperation(newBlock, op, ops.objId, true)
+
         if (op[insertIdx]) {
           elemVisible = false
           listIndex++
@@ -897,15 +1031,18 @@ function mergeDocChangeOps(patches, outCols, ops, changeCols, docState, listInde
         changeOps.splice(0, takeChangeOps)
         predSeen.splice(0, takeChangeOps)
       }
-      opsAppended += takeChangeOps
+      newBlock.numOps += takeChangeOps
     }
   }
 
   if (docOp) {
     appendOperation(outCols, docState.blocks[blockIndex].columns, docOp)
-    opsAppended++
+    newBlock.numOps++
+    if (docState.actorIds[docOp[objActorIdx]] === ops.objActor && docOp[objCtrIdx] === ops.objCtr) {
+      addBlockOperation(newBlock, docOp, ops.objId, false)
+    }
   }
-  return {opsAppended, docOpsConsumed, blockIndex}
+  return {docOpsConsumed, blockIndex}
 }
 
 /**
@@ -934,21 +1071,47 @@ function applyOps(patches, ops, changeCols, docState) {
   docState.lastIndex[ops.objId] = visibleCount
   for (let col of block.columns) col.decoder.reset()
 
+  const resetFirstVisible = (skipCount === 0) || (block.firstVisibleActor === undefined) ||
+    (!ops.insert && docState.actorIds[block.firstVisibleActor] === ops.keyActor && block.firstVisibleCtr === ops.keyCtr)
+  const newBlock = {
+    columns: undefined,
+    bloom: new Uint8Array(block.bloom),
+    lastKey: copyObject(block.lastKey),
+    numVisible: copyObject(block.numVisible),
+    numOps: skipCount,
+    firstVisibleActor: resetFirstVisible ? undefined : block.firstVisibleActor,
+    firstVisibleCtr: resetFirstVisible ? undefined : block.firstVisibleCtr,
+    lastVisibleActor: undefined,
+    lastVisibleCtr: undefined
+  }
+
   let outCols = docState.allCols.map(columnId => ({columnId, encoder: encoderByColumnId(columnId)}))
   copyColumns(outCols, block.columns, skipCount)
-  const {opsAppended, docOpsConsumed} = mergeDocChangeOps(patches, outCols, ops, changeCols, docState, visibleCount, 0)
-  copyColumns(outCols, block.columns, block.numOps - skipCount - docOpsConsumed)
+  const {docOpsConsumed} = mergeDocChangeOps(patches, newBlock, outCols, ops, changeCols, docState, visibleCount, 0)
+  const copyAfterMerge = block.numOps - skipCount - docOpsConsumed
+  copyColumns(outCols, block.columns, copyAfterMerge)
+  newBlock.numOps += copyAfterMerge
   for (let col of block.columns) {
     if (!col.decoder.done) throw new RangeError(`excess ops in ${col.columnName} column`)
   }
 
-  docState.blocks[0] = {
-    numOps: block.numOps + opsAppended - docOpsConsumed,
-    columns: outCols.map(col => {
-      const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
-      return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
-    })
+  if (copyAfterMerge > 0 && block.lastVisibleActor !== undefined && block.lastVisibleCtr !== undefined) {
+    // It's possible that none of the ops after the merge point are visible, in which case the
+    // lastVisible may not be strictly correct, because it may refer to an operation before the
+    // merge point rather than a list element inserted by the current change. However, this doesn't
+    // matter, because the only purpose for which we need it is to check whether one block ends with
+    // the same visible element as the next block starts with (to avoid double-counting its index);
+    // if the last list element of a block is invisible, the exact value of lastVisible doesn't
+    // matter since it will be different from the next block's firstVisible in any case.
+    newBlock.lastVisibleActor = block.lastVisibleActor
+    newBlock.lastVisibleCtr = block.lastVisibleCtr
   }
+
+  newBlock.columns = outCols.map(col => {
+    const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
+    return {columnId: col.columnId, columnName: DOC_OPS_COLUMNS_REV[col.columnId], decoder}
+  })
+  docState.blocks[0] = newBlock
 }
 
 /**
@@ -1163,10 +1326,21 @@ class BackendDoc {
       }
       this.actorIds = doc.actorIds
       this.heads = doc.heads
-      this.blocks = [{numOps: 0, columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
+      this.blocks = [{columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
+      updateBlockMetadata(this.blocks[0]) // TODO split into multipe blocks if needed
       this.objectMeta = {} // TODO fill this in
     } else {
-      this.blocks = [{numOps: 0, columns: makeDecoders([], DOC_OPS_COLUMNS)}]
+      this.blocks = [{
+        columns: makeDecoders([], DOC_OPS_COLUMNS),
+        bloom: new Uint8Array(BLOOM_FILTER_SIZE),
+        lastKey: {},
+        numVisible: {},
+        numOps: 0,
+        firstVisibleActor: undefined,
+        firstVisibleCtr: undefined,
+        lastVisibleActor: undefined,
+        lastVisibleCtr: undefined
+      }]
       this.objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
   }
@@ -1336,4 +1510,4 @@ class BackendDoc {
   }
 }
 
-module.exports = { BackendDoc }
+module.exports = { BackendDoc, bloomFilterContains }

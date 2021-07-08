@@ -1,7 +1,7 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
 const { DOC_OPS_COLUMNS, encodeChange, decodeChange } = require('../backend/columnar')
-const { BackendDoc } = require('../backend/new')
+const { BackendDoc, bloomFilterContains } = require('../backend/new')
 const uuid = require('../src/uuid')
 
 function checkColumns(backend, expectedCols) {
@@ -58,6 +58,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'y'})
+    assert.deepStrictEqual(backend.blocks[0].numOps, 3)
   })
 
   it('should overwrite root object properties (2)', () => {
@@ -101,6 +103,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'z'})
+    assert.deepStrictEqual(backend.blocks[0].numOps, 4)
   })
 
   it('should allow concurrent overwrites of the same value', () => {
@@ -181,6 +185,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 1, 2], // 0, 1, 2
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
+    assert.deepStrictEqual(backend1.blocks[0].lastKey, {_root: 'x'})
+    assert.deepStrictEqual(backend1.blocks[0].numOps, 4)
     // The two backends are not identical because actors appear in a different order
     checkColumns(backend2, {
       objActor: [],
@@ -198,6 +204,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 2, 1], // 0, 2, 1 <-- different from backend1
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
+    assert.deepStrictEqual(backend2.blocks[0].lastKey, {_root: 'x'})
+    assert.deepStrictEqual(backend2.blocks[0].numOps, 4)
   })
 
   it('should allow a conflict to be resolved', () => {
@@ -247,6 +255,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 2, 0] // 2, 2
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
+    assert.deepStrictEqual(backend.blocks[0].numOps, 3)
   })
 
   it('should throw an error if the predecessor operation does not exist (1)', () => {
@@ -325,6 +335,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor}`]: 'z'})
+    assert.deepStrictEqual(backend.blocks[0].numOps, 5)
   })
 
   it('should create nested maps several levels deep', () => {
@@ -375,6 +387,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'a', [`1@${actor}`]: 'b', [`2@${actor}`]: 'c', [`3@${actor}`]: 'd'})
+    assert.deepStrictEqual(backend.blocks[0].numOps, 5)
   })
 
   it('should create a text object', () => {
@@ -406,6 +420,15 @@ describe('BackendDoc applying changes', () => {
       valRaw:   [0x61],
       succNum:  [2, 0]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
+    assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 3), false)
   })
 
   it('should insert text characters', () => {
@@ -450,6 +473,18 @@ describe('BackendDoc applying changes', () => {
       valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
       succNum:  [5, 0]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 5)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 3), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 4), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 5), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 1, 2), false)
   })
 
   it('should throw an error if the reference element of an insertion does not exist', () => {
@@ -524,6 +559,13 @@ describe('BackendDoc applying changes', () => {
       valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
       succNum:  [5, 0]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 5)
   })
 
   it('should throw an error if insertions are not in ascending order', () => {
@@ -582,6 +624,14 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 0})
+    assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, undefined)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, undefined)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, undefined)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, undefined)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
   })
 
   it('should delete a character in the middle', () => {
@@ -626,6 +676,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
+    assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 4)
   })
 
   it('should throw an error if a deleted element does not exist', () => {
@@ -719,6 +776,13 @@ describe('BackendDoc applying changes', () => {
         valRaw:   [0x61, 0x62, 0x63], // 'a', 'b', 'c'
         succNum:  [4, 0]
       })
+      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 3})
+      assert.strictEqual(backend.blocks[0].numOps, 4)
+      assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+      assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].lastVisibleCtr, 3)
     }
   })
 
@@ -799,6 +863,21 @@ describe('BackendDoc applying changes', () => {
         valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
         succNum:  [5, 0]
       })
+      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 4})
+      assert.strictEqual(backend.blocks[0].numOps, 5)
+      // firstVisible is incorrect -- it should strictly be (1,3) rather than (0,2) -- but that
+      // doesn't matter since in any case it'll be different from the previous block's lastVisible
+      assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+      assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
+      assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
+      assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 3), true)
+      assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 1, 3), true)
+      assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 1, 4), true)
+      // The chance of a false positive is extremely low since the filter only contains 4 elements
+      for (let i = 5; i < 100; i++) assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 1, i), false)
     }
   })
 
@@ -848,6 +927,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 5, 1] // 5, 6
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 3})
+    assert.strictEqual(backend.blocks[0].numOps, 6)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 4)
   })
 
   it('should require list element updates to be in ascending order', () => {
@@ -915,6 +1001,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [],
       succCtr:   []
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list', [`3@${actor}`]: 'x'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
+    assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, undefined)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, undefined)
   })
 
   it('should handle a counter inside a map', () => {
@@ -963,6 +1056,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 2, 1] // 2, 3
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'counter'})
+    assert.strictEqual(backend.blocks[0].numOps, 3)
   })
 
   it('should handle a counter inside a list element', () => {
@@ -1011,6 +1106,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
+    assert.strictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
   })
 
   it('should delete a counter from a map', () => {
@@ -1036,6 +1138,8 @@ describe('BackendDoc applying changes', () => {
       maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {counter: {}}}
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'counter'})
+    assert.strictEqual(backend.blocks[0].numOps, 2)
   })
 
   it('should handle conflicts inside list elements', () => {
@@ -1111,6 +1215,13 @@ describe('BackendDoc applying changes', () => {
         succActor: [0x7e, 0, 1],
         succCtr:   [0x7e, 3, 0] // 3, 3
       })
+      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
+      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
+      assert.strictEqual(backend.blocks[0].numOps, 4)
+      assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+      assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
     }
   })
 
@@ -1159,6 +1270,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 3)
   })
 
   it('should allow conflicts to arise on a multi-inserted element', () => {
@@ -1199,6 +1317,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 3)
   })
 
   it('should convert inserts to updates when needed', () => {
@@ -1261,6 +1386,15 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 1, 0x7f, 0], // actor2, actor2, actor1
       succCtr:   [0x7f, 3, 2, 1] // 3, 4, 5
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 3})
+    assert.strictEqual(backend.blocks[0].numOps, 7)
+    // firstVisible is incorrect -- it should strictly be (0,3) rather than (0,2) -- but that
+    // doesn't matter since in any case it'll be different from the previous block's lastVisible
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
   })
 
   it('should allow a further conflict to be added to an existing conflict', () => {
@@ -1309,6 +1443,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 1, 0], // actor1, actor2, actor1
       succCtr:   [0x7d, 3, 0, 1] // 3, 3, 4
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
   })
 
   it('should allow element deletes and overwrites in the same change', () => {
@@ -1349,6 +1490,13 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
+    assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 3)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 3)
   })
 
   it('should allow concurrent deletion and assignment of the same list element', () => {
@@ -1414,6 +1562,13 @@ describe('BackendDoc applying changes', () => {
         succActor: [0x7e, 0, 1], // 0, 1
         succCtr:   [0x7e, 3, 0] // 3, 3
       })
+      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
+      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
+      assert.strictEqual(backend.blocks[0].numOps, 3)
+      assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+      assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+      assert.strictEqual(backend.blocks[0].lastVisibleCtr, 2)
     }
   })
 
@@ -1467,6 +1622,8 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor1}`]: 'x', [`1@${actor2}`]: 'y'})
+    assert.strictEqual(backend.blocks[0].numOps, 5)
   })
 
   it('should allow a conflict consisting of a nested object and a value', () => {
@@ -1518,5 +1675,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x', [`1@${actor1}`]: 'y'})
+    assert.strictEqual(backend.blocks[0].numOps, 4)
   })
 })
