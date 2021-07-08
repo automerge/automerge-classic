@@ -551,8 +551,7 @@ function makeDecoders(columns, columnSpec) {
 
   let result = []
   for (let columnId of Object.keys(decoders).map(id => parseInt(id, 10)).sort((a, b) => a - b)) {
-    let [columnName] = Object.entries(columnSpec).find(([/* name */, id]) => id === columnId)
-    if (!columnName) columnName = columnId.toString()
+    const [columnName] = Object.entries(columnSpec).find(([/* name */, id]) => id === columnId) || [columnId.toString()]
     result.push({columnId, columnName, decoder: decoders[columnId]})
   }
   return result

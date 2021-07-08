@@ -6,9 +6,17 @@ const uuid = require('../src/uuid')
 
 function checkColumns(backend, expectedCols) {
   for (let actual of backend.blocks[0].columns) {
-    const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId)
+    const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId) || [actual.columnId.toString()]
     if (expectedCols[colName]) {
       checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
+    } else if (colName !== 'chldActor' && colName !== 'chldCtr') {
+      throw new Error(`Unexpected column ${colName}`)
+    }
+  }
+  for (let colName of Object.keys(expectedCols)) {
+    const columnId = DOC_OPS_COLUMNS[colName] || parseInt(colName, 10)
+    if (!backend.blocks[0].columns.find(actual => actual.columnId === columnId)) {
+      throw new Error(`Missing column ${colName}`)
     }
   }
 }
@@ -418,7 +426,9 @@ describe('BackendDoc applying changes', () => {
       action:   [0x7e, 4, 1],
       valLen:   [0x7e, 0, 0x16],
       valRaw:   [0x61],
-      succNum:  [2, 0]
+      succNum:  [2, 0],
+      succActor: [],
+      succCtr:   []
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
     assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
@@ -471,7 +481,9 @@ describe('BackendDoc applying changes', () => {
       action:   [0x7f, 4, 4, 1], // makeText, 4x set
       valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
       valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
-      succNum:  [5, 0]
+      succNum:  [5, 0],
+      succActor: [],
+      succCtr:   []
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
     assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
@@ -557,7 +569,9 @@ describe('BackendDoc applying changes', () => {
       action:   [0x7f, 4, 4, 1], // makeText, 4x set
       valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
       valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
-      succNum:  [5, 0]
+      succNum:  [5, 0],
+      succActor: [],
+      succCtr:   []
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
     assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
@@ -774,7 +788,9 @@ describe('BackendDoc applying changes', () => {
         action:   [0x7f, 4, 3, 1], // makeText, set, set, set
         valLen:   [0x7f, 0, 3, 0x16], // null, 3x 1-byte string
         valRaw:   [0x61, 0x62, 0x63], // 'a', 'b', 'c'
-        succNum:  [4, 0]
+        succNum:  [4, 0],
+        succActor: [],
+        succCtr:   []
       })
       assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
       assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 3})
@@ -861,7 +877,9 @@ describe('BackendDoc applying changes', () => {
         action:   [0x7f, 4, 4, 1], // makeText, set, set, set, set
         valLen:   [0x7f, 0, 4, 0x16], // null, 4x 1-byte string
         valRaw:   [0x61, 0x62, 0x63, 0x64], // 'a', 'b', 'c', 'd'
-        succNum:  [5, 0]
+        succNum:  [5, 0],
+        succActor: [],
+        succCtr:   []
       })
       assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
       assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 4})
@@ -1677,5 +1695,53 @@ describe('BackendDoc applying changes', () => {
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x', [`1@${actor1}`]: 'y'})
     assert.strictEqual(backend.blocks[0].numOps, 4)
+  })
+
+  it('should allow changes containing unknown columns, actions, and datatypes', () => {
+    const change = new Uint8Array([
+      0x85, 0x6f, 0x4a, 0x83, // magic bytes
+      0xad, 0xfb, 0x1a, 0x69, // checksum
+      1, 51, 0, 2, 0x12, 0x34, // chunkType: change, length, deps, actor '1234'
+      1, 1, 0, 0, // seq, startOp, time, message
+      0, 9, // actor list, column count
+      0x15, 3, 0x34, 1, 0x42, 2, // keyStr, insert, action
+      0x56, 2, 0x57, 4, 0x70, 2, // valLen, valRaw, predNum
+      0xf0, 1, 2, 0xf1, 1, 2, 0xf3, 1, 2, // unknown column group (3 columns of type GROUP_CARD, ACTOR_ID, INT_DELTA)
+      0x7f, 1, 0x78, // keyStr: 'x'
+      1, // insert: false
+      0x7f, 17, // unknown action type: 17
+      0x7f, 0x4e, // valLen: 4 bytes of unknown type 14
+      1, 2, 3, 4, // valRaw: 4 bytes
+      0x7f, 0, // predNum: 0
+      0x7f, 2, // unknown cardinality column: 2 values
+      2, 0, // unknown actor column: 0, 0
+      2, 1 // unknown delta column: 1, 2
+    ])
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([change]), {
+      maxOp: 1, clock: {'1234': 1}, deps: [decodeChange(change).hash], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {x: {}}}
+    })
+    checkColumns(backend, {
+      objActor: [],
+      objCtr:   [],
+      keyActor: [],
+      keyCtr:   [],
+      keyStr:   [0x7f, 1, 0x78],
+      idActor:  [0x7f, 0],
+      idCtr:    [0x7f, 1],
+      insert:   [1],
+      action:   [0x7f, 17],
+      valLen:   [0x7f, 0x4e],
+      valRaw:   [1, 2, 3, 4],
+      succNum:  [0x7f, 0],
+      succActor: [],
+      succCtr:   [],
+      240:      [0x7f, 2],
+      241:      [2, 0],
+      243:      [2, 1]
+    })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
+    assert.strictEqual(backend.blocks[0].numOps, 1)
   })
 })
