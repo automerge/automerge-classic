@@ -1231,7 +1231,7 @@ function applyOps(patches, ops, changeCols, docState) {
 
   // Copy the remaining operations after the insertion position
   const lastBlock = docState.blocks[lastBlockIndex]
-  let copyAfterMerge = - skipCount - docOpsConsumed
+  let copyAfterMerge = -skipCount - docOpsConsumed
   for (let i = blockIndex; i <= lastBlockIndex; i++) copyAfterMerge += docState.blocks[i].numOps
   copyColumns(outCols, lastBlock.columns, copyAfterMerge)
   newBlock.numOps += copyAfterMerge
