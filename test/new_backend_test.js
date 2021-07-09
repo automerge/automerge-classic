@@ -1,11 +1,11 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
 const { DOC_OPS_COLUMNS, encodeChange, decodeChange } = require('../backend/columnar')
-const { BackendDoc, bloomFilterContains } = require('../backend/new')
+const { MAX_BLOCK_SIZE, BackendDoc, bloomFilterContains } = require('../backend/new')
 const uuid = require('../src/uuid')
 
-function checkColumns(backend, expectedCols) {
-  for (let actual of backend.blocks[0].columns) {
+function checkColumns(block, expectedCols) {
+  for (let actual of block.columns) {
     const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId) || [actual.columnId.toString()]
     if (expectedCols[colName]) {
       checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
@@ -15,7 +15,7 @@ function checkColumns(backend, expectedCols) {
   }
   for (let colName of Object.keys(expectedCols)) {
     const columnId = DOC_OPS_COLUMNS[colName] || parseInt(colName, 10)
-    if (!backend.blocks[0].columns.find(actual => actual.columnId === columnId)) {
+    if (!block.columns.find(actual => actual.columnId === columnId)) {
       throw new Error(`Missing column ${colName}`)
     }
   }
@@ -50,7 +50,7 @@ describe('BackendDoc applying changes', () => {
         x: {[`3@${actor}`]: {type: 'value', value: 5}}
       }}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -67,7 +67,9 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 3]
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'y'})
-    assert.deepStrictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, undefined)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, undefined)
   })
 
   it('should overwrite root object properties (2)', () => {
@@ -95,7 +97,7 @@ describe('BackendDoc applying changes', () => {
         z: {[`4@${actor}`]: {type: 'value', value: 6}}
       }}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -112,7 +114,9 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 3]
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'z'})
-    assert.deepStrictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, undefined)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, undefined)
   })
 
   it('should allow concurrent overwrites of the same value', () => {
@@ -177,7 +181,7 @@ describe('BackendDoc applying changes', () => {
         [`2@${actor3}`]: {type: 'value', value: 4}
       }}}
     })
-    checkColumns(backend1, {
+    checkColumns(backend1.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -196,7 +200,7 @@ describe('BackendDoc applying changes', () => {
     assert.deepStrictEqual(backend1.blocks[0].lastKey, {_root: 'x'})
     assert.deepStrictEqual(backend1.blocks[0].numOps, 4)
     // The two backends are not identical because actors appear in a different order
-    checkColumns(backend2, {
+    checkColumns(backend2.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -213,7 +217,7 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
     assert.deepStrictEqual(backend2.blocks[0].lastKey, {_root: 'x'})
-    assert.deepStrictEqual(backend2.blocks[0].numOps, 4)
+    assert.strictEqual(backend2.blocks[0].numOps, 4)
   })
 
   it('should allow a conflict to be resolved', () => {
@@ -247,7 +251,7 @@ describe('BackendDoc applying changes', () => {
         [`2@${actor1}`]: {type: 'value', value: 3}
       }}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -264,7 +268,7 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7e, 2, 0] // 2, 2
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
-    assert.deepStrictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].numOps, 3)
   })
 
   it('should throw an error if the predecessor operation does not exist (1)', () => {
@@ -327,7 +331,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'map', props: {y: {[`5@${actor}`]: {type: 'value', value: 'B'}}}
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [],
@@ -344,7 +348,9 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 5]
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor}`]: 'z'})
-    assert.deepStrictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
   })
 
   it('should create nested maps several levels deep', () => {
@@ -379,7 +385,7 @@ describe('BackendDoc applying changes', () => {
         }}}
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 0x7e, 1, 2, 2, 3], // null, 1, 2, 3, 3
       keyActor: [],
@@ -396,7 +402,9 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 5]
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'a', [`1@${actor}`]: 'b', [`2@${actor}`]: 'c', [`3@${actor}`]: 'd'})
-    assert.deepStrictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 3)
   })
 
   it('should create a text object', () => {
@@ -414,7 +422,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [],
@@ -433,6 +441,8 @@ describe('BackendDoc applying changes', () => {
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
     assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
     assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -469,7 +479,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -525,6 +535,8 @@ describe('BackendDoc applying changes', () => {
         }}}
       }}
     })
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 4)
     assert.throws(() => { backend.applyChanges([encodeChange(change2)]) }, /Reference element not found/)
   })
 
@@ -557,7 +569,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -622,7 +634,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 0, count: 1}]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 0x7f, 0],
       objCtr:   [0, 1, 0x7f, 1],
       keyActor: [],
@@ -674,7 +686,7 @@ describe('BackendDoc applying changes', () => {
         objectId: `1@${actor}`, type: 'text', edits: [{action: 'remove', index: 1, count: 1}]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 3, 1],
       keyActor: [0, 2, 2, 0],
@@ -711,7 +723,7 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     backend.applyChanges([encodeChange(change1)])
-    assert.throws(() => { backend.applyChanges([encodeChange(change2)]) }, /Element not found for update/)
+    assert.throws(() => { backend.applyChanges([encodeChange(change2)]) }, /Reference element not found/)
   })
 
   it('should apply concurrent insertions at the same position', () => {
@@ -776,7 +788,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend, {
+      checkColumns(backend.blocks[0], {
         objActor: [0, 1, 3, 0],
         objCtr:   [0, 1, 3, 1],
         keyActor: [0, 2, 2, 0],
@@ -865,7 +877,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend, {
+      checkColumns(backend.blocks[0], {
         objActor: [0, 1, 4, 0],
         objCtr:   [0, 1, 4, 1],
         keyActor: [0, 2, 0x7f, 1, 0, 2], // null, null, 1, null, null
@@ -929,7 +941,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 5, 0],
       objCtr:   [0, 1, 5, 1],
       keyActor: [0, 2, 4, 0],
@@ -1003,7 +1015,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 2, 1, 0x7f, 3], // null, 1, 1, 3
       keyActor: [0, 2, 0x7f, 0, 0, 1], // null, null, 0, null
@@ -1058,7 +1070,7 @@ describe('BackendDoc applying changes', () => {
         counter: {[`1@${actor}`]: {type: 'value', value: 6, datatype: 'counter'}}
       }}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -1108,7 +1120,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 2, 0],
       objCtr:   [0, 1, 2, 1],
       keyActor: [0, 2, 0x7f, 0], // null, null, 0
@@ -1217,7 +1229,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend, {
+      checkColumns(backend.blocks[0], {
         objActor: [0, 1, 3, 0],
         objCtr:   [0, 1, 3, 1],
         keyActor: [0, 2, 2, 0],
@@ -1272,7 +1284,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1319,7 +1331,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1388,7 +1400,7 @@ describe('BackendDoc applying changes', () => {
     // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
     // {action: 'set',      id: `4@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'y', succ: []},
     // {action: 'set',      id: `5@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'C', succ: []}
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 6, 0],
       objCtr:   [0, 1, 6, 1],
       keyActor: [0, 2, 0x7f, 0, 0, 1, 3, 0], // null, null, 0, null, 0, 0, 0
@@ -1445,7 +1457,7 @@ describe('BackendDoc applying changes', () => {
     // {action: 'set',      id: `3@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'b', succ: []},
     // {action: 'set',      id: `3@${actor2}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'x', succ: []},
     // {action: 'set',      id: `4@${actor1}`, obj: `1@${actor1}`, elemId: `2@${actor1}`, insert: false, value: 'c', succ: []}
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 4, 0],
       objCtr:   [0, 1, 4, 1],
       keyActor: [0, 2, 3, 0],
@@ -1492,7 +1504,7 @@ describe('BackendDoc applying changes', () => {
         ]
       }}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 1, 3, 0],
       objCtr:   [0, 1, 3, 1],
       keyActor: [0, 2, 2, 0],
@@ -1564,7 +1576,7 @@ describe('BackendDoc applying changes', () => {
       }}}}
     })
     for (let backend of [backend1, backend2]) {
-      checkColumns(backend, {
+      checkColumns(backend.blocks[0], {
         objActor: [0, 1, 2, 0], // null, actor1, actor1
         objCtr:   [0, 1, 2, 1], // null, 1, 1
         keyActor: [0, 2, 0x7f, 0], // null, null, actor1
@@ -1624,7 +1636,7 @@ describe('BackendDoc applying changes', () => {
         [`1@${actor2}`]: {objectId: `1@${actor2}`, type: 'map', props: {}}
       }}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 2, 2, 0, 0x7f, 1],
       objCtr:   [0, 2, 3, 1],
       keyActor: [],
@@ -1642,6 +1654,8 @@ describe('BackendDoc applying changes', () => {
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor1}`]: 'x', [`1@${actor2}`]: 'y'})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
   })
 
   it('should allow a conflict consisting of a nested object and a value', () => {
@@ -1677,7 +1691,7 @@ describe('BackendDoc applying changes', () => {
         [`1@${actor2}`]: {type: 'value', value: 1}
       }}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [0, 2, 2, 0],
       objCtr:   [0, 2, 2, 1],
       keyActor: [],
@@ -1722,7 +1736,7 @@ describe('BackendDoc applying changes', () => {
       maxOp: 1, clock: {'1234': 1}, deps: [decodeChange(change).hash], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {x: {}}}
     })
-    checkColumns(backend, {
+    checkColumns(backend.blocks[0], {
       objActor: [],
       objCtr:   [],
       keyActor: [],
@@ -1743,5 +1757,126 @@ describe('BackendDoc applying changes', () => {
     })
     assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
     assert.strictEqual(backend.blocks[0].numOps, 1)
+  })
+
+  it('should split a long insertion into multiple blocks', () => {
+    const actor = uuid()
+    const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 2; i <= MAX_BLOCK_SIZE; i++) {
+      change.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    const backend = new BackendDoc()
+    const patch = backend.applyChanges([encodeChange(change)])
+    const edits = patch.diffs.props.text[`1@${actor}`].edits
+    assert.strictEqual(edits.length, 1)
+    assert.strictEqual(edits[0].action, 'multi-insert')
+    assert.strictEqual(edits[0].values.length, MAX_BLOCK_SIZE)
+    assert.strictEqual(backend.blocks.length, 2)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE + 1), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, 2), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE + 1), true)
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
+      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
+      insert:   [1, MAX_BLOCK_SIZE / 2],
+      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      succActor: [],
+      succCtr:   []
+    })
+    checkColumns(backend.blocks[1], {
+      objActor: [MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [MAX_BLOCK_SIZE / 2, 0],
+      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      keyStr:   [],
+      idActor:  [MAX_BLOCK_SIZE / 2, 0],
+      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
+      insert:   [0, MAX_BLOCK_SIZE / 2],
+      action:   [MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [MAX_BLOCK_SIZE / 2, 0],
+      succActor: [],
+      succCtr:   []
+    })
+  })
+
+  it('should split a sequence of short insertions into multiple blocks', () => {
+    const actor = uuid(), backend = new BackendDoc()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    backend.applyChanges([encodeChange(change1)])
+    for (let i = 2; i <= MAX_BLOCK_SIZE; i++) {
+      const change2 = {actor, seq: i, startOp: i + 1, time: 0, deps: backend.heads, ops: [
+        {action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []}
+      ]}
+      assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+        maxOp: i + 1, clock: {[actor]: i}, deps: [hash(change2)], pendingChanges: 0,
+        diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
+          objectId: `1@${actor}`, type: 'text', edits: [
+            {action: 'insert', index: i - 1, elemId: `${i + 1}@${actor}`, opId: `${i + 1}@${actor}`, value: {type: 'value', value: 'a'}}
+          ]
+        }}}}
+      })
+    }
+    assert.strictEqual(backend.blocks.length, 2)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[0].bloom, 0, MAX_BLOCK_SIZE + 1), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, 2), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), false)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), true)
+    assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE + 1), true)
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
+      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
+      insert:   [1, MAX_BLOCK_SIZE / 2],
+      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      succActor: [],
+      succCtr:   []
+    })
+    checkColumns(backend.blocks[1], {
+      objActor: [MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [MAX_BLOCK_SIZE / 2, 0],
+      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      keyStr:   [],
+      idActor:  [MAX_BLOCK_SIZE / 2, 0],
+      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
+      insert:   [0, MAX_BLOCK_SIZE / 2],
+      action:   [MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [MAX_BLOCK_SIZE / 2, 0],
+      succActor: [],
+      succCtr:   []
+    })
   })
 })
