@@ -18,7 +18,7 @@ Automerge synchronization occurs at a per-document level. Most Automerge-based a
 
 Throughout the example code below we're going to assume a couple of global variables exist, described here:
 
-```
+```js
 // global variables (but maybe don't use global variables)
 const syncStates = {} // a hash of [source][docId] containing in-memory sync states
 const backends = {} // a hash by [docId] of current backend values
@@ -32,7 +32,7 @@ To maintain this structure, when a peer is discovered, first create a new `syncS
 
 If you've already seen a peer, you should load your old `syncState` for them via `decodeSyncState()`. This is not strictly necessary, but will reduce unnecessary computation and network traffic.
 
-```  
+```js
   if (data.type === 'HELLO') {
     if (syncStates[source] === undefined) {
       syncStates[source] = {}
@@ -50,7 +50,7 @@ In general, whenever a peer creates a local change or receives a sync message fr
 Generating new sync messages to other peers is straightforward. Simply call `generateSyncMessage` and, if `syncMessage` is not null, send it to the appropriate peer. You will also need to hold on to the returned `syncState` for that peer, since it keeps track of what data you have sent them to avoid sending data twice.
 
 Here is a simple example:
-```
+```js
 function updatePeers(docId: string) {
   Object.entries(syncStates).forEach(([peer, syncState]) => {
     const [nextSyncState, syncMessage] = Automerge.Backend.generateSyncMessage(
@@ -73,7 +73,7 @@ Receiving sync messages is also simple. Just pass the document, syncState, and i
 
 After receiving a sync message, you should check if you need to send new sync messages to any connected peers using the code above. In our example code below this is represented by a call to `updatePeers()`:
 
-```
+```js
   const [nextBackend, nextSyncState, patch] = Automerge.Backend.receiveSyncMessage(
     backends[docId],
     syncStates[source][docId] || Automerge.Backend.initSyncState(),
@@ -96,7 +96,7 @@ When you create a local change to a document, simply call `generateSyncMessage()
 
 Here's a sample implementation:
 
-```
+```js
 // sample message data format for sending from a renderer to a worker in a browser  
 interface FrontendMessage {
   docId: string
@@ -129,7 +129,7 @@ self.addEventListener('message', (event: Event) => {
 
 Remember to save your syncState object for a peer upon disconnection via `encodeSyncState()`. That might look like this:
 
-```
+```js
 db.storeSyncState(docId, source, encodeSyncState(syncStates[source]))
 ```
 
@@ -152,7 +152,7 @@ To avoid constantly recalculating and retransmitting Bloom filters, the `syncSta
 
 ### Bloom filter example 
 
-```
+```js
 a: [ a0, b0, a1, b1 ] + [ a2, a3 ]
 b: [ a0, b0, a1, b1 ] + [ b2, b3 ]
 ```
@@ -166,7 +166,7 @@ Finally, Automerge helps recover failed peer nodes by resetting the list of `sha
 
 If the connection times out due to packet loss, when you reconnect, you should reset the sync state as follows, if you haven't already:
 
-```
+```js
 for (let docId of Object.keys(syncStates[peer])) {
   syncStates[peer][docId] = decodeSyncState(encodeSyncState(syncStates[peer][docId]))
 }
