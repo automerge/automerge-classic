@@ -1490,8 +1490,13 @@ class BackendDoc {
       }
       this.actorIds = doc.actorIds
       this.heads = doc.heads
+      this.binaryDoc = buffer
+
       this.blocks = [{columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
-      updateBlockMetadata(this.blocks[0]) // TODO split into multipe blocks if needed
+      updateBlockMetadata(this.blocks[0], this.actorIds)
+      if (this.blocks[0].numOps > MAX_BLOCK_SIZE) {
+        this.blocks = splitBlock(this.blocks[0], this.actorIds)
+      }
       this.objectMeta = {} // TODO fill this in
     } else {
       this.blocks = [{
@@ -1566,6 +1571,7 @@ class BackendDoc {
     this.clock        = docState.clock
     this.blocks       = docState.blocks
     this.objectMeta   = docState.objectMeta
+    this.binaryDoc    = null
 
     let patch = {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
@@ -1671,6 +1677,7 @@ class BackendDoc {
    * Serialises the current document state into a single byte array.
    */
   save() {
+    if (this.binaryDoc) return this.binaryDoc
     return encodeDocument(this.changes)
   }
 }
