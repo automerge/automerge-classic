@@ -287,6 +287,7 @@ function seekToOp(docState, ops) {
       // continue scanning the next block to find the actual insertion position.
       // Either way, go back round the loop again to skip blocks until the next Bloom filter hit.
       resumeInsertion = found && ops.insert
+      blockIndex++
     }
   }
 }
