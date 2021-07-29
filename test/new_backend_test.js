@@ -594,22 +594,6 @@ describe('BackendDoc applying changes', () => {
     assert.strictEqual(backend.blocks[0].lastVisibleCtr, 5)
   })
 
-  it('should throw an error if insertions are not in ascending order', () => {
-    const actor = uuid()
-    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
-      {action: 'makeText', obj: '_root',      key: 'text',          insert: false,             pred: []},
-      {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true,  value: 'A', pred: []},
-      {action: 'set',      obj: `1@${actor}`, elemId: `2@${actor}`, insert: true,  value: 'C', pred: []}
-    ]}
-    const change2 = {actor, seq: 2, startOp: 4, time: 0, deps: [], ops: [
-      {action: 'set',      obj: `1@${actor}`, elemId: `3@${actor}`, insert: true,  value: 'D', pred: []},
-      {action: 'set',      obj: `1@${actor}`, elemId: `2@${actor}`, insert: true,  value: 'B', pred: []}
-    ]}
-    const backend = new BackendDoc()
-    backend.applyChanges([encodeChange(change1)])
-    assert.throws(() => { backend.applyChanges([encodeChange(change2)]) }, /list element accesses must occur in ascending order/)
-  })
-
   it('should delete the first character', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [

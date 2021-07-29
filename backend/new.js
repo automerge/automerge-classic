@@ -1189,20 +1189,13 @@ function mergeDocChangeOps(patches, newBlock, outCols, ops, changeCols, docState
  *     index for the actor that has index `i` in the change (`i == 0` is the author of the change).
  *   - `blocks` is an array of all the blocks of operations in the document.
  *   - `objectMeta` is a map from objectId to metadata about that object.
- *   - `lastIndex` is an object where the key is an objectId, and the value is the last list index
- *     accessed in that object. This is used to check that accesses occur in ascending order
- *     (which makes it easier to generate patches for lists).
  *
  * `docState` is mutated to contain the updated document state.
  * `patches` is a patch object that is mutated to reflect the operations applied by this function.
  */
 function applyOps(patches, ops, changeCols, docState) {
   const {blockIndex, skipCount, visibleCount} = seekToOp(docState, ops)
-  if (docState.lastIndex[ops.objId] && visibleCount < docState.lastIndex[ops.objId]) {
-    throw new RangeError('list element accesses must occur in ascending order')
-  }
-  docState.lastIndex[ops.objId] = visibleCount
-  const block = docState.blocks[blockIndex] // TODO support multiple blocks
+  const block = docState.blocks[blockIndex]
   for (let col of block.columns) col.decoder.reset()
 
   const resetFirstVisible = (skipCount === 0) || (block.firstVisibleActor === undefined) ||
@@ -1550,8 +1543,7 @@ class BackendDoc {
       heads: this.heads,
       clock: this.clock,
       blocks: this.blocks.slice(),
-      objectMeta: Object.assign({}, this.objectMeta),
-      lastIndex: {}
+      objectMeta: Object.assign({}, this.objectMeta)
     }
 
     const decodedChanges = applyChanges(patches, changeBuffers, docState)
