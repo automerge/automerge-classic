@@ -2,13 +2,14 @@ const { OPTIONS, CACHE, STATE, OBJECT_ID, CONFLICTS, CHANGE, ELEM_IDS } = requir
 const { isObject, copyObject } = require('../src/common')
 const uuid = require('../src/uuid')
 const { interpretPatch, cloneRootObject } = require('./apply_patch')
-const { rootObjectProxy } = require('./proxies')
+const { rootObjectProxy, setFacebookSyntax } = require('./proxies')
 const { Context } = require('./context')
 const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter } = require('./counter')
 const { Float64, Int, Uint } = require('./numbers')
 const { Observable } = require('./observable')
+const { ProxyPolyfill } = require('./proxy_polyfill')
 
 /**
  * Actor IDs must consist only of hexadecimal digits so that they can be encoded
@@ -158,6 +159,13 @@ function applyPatchToDoc(doc, patch, state, fromBackend) {
     state.maxOp = Math.max(state.maxOp, patch.maxOp)
   }
   return updateRootObject(doc, updated, state)
+}
+
+/**
+ * This function will set syntax defined by `ListProxyPolyfill`/`MapProxyPolyfill` as frontend interface
+ */
+function facebookSyntaxOn() {
+  setFacebookSyntax(true)
 }
 
 /**
@@ -325,12 +333,21 @@ function applyPatch(doc, patch, backendState = undefined) {
     return updateRootObject(doc, {}, state)
   }
 }
+/**
+ * Returns the Automerge value associated with `key` of the given object.
+ */
+function get(object, key) {
+  if (typeof object.get === 'function') {
+    return object.get(key)
+  }
+  return object[key]
+}
 
 /**
  * Returns the Automerge object ID of the given object.
  */
 function getObjectId(object) {
-  return object[OBJECT_ID]
+  return get(object, OBJECT_ID)
 }
 
 /**
@@ -343,17 +360,17 @@ function getObjectById(doc, objectId) {
   // However, that requires knowing the path from the root to the current
   // object, which we don't have if we jumped straight to the object by its ID.
   // If we maintained an index from object ID to parent ID we could work out the path.
-  if (doc[CHANGE]) {
+  if (get(doc, CHANGE)) {
     throw new TypeError('Cannot use getObjectById in a change callback')
   }
-  return doc[CACHE][objectId]
+  return get(get(doc, CACHE), objectId)
 }
 
 /**
  * Returns the Automerge actor ID of the given document.
  */
 function getActorId(doc) {
-  return doc[STATE].actorId || doc[OPTIONS].actorId
+  return get(doc, STATE).actorId || get(doc, OPTIONS).actorId
 }
 
 /**
@@ -409,7 +426,7 @@ function getElementIds(list) {
 }
 
 module.exports = {
-  init, from, change, emptyChange, applyPatch,
+  facebookSyntaxOn, init, from, change, emptyChange, applyPatch,
   getObjectId, getObjectById, getActorId, setActorId, getConflicts, getLastLocalChange,
   getBackendState, getElementIds,
   Text, Table, Counter, Observable, Float64, Int, Uint

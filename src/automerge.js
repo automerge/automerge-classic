@@ -6,6 +6,13 @@ const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
 /**
+ * This function will set syntax defined by `ListProxyPolyfill`/`MapProxyPolyfill` as frontend interface
+ */
+function facebookSyntaxOn() {
+  Frontend.facebookSyntaxOn()
+}
+
+/**
  * Automerge.* API
  * The functions in this file constitute the publicly facing Automerge API which combines
  * the features of the Frontend (a document interface) and the backend (CRDT operations)
@@ -152,7 +159,7 @@ function setDefaultBackend(newBackend) {
 }
 
 module.exports = {
-  init, from, change, emptyChange, clone, free,
+  facebookSyntaxOn, init, from, change, emptyChange, clone, free,
   load, save, merge, getChanges, getAllChanges, applyChanges,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState,
