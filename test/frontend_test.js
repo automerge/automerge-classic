@@ -5,6 +5,7 @@ const { Backend } = require('../src/automerge')
 const uuid = require('../src/uuid')
 const { STATE } = require('../frontend/constants')
 const UUID_PATTERN = /^[0-9a-f]{32}$/
+const { setProxyFree } = require('../frontend/proxies')
 
 describe('Automerge.Frontend', () => {
   describe('initializing', () => {
@@ -37,6 +38,29 @@ describe('Automerge.Frontend', () => {
     it('should accept an empty object as initial state', () => {
       const [doc] = Frontend.from({})
       assert.deepStrictEqual(doc, {})
+    })
+  })
+
+  describe('initializing with facebook syntax', () => {
+    after(() => {
+      setProxyFree(false)
+    })
+
+    it('should be an empty object by default', () => {
+      Frontend.useProxyFreeAPI()
+      const doc = Frontend.init()
+      assert.deepStrictEqual(doc, {})
+      assert(UUID_PATTERN.test(Frontend.getActorId(doc).toString()))
+    })
+
+    it('should support .get and .set', () => {
+      Frontend.useProxyFreeAPI()
+      const doc = Frontend.init()
+      Frontend.change(doc, doc => {
+        assert.deepStrictEqual(doc.get('key'), undefined)
+        doc.set('key', 'value')
+        assert.deepStrictEqual(doc.get('key'), 'value')
+      })
     })
   })
 

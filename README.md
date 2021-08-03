@@ -660,3 +660,9 @@ MIT license (see `LICENSE`).
 
 Created by [Martin Kleppmann](https://martin.kleppmann.com/) and
 [many great contributors](https://github.com/automerge/automerge/graphs/contributors).
+
+	
+# Proxy Free API
+Automerge uses JS Proxy extensively for its front-end API. However, to be able to support multiple JS runtime which does not support `Proxy` you can use the **Proxy Free API**.
+
+To use the Proxy Free API, you will only need to change a flag by calling `Automerge.useProxyFreeAPI()`. Read more documentation on this API on [`proxy_free.md`]https://github.com/automerge/automerge/blob/main/proxy_free.md).

@@ -4,6 +4,7 @@ const { assertEqualsOneOf } = require('./helpers')
 const { decodeChange } = require('../backend/columnar')
 const UUID_PATTERN = /^[0-9a-f]{32}$/
 const OPID_PATTERN = /^[0-9]+@[0-9a-f]{32}$/
+const { setProxyFree } = require('../frontend/proxies')
 
 describe('Automerge', () => {
 
@@ -56,6 +57,28 @@ describe('Automerge', () => {
       assert.deepStrictEqual(doc1, {})
       const doc2 = Automerge.from(true)
       assert.deepStrictEqual(doc2, {})
+    })
+  })
+
+  describe('initialization with facebook syntax', () => {
+    after(() => {
+      setProxyFree(false)
+    })
+
+    it('should be an empty object by default', () => {
+      Automerge.useProxyFreeAPI()
+      const doc = Automerge.init()
+      assert.deepStrictEqual(doc, {})
+    })
+
+    it('should support .get and .set', () => {
+      Automerge.useProxyFreeAPI()
+      const doc = Automerge.init()
+      Automerge.change(doc, doc => {
+        assert.deepStrictEqual(doc.get('key'), undefined)
+        doc.set('key', 'value')
+        assert.deepStrictEqual(doc.get('key'), 'value')
+      })
     })
   })
 
