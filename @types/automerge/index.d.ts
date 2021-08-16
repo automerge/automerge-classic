@@ -219,6 +219,7 @@ declare module 'automerge' {
     actor: string
     time: number
     seq: number
+    startOp: number
     deps: Hash[]
     ops: Op[]
   }
