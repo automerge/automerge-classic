@@ -12,7 +12,7 @@ model objects, such as a JSON document. For example, imagine you are developing 
 in which each task is represented by a card. In vanilla JavaScript you might write the following:
 
 ```js
-var doc = { cards: [] }
+const doc = { cards: [] }
 
 // User adds a card
 doc.cards.push({ title: 'Reticulate splines', done: false })
