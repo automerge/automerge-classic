@@ -228,6 +228,7 @@ declare module 'automerge' {
     obj: OpId
     key: string | number
     insert: boolean
+    elemId?: OpId
     child?: OpId
     value?: number | boolean | string | null
     datatype?: DataType
