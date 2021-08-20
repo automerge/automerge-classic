@@ -220,6 +220,7 @@ declare module 'automerge' {
     time: number
     seq: number
     startOp: number
+    hash: Hash
     deps: Hash[]
     ops: Op[]
   }
