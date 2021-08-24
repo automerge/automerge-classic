@@ -413,9 +413,9 @@ class Context {
   setListIndex(path, index, value) {
     const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const list = this.getObject(objectId)
-    if (index === list.length) {
-      return this.splice(path, index, 0, [value])
-    } else if (index > list.length) {
+
+    // Assignment past the end of the list => insert nulls followed by new value
+    if (index >= list.length) {
       const insertions = createArrayOfNulls(index - list.length)
       insertions.push(value)
       return this.splice(path, list.length, 0, insertions)
