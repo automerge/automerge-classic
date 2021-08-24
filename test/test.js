@@ -619,11 +619,6 @@ describe('Automerge', () => {
         assert.strictEqual(s1.japaneseFood.length, 2)
       })
 
-      it('should not allow out-of-range assignment', () => {
-        s1 = Automerge.change(s1, doc => doc.japaneseFood = ['udon'])
-        assert.throws(() => { Automerge.change(s1, doc => doc.japaneseFood[4] = 'ramen') }, /is out of bounds/)
-      })
-
       it('should allow bulk assignment of multiple list indexes', () => {
         s1 = Automerge.change(s1, doc => doc.noodles = ['udon', 'ramen', 'soba'])
         s1 = Automerge.change(s1, doc => Object.assign(doc.noodles, {0: 'うどん', 2: 'そば'}))

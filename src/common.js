@@ -41,6 +41,15 @@ function equalBytes(array1, array2) {
   return true
 }
 
+/**
+ * Creates an array containing the value `null` repeated `length` times.
+ */
+function createArrayOfNulls(length) {
+  const array = new Array(length)
+  for (let i = 0; i < length; i++) array[i] = null
+  return array
+}
+
 module.exports = {
-  isObject, copyObject, parseOpId, equalBytes
+  isObject, copyObject, parseOpId, equalBytes, createArrayOfNulls
 }

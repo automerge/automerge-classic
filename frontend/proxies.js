@@ -1,4 +1,5 @@
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
+const { createArrayOfNulls } = require('../src/common')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
@@ -11,12 +12,6 @@ function parseListIndex(key) {
     throw new RangeError('A list index must be positive, but you passed ' + key)
   }
   return key
-}
-
-function createArrayOfNulls(length) {
-  const array = new Array(length)
-  for (let i = 0; i < length; i++) array[i] = null
-  return array
 }
 
 function listMethods(context, listId, path) {

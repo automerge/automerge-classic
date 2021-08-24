@@ -4,7 +4,7 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
 const { Int, Uint, Float64 } = require('./numbers')
-const { isObject, parseOpId } = require('../src/common')
+const { isObject, parseOpId, createArrayOfNulls } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
@@ -412,11 +412,12 @@ class Context {
   setListIndex(path, index, value) {
     const objectId = path.length === 0 ? '_root' : path[path.length - 1].objectId
     const list = this.getObject(objectId)
-    if (index === list.length) {
-      return this.splice(path, index, 0, [value])
-    }
-    if (index < 0 || index > list.length) {
-      throw new RangeError(`List index ${index} is out of bounds for list of length ${list.length}`)
+
+    // Assignment past the end of the list => insert nulls followed by new value
+    if (index >= list.length) {
+      const insertions = createArrayOfNulls(index - list.length)
+      insertions.push(value)
+      return this.splice(path, list.length, 0, insertions)
     }
     if (list[index] instanceof Counter) {
       throw new RangeError('Cannot overwrite a Counter object; use .increment() or .decrement() to change its value.')
