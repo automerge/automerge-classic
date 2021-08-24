@@ -4,8 +4,7 @@ const { Text } = require('./text')
 const { Table } = require('./table')
 const { Counter, getWriteableCounter } = require('./counter')
 const { Int, Uint, Float64 } = require('./numbers')
-const { isObject, parseOpId } = require('../src/common')
-const { createArrayOfNulls } = require('./proxies')
+const { isObject, parseOpId, createArrayOfNulls } = require('../src/common')
 const uuid = require('../src/uuid')
 
 
