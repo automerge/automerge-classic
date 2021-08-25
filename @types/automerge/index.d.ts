@@ -246,6 +246,7 @@ declare module 'automerge' {
     clock: Clock
     deps: Hash[]
     diffs: MapDiff
+    maxOp: number
   }
 
   // Describes changes to a map (in which case propName represents a key in the
