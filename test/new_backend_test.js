@@ -950,7 +950,7 @@ describe('BackendDoc applying changes', () => {
     assert.strictEqual(backend.blocks[0].lastVisibleCtr, 4)
   })
 
-  it('should require list element updates to be in ascending order', () => {
+  it('should allow list element updates in reverse order', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
       {action: 'makeText', obj: '_root',      key: 'text',          insert: false,             pred: []},
@@ -964,7 +964,38 @@ describe('BackendDoc applying changes', () => {
     ]}
     const backend = new BackendDoc()
     backend.applyChanges([encodeChange(change1)])
-    assert.throws(() => { backend.applyChanges([encodeChange(change2)]) }, /could not find list element with ID/)
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+      maxOp: 6, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {text: {[`1@${actor}`]: {
+        objectId: `1@${actor}`, type: 'text', edits: [
+          {action: 'update', index: 2, opId: `5@${actor}`, value: {type: 'value', value: 'C'}},
+          {action: 'update', index: 0, opId: `6@${actor}`, value: {type: 'value', value: 'A'}}
+        ]
+      }}}}
+    })
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 1, 5, 0],
+      objCtr:   [0, 1, 5, 1],
+      keyActor: [0, 2, 4, 0], // null, null, 0, 0, 0, 0
+      keyCtr:   [0, 1, 0x7d, 0, 2, 0, 2, 1], // null, 0, 2, 2, 3, 4
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, 5], // 'text', 5x null
+      idActor:  [6, 0],
+      idCtr:    [2, 1, 0x7e, 4, 0x7d, 2, 1], // 1, 2, 6, 3, 4, 5
+      insert:   [1, 1, 1, 2, 1], // false, true, false, true, true, false
+      action:   [0x7f, 4, 5, 1], // makeText, 5x set
+      valLen:   [0x7f, 0, 5, 0x16], // null, 5x 1-byte string
+      valRaw:   [0x61, 0x41, 0x62, 0x63, 0x43], // 'a', 'A', 'b', 'c', 'C'
+      succNum:  [0x7e, 0, 1, 2, 0, 0x7e, 1, 0], // 0, 1, 0, 0, 1, 0
+      succActor: [2, 0],
+      succCtr:   [0x7e, 6, 0x7f] // 6, 5
+    })
+    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
+    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 3})
+    assert.strictEqual(backend.blocks[0].numOps, 6)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 4)
   })
 
   it('should handle nested objects inside list elements', () => {
