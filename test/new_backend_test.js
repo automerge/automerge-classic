@@ -1894,4 +1894,57 @@ describe('BackendDoc applying changes', () => {
       succCtr:   []
     })
   })
+
+  it('should delete many consecutive characters', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 2; i <= MAX_BLOCK_SIZE; i++) {
+      change1.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    const change2 = {actor, seq: 2, startOp: MAX_BLOCK_SIZE + 3, time: 0, deps: [], ops: []}
+    for (let i = 2; i <= MAX_BLOCK_SIZE + 1; i++) {
+      change2.ops.push({action: 'del', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: false, pred: [`${i}@${actor}`]})
+    }
+    const backend = new BackendDoc()
+    backend.applyChanges([encodeChange(change1)])
+    const patch = backend.applyChanges([encodeChange(change2)])
+    assert.deepStrictEqual(patch.diffs.props.text[`1@${actor}`].edits, [{action: 'remove', index: 0, count: MAX_BLOCK_SIZE}])
+    assert.strictEqual(backend.blocks.length, 2)
+    const firstSucc = MAX_BLOCK_SIZE + 3, secondSucc = MAX_BLOCK_SIZE + 3 + MAX_BLOCK_SIZE / 2
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
+      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
+      insert:   [1, MAX_BLOCK_SIZE / 2],
+      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [0x7f, 0, MAX_BLOCK_SIZE / 2, 1],
+      succActor: [MAX_BLOCK_SIZE / 2, 0],
+      succCtr:   [0x7f, 0x80 | (0x7f & firstSucc), firstSucc >>> 7, MAX_BLOCK_SIZE / 2 - 1, 1]
+    })
+    checkColumns(backend.blocks[1], {
+      objActor: [MAX_BLOCK_SIZE / 2, 0],
+      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
+      keyActor: [MAX_BLOCK_SIZE / 2, 0],
+      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      keyStr:   [],
+      idActor:  [MAX_BLOCK_SIZE / 2, 0],
+      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
+      insert:   [0, MAX_BLOCK_SIZE / 2],
+      action:   [MAX_BLOCK_SIZE / 2, 1],
+      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [MAX_BLOCK_SIZE / 2, 1],
+      succActor: [MAX_BLOCK_SIZE / 2, 0],
+      succCtr:   [0x7f, 0x80 | (0x7f & secondSucc), secondSucc >>> 7, MAX_BLOCK_SIZE / 2 - 1, 1]
+    })
+  })
 })
