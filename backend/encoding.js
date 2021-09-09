@@ -33,16 +33,21 @@ function hexStringToBytes(value) {
   }
 }
 
+const NIBBLE_TO_HEX = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+const BYTE_TO_HEX = new Array(256)
+for (let i = 0; i < 256; i++) {
+  BYTE_TO_HEX[i] = `${NIBBLE_TO_HEX[(i >>> 4) & 0xf]}${NIBBLE_TO_HEX[i & 0xf]}`;
+}
+
 /**
  * Converts a Uint8Array into the equivalent hexadecimal string.
  */
 function bytesToHexString(bytes) {
-  const hex = []
-  for (let b of bytes) {
-    if (b < 0 || b > 255) throw new RangeError(`value does not fit in one byte: ${b}`)
-    hex.push(('0' + b.toString(16)).slice(-2))
+  let hex = '', len = bytes.byteLength
+  for (let i = 0; i < len; i++) {
+    hex += BYTE_TO_HEX[bytes[i]]
   }
-  return hex.join('')
+  return hex
 }
 
 /**
