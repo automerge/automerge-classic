@@ -6,17 +6,17 @@ const uuid = require('../src/uuid')
 
 function checkColumns(block, expectedCols) {
   for (let actual of block.columns) {
-    const [colName] = Object.entries(DOC_OPS_COLUMNS).find(([/* name */, id]) => id === actual.columnId) || [actual.columnId.toString()]
-    if (expectedCols[colName]) {
-      checkEncoded(actual.decoder.buf, expectedCols[colName], `${colName} column`)
-    } else if (colName !== 'chldActor' && colName !== 'chldCtr') {
-      throw new Error(`Unexpected column ${colName}`)
+    const {columnName} = DOC_OPS_COLUMNS.find(({columnId}) => columnId === actual.columnId) || {columnName: actual.columnId.toString()}
+    if (expectedCols[columnName]) {
+      checkEncoded(actual.decoder.buf, expectedCols[columnName], `${columnName} column`)
+    } else if (columnName !== 'chldActor' && columnName !== 'chldCtr') {
+      throw new Error(`Unexpected column ${columnName}`)
     }
   }
-  for (let colName of Object.keys(expectedCols)) {
-    const columnId = DOC_OPS_COLUMNS[colName] || parseInt(colName, 10)
+  for (let expectedName of Object.keys(expectedCols)) {
+    const {columnId} = DOC_OPS_COLUMNS.find(({columnName}) => columnName === expectedName) || {columnId: parseInt(expectedName, 10)}
     if (!block.columns.find(actual => actual.columnId === columnId)) {
-      throw new Error(`Missing column ${colName}`)
+      throw new Error(`Missing column ${expectedName}`)
     }
   }
 }

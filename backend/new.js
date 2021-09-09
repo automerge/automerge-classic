@@ -12,6 +12,10 @@ const objActorIdx = 0, objCtrIdx = 1, keyActorIdx = 2, keyCtrIdx = 3, keyStrIdx 
   idActorIdx = 5, idCtrIdx = 6, insertIdx = 7, actionIdx = 8, valLenIdx = 9, valRawIdx = 10,
   predNumIdx = 13, predActorIdx = 14, predCtrIdx = 15, succNumIdx = 13, succActorIdx = 14, succCtrIdx = 15
 
+const PRED_COLUMN_IDS = CHANGE_COLUMNS
+  .filter(column => ['predNum', 'predActor', 'predCtr'].includes(column.columnName))
+  .map(column => column.columnId)
+
 /**
  * Updates `objectTree`, which is a tree of nested objects, so that afterwards
  * `objectTree[path[0]][path[1]][...] === value`. Only the root object is mutated, whereas any
@@ -1239,36 +1243,35 @@ function applyOps(patches, changeState, docState) {
  */
 function updateBlockColumns(docState, changeCols) {
   // Check that the columns of a change appear at the index at which we expect them to be
-  if (changeCols[objActorIdx ].columnId !== CHANGE_COLUMNS.objActor  ||
-      changeCols[objCtrIdx   ].columnId !== CHANGE_COLUMNS.objCtr    ||
-      changeCols[keyActorIdx ].columnId !== CHANGE_COLUMNS.keyActor  ||
-      changeCols[keyCtrIdx   ].columnId !== CHANGE_COLUMNS.keyCtr    ||
-      changeCols[keyStrIdx   ].columnId !== CHANGE_COLUMNS.keyStr    ||
-      changeCols[idActorIdx  ].columnId !== CHANGE_COLUMNS.idActor   ||
-      changeCols[idCtrIdx    ].columnId !== CHANGE_COLUMNS.idCtr     ||
-      changeCols[insertIdx   ].columnId !== CHANGE_COLUMNS.insert    ||
-      changeCols[actionIdx   ].columnId !== CHANGE_COLUMNS.action    ||
-      changeCols[valLenIdx   ].columnId !== CHANGE_COLUMNS.valLen    ||
-      changeCols[valRawIdx   ].columnId !== CHANGE_COLUMNS.valRaw    ||
-      changeCols[predNumIdx  ].columnId !== CHANGE_COLUMNS.predNum   ||
-      changeCols[predActorIdx].columnId !== CHANGE_COLUMNS.predActor ||
-      changeCols[predCtrIdx  ].columnId !== CHANGE_COLUMNS.predCtr) {
+  if (changeCols[objActorIdx ].columnId !== CHANGE_COLUMNS[objActorIdx ].columnId || CHANGE_COLUMNS[objActorIdx ].columnName !== 'objActor'  ||
+      changeCols[objCtrIdx   ].columnId !== CHANGE_COLUMNS[objCtrIdx   ].columnId || CHANGE_COLUMNS[objCtrIdx   ].columnName !== 'objCtr'    ||
+      changeCols[keyActorIdx ].columnId !== CHANGE_COLUMNS[keyActorIdx ].columnId || CHANGE_COLUMNS[keyActorIdx ].columnName !== 'keyActor'  ||
+      changeCols[keyCtrIdx   ].columnId !== CHANGE_COLUMNS[keyCtrIdx   ].columnId || CHANGE_COLUMNS[keyCtrIdx   ].columnName !== 'keyCtr'    ||
+      changeCols[keyStrIdx   ].columnId !== CHANGE_COLUMNS[keyStrIdx   ].columnId || CHANGE_COLUMNS[keyStrIdx   ].columnName !== 'keyStr'    ||
+      changeCols[idActorIdx  ].columnId !== CHANGE_COLUMNS[idActorIdx  ].columnId || CHANGE_COLUMNS[idActorIdx  ].columnName !== 'idActor'   ||
+      changeCols[idCtrIdx    ].columnId !== CHANGE_COLUMNS[idCtrIdx    ].columnId || CHANGE_COLUMNS[idCtrIdx    ].columnName !== 'idCtr'     ||
+      changeCols[insertIdx   ].columnId !== CHANGE_COLUMNS[insertIdx   ].columnId || CHANGE_COLUMNS[insertIdx   ].columnName !== 'insert'    ||
+      changeCols[actionIdx   ].columnId !== CHANGE_COLUMNS[actionIdx   ].columnId || CHANGE_COLUMNS[actionIdx   ].columnName !== 'action'    ||
+      changeCols[valLenIdx   ].columnId !== CHANGE_COLUMNS[valLenIdx   ].columnId || CHANGE_COLUMNS[valLenIdx   ].columnName !== 'valLen'    ||
+      changeCols[valRawIdx   ].columnId !== CHANGE_COLUMNS[valRawIdx   ].columnId || CHANGE_COLUMNS[valRawIdx   ].columnName !== 'valRaw'    ||
+      changeCols[predNumIdx  ].columnId !== CHANGE_COLUMNS[predNumIdx  ].columnId || CHANGE_COLUMNS[predNumIdx  ].columnName !== 'predNum'   ||
+      changeCols[predActorIdx].columnId !== CHANGE_COLUMNS[predActorIdx].columnId || CHANGE_COLUMNS[predActorIdx].columnName !== 'predActor' ||
+      changeCols[predCtrIdx  ].columnId !== CHANGE_COLUMNS[predCtrIdx  ].columnId || CHANGE_COLUMNS[predCtrIdx  ].columnName !== 'predCtr') {
     throw new RangeError('unexpected columnId')
   }
 
   // Check if there any columns in the change that are not in the document, apart from pred*
   const docCols = docState.blocks[0].columns
-  if (!changeCols.every(changeCol => changeCol.columnId === CHANGE_COLUMNS.predNum ||
-                                     changeCol.columnId === CHANGE_COLUMNS.predActor ||
-                                     changeCol.columnId === CHANGE_COLUMNS.predCtr ||
+  if (!changeCols.every(changeCol => PRED_COLUMN_IDS.includes(changeCol.columnId) ||
                                      docCols.find(docCol => docCol.columnId === changeCol.columnId))) {
-    const allCols = copyObject(DOC_OPS_COLUMNS)
-    for (let docCol of docCols) allCols[docCol.columnId] = docCol.columnId
+    let allCols = docCols.map(docCol => ({columnId: docCol.columnId}))
     for (let changeCol of changeCols) {
       const { columnId } = changeCol
-      if (columnId !== CHANGE_COLUMNS.predNum && columnId !== CHANGE_COLUMNS.predActor &&
-          columnId !== CHANGE_COLUMNS.predCtr) allCols[columnId] = columnId
+      if (!PRED_COLUMN_IDS.includes(columnId) && !docCols.find(docCol => docCol.columnId === columnId)) {
+        allCols.push({columnId})
+      }
     }
+    allCols.sort((a, b) => a.columnId - b.columnId)
 
     for (let blockIndex = 0; blockIndex < docState.blocks.length; blockIndex++) {
       let block = copyObject(docState.blocks[blockIndex])

@@ -53,45 +53,45 @@ const ACTIONS = ['makeMap', 'set', 'makeList', 'del', 'makeText', 'inc', 'makeTa
 
 const OBJECT_TYPE = {makeMap: 'map', makeList: 'list', makeText: 'text', makeTable: 'table'}
 
-const COMMON_COLUMNS = {
-  objActor:  0 << 4 | COLUMN_TYPE.ACTOR_ID,
-  objCtr:    0 << 4 | COLUMN_TYPE.INT_RLE,
-  keyActor:  1 << 4 | COLUMN_TYPE.ACTOR_ID,
-  keyCtr:    1 << 4 | COLUMN_TYPE.INT_DELTA,
-  keyStr:    1 << 4 | COLUMN_TYPE.STRING_RLE,
-  idActor:   2 << 4 | COLUMN_TYPE.ACTOR_ID,
-  idCtr:     2 << 4 | COLUMN_TYPE.INT_DELTA,
-  insert:    3 << 4 | COLUMN_TYPE.BOOLEAN,
-  action:    4 << 4 | COLUMN_TYPE.INT_RLE,
-  valLen:    5 << 4 | COLUMN_TYPE.VALUE_LEN,
-  valRaw:    5 << 4 | COLUMN_TYPE.VALUE_RAW,
-  chldActor: 6 << 4 | COLUMN_TYPE.ACTOR_ID,
-  chldCtr:   6 << 4 | COLUMN_TYPE.INT_DELTA
-}
+const COMMON_COLUMNS = [
+  {columnName: 'objActor',  columnId: 0 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'objCtr',    columnId: 0 << 4 | COLUMN_TYPE.INT_RLE},
+  {columnName: 'keyActor',  columnId: 1 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'keyCtr',    columnId: 1 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'keyStr',    columnId: 1 << 4 | COLUMN_TYPE.STRING_RLE},
+  {columnName: 'idActor',   columnId: 2 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'idCtr',     columnId: 2 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'insert',    columnId: 3 << 4 | COLUMN_TYPE.BOOLEAN},
+  {columnName: 'action',    columnId: 4 << 4 | COLUMN_TYPE.INT_RLE},
+  {columnName: 'valLen',    columnId: 5 << 4 | COLUMN_TYPE.VALUE_LEN},
+  {columnName: 'valRaw',    columnId: 5 << 4 | COLUMN_TYPE.VALUE_RAW},
+  {columnName: 'chldActor', columnId: 6 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'chldCtr',   columnId: 6 << 4 | COLUMN_TYPE.INT_DELTA}
+]
 
-const CHANGE_COLUMNS = Object.assign({
-  predNum:   7 << 4 | COLUMN_TYPE.GROUP_CARD,
-  predActor: 7 << 4 | COLUMN_TYPE.ACTOR_ID,
-  predCtr:   7 << 4 | COLUMN_TYPE.INT_DELTA
-}, COMMON_COLUMNS)
+const CHANGE_COLUMNS = COMMON_COLUMNS.concat([
+  {columnName: 'predNum',   columnId: 7 << 4 | COLUMN_TYPE.GROUP_CARD},
+  {columnName: 'predActor', columnId: 7 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'predCtr',   columnId: 7 << 4 | COLUMN_TYPE.INT_DELTA}
+])
 
-const DOC_OPS_COLUMNS = Object.assign({
-  succNum:   8 << 4 | COLUMN_TYPE.GROUP_CARD,
-  succActor: 8 << 4 | COLUMN_TYPE.ACTOR_ID,
-  succCtr:   8 << 4 | COLUMN_TYPE.INT_DELTA
-}, COMMON_COLUMNS)
+const DOC_OPS_COLUMNS = COMMON_COLUMNS.concat([
+  {columnName: 'succNum',   columnId: 8 << 4 | COLUMN_TYPE.GROUP_CARD},
+  {columnName: 'succActor', columnId: 8 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'succCtr',   columnId: 8 << 4 | COLUMN_TYPE.INT_DELTA}
+])
 
-const DOCUMENT_COLUMNS = {
-  actor:     0 << 4 | COLUMN_TYPE.ACTOR_ID,
-  seq:       0 << 4 | COLUMN_TYPE.INT_DELTA,
-  maxOp:     1 << 4 | COLUMN_TYPE.INT_DELTA,
-  time:      2 << 4 | COLUMN_TYPE.INT_DELTA,
-  message:   3 << 4 | COLUMN_TYPE.STRING_RLE,
-  depsNum:   4 << 4 | COLUMN_TYPE.GROUP_CARD,
-  depsIndex: 4 << 4 | COLUMN_TYPE.INT_DELTA,
-  extraLen:  5 << 4 | COLUMN_TYPE.VALUE_LEN,
-  extraRaw:  5 << 4 | COLUMN_TYPE.VALUE_RAW
-}
+const DOCUMENT_COLUMNS = [
+  {columnName: 'actor',     columnId: 0 << 4 | COLUMN_TYPE.ACTOR_ID},
+  {columnName: 'seq',       columnId: 0 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'maxOp',     columnId: 1 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'time',      columnId: 2 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'message',   columnId: 3 << 4 | COLUMN_TYPE.STRING_RLE},
+  {columnName: 'depsNum',   columnId: 4 << 4 | COLUMN_TYPE.GROUP_CARD},
+  {columnName: 'depsIndex', columnId: 4 << 4 | COLUMN_TYPE.INT_DELTA},
+  {columnName: 'extraLen',  columnId: 5 << 4 | COLUMN_TYPE.VALUE_LEN},
+  {columnName: 'extraRaw',  columnId: 5 << 4 | COLUMN_TYPE.VALUE_RAW}
+]
 
 /**
  * Maps an opId of the form {counter: 12345, actorId: 'someActorId'} to the form
@@ -428,8 +428,8 @@ function encodeOps(ops, forDocument) {
   }
 
   let columnList = []
-  for (let [name, id] of Object.entries(forDocument ? DOC_OPS_COLUMNS : CHANGE_COLUMNS)) {
-    if (columns[name]) columnList.push({id, name, encoder: columns[name]})
+  for (let {columnName, columnId} of forDocument ? DOC_OPS_COLUMNS : CHANGE_COLUMNS) {
+    if (columns[columnName]) columnList.push({id: columnId, name: columnName, encoder: columns[columnName]})
   }
   return columnList.sort((a, b) => a.id - b.id)
 }
@@ -540,21 +540,27 @@ function decoderByColumnId(columnId, buffer) {
 }
 
 function makeDecoders(columns, columnSpec) {
-  // By default, every column decodes an empty byte array
-  const emptyBuf = new Uint8Array(0), decoders = {}
-  for (let columnId of Object.values(columnSpec)) {
-    decoders[columnId] = decoderByColumnId(columnId, emptyBuf)
-  }
-  for (let column of columns) {
-    decoders[column.columnId] = decoderByColumnId(column.columnId, column.buffer)
-  }
+  const emptyBuf = new Uint8Array(0)
+  let decoders = [], columnIndex = 0, specIndex = 0
 
-  let result = []
-  for (let columnId of Object.keys(decoders).map(id => parseInt(id, 10)).sort((a, b) => a - b)) {
-    const [columnName] = Object.entries(columnSpec).find(([/* name */, id]) => id === columnId) || [columnId.toString()]
-    result.push({columnId, columnName, decoder: decoders[columnId]})
+  while (columnIndex < columns.length || specIndex < columnSpec.length) {
+    if (columnIndex === columns.length ||
+        (specIndex < columnSpec.length && columnSpec[specIndex].columnId < columns[columnIndex].columnId)) {
+      const {columnId, columnName} = columnSpec[specIndex]
+      decoders.push({columnId, columnName, decoder: decoderByColumnId(columnId, emptyBuf)})
+      specIndex++
+    } else if (specIndex === columnSpec.length || columns[columnIndex].columnId < columnSpec[specIndex].columnId) {
+      const {columnId, buffer} = columns[columnIndex]
+      decoders.push({columnId, decoder: decoderByColumnId(columnId, buffer)})
+      columnIndex++
+    } else { // columns[columnIndex].columnId === columnSpec[specIndex].columnId
+      const {columnId, buffer} = columns[columnIndex], {columnName} = columnSpec[specIndex]
+      decoders.push({columnId, columnName, decoder: decoderByColumnId(columnId, buffer)})
+      columnIndex++
+      specIndex++
+    }
   }
-  return result
+  return decoders
 }
 
 function decodeColumns(columns, actorIds, columnSpec) {
@@ -1050,8 +1056,8 @@ function encodeDocumentChanges(changes) {
   }
 
   let changesColumns = []
-  for (let [name, id] of Object.entries(DOCUMENT_COLUMNS)) {
-    changesColumns.push({id, name, encoder: columns[name]})
+  for (let {columnName, columnId} of DOCUMENT_COLUMNS) {
+    changesColumns.push({id: columnId, name: columnName, encoder: columns[columnName]})
   }
   changesColumns.sort((a, b) => a.id - b.id)
   return { changesColumns, heads: Object.keys(heads).sort() }
@@ -1401,7 +1407,7 @@ function constructPatch(documentBuffer) {
 }
 
 module.exports = {
-  COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
+  COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   splitContainers, encodeChange, decodeChangeColumns, decodeChange, decodeChangeMeta, decodeChanges,
   decodeDocumentHeader, encodeDocument, decodeDocument,
