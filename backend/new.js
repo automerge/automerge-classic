@@ -1689,6 +1689,10 @@ class BackendDoc {
     return toReturn.reverse().map(hash => this.changeByHash[hash])
   }
 
+  getChangeByHash(hash) {
+    return this.changeByHash[hash]
+  }
+
   /**
    * Returns the hashes of any missing dependencies, i.e. where we have tried to apply a change that
    * has a dependency on a change we have not seen.
