@@ -1421,58 +1421,62 @@ function setupPatches(patches, objectIds, docState) {
 }
 
 /**
- * Takes an array of binary-encoded changes (`changeBuffers`) and applies them to a document.
- * `docState` contains a bunch of fields describing the document state. This function returns an
- * array of decoded change headers, mutates `docState` to contain the updated document state, and
- * mutates `patches` to contain a patch to return to the frontend. Only the top-level `docState`
- * object is mutated; all nested objects within it are treated as immutable.
+ * Takes an array of decoded changes and applies them to a document. `docState` contains a bunch of
+ * fields describing the document state. This function mutates `docState` to contain the updated
+ * document state, and mutates `patches` to contain a patch to return to the frontend. Only the
+ * top-level `docState` object is mutated; all nested objects within it are treated as immutable.
+ * `objectIds` is mutated to contain the IDs of objects that are updated in any of the changes.
+ *
+ * Returns a two-element array `[applied, enqueued]`, where `applied` is an array of changes that
+ * have been applied to the document, and `enqueued` is an array of changes that have not yet been
+ * applied because they are missing a dependency.
  */
-function applyChanges(patches, changeBuffers, docState) {
+function applyChanges(patches, decodedChanges, docState, objectIds) {
   let heads = new Set(docState.heads), changeHashes = new Set()
   let clock = copyObject(docState.clock)
+  let applied = [], enqueued = []
 
-  // decoded change has the form { actor, seq, startOp, time, message, deps, actorIds, hash, columns }
-  let decodedChanges = changeBuffers.map(decodeChangeColumns)
   for (let change of decodedChanges) {
-    changeHashes.add(change.hash)
+    // Skip any duplicate changes that we have already seen
+    if (docState.changeByHash[change.hash] || changeHashes.has(change.hash)) continue
 
+    let causallyReady = true
     for (let dep of change.deps) {
-      // TODO enqueue changes that are not yet causally ready rather than throwing an exception
       if (!docState.changeByHash[dep] && !changeHashes.has(dep)) {
-        throw new RangeError(`missing dependency ${dep}`)
+        causallyReady = false
       }
-      heads.delete(dep)
     }
-    heads.add(change.hash)
 
-    const expectedSeq = (clock[change.actor] || 0) + 1
-    if (change.seq !== expectedSeq) {
-      throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+    if (causallyReady) {
+      const expectedSeq = (clock[change.actor] || 0) + 1
+      if (change.seq !== expectedSeq) {
+        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+      }
+      clock[change.actor] = change.seq
+      changeHashes.add(change.hash)
+      for (let dep of change.deps) heads.delete(dep)
+      heads.add(change.hash)
+      applied.push(change)
+    } else {
+      enqueued.push(change)
     }
-    clock[change.actor] = change.seq
   }
 
-  // Used by readNextChangeOp
-  let changeState = {
-    changes: decodedChanges,
-    changeIndex: -1,
-    objectIds: new Set(),
+  if (applied.length > 0) {
+    let changeState = {changes: applied, changeIndex: -1, objectIds}
+    readNextChangeOp(docState, changeState)
+    while (!changeState.done) applyOps(patches, changeState, docState)
+
+    docState.heads = [...heads].sort()
+    docState.clock = clock
   }
-
-  readNextChangeOp(docState, changeState)
-  while (!changeState.done) applyOps(patches, changeState, docState)
-  setupPatches(patches, changeState.objectIds, docState)
-
-  docState.heads = [...heads].sort()
-  docState.clock = clock
-  return decodedChanges
+  return [applied, enqueued]
 }
 
 
 class BackendDoc {
   constructor(buffer) {
     this.maxOp = 0
-    this.pendingChanges = 0
     this.changes = []
     this.changeByHash = {}
     this.dependenciesByHash = {}
@@ -1481,6 +1485,7 @@ class BackendDoc {
     this.actorIds = []
     this.heads = []
     this.clock = {}
+    this.queue = []
 
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
@@ -1533,6 +1538,7 @@ class BackendDoc {
     copy.clock = this.clock // immutable, no copying needed
     copy.blocks = this.blocks // immutable, no copying needed
     copy.objectMeta = this.objectMeta // immutable, no copying needed
+    copy.queue = this.queue // immutable, no copying needed
     return copy
   }
 
@@ -1542,6 +1548,13 @@ class BackendDoc {
    * object is not modified.
    */
   applyChanges(changeBuffers, isLocal = false) {
+    // decoded change has the form { actor, seq, startOp, time, message, deps, actorIds, hash, columns, buffer }
+    let decodedChanges = changeBuffers.map(buffer => {
+      const decoded = decodeChangeColumns(buffer)
+      decoded.buffer = buffer
+      return decoded
+    })
+
     let patches = {_root: {objectId: '_root', type: 'map', props: {}}}
     let docState = {
       maxOp: this.maxOp,
@@ -1552,32 +1565,41 @@ class BackendDoc {
       blocks: this.blocks.slice(),
       objectMeta: Object.assign({}, this.objectMeta)
     }
+    let queue = (this.queue.length === 0) ? decodedChanges : decodedChanges.concat(this.queue)
+    let allApplied = [], objectIds = new Set()
 
-    const decodedChanges = applyChanges(patches, changeBuffers, docState)
+    while (true) {
+      const [applied, enqueued] = applyChanges(patches, queue, docState, objectIds)
+      queue = enqueued
+      if (applied.length > 0) allApplied = allApplied.concat(applied)
+      if (applied.length === 0 || queue.length === 0) break
+    }
+
+    setupPatches(patches, objectIds, docState)
 
     // Update the document state only if `applyChanges` does not throw an exception
-    for (let i = 0; i < decodedChanges.length; i++) {
-      const change = decodedChanges[i]
+    for (let change of allApplied) {
       if (change.seq === 1) this.hashesByActor[change.actor] = []
+      this.changes.push(change.buffer)
       this.hashesByActor[change.actor].push(change.hash)
-      this.changeByHash[change.hash] = changeBuffers[i]
+      this.changeByHash[change.hash] = change.buffer
       this.dependenciesByHash[change.hash] = change.deps
       this.dependentsByHash[change.hash] = []
       for (let dep of change.deps) this.dependentsByHash[dep].push(change.hash)
     }
 
-    this.changes.push(...changeBuffers)
     this.maxOp        = docState.maxOp
     this.actorIds     = docState.actorIds
     this.heads        = docState.heads
     this.clock        = docState.clock
     this.blocks       = docState.blocks
     this.objectMeta   = docState.objectMeta
+    this.queue        = queue
     this.binaryDoc    = null
 
     let patch = {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
-      pendingChanges: this.pendingChanges, diffs: patches._root
+      pendingChanges: this.getMissingDeps().length, diffs: patches._root
     }
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
@@ -1596,7 +1618,7 @@ class BackendDoc {
   getChanges(haveDeps) {
     // If the other replica has nothing, return all changes in history order
     if (haveDeps.length === 0) {
-      return this.changes
+      return this.changes.slice()
     }
 
     // Fast path for the common case where all new changes depend only on haveDeps
@@ -1668,11 +1690,27 @@ class BackendDoc {
   }
 
   /**
-   * When you attempt to apply a change whose dependencies are not satisfied, it is queued up and
-   * the missing dependency's hash is returned from this method.
+   * Returns the hashes of any missing dependencies, i.e. where we have tried to apply a change that
+   * has a dependency on a change we have not seen.
+   *
+   * If the argument `heads` is given (an array of hexadecimal strings representing hashes as
+   * returned by `getHeads()`), this function also ensures that all of those hashes resolve to
+   * either a change that has been applied to the document, or that has been enqueued for later
+   * application once missing dependencies have arrived. Any missing heads hashes are included in
+   * the returned array.
    */
-  getMissingDeps() {
-    return [] // TODO implement this
+  getMissingDeps(heads = []) {
+    let allDeps = new Set(heads), inQueue = new Set()
+    for (let change of this.queue) {
+      inQueue.add(change.hash)
+      for (let dep of change.deps) allDeps.add(dep)
+    }
+
+    let missing = []
+    for (let hash of allDeps) {
+      if (!this.changeByHash[hash] && !inQueue.has(hash)) missing.push(hash)
+    }
+    return missing.sort()
   }
 
   /**
