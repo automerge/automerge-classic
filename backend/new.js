@@ -1532,7 +1532,8 @@ class BackendDoc {
     copy.changes = this.changes.slice()
     copy.changeByHash = copyObject(this.changeByHash)
     copy.dependenciesByHash = copyObject(this.dependenciesByHash)
-    copy.dependentsByHash = Object.entries(this.dependentsByHash).reduce((acc, [k, v]) => { acc[k] = v.slice(); return acc })
+    copy.dependentsByHash = Object.entries(this.dependentsByHash).reduce((acc, [k, v]) => { acc[k] = v.slice(); return acc }, {})
+    copy.hashesByActor = Object.entries(this.hashesByActor).reduce((acc, [k, v]) => { acc[k] = v.slice(); return acc }, {})
     copy.actorIds = this.actorIds // immutable, no copying needed
     copy.heads = this.heads // immutable, no copying needed
     copy.clock = this.clock // immutable, no copying needed
