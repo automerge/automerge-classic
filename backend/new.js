@@ -982,7 +982,17 @@ function mergeDocChangeOps(patches, newBlock, outCols, changeState, docState, li
       let nextOp = changeState.nextOp
       while (!changeState.done && nextOp[idActorIdx] === idActorIndex && nextOp[insertIdx] === insert &&
              nextOp[objActorIdx] === firstOp[objActorIdx] && nextOp[objCtrIdx] === firstOp[objCtrIdx]) {
+
+        // Check if the operation's pred references a previous operation in changeOps
         const lastOp = (changeOps.length > 0) ? changeOps[changeOps.length - 1] : null
+        let isOverwrite = false
+        for (let i = 0; i < nextOp[predNumIdx]; i++) {
+          for (let prevOp of changeOps) {
+            if (nextOp[predActorIdx][i] === prevOp[idActorIdx] && nextOp[predCtrIdx][i] === prevOp[idCtrIdx]) {
+              isOverwrite = true
+            }
+          }
+        }
 
         // If any of the following `if` statements is true, we add `nextOp` to `changeOps`. If they
         // are all false, we break out of the loop and stop adding to `changeOps`.
@@ -993,12 +1003,12 @@ function mergeDocChangeOps(patches, newBlock, outCols, changeState, docState, li
                    nextOp[keyCtrIdx] === lastOp[idCtrIdx]) {
           // Collect consecutive insertions
         } else if (!insert && lastOp !== null && nextOp[keyStrIdx] !== null &&
-                   nextOp[keyStrIdx] === lastOp[keyStrIdx]) {
+                   nextOp[keyStrIdx] === lastOp[keyStrIdx] && !isOverwrite) {
           // Collect several updates to the same key
         } else if (!insert && lastOp !== null &&
                    nextOp[keyStrIdx] === null && lastOp[keyStrIdx] === null &&
                    nextOp[keyActorIdx] === lastOp[keyActorIdx] &&
-                   nextOp[keyCtrIdx] === lastOp[keyCtrIdx]) {
+                   nextOp[keyCtrIdx] === lastOp[keyCtrIdx] && !isOverwrite) {
           // Collect several updates to the same list element
         } else if (!insert && lastOp === null && nextOp[keyStrIdx] === null &&
                    docOp && docOp[insertIdx] && docOp[keyStrIdx] === null &&
