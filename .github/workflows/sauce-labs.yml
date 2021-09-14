@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  SAUCE_USERNAME: ${{secrets.SAUCE_USERNAME}}
-  SAUCE_ACCESS_KEY: ${{secrets.SAUCE_ACCESS_KEY}}
-
 jobs:
   browsertest:
     runs-on: ubuntu-latest
@@ -24,10 +20,12 @@ jobs:
         run: yarn
       - name: Bundle
         run: yarn build
-      - name: saucectl run
-        uses: saucelabs/saucectl-run-action@v1
+      - name: Sauce Connect
+        uses: saucelabs/sauce-connect-action@v1
         with:
-          testing-environment: ''
-          concurrency: 5
+          username: ${{ secrets.SAUCE_USERNAME }}
+          accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
+          tunnelIdentifier: github-action-tunnel
+          scVersion: 4.7.0
       - name: Run tests
         run: karma start karma.sauce.js
