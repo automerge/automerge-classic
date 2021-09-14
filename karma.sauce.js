@@ -80,8 +80,8 @@ module.exports = function(config) {
     captureTimeout: 120000,
     sauceLabs: {
       testName: 'Automerge unit tests',
-      startConnect: false, // Sauce Connect is started via setting in .travis.yml
-      tunnelIdentifier: process.env.TRAVIS_JOB_NUMBER
+      startConnect: false, // Sauce Connect is started in GitHub action
+      tunnelIdentifier: github-action-tunnel
     },
     customLaunchers,
     browsers: Object.keys(customLaunchers),
