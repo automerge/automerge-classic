@@ -81,7 +81,7 @@ module.exports = function(config) {
     sauceLabs: {
       testName: 'Automerge unit tests',
       startConnect: false, // Sauce Connect is started in GitHub action
-      tunnelIdentifier: github-action-tunnel
+      tunnelIdentifier: 'github-action-tunnel'
     },
     customLaunchers,
     browsers: Object.keys(customLaunchers),
