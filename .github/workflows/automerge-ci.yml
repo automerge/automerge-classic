@@ -1,0 +1,75 @@
+name: Automerge CI
+on: [push, pull_request]
+
+jobs:
+  node-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [12.x, 14.x, 16.x]
+    steps:
+    - name: Check out repo
+      uses: actions/checkout@v2
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'yarn'
+    - name: Install dependencies
+      run: yarn
+    - name: ESLint
+      run: yarn lint
+    - name: Test suite
+      run: yarn test
+    - name: Bundle
+      run: yarn build
+    - name: Test suite using bundle
+      run: TEST_DIST=1 yarn test
+    - name: Load bundled code
+      run: node -e "const Automerge = require(\"./dist/automerge\")"
+
+  browsertest:
+    runs-on: ubuntu-latest
+    # Don't run this job when triggered from a forked repository, since the secrets
+    # (Sauce Labs credentials) are not available in that context
+    if: ${{ github.repository == 'automerge/automerge' }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16.x
+          cache: 'yarn'
+      - name: Install dependencies
+        run: yarn
+      - name: Bundle
+        run: yarn build
+      - name: Sauce Connect
+        uses: saucelabs/sauce-connect-action@v1
+        with:
+          username: ${{ secrets.SAUCE_USERNAME }}
+          accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
+          tunnelIdentifier: github-action-tunnel
+          scVersion: 4.7.0
+      - name: Run browser tests
+        run: node_modules/.bin/karma start karma.sauce.js
+        env:
+          SAUCE_USERNAME: ${{secrets.SAUCE_USERNAME}}
+          SAUCE_ACCESS_KEY: ${{secrets.SAUCE_ACCESS_KEY}}
+
+  npm-publish:
+    name: npm-publish
+    if: ${{ github.repository == 'automerge/automerge' && github.ref == 'refs/heads/main' }}
+    needs: [ node-build, browsertest ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repo
+      uses: actions/checkout@v2
+    - name: Install dependencies
+      run: yarn install
+    - name: npm publish if version has been updated
+      uses: pascalgn/npm-publish-action@1.3.8
+      with:
+        create_tag: 'false'
+      env:
+        NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
