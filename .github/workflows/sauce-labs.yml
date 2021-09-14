@@ -27,5 +27,6 @@ jobs:
           accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
           tunnelIdentifier: github-action-tunnel
           scVersion: 4.7.0
+      - run: ls -al node_modules
       - name: Run tests
-        run: karma start karma.sauce.js
+        run: node_modules/karma/bin/karma start karma.sauce.js
