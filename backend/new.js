@@ -193,6 +193,27 @@ function seekWithinBlock(ops, docCols, actorIds, resumeInsertion) {
 }
 
 /**
+ * Returns the number of list elements that should be added to a list index when skipping over the
+ * block with index `blockIndex` in the list object with ID `objectId`.
+ */
+function visibleListElements(docState, blockIndex, objectId) {
+  const thisBlock = docState.blocks[blockIndex]
+  const nextBlock = docState.blocks[blockIndex + 1]
+
+  let blockVisible = thisBlock.numVisible[objectId]
+  if (blockVisible !== undefined) {
+    // If a list element is split across the block boundary, don't double-count it
+    if (thisBlock.lastVisibleActor === nextBlock.firstVisibleActor &&
+        thisBlock.lastVisibleActor !== undefined &&
+        thisBlock.lastVisibleCtr === nextBlock.firstVisibleCtr &&
+        thisBlock.lastVisibleCtr !== undefined) blockVisible -= 1
+    return blockVisible
+  } else {
+    return 0
+  }
+}
+
+/**
  * Scans the blocks of document operations to find the position where a new operation should be
  * inserted. Returns an object with keys:
  * - `blockIndex`: the index of the block into which we should insert the new operation
@@ -237,34 +258,25 @@ function seekToOp(docState, ops) {
     let resumeInsertion = false
 
     while (true) {
-      // If the operation has a reference element (i.e. it's not an insertion at the head), we skip
-      // blocks until we get a Bloom filter hit for the reference element. Note this may be a false
-      // positive. Also, if resumeInsertion == true, we move forward by exactly one block.
-      while (blockIndex < docState.blocks.length - 1 && (resumeInsertion || // eslint-disable-line no-unmodified-loop-condition
-             !insertAtHead && !bloomFilterContains(docState.blocks[blockIndex].bloom, keyActorNum, keyCtr))) { // eslint-disable-line no-unmodified-loop-condition
-        const thisBlock = docState.blocks[blockIndex]
-        const nextBlock = docState.blocks[blockIndex + 1]
-        blockIndex++
+      // Search for the reference element, skipping any blocks whose Bloom filter does not contain
+      // the reference element. We only do this if not inserting at the head (in which case there is
+      // no reference element), or if we already found the reference element in an earlier block (in
+      // which case we have resumeInsertion === true). The latter case arises with concurrent
+      // insertions at the same position, and so we have to scan beyond the reference element to
+      // find the actual insertion position, and that further scan crosses a block boundary.
+      if (!insertAtHead && !resumeInsertion) {
+        while (blockIndex < docState.blocks.length - 1 &&
+               !bloomFilterContains(docState.blocks[blockIndex].bloom, keyActorNum, keyCtr)) {
+          // If we reach the end of the list object without a Bloom filter hit, the reference element
+          // doesn't exist
+          if (docState.blocks[blockIndex].lastObjectCtr > objCtr) {
+            throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
+          }
 
-        // If we reach the end of the list object without a Bloom filter hit, the reference element
-        // doesn't exist
-        if (thisBlock.lastObjectCtr > objCtr) {
-          throw new RangeError(`Reference element not found: ${keyCtr}@${keyActor}`)
+          // Add up number of visible list elements in any blocks we skip, for list index computation
+          totalVisible += visibleListElements(docState, blockIndex, ops.objId)
+          blockIndex++
         }
-
-        // Add up number of visible list elements in any blocks we skip, for list index computation
-        const blockVisible = thisBlock.numVisible[ops.objId]
-        if (blockVisible !== undefined) {
-          totalVisible += blockVisible
-          // If a list element is split across the block boundary, don't double-count it
-          if (thisBlock.lastVisibleActor === nextBlock.firstVisibleActor &&
-              thisBlock.lastVisibleActor !== undefined &&
-              thisBlock.lastVisibleCtr === nextBlock.firstVisibleCtr &&
-              thisBlock.lastVisibleCtr !== undefined) totalVisible -= 1
-        }
-
-        // If we're scanning for the insertion position, we only want to move to the next block
-        if (resumeInsertion) break
       }
 
       // We have a candidate block. Decode it to see whether it really contains the reference element
@@ -291,6 +303,7 @@ function seekToOp(docState, ops) {
       // continue scanning the next block to find the actual insertion position.
       // Either way, go back round the loop again to skip blocks until the next Bloom filter hit.
       resumeInsertion = found && ops.insert
+      totalVisible += visibleListElements(docState, blockIndex, ops.objId)
       blockIndex++
     }
   }

@@ -1895,6 +1895,39 @@ describe('BackendDoc applying changes', () => {
     })
   })
 
+  it('should handle insertions with Bloom filter false positives', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 2; i <= 2 * MAX_BLOCK_SIZE; i++) {
+      change1.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    const backend = new BackendDoc(), startOp = 2 * MAX_BLOCK_SIZE + 2
+    backend.applyChanges([encodeChange(change1)])
+    assert.strictEqual(backend.blocks.length, 3)
+    let keyCtr = backend.blocks[1].firstVisibleCtr
+    while (keyCtr <= backend.blocks[backend.blocks.length - 1].lastVisibleCtr) {
+      if (bloomFilterContains(backend.blocks[0].bloom, 0, keyCtr)) break
+      keyCtr++
+    }
+    if (keyCtr > backend.blocks[backend.blocks.length - 1].lastVisibleCtr) {
+      throw new Error('no false positive found')
+    }
+    const change2 = {actor, seq: 2, startOp, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set', obj: `1@${actor}`, elemId: `${keyCtr}@${actor}`, insert: true,  value: 'a', pred: []}
+    ]}
+    const patch = backend.applyChanges([encodeChange(change2)])
+    assert.deepStrictEqual(patch.diffs.props.text[`1@${actor}`].edits, [{
+      action: 'insert',
+      index: keyCtr - 1,
+      elemId: `${startOp}@${actor}`,
+      opId: `${startOp}@${actor}`,
+      value: {type: 'value', value: 'a'}
+    }])
+  })
+
   it('should delete many consecutive characters', () => {
     const actor = uuid()
     const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
