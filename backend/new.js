@@ -795,8 +795,12 @@ function convertInsertToUpdate(edits, index, elemId) {
  * in the document, `oldSuccNum` is the value of `op[succNumIdx]` before the current change was
  * applied (allowing us to determine whether this operation was overwritten or deleted in the
  * current change). `oldSuccNum` must be undefined if the operation came from the current change.
+ * If we are creating an incremental patch as a result of applying one or more changes, `newBlock`
+ * is the block to which the operations are getting written; we will update the metadata on this
+ * block. `newBlock` should be null if we are creating a patch for the whole document.
  */
 function updatePatchProperty(patches, newBlock, objectId, op, docState, propState, listIndex, oldSuccNum) {
+  const isWholeDoc = !newBlock
   const type = op[actionIdx] < ACTIONS.length ? OBJECT_TYPE[ACTIONS[op[actionIdx]]] : null
   const opId = `${op[idCtrIdx]}@${docState.actorIds[op[idActorIdx]]}`
   const elemIdActor = op[insertIdx] ? op[idActorIdx] : op[keyActorIdx]
@@ -805,7 +809,7 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
 
   // When the change contains a new make* operation (i.e. with an even-numbered action), record the
   // new parent-child relationship in objectMeta. TODO: also handle link/move operations.
-  if (op[actionIdx] % 2 === 0 && oldSuccNum === undefined) {
+  if (op[actionIdx] % 2 === 0 && !docState.objectMeta[opId]) {
     docState.objectMeta[opId] = {parentObj: objectId, parentKey: elemId, opId, type, children: {}}
     deepCopyUpdate(docState.objectMeta, [objectId, 'children', elemId, opId], {objectId: opId, type, props: {}})
   }
@@ -899,10 +903,10 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
     // means the current list element already had a value before this change was applied, and
     // therefore the current element cannot be an insert. If we already registered an insert, we
     // have to convert it into an update.
-    if (oldSuccNum === 0 && propState[elemId].action === 'insert') {
+    if (oldSuccNum === 0 && !isWholeDoc && propState[elemId].action === 'insert') {
       propState[elemId].action = 'update'
       convertInsertToUpdate(patch.edits, listIndex, elemId)
-      newBlock.numVisible[objectId] -= 1
+      if (newBlock) newBlock.numVisible[objectId] -= 1
     }
 
     if (patchValue) {
@@ -910,11 +914,13 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
       // (It's not necessarily the case that op[insertIdx] is true: if a list element is concurrently
       // deleted and updated, the node that first processes the deletion and then the update will
       // observe the update as a re-insertion of the deleted list element.)
-      if (oldSuccNum === undefined && !propState[elemId].action) {
+      if (!propState[elemId].action && (oldSuccNum === undefined || isWholeDoc)) {
         propState[elemId].action = 'insert'
         appendEdit(patch.edits, {action: 'insert', index: listIndex, elemId, opId: patchKey, value: patchValue})
-        if (newBlock.numVisible[objectId] === undefined) newBlock.numVisible[objectId] = 0
-        newBlock.numVisible[objectId] += 1
+        if (newBlock) {
+          if (newBlock.numVisible[objectId] === undefined) newBlock.numVisible[objectId] = 0
+          newBlock.numVisible[objectId] += 1
+        }
 
       // If the property has a value and it's not an insert, then it must be an update.
       // We might have previously registered it as a remove, in which case we convert it to update.
@@ -924,7 +930,7 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
         if (lastEdit.count > 1) lastEdit.count -= 1; else patch.edits.pop()
         propState[elemId].action = 'update'
         appendUpdate(patch.edits, listIndex, elemId, patchKey, patchValue, true)
-        newBlock.numVisible[objectId] += 1
+        if (newBlock) newBlock.numVisible[objectId] += 1
 
       } else {
         // A 'normal' update
@@ -936,10 +942,10 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
       // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
       propState[elemId].action = 'remove'
       appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
-      newBlock.numVisible[objectId] -= 1
+      if (newBlock) newBlock.numVisible[objectId] -= 1
     }
 
-  } else {
+  } else if (patchValue || !isWholeDoc) {
     // Updating a map or table (with string key)
     if (firstOp || !patch.props[op[keyStrIdx]]) patch.props[op[keyStrIdx]] = {}
     if (patchValue) patch.props[op[keyStrIdx]][patchKey] = patchValue
@@ -1486,6 +1492,40 @@ function applyChanges(patches, decodedChanges, docState, objectIds) {
   return [applied, enqueued]
 }
 
+/**
+ * Scans the operations in a document and generates a patch that can be sent to the frontend to
+ * instantiate the current state of the document. `objectMeta` is mutated to contain information
+ * about the parent and children of each object in the document.
+ */
+function documentPatch(docState) {
+  for (let col of docState.blocks[0].columns) col.decoder.reset()
+  let propState = {}, docOp = null, blockIndex = 0
+  let patches = {_root: {objectId: '_root', type: 'map', props: {}}}
+  let lastObjActor = null, lastObjCtr = null, objectId = '_root', elemVisible = false, listIndex = 0
+
+  while (true) {
+    ;({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
+    if (docOp === null) break
+    if (docOp[objActorIdx] !== lastObjActor || docOp[objCtrIdx] !== lastObjCtr) {
+      objectId = `${docOp[objCtrIdx]}@${docState.actorIds[docOp[objActorIdx]]}`
+      lastObjActor = docOp[objActorIdx]
+      lastObjCtr = docOp[objCtrIdx]
+      propState = {}
+      listIndex = 0
+      elemVisible = false
+    }
+
+    if (docOp[insertIdx] && elemVisible) {
+      elemVisible = false
+      listIndex++
+    }
+    if (docOp[succNumIdx] === 0) elemVisible = true
+    if (docOp[idCtrIdx] > docState.maxOp) docState.maxOp = docOp[idCtrIdx]
+
+    updatePatchProperty(patches, null, objectId, docOp, docState, propState, listIndex, docOp[succNumIdx])
+  }
+  return patches._root
+}
 
 class BackendDoc {
   constructor(buffer) {
@@ -1499,6 +1539,7 @@ class BackendDoc {
     this.heads = []
     this.clock = {}
     this.queue = []
+    this.objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
 
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
@@ -1517,7 +1558,10 @@ class BackendDoc {
       if (this.blocks[0].numOps > MAX_BLOCK_SIZE) {
         this.blocks = splitBlock(this.blocks[0], this.actorIds)
       }
-      this.objectMeta = {} // TODO fill this in
+
+      let docState = {blocks: this.blocks, actorIds: this.actorIds, objectMeta: this.objectMeta, maxOp: 0}
+      this.initPatch = documentPatch(docState)
+      this.maxOp = docState.maxOp
     } else {
       this.blocks = [{
         columns: makeDecoders([], DOC_OPS_COLUMNS),
@@ -1532,7 +1576,6 @@ class BackendDoc {
         lastVisibleActor: undefined,
         lastVisibleCtr: undefined
       }]
-      this.objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
     }
   }
 
@@ -1610,6 +1653,7 @@ class BackendDoc {
     this.objectMeta   = docState.objectMeta
     this.queue        = queue
     this.binaryDoc    = null
+    this.initPatch    = null
 
     let patch = {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
@@ -1737,6 +1781,19 @@ class BackendDoc {
   save() {
     if (this.binaryDoc) return this.binaryDoc
     return encodeDocument(this.changes)
+  }
+
+  /**
+   * Returns a patch from which we can initialise the current state of the backend.
+   */
+  getPatch() {
+    const objectMeta = {_root: {parentObj: null, parentKey: null, opId: null, type: 'map', children: {}}}
+    const docState = {blocks: this.blocks, actorIds: this.actorIds, objectMeta, maxOp: 0}
+    const diffs = this.initPatch ? this.initPatch : documentPatch(docState)
+    return {
+      maxOp: this.maxOp, clock: this.clock, deps: this.heads,
+      pendingChanges: this.getMissingDeps().length, diffs
+    }
   }
 }
 

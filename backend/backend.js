@@ -223,14 +223,7 @@ function loadChanges(backend, changes) {
 function getPatch(backend) {
   const state = backendState(backend)
   if (USE_NEW_BACKEND) {
-    const diffs = constructPatch(state.save())
-    return {
-      maxOp: state.maxOp,
-      clock: state.clock,
-      deps: state.heads,
-      pendingChanges: state.getMissingDeps().length,
-      diffs
-    }
+    return state.getPatch()
   } else {
     const diffs = constructPatch(save(backend))
     return makePatch(state, diffs, null, false)
