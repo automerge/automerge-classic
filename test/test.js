@@ -1296,7 +1296,7 @@ describe('Automerge', () => {
       let [s6, patch6] = Automerge.applyChanges(s5, changes12)
       assert.deepStrictEqual(Automerge.Backend.getMissingDeps(Automerge.Frontend.getBackendState(s6)),
                              [decodeChange(changes01[0]).hash])
-      assert.strictEqual(patch6.pendingChanges, 1)
+      assert.strictEqual(patch6.pendingChanges, 2)
     })
 
     it('should call patchCallback if supplied when applying changes', () => {

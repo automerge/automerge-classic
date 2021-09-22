@@ -1657,7 +1657,7 @@ class BackendDoc {
 
     let patch = {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
-      pendingChanges: this.getMissingDeps().length, diffs: patches._root
+      pendingChanges: this.queue.length, diffs: patches._root
     }
     if (isLocal && decodedChanges.length === 1) {
       patch.actor = decodedChanges[0].actor
@@ -1792,7 +1792,7 @@ class BackendDoc {
     const diffs = this.initPatch ? this.initPatch : documentPatch(docState)
     return {
       maxOp: this.maxOp, clock: this.clock, deps: this.heads,
-      pendingChanges: this.getMissingDeps().length, diffs
+      pendingChanges: this.queue.length, diffs
     }
   }
 }
