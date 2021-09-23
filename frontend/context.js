@@ -16,7 +16,7 @@ const uuid = require('../src/uuid')
 class Context {
   constructor (doc, actorId, applyPatch) {
     this.actorId = actorId
-    this.maxOp = doc[STATE].maxOp
+    this.nextOpNum = doc[STATE].maxOp + 1
     this.cache = doc[CACHE]
     this.updated = {}
     this.ops = []
@@ -28,23 +28,21 @@ class Context {
    */
   addOp(operation) {
     this.ops.push(operation)
+
+    if (operation.action === 'set' && operation.values) {
+      this.nextOpNum += operation.values.length
+    } else if (operation.action === 'del' && operation.multiOp) {
+      this.nextOpNum += operation.multiOp
+    } else {
+      this.nextOpNum += 1
+    }
   }
 
   /**
    * Returns the operation ID of the next operation to be added to the context.
    */
   nextOpId() {
-    let opNum = this.maxOp + 1
-    for (const op of this.ops) {
-      if (op.action === 'set' && op.values) {
-        opNum += op.values.length
-      } else if (op.action === 'del' && op.multiOp) {
-        opNum += op.multiOp
-      } else {
-        opNum += 1
-      }
-    }
-    return `${opNum}@${this.actorId}`
+    return `${this.nextOpNum}@${this.actorId}`
   }
 
   /**
