@@ -1,5 +1,5 @@
 const { parseOpId, copyObject } = require('../src/common')
-const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS,
+const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocument,
   appendEdit } = require('./columnar')
@@ -1527,9 +1527,44 @@ function documentPatch(docState) {
   return patches._root
 }
 
+/**
+ * Takes an encoded document whose headers have been parsed using `decodeDocumentHeader()` and reads
+ * from it the list of changes. Returns the document's current vector clock, i.e. an object mapping
+ * each actor ID (as a hex string) to the number of changes seen from that actor. Also returns an
+ * array of the actorIds whose most recent change has no dependents (i.e. the actors that
+ * contributed the current heads of the document).
+ */
+function documentClock(doc) {
+  const columns = makeDecoders(doc.changesColumns, DOCUMENT_COLUMNS)
+  const actorD = columns[0].decoder, seqD = columns[1].decoder
+  const depsNumD = columns[5].decoder, depsIndexD = columns[6].decoder
+  if (columns[0].columnId !== DOCUMENT_COLUMNS[0].columnId || DOCUMENT_COLUMNS[0].columnName !== 'actor' ||
+      columns[1].columnId !== DOCUMENT_COLUMNS[1].columnId || DOCUMENT_COLUMNS[1].columnName !== 'seq' ||
+      columns[5].columnId !== DOCUMENT_COLUMNS[5].columnId || DOCUMENT_COLUMNS[5].columnName !== 'depsNum' ||
+      columns[6].columnId !== DOCUMENT_COLUMNS[6].columnId || DOCUMENT_COLUMNS[6].columnName !== 'depsIndex') {
+    throw new RangeError('unexpected columnId')
+  }
+
+  const clock = {}, actorNums = [], headIndexes = new Set()
+  for (let i = 0; !actorD.done; i++) {
+    const actorNum = actorD.readValue(), seq = seqD.readValue(), depsNum = depsNumD.readValue()
+    const actorId = doc.actorIds[actorNum]
+    if (seq !== 1 && seq !== clock[actorId] + 1) {
+      throw new RangeError(`Expected seq ${clock[actorId] + 1}, got ${seq} for actor ${actorId}`)
+    }
+    actorNums.push(actorNum)
+    clock[actorId] = seq
+    headIndexes.add(i)
+    for (let j = 0; j < depsNum; j++) headIndexes.delete(depsIndexD.readValue())
+  }
+  const headActors = [...headIndexes].map(index => doc.actorIds[actorNums[index]]).sort()
+  return {clock, headActors}
+}
+
 class BackendDoc {
   constructor(buffer) {
     this.maxOp = 0
+    this.haveHashGraph = false
     this.changes = []
     this.changeByHash = {}
     this.dependenciesByHash = {}
@@ -1543,15 +1578,22 @@ class BackendDoc {
 
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
-      for (let change of decodeChanges([buffer])) {
-        const binaryChange = encodeChange(change) // decoding and re-encoding, argh!
-        this.changes.push(binaryChange)
-        this.changeByHash[change.hash] = binaryChange
-        this.clock[change.actor] = Math.max(change.seq, this.clock[change.actor] || 0)
-      }
+      const {clock, headActors} = documentClock(doc)
+      this.binaryDoc = buffer
       this.actorIds = doc.actorIds
       this.heads = doc.heads
-      this.binaryDoc = buffer
+      this.clock = clock
+
+      // If there is a single head, we can unambiguously point at the actorId and sequence number of
+      // the head hash without having to reconstruct the hash graph
+      if (doc.heads.length === 1 && headActors.length === 1) {
+        this.hashesByActor[headActors[0]] = []
+        this.hashesByActor[headActors[0]][clock[headActors[0]] - 1] = doc.heads[0]
+      }
+
+      // For purposes of checking causal dependencies, we just need to know that we have a certain
+      // hash; we don't actually need the change itself
+      for (let head of doc.heads) this.changeByHash[head] = true
 
       this.blocks = [{columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
       updateBlockMetadata(this.blocks[0], this.actorIds)
@@ -1562,7 +1604,9 @@ class BackendDoc {
       let docState = {blocks: this.blocks, actorIds: this.actorIds, objectMeta: this.objectMeta, maxOp: 0}
       this.initPatch = documentPatch(docState)
       this.maxOp = docState.maxOp
+
     } else {
+      this.haveHashGraph = true
       this.blocks = [{
         columns: makeDecoders([], DOC_OPS_COLUMNS),
         bloom: new Uint8Array(BLOOM_FILTER_SIZE),
@@ -1585,6 +1629,7 @@ class BackendDoc {
   clone() {
     let copy = new BackendDoc()
     copy.maxOp = this.maxOp
+    copy.haveHashGraph = this.haveHashGraph
     copy.changes = this.changes.slice()
     copy.changeByHash = copyObject(this.changeByHash)
     copy.dependenciesByHash = copyObject(this.dependenciesByHash)
@@ -1629,20 +1674,29 @@ class BackendDoc {
       const [applied, enqueued] = applyChanges(patches, queue, docState, objectIds)
       queue = enqueued
       if (applied.length > 0) allApplied = allApplied.concat(applied)
-      if (applied.length === 0 || queue.length === 0) break
+      if (queue.length === 0) break
+
+      // If we are missing a dependency, and we haven't computed the hash graph yet, first compute
+      // the hashes to see if we actually have it already
+      if (applied.length === 0) {
+        if (!this.haveHashGraph) this.computeHashGraph(); else break
+      }
     }
 
     setupPatches(patches, objectIds, docState)
 
     // Update the document state only if `applyChanges` does not throw an exception
     for (let change of allApplied) {
-      if (change.seq === 1) this.hashesByActor[change.actor] = []
       this.changes.push(change.buffer)
-      this.hashesByActor[change.actor].push(change.hash)
+      if (!this.hashesByActor[change.actor]) this.hashesByActor[change.actor] = []
+      this.hashesByActor[change.actor][change.seq - 1] = change.hash
       this.changeByHash[change.hash] = change.buffer
       this.dependenciesByHash[change.hash] = change.deps
       this.dependentsByHash[change.hash] = []
-      for (let dep of change.deps) this.dependentsByHash[dep].push(change.hash)
+      for (let dep of change.deps) {
+        if (!this.dependentsByHash[dep]) this.dependentsByHash[dep] = []
+        this.dependentsByHash[dep].push(change.hash)
+      }
     }
 
     this.maxOp        = docState.maxOp
@@ -1667,6 +1721,38 @@ class BackendDoc {
   }
 
   /**
+   * Reconstructs the full change history of a document, and initialises the variables that allow us
+   * to traverse the hash graph of changes and their dependencies. When a compressed document is
+   * loaded we defer the computation of this hash graph to make loading faster, but if the hash
+   * graph is later needed (e.g. for the sync protocol), this function fills it in.
+   */
+  computeHashGraph() {
+    this.haveHashGraph = true
+    this.changes = []
+    this.changeByHash = {}
+    this.dependenciesByHash = {}
+    this.dependentsByHash = {}
+    this.hashesByActor = {}
+    this.clock = {}
+
+    for (let change of decodeChanges([this.save()])) {
+      const binaryChange = encodeChange(change) // TODO: avoid decoding and re-encoding again
+      this.changes.push(binaryChange)
+      this.changeByHash[change.hash] = binaryChange
+      this.dependenciesByHash[change.hash] = change.deps
+      this.dependentsByHash[change.hash] = []
+      for (let dep of change.deps) this.dependentsByHash[dep].push(change.hash)
+      if (change.seq === 1) this.hashesByActor[change.actor] = []
+      this.hashesByActor[change.actor].push(change.hash)
+      const expectedSeq = (this.clock[change.actor] || 0) + 1
+      if (change.seq !== expectedSeq) {
+        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+      }
+      this.clock[change.actor] = change.seq
+    }
+  }
+
+  /**
    * Returns all the changes that need to be sent to another replica. `haveDeps` is a list of change
    * hashes (as hex strings) of the heads that the other replica has. The changes in `haveDeps` and
    * any of their transitive dependencies will not be returned; any changes later than or concurrent
@@ -1674,6 +1760,8 @@ class BackendDoc {
    * returned. Throws an exception if any of the given hashes are not known to this replica.
    */
   getChanges(haveDeps) {
+    if (!this.haveHashGraph) this.computeHashGraph()
+
     // If the other replica has nothing, return all changes in history order
     if (haveDeps.length === 0) {
       return this.changes.slice()
@@ -1730,6 +1818,8 @@ class BackendDoc {
    * BackendDoc.
    */
   getChangesAdded(other) {
+    if (!this.haveHashGraph) this.computeHashGraph()
+
     // Depth-first traversal from the heads through the dependency graph,
     // until we reach a change that is already present in opSet1
     let stack = this.heads.slice(), seenHashes = {}, toReturn = []
@@ -1748,6 +1838,7 @@ class BackendDoc {
   }
 
   getChangeByHash(hash) {
+    if (!this.haveHashGraph) this.computeHashGraph()
     return this.changeByHash[hash]
   }
 
@@ -1762,6 +1853,8 @@ class BackendDoc {
    * the returned array.
    */
   getMissingDeps(heads = []) {
+    if (!this.haveHashGraph) this.computeHashGraph()
+
     let allDeps = new Set(heads), inQueue = new Set()
     for (let change of this.queue) {
       inQueue.add(change.hash)

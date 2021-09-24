@@ -10,7 +10,7 @@ const USE_NEW_BACKEND = false
 
 function numHashesByActor(state, actorId) {
   if (USE_NEW_BACKEND) {
-    return (state.hashesByActor[actorId] || []).length
+    return state.clock[actorId] || 0
   } else {
     return state.getIn(['opSet', 'states', actorId], List()).size
   }
@@ -18,7 +18,16 @@ function numHashesByActor(state, actorId) {
 
 function hashByActor(state, actorId, index) {
   if (USE_NEW_BACKEND) {
-    return (state.hashesByActor[actorId] || [])[index]
+    if (state.hashesByActor[actorId] && state.hashesByActor[actorId][index]) {
+      return state.hashesByActor[actorId][index]
+    }
+    if (!state.haveHashGraph) {
+      state.computeHashGraph()
+      if (state.hashesByActor[actorId] && state.hashesByActor[actorId][index]) {
+        return state.hashesByActor[actorId][index]
+      }
+    }
+    throw new RangeError(`Unknown change: actorId = ${actorId}, seq = ${index + 1}`)
   } else {
     return state.getIn(['opSet', 'states', actorId, index])
   }

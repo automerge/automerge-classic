@@ -1171,6 +1171,13 @@ describe('Automerge', () => {
       assert.strictEqual(callbacks[0].after, reloaded)
       assert.strictEqual(callbacks[0].local, false)
     })
+
+    it('should reconstruct the original changes if needed', () => {
+      let doc = Automerge.init()
+      for (let i = 0; i < 10; i++) doc = Automerge.change(doc, doc => doc.x = i)
+      doc = Automerge.load(Automerge.save(doc))
+      assert.strictEqual(Automerge.getAllChanges(doc).length, 10)
+    })
   })
 
   describe('history API', () => {
