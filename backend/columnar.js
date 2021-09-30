@@ -1060,7 +1060,10 @@ function encodeDocumentChanges(changes) {
     changesColumns.push({id: columnId, name: columnName, encoder: columns[columnName]})
   }
   changesColumns.sort((a, b) => a.id - b.id)
-  return { changesColumns, heads: Object.keys(heads).sort() }
+
+  const sortedHeads = Object.keys(heads).sort()
+  const headsIndexes = sortedHeads.map(hash => indexByHash[hash])
+  return { changesColumns, heads: sortedHeads, headsIndexes }
 }
 
 function decodeDocumentChanges(changes, expectedHeads) {
@@ -1106,7 +1109,7 @@ function decodeDocumentChanges(changes, expectedHeads) {
  */
 function encodeDocument(binaryChanges) {
   const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
-  const { changesColumns, heads } = encodeDocumentChanges(changes)
+  const { changesColumns, heads, headsIndexes } = encodeDocumentChanges(changes)
   const opsColumns = encodeOps(groupDocumentOps(changes), true)
   for (let column of changesColumns) deflateColumn(column)
   for (let column of opsColumns) deflateColumn(column)
@@ -1124,6 +1127,7 @@ function encodeDocument(binaryChanges) {
     encodeColumnInfo(encoder, opsColumns)
     for (let column of changesColumns) encoder.appendRawBytes(column.encoder.buffer)
     for (let column of opsColumns) encoder.appendRawBytes(column.encoder.buffer)
+    for (let index of headsIndexes) encoder.appendUint53(index)
   }).bytes
 }
 
@@ -1138,7 +1142,7 @@ function decodeDocumentHeader(buffer) {
   for (let i = 0; i < numActors; i++) {
     actorIds.push(decoder.readHexString())
   }
-  const heads = [], numHeads = decoder.readUint53()
+  const heads = [], headsIndexes = [], numHeads = decoder.readUint53()
   for (let i = 0; i < numHeads; i++) {
     heads.push(bytesToHexString(decoder.readRawBytes(32)))
   }
@@ -1153,9 +1157,12 @@ function decodeDocumentHeader(buffer) {
     opsColumns[i].buffer = decoder.readRawBytes(opsColumns[i].bufferLen)
     inflateColumn(opsColumns[i])
   }
+  if (!decoder.done) {
+    for (let i = 0; i < numHeads; i++) headsIndexes.push(decoder.readUint53())
+  }
 
   const extraBytes = decoder.readRawBytes(decoder.buf.byteLength - decoder.offset)
-  return { changesColumns, opsColumns, actorIds, heads, extraBytes }
+  return { changesColumns, opsColumns, actorIds, heads, headsIndexes, extraBytes }
 }
 
 function decodeDocument(buffer) {
