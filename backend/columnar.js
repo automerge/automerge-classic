@@ -363,8 +363,8 @@ function decodeValueColumns(columns, colIndex, actorIds, result) {
  * Encodes an array of operations in a set of columns. The operations need to
  * be parsed with `parseAllOpIds()` beforehand. If `forDocument` is true, we use
  * the column structure of a whole document, otherwise we use the column
- * structure for an individual change. Returns an array of `{id, name, encoder}`
- * objects.
+ * structure for an individual change. Returns an array of
+ * `{columnId, columnName, encoder}` objects.
  */
 function encodeOps(ops, forDocument) {
   const columns = {
@@ -429,9 +429,9 @@ function encodeOps(ops, forDocument) {
 
   let columnList = []
   for (let {columnName, columnId} of forDocument ? DOC_OPS_COLUMNS : CHANGE_COLUMNS) {
-    if (columns[columnName]) columnList.push({id: columnId, name: columnName, encoder: columns[columnName]})
+    if (columns[columnName]) columnList.push({columnId, columnName, encoder: columns[columnName]})
   }
-  return columnList.sort((a, b) => a.id - b.id)
+  return columnList.sort((a, b) => a.columnId - b.columnId)
 }
 
 function expandMultiOps(ops, startOp, actor) {
@@ -616,7 +616,7 @@ function encodeColumnInfo(encoder, columns) {
   const nonEmptyColumns = columns.filter(column => column.encoder.buffer.byteLength > 0)
   encoder.appendUint53(nonEmptyColumns.length)
   for (let column of nonEmptyColumns) {
-    encoder.appendUint53(column.id)
+    encoder.appendUint53(column.columnId)
     encoder.appendUint53(column.encoder.buffer.byteLength)
   }
 }
@@ -1057,9 +1057,9 @@ function encodeDocumentChanges(changes) {
 
   let changesColumns = []
   for (let {columnName, columnId} of DOCUMENT_COLUMNS) {
-    changesColumns.push({id: columnId, name: columnName, encoder: columns[columnName]})
+    changesColumns.push({columnId, columnName, encoder: columns[columnName]})
   }
-  changesColumns.sort((a, b) => a.id - b.id)
+  changesColumns.sort((a, b) => a.columnId - b.columnId)
 
   const sortedHeads = Object.keys(heads).sort()
   const headsIndexes = sortedHeads.map(hash => indexByHash[hash])
@@ -1104,13 +1104,8 @@ function decodeDocumentChanges(changes, expectedHeads) {
   }
 }
 
-/**
- * Transforms a list of changes into a binary representation of the document state.
- */
-function encodeDocument(binaryChanges) {
-  const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
-  const { changesColumns, heads, headsIndexes } = encodeDocumentChanges(changes)
-  const opsColumns = encodeOps(groupDocumentOps(changes), true)
+function encodeDocumentHeader(doc) {
+  const { changesColumns, opsColumns, actorIds, heads, headsIndexes, extraBytes } = doc
   for (let column of changesColumns) deflateColumn(column)
   for (let column of opsColumns) deflateColumn(column)
 
@@ -1128,6 +1123,7 @@ function encodeDocument(binaryChanges) {
     for (let column of changesColumns) encoder.appendRawBytes(column.encoder.buffer)
     for (let column of opsColumns) encoder.appendRawBytes(column.encoder.buffer)
     for (let index of headsIndexes) encoder.appendUint53(index)
+    if (extraBytes) encoder.appendRawBytes(extraBytes)
   }).bytes
 }
 
@@ -1165,6 +1161,16 @@ function decodeDocumentHeader(buffer) {
   return { changesColumns, opsColumns, actorIds, heads, headsIndexes, extraBytes }
 }
 
+/**
+ * Transforms a list of changes into a binary representation of the document state.
+ */
+function encodeDocument(binaryChanges) {
+  const { changes, actorIds } = parseAllOpIds(decodeChanges(binaryChanges), false)
+  const { changesColumns, heads, headsIndexes } = encodeDocumentChanges(changes)
+  const opsColumns = encodeOps(groupDocumentOps(changes), true)
+  return encodeDocumentHeader({ changesColumns, opsColumns, actorIds, heads, headsIndexes })
+}
+
 function decodeDocument(buffer) {
   const { changesColumns, opsColumns, actorIds, heads } = decodeDocumentHeader(buffer)
   const changes = decodeColumns(changesColumns, actorIds, DOCUMENT_COLUMNS)
@@ -1180,7 +1186,7 @@ function decodeDocument(buffer) {
 function deflateColumn(column) {
   if (column.encoder.buffer.byteLength >= DEFLATE_MIN_SIZE) {
     column.encoder = {buffer: pako.deflateRaw(column.encoder.buffer)}
-    column.id |= COLUMN_TYPE_DEFLATE
+    column.columnId |= COLUMN_TYPE_DEFLATE
   }
 }
 
@@ -1417,6 +1423,6 @@ module.exports = {
   COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   splitContainers, encodeChange, decodeChangeColumns, decodeChange, decodeChangeMeta, decodeChanges,
-  decodeDocumentHeader, encodeDocument, decodeDocument,
+  encodeDocumentHeader, decodeDocumentHeader, encodeDocument, decodeDocument,
   getChangeChecksum, appendEdit, constructPatch
 }

@@ -1,7 +1,7 @@
 const { parseOpId, copyObject } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
-  encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocument,
+  encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocumentHeader,
   appendEdit } = require('./columnar')
 
 const MAX_BLOCK_SIZE = 100 // operations
@@ -478,6 +478,19 @@ function splitBlock(block, actorIds) {
 }
 
 /**
+ * Takes an array of blocks and concatenates the corresponding columns across all of the blocks.
+ */
+function concatBlocks(blocks) {
+  const encoders = blocks[0].columns.map(col => ({columnId: col.columnId, encoder: encoderByColumnId(col.columnId)}))
+
+  for (let block of blocks) {
+    for (let col of block.columns) col.decoder.reset()
+    copyColumns(encoders, block.columns, block.numOps)
+  }
+  return encoders
+}
+
+/**
  * Copies `count` rows from the set of input columns `inCols` to the set of output columns
  * `outCols`. The input columns are given as an array of `{columnId, decoder}` objects, and the
  * output columns are given as an array of `{columnId, encoder}` objects. Both are sorted in
@@ -605,7 +618,7 @@ function appendOperation(outCols, inCols, operation) {
         }
         for (let v of colValue) outCol.encoder.appendValue(v)
       } else if (outCol.columnId % 8 === COLUMN_TYPE.VALUE_RAW) {
-        outCol.encoder.appendRawBytes(colValue)
+        if (colValue) outCol.encoder.appendRawBytes(colValue)
       } else {
         outCol.encoder.appendValue(colValue)
       }
@@ -676,6 +689,7 @@ function readNextChangeOp(docState, changeState) {
   changeState.nextOp = readOperation(changeState.columns, changeState.actorTable)
   changeState.nextOp[idActorIdx] = changeState.actorIndex
   changeState.nextOp[idCtrIdx] = changeState.opCtr
+  changeState.changes[changeState.changeIndex].maxOp = changeState.opCtr
   if (changeState.opCtr > docState.maxOp) docState.maxOp = changeState.opCtr
   changeState.opCtr += 1
 
@@ -1533,7 +1547,8 @@ function documentPatch(docState) {
  * from it the list of changes. Returns the document's current vector clock, i.e. an object mapping
  * each actor ID (as a hex string) to the number of changes seen from that actor. Also returns an
  * array of the actorIds whose most recent change has no dependents (i.e. the actors that
- * contributed the current heads of the document).
+ * contributed the current heads of the document), and an array of encoders that has been
+ * initialised to contain the columns of the changes list.
  */
 function readDocumentChanges(doc) {
   const columns = makeDecoders(doc.changesColumns, DOCUMENT_COLUMNS)
@@ -1560,7 +1575,28 @@ function readDocumentChanges(doc) {
     numChanges++
   }
   const headActors = [...headIndexes].map(index => doc.actorIds[actorNums[index]]).sort()
-  return {clock, headActors, numChanges}
+
+  for (let col of columns) col.decoder.reset()
+  const encoders = columns.map(col => ({columnId: col.columnId, encoder: encoderByColumnId(col.columnId)}))
+  copyColumns(encoders, columns, numChanges)
+  return {clock, headActors, encoders, numChanges}
+}
+
+/**
+ * Records the metadata about a change in the appropriate columns.
+ */
+function appendChange(columns, change, actorIds, changeIndexByHash) {
+  appendOperation(columns, DOCUMENT_COLUMNS, [
+    actorIds.indexOf(change.actor), // actor
+    change.seq, // seq
+    change.maxOp, // maxOp
+    change.time, // time
+    change.message, // message
+    change.deps.length, // depsNum
+    change.deps.map(dep => changeIndexByHash[dep]), // depsIndex
+    change.extraBytes ? (change.extraBytes.byteLength << 4 | VALUE_TYPE.BYTES) : VALUE_TYPE.BYTES, // extraLen
+    change.extraBytes // extraRaw
+  ])
 }
 
 class BackendDoc {
@@ -1580,12 +1616,14 @@ class BackendDoc {
 
     if (buffer) {
       const doc = decodeDocumentHeader(buffer)
-      const {clock, headActors, numChanges} = readDocumentChanges(doc)
+      const {clock, headActors, encoders, numChanges} = readDocumentChanges(doc)
       this.binaryDoc = buffer
       this.changes = new Array(numChanges)
       this.actorIds = doc.actorIds
       this.heads = doc.heads
       this.clock = clock
+      this.changesEncoders = encoders
+      this.extraBytes = doc.extraBytes
 
       // If there is a single head, we can unambiguously point at the actorId and sequence number of
       // the head hash without having to reconstruct the hash graph
@@ -1620,6 +1658,7 @@ class BackendDoc {
 
     } else {
       this.haveHashGraph = true
+      this.changesEncoders = DOCUMENT_COLUMNS.map(col => ({columnId: col.columnId, encoder: encoderByColumnId(col.columnId)}))
       this.blocks = [{
         columns: makeDecoders([], DOC_OPS_COLUMNS),
         bloom: new Uint8Array(BLOOM_FILTER_SIZE),
@@ -1710,6 +1749,7 @@ class BackendDoc {
         if (!this.dependentsByHash[dep]) this.dependentsByHash[dep] = []
         this.dependentsByHash[dep].push(change.hash)
       }
+      appendChange(this.changesEncoders, change, docState.actorIds, this.changeIndexByHash)
     }
 
     this.maxOp        = docState.maxOp
@@ -1740,6 +1780,7 @@ class BackendDoc {
    * graph is later needed (e.g. for the sync protocol), this function fills it in.
    */
   computeHashGraph() {
+    const binaryDoc = this.save()
     this.haveHashGraph = true
     this.changes = []
     this.changeIndexByHash = {}
@@ -1748,7 +1789,7 @@ class BackendDoc {
     this.hashesByActor = {}
     this.clock = {}
 
-    for (let change of decodeChanges([this.save()])) {
+    for (let change of decodeChanges([binaryDoc])) {
       const binaryChange = encodeChange(change) // TODO: avoid decoding and re-encoding again
       this.changes.push(binaryChange)
       this.changeIndexByHash[change.hash] = this.changes.length - 1
@@ -1886,7 +1927,26 @@ class BackendDoc {
    */
   save() {
     if (this.binaryDoc) return this.binaryDoc
-    return encodeDocument(this.changes)
+
+    // Getting the byte array for the changes columns finalises their encoders, after which we can
+    // no longer append values to them. We therefore copy their data over to fresh encoders.
+    const newEncoders = this.changesEncoders.map(col => ({columnId: col.columnId, encoder: encoderByColumnId(col.columnId)}))
+    const decoders = this.changesEncoders.map(col => {
+      const decoder = decoderByColumnId(col.columnId, col.encoder.buffer)
+      return {columnId: col.columnId, decoder}
+    })
+    copyColumns(newEncoders, decoders, this.changes.length)
+
+    this.binaryDoc = encodeDocumentHeader({
+      changesColumns: this.changesEncoders,
+      opsColumns: concatBlocks(this.blocks),
+      actorIds: this.actorIds, // TODO: sort actorIds (requires transforming all actorId columns in opsColumns)
+      heads: this.heads,
+      headsIndexes: this.heads.map(hash => this.changeIndexByHash[hash]),
+      extraBytes: this.extraBytes
+    })
+    this.changesEncoders = newEncoders
+    return this.binaryDoc
   }
 
   /**
