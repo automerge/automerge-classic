@@ -1536,6 +1536,9 @@ function documentPatch(docState) {
     }
     if (docOp[succNumIdx] === 0) elemVisible = true
     if (docOp[idCtrIdx] > docState.maxOp) docState.maxOp = docOp[idCtrIdx]
+    for (let i = 0; i < docOp[succNumIdx]; i++) {
+      if (docOp[succCtrIdx][i] > docState.maxOp) docState.maxOp = docOp[succCtrIdx][i]
+    }
 
     updatePatchProperty(patches, null, objectId, docOp, docState, propState, listIndex, docOp[succNumIdx])
   }
