@@ -17,7 +17,7 @@ const assert = require('assert')
 const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
 const jsBackend = require('../backend')
 const Frontend = require('../frontend')
-const { decodeChange, decodeDocument } = require('../backend/columnar')
+const { decodeChange } = require('../backend/columnar')
 const uuid = require('../src/uuid')
 
 const path = require('path')
@@ -181,13 +181,6 @@ function interopTests(sourceBackend, destBackend) {
         }}}
       }}}}
     })
-  })
-
-  it('should be able to serialize and deserialize with javascript', () => {
-    const [doc, request] = Frontend.from({ number: 1.0 })
-    const [source1, p1, change1] = sourceBackend.applyLocalChange(source, request)
-    const saved = sourceBackend.save(source1)
-    decodeDocument(saved)
   })
 
   it('should support Counter objects', () => {

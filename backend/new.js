@@ -1,8 +1,7 @@
 const { parseOpId, copyObject } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
-  encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocumentHeader,
-  appendEdit } = require('./columnar')
+  encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocumentHeader } = require('./columnar')
 
 const MAX_BLOCK_SIZE = 600 // operations
 const BLOOM_BITS_PER_ENTRY = 10, BLOOM_NUM_PROBES = 7 // 1% false positive rate
@@ -710,6 +709,51 @@ function emptyObjectPatch(objectId, type) {
     return {objectId, type, edits: []}
   } else {
     return {objectId, type, props: {}}
+  }
+}
+
+/**
+ * Returns true if the two given operation IDs have the same actor ID, and the counter of `id2` is
+ * exactly `delta` greater than the counter of `id1`.
+ */
+function opIdDelta(id1, id2, delta = 1) {
+  const parsed1 = parseOpId(id1), parsed2 = parseOpId(id2)
+  return parsed1.actorId === parsed2.actorId && parsed1.counter + delta === parsed2.counter
+}
+
+/**
+ * Appends a list edit operation (insert, update, remove) to an array of existing operations. If the
+ * last existing operation can be extended (as a multi-op), we do that.
+ */
+function appendEdit(existingEdits, nextEdit) {
+  if (existingEdits.length === 0) {
+    existingEdits.push(nextEdit)
+    return
+  }
+
+  let lastEdit = existingEdits[existingEdits.length - 1]
+  if (lastEdit.action === 'insert' && nextEdit.action === 'insert' &&
+      lastEdit.index === nextEdit.index - 1 &&
+      lastEdit.value.type === 'value' && nextEdit.value.type === 'value' &&
+      lastEdit.elemId === lastEdit.opId && nextEdit.elemId === nextEdit.opId &&
+      opIdDelta(lastEdit.elemId, nextEdit.elemId, 1)) {
+    lastEdit.action = 'multi-insert'
+    lastEdit.values = [lastEdit.value.value, nextEdit.value.value]
+    delete lastEdit.value
+    delete lastEdit.opId
+
+  } else if (lastEdit.action === 'multi-insert' && nextEdit.action === 'insert' &&
+             lastEdit.index + lastEdit.values.length === nextEdit.index &&
+             nextEdit.value.type === 'value' && nextEdit.elemId === nextEdit.opId &&
+             opIdDelta(lastEdit.elemId, nextEdit.elemId, lastEdit.values.length)) {
+    lastEdit.values.push(nextEdit.value.value)
+
+  } else if (lastEdit.action === 'remove' && nextEdit.action === 'remove' &&
+             lastEdit.index === nextEdit.index) {
+    lastEdit.count += nextEdit.count
+
+  } else {
+    existingEdits.push(nextEdit)
   }
 }
 

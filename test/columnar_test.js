@@ -1,6 +1,7 @@
 const assert = require('assert')
 const { checkEncoded } = require('./helpers')
-const { encodeChange, decodeChange, encodeDocument, decodeDocument } = require('../backend/columnar')
+const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') : require('../src/automerge')
+const { encodeChange, decodeChange } = require('../backend/columnar')
 
 describe('change encoding', () => {
   it('should encode text edits', () => {
@@ -76,7 +77,8 @@ describe('change encoding', () => {
     })
 
     it('should be preserved in document encoding', () => {
-      const reconstructed = encodeChange(decodeDocument(encodeDocument([change]))[0])
+      const [doc] = Automerge.applyChanges(Automerge.init(), [change])
+      const [reconstructed] = Automerge.getAllChanges(Automerge.load(Automerge.save(doc)))
       checkEncoded(change, reconstructed)
     })
   })
