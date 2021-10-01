@@ -1568,7 +1568,7 @@ function documentPatch(docState) {
   let lastObjActor = null, lastObjCtr = null, objectId = '_root', elemVisible = false, listIndex = 0
 
   while (true) {
-    ;({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
+    ({ docOp, blockIndex } = readNextDocOp(docState, blockIndex))
     if (docOp === null) break
     if (docOp[objActorIdx] !== lastObjActor || docOp[objCtrIdx] !== lastObjCtr) {
       objectId = `${docOp[objCtrIdx]}@${docState.actorIds[docOp[objActorIdx]]}`
