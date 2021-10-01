@@ -16,10 +16,7 @@
  * last sync to disk), and we fall back to sending the entire document in this case.
  */
 
-const { List } = require('immutable')
-const { backendState } = require('./util')
 const Backend = require('./backend')
-const OpSet = require('./op_set')
 const { hexStringToBytes, bytesToHexString, Encoder, Decoder } = require('./encoding')
 const { decodeChangeMeta } = require('./columnar')
 const { copyObject } = require('../src/common')
@@ -235,7 +232,7 @@ function decodeSyncState(bytes) {
  * message.
  */
 function makeBloomFilter(backend, lastSync) {
-  const newChanges = OpSet.getMissingChanges(backend.get('opSet'), List(lastSync))
+  const newChanges = Backend.getChanges(backend, lastSync)
   const hashes = newChanges.map(change => decodeChangeMeta(change, true).hash)
   return {lastSync, bloom: new BloomFilter(hashes).bytes}
 }
@@ -247,9 +244,8 @@ function makeBloomFilter(backend, lastSync) {
  * byte arrays).
  */
 function getChangesToSend(backend, have, need) {
-  const opSet = backend.get('opSet')
   if (have.length === 0) {
-    return need.map(hash => OpSet.getChangeByHash(opSet, hash)).filter(change => change !== undefined)
+    return need.map(hash => Backend.getChangeByHash(backend, hash)).filter(change => change !== undefined)
   }
 
   let lastSyncHashes = {}, bloomFilters = []
@@ -259,7 +255,7 @@ function getChangesToSend(backend, have, need) {
   }
 
   // Get all changes that were added since the last sync
-  const changes = OpSet.getMissingChanges(opSet, List(Object.keys(lastSyncHashes)))
+  const changes = Backend.getChanges(backend, Object.keys(lastSyncHashes))
     .map(change => decodeChangeMeta(change, true))
 
   let changeHashes = {}, dependents = {}, hashesToSend = {}
@@ -297,7 +293,7 @@ function getChangesToSend(backend, have, need) {
   for (let hash of need) {
     hashesToSend[hash] = true
     if (!changeHashes[hash]) { // Change is not among those returned by getMissingChanges()?
-      const change = OpSet.getChangeByHash(opSet, hash)
+      const change = Backend.getChangeByHash(backend, hash)
       if (change) changesToSend.push(change)
     }
   }
@@ -338,7 +334,6 @@ function generateSyncMessage(backend, syncState) {
 
   let { sharedHeads, lastSentHeads, theirHeads, theirNeed, theirHave, sentHashes } = syncState
   const ourHeads = Backend.getHeads(backend)
-  const state = backendState(backend)
 
   // Hashes to explicitly request from the remote peer: any missing dependencies of unapplied
   // changes, and any of the remote peer's heads that we don't know about
@@ -351,7 +346,7 @@ function generateSyncMessage(backend, syncState) {
   // In case 2, or if ourNeed is empty, we send a Bloom filter to request any unsent changes.
   let ourHave = []
   if (!theirHeads || ourNeed.every(hash => theirHeads.includes(hash))) {
-    ourHave = [makeBloomFilter(state, sharedHeads)]
+    ourHave = [makeBloomFilter(backend, sharedHeads)]
   }
 
   // Fall back to a full re-sync if the sender's last sync state includes hashes
@@ -368,7 +363,7 @@ function generateSyncMessage(backend, syncState) {
 
   // XXX: we should limit ourselves to only sending a subset of all the messages, probably limited by a total message size
   //      these changes should ideally be RLE encoded but we haven't implemented that yet.
-  let changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(state, theirHave, theirNeed) : []
+  let changesToSend = Array.isArray(theirHave) && Array.isArray(theirNeed) ? getChangesToSend(backend, theirHave, theirNeed) : []
 
   // If the heads are equal, we're in sync and don't need to do anything further
   const headsUnchanged = Array.isArray(lastSentHeads) && compareArrays(ourHeads, lastSentHeads)

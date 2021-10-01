@@ -1236,6 +1236,13 @@ describe('Automerge', () => {
       assert.strictEqual(callbacks[0].after, reloaded)
       assert.strictEqual(callbacks[0].local, false)
     })
+
+    it('should reconstruct the original changes if needed', () => {
+      let doc = Automerge.init()
+      for (let i = 0; i < 10; i++) doc = Automerge.change(doc, doc => doc.x = i)
+      doc = Automerge.load(Automerge.save(doc))
+      assert.strictEqual(Automerge.getAllChanges(doc).length, 10)
+    })
   })
 
   describe('history API', () => {
@@ -1361,7 +1368,7 @@ describe('Automerge', () => {
       let [s6, patch6] = Automerge.applyChanges(s5, changes12)
       assert.deepStrictEqual(Automerge.Backend.getMissingDeps(Automerge.Frontend.getBackendState(s6)),
                              [decodeChange(changes01[0]).hash])
-      assert.strictEqual(patch6.pendingChanges, 1)
+      assert.strictEqual(patch6.pendingChanges, 2)
     })
 
     it('should call patchCallback if supplied when applying changes', () => {
