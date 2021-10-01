@@ -1798,35 +1798,36 @@ describe('BackendDoc applying changes', () => {
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), false)
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), true)
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE + 1), true)
+    const sizeByte1 = 0x80 | 0x7f & (MAX_BLOCK_SIZE / 2), sizeByte2 = (MAX_BLOCK_SIZE / 2) >>> 7
     checkColumns(backend.blocks[0], {
-      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
-      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
-      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
-      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
-      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
-      insert:   [1, MAX_BLOCK_SIZE / 2],
-      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      objActor: [0, 1, sizeByte1, sizeByte2, 0],
+      objCtr:   [0, 1, sizeByte1, sizeByte2, 1],
+      keyActor: [0, 2, sizeByte1 - 1, sizeByte2, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, sizeByte1 - 2, sizeByte2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, sizeByte1, sizeByte2], // 'text', nulls
+      idActor:  [sizeByte1 + 1, sizeByte2, 0],
+      idCtr:    [sizeByte1 + 1, sizeByte2, 1],
+      insert:   [1, sizeByte1, sizeByte2],
+      action:   [0x7f, 4, sizeByte1, sizeByte2, 1],
+      valLen:   [0x7f, 0, sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      succNum:  [sizeByte1 + 1, sizeByte2, 0],
       succActor: [],
       succCtr:   []
     })
     checkColumns(backend.blocks[1], {
-      objActor: [MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [MAX_BLOCK_SIZE / 2, 0],
-      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      objActor: [sizeByte1, sizeByte2, 0],
+      objCtr:   [sizeByte1, sizeByte2, 1],
+      keyActor: [sizeByte1, sizeByte2, 0],
+      keyCtr:   [0x7f, sizeByte1 + 1, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
       keyStr:   [],
-      idActor:  [MAX_BLOCK_SIZE / 2, 0],
-      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
-      insert:   [0, MAX_BLOCK_SIZE / 2],
-      action:   [MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      idActor:  [sizeByte1, sizeByte2, 0],
+      idCtr:    [0x7f, sizeByte1 + 2, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      insert:   [0, sizeByte1, sizeByte2],
+      action:   [sizeByte1, sizeByte2, 1],
+      valLen:   [sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [MAX_BLOCK_SIZE / 2, 0],
+      succNum:  [sizeByte1, sizeByte2, 0],
       succActor: [],
       succCtr:   []
     })
@@ -1861,35 +1862,36 @@ describe('BackendDoc applying changes', () => {
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 1), false)
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE / 2 + 2), true)
     assert.strictEqual(bloomFilterContains(backend.blocks[1].bloom, 0, MAX_BLOCK_SIZE + 1), true)
+    const sizeByte1 = 0x80 | 0x7f & (MAX_BLOCK_SIZE / 2), sizeByte2 = (MAX_BLOCK_SIZE / 2) >>> 7
     checkColumns(backend.blocks[0], {
-      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
-      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
-      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
-      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
-      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
-      insert:   [1, MAX_BLOCK_SIZE / 2],
-      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      objActor: [0, 1, sizeByte1, sizeByte2, 0],
+      objCtr:   [0, 1, sizeByte1, sizeByte2, 1],
+      keyActor: [0, 2, sizeByte1 - 1, sizeByte2, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, sizeByte1 - 2, sizeByte2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, sizeByte1, sizeByte2], // 'text', nulls
+      idActor:  [sizeByte1 + 1, sizeByte2, 0],
+      idCtr:    [sizeByte1 + 1, sizeByte2, 1],
+      insert:   [1, sizeByte1, sizeByte2],
+      action:   [0x7f, 4, sizeByte1, sizeByte2, 1],
+      valLen:   [0x7f, 0, sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [MAX_BLOCK_SIZE / 2 + 1, 0],
+      succNum:  [sizeByte1 + 1, sizeByte2, 0],
       succActor: [],
       succCtr:   []
     })
     checkColumns(backend.blocks[1], {
-      objActor: [MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [MAX_BLOCK_SIZE / 2, 0],
-      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      objActor: [sizeByte1, sizeByte2, 0],
+      objCtr:   [sizeByte1, sizeByte2, 1],
+      keyActor: [sizeByte1, sizeByte2, 0],
+      keyCtr:   [0x7f, sizeByte1 + 1, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
       keyStr:   [],
-      idActor:  [MAX_BLOCK_SIZE / 2, 0],
-      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
-      insert:   [0, MAX_BLOCK_SIZE / 2],
-      action:   [MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      idActor:  [sizeByte1, sizeByte2, 0],
+      idCtr:    [0x7f, sizeByte1 + 2, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      insert:   [0, sizeByte1, sizeByte2],
+      action:   [sizeByte1, sizeByte2, 1],
+      valLen:   [sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [MAX_BLOCK_SIZE / 2, 0],
+      succNum:  [sizeByte1, sizeByte2, 0],
       succActor: [],
       succCtr:   []
     })
@@ -1946,38 +1948,39 @@ describe('BackendDoc applying changes', () => {
     const patch = backend.applyChanges([encodeChange(change2)])
     assert.deepStrictEqual(patch.diffs.props.text[`1@${actor}`].edits, [{action: 'remove', index: 0, count: MAX_BLOCK_SIZE}])
     assert.strictEqual(backend.blocks.length, 2)
+    const sizeByte1 = 0x80 | 0x7f & (MAX_BLOCK_SIZE / 2), sizeByte2 = (MAX_BLOCK_SIZE / 2) >>> 7
     const firstSucc = MAX_BLOCK_SIZE + 3, secondSucc = MAX_BLOCK_SIZE + 3 + MAX_BLOCK_SIZE / 2
     checkColumns(backend.blocks[0], {
-      objActor: [0, 1, MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [0, 1, MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [0, 2, MAX_BLOCK_SIZE / 2 - 1, 0],
-      keyCtr:   [0, 1, 0x7e, 0, 2, MAX_BLOCK_SIZE / 2 - 2, 1], // null, 0, 2, 3, 4, ...
-      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, MAX_BLOCK_SIZE / 2], // 'text', nulls
-      idActor:  [MAX_BLOCK_SIZE / 2 + 1, 0],
-      idCtr:    [MAX_BLOCK_SIZE / 2 + 1, 1],
-      insert:   [1, MAX_BLOCK_SIZE / 2],
-      action:   [0x7f, 4, MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [0x7f, 0, MAX_BLOCK_SIZE / 2, 0x16],
+      objActor: [0, 1, sizeByte1, sizeByte2, 0],
+      objCtr:   [0, 1, sizeByte1, sizeByte2, 1],
+      keyActor: [0, 2, sizeByte1 - 1, sizeByte2, 0],
+      keyCtr:   [0, 1, 0x7e, 0, 2, sizeByte1 - 2, sizeByte2, 1], // null, 0, 2, 3, 4, ...
+      keyStr:   [0x7f, 4, 0x74, 0x65, 0x78, 0x74, 0, sizeByte1, sizeByte2], // 'text', nulls
+      idActor:  [sizeByte1 + 1, sizeByte2, 0],
+      idCtr:    [sizeByte1 + 1, sizeByte2, 1],
+      insert:   [1, sizeByte1, sizeByte2],
+      action:   [0x7f, 4, sizeByte1, sizeByte2, 1],
+      valLen:   [0x7f, 0, sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [0x7f, 0, MAX_BLOCK_SIZE / 2, 1],
-      succActor: [MAX_BLOCK_SIZE / 2, 0],
-      succCtr:   [0x7f, 0x80 | (0x7f & firstSucc), firstSucc >>> 7, MAX_BLOCK_SIZE / 2 - 1, 1]
+      succNum:  [0x7f, 0, sizeByte1, sizeByte2, 1],
+      succActor: [sizeByte1, sizeByte2, 0],
+      succCtr:   [0x7f, 0x80 | (0x7f & firstSucc), firstSucc >>> 7, sizeByte1 - 1, sizeByte2, 1]
     })
     checkColumns(backend.blocks[1], {
-      objActor: [MAX_BLOCK_SIZE / 2, 0],
-      objCtr:   [MAX_BLOCK_SIZE / 2, 1],
-      keyActor: [MAX_BLOCK_SIZE / 2, 0],
-      keyCtr:   [0x7f, MAX_BLOCK_SIZE / 2 + 1, MAX_BLOCK_SIZE / 2 - 1, 1],
+      objActor: [sizeByte1, sizeByte2, 0],
+      objCtr:   [sizeByte1, sizeByte2, 1],
+      keyActor: [sizeByte1, sizeByte2, 0],
+      keyCtr:   [0x7f, sizeByte1 + 1, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
       keyStr:   [],
-      idActor:  [MAX_BLOCK_SIZE / 2, 0],
-      idCtr:    [0x7f, MAX_BLOCK_SIZE / 2 + 2, MAX_BLOCK_SIZE / 2 - 1, 1],
-      insert:   [0, MAX_BLOCK_SIZE / 2],
-      action:   [MAX_BLOCK_SIZE / 2, 1],
-      valLen:   [MAX_BLOCK_SIZE / 2, 0x16],
+      idActor:  [sizeByte1, sizeByte2, 0],
+      idCtr:    [0x7f, sizeByte1 + 2, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      insert:   [0, sizeByte1, sizeByte2],
+      action:   [sizeByte1, sizeByte2, 1],
+      valLen:   [sizeByte1, sizeByte2, 0x16],
       valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
-      succNum:  [MAX_BLOCK_SIZE / 2, 1],
-      succActor: [MAX_BLOCK_SIZE / 2, 0],
-      succCtr:   [0x7f, 0x80 | (0x7f & secondSucc), secondSucc >>> 7, MAX_BLOCK_SIZE / 2 - 1, 1]
+      succNum:  [sizeByte1, sizeByte2, 1],
+      succActor: [sizeByte1, sizeByte2, 0],
+      succCtr:   [0x7f, 0x80 | (0x7f & secondSucc), secondSucc >>> 7, sizeByte1 - 1, sizeByte2, 1]
     })
   })
 })
