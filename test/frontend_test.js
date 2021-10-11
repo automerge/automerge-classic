@@ -41,7 +41,7 @@ describe('Automerge.Frontend', () => {
     })
   })
 
-  describe('initializing with facebook syntax', () => {
+  describe('initializing with Proxy Free API', () => {
     after(() => {
       setProxyFree(false)
     })

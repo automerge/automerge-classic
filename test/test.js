@@ -60,7 +60,7 @@ describe('Automerge', () => {
     })
   })
 
-  describe('initialization with facebook syntax', () => {
+  describe('initialization with Proxy Free API', () => {
     after(() => {
       setProxyFree(false)
     })
