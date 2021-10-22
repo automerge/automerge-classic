@@ -2011,4 +2011,31 @@ describe('BackendDoc applying changes', () => {
       succCtr:   [0x7f, 0x80 | (0x7f & secondSucc), secondSucc >>> 7, sizeByte1 - 1, sizeByte2, 1]
     })
   })
+
+  it('should update an object that appears after a long text object', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text1',    insert: false,             pred: []},
+      {action: 'makeText', obj: '_root',      key: 'text2',    insert: false,             pred: []},
+      {action: 'set',      obj: `2@${actor}`, elemId: '_head', insert: true,  value: 'x', pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 4; i <= MAX_BLOCK_SIZE; i++) {
+      change1.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    const change2 = {actor, seq: 2, startOp: MAX_BLOCK_SIZE + 3, time: 0, deps: [], ops: [
+      {action: 'set',      obj: `2@${actor}`, elemId: `3@${actor}`, insert: true, value: 'x', pred: []}
+    ]}
+    const backend = new BackendDoc()
+    backend.applyChanges([encodeChange(change1)])
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]).diffs.props, {text2: {[`2@${actor}`]: {
+      objectId: `2@${actor}`, type: 'text', edits: [{
+        action: 'insert',
+        index: 1,
+        opId: `${MAX_BLOCK_SIZE + 3}@${actor}`,
+        elemId: `${MAX_BLOCK_SIZE + 3}@${actor}`,
+        value: {type: 'value', value: 'x'}
+      }]
+    }}})
+  })
 })
