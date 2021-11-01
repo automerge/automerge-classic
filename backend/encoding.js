@@ -1190,7 +1190,10 @@ class BooleanDecoder extends Decoder {
       if (this.count === 0) {
         this.count = this.readUint53()
         this.lastValue = !this.lastValue
-        if (this.count === 0) throw new RangeError('Zero-length runs are not allowed')
+        if (this.count === 0 && !this.firstRun) {
+          throw new RangeError('Zero-length runs are not allowed')
+        }
+        this.firstRun = false
       }
       if (this.count < numSkip) {
         numSkip -= this.count
