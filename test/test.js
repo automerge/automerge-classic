@@ -1421,5 +1421,32 @@ describe('Automerge', () => {
         diffs: {objectId: '_root', type: 'map', props: {bird: {[`1@${actor}`]: {type: 'value', value: 'Goldfinch'}}}}
       }])
     })
+
+    it.only('should apply changes from another document initialized with the same schema', () => {
+        function getDocument() {
+            let change = Automerge.getLastLocalChange(Automerge.change(Automerge.init('0000'), { time: 0 }, (doc) => {
+                doc.panels = []
+            }))
+            let [doc, ] = Automerge.applyChanges(Automerge.init(), [change])
+            return Automerge.load(Automerge.save(doc))
+        }
+        let s1 = getDocument()
+        let s2 = getDocument()
+
+        // create a conflict
+        s1 = Automerge.change(s1, (doc) => {
+            doc.panels.push({ id: 'panel1' })
+        })
+
+        s2 = Automerge.change(s2, (doc) => {
+            doc.panels.push({ id: 'panel2' })
+        })
+
+        s2 = Automerge.load(Automerge.save(s2))
+        s1 = Automerge.load(Automerge.save(s1))
+
+        let [newDoc, ] = Automerge.applyChanges(s1, Automerge.getAllChanges(s2))
+        assert.strictEqual(newDoc.panels.length, 2)
+    })
   })
 })
