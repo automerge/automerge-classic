@@ -1243,6 +1243,19 @@ describe('Automerge', () => {
       doc = Automerge.load(Automerge.save(doc))
       assert.strictEqual(Automerge.getAllChanges(doc).length, 10)
     })
+
+    it('should deduplicate changes after saving and reloading', () => {
+      let initChange = Automerge.getLastLocalChange(Automerge.change(Automerge.init('0000'), { time: 0 }, (doc) => {
+        doc.panels = []
+      }))
+      let [s1] = Automerge.applyChanges(Automerge.init(), [initChange])
+      let [s2] = Automerge.applyChanges(Automerge.init(), [initChange])
+      s1 = Automerge.change(s1, doc => doc.panels.push({ id: 'panel1' }))
+      s2 = Automerge.change(s2, doc => doc.panels.push({ id: 'panel2' }))
+      s1 = Automerge.load(Automerge.save(s1))
+      let [s3] = Automerge.applyChanges(s1, Automerge.getAllChanges(s2))
+      assert.strictEqual(s3.panels.length, 2)
+    })
   })
 
   describe('history API', () => {
