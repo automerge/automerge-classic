@@ -2140,4 +2140,54 @@ describe('BackendDoc applying changes', () => {
       }]
     }}})
   })
+
+  it('should place root object operations before a long text object', () => {
+    const actor = uuid()
+    const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 2; i <= MAX_BLOCK_SIZE; i++) {
+      change.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    change.ops.push({action: 'set', obj: '_root', key: 'z', insert: false, value: 'zzz', pred: []})
+    const backend = new BackendDoc()
+    backend.applyChanges([encodeChange(change)])
+    const sizeByte1 = 0x80 | 0x7f & (MAX_BLOCK_SIZE / 2), sizeByte2 = (MAX_BLOCK_SIZE / 2) >>> 7
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 2, sizeByte1, sizeByte2, 0],
+      objCtr:   [0, 2, sizeByte1, sizeByte2, 1],
+      keyActor: [0, 3, sizeByte1 - 1, sizeByte2, 0],
+      keyCtr:   [0, 2, 0x7e, 0, 2, sizeByte1 - 2, sizeByte2, 1], // null, null, 0, 2, 3, 4, ...
+      keyStr:   [0x7e, 4, 0x74, 0x65, 0x78, 0x74, 1, 0x7a, 0, sizeByte1, sizeByte2], // 'text', 'z', nulls
+      idActor:  [sizeByte1 + 2, sizeByte2, 0],
+      idCtr:    [0x7d, 1,
+                 0x80 | 0x7f & (MAX_BLOCK_SIZE + 1), 0x7f & (MAX_BLOCK_SIZE + 1) >>> 7,
+                 0x80 | 0x7f & -MAX_BLOCK_SIZE,      0x7f & -MAX_BLOCK_SIZE      >>> 7,
+                 sizeByte1 - 1, sizeByte2, 1],
+      insert:   [2, sizeByte1, sizeByte2],
+      action:   [0x7f, 4, sizeByte1 + 1, sizeByte2, 1],
+      valLen:   [0x7e, 0, 0x36, sizeByte1, sizeByte2, 0x16],
+      valRaw:   [0x7a, 0x7a, 0x7a].concat(new Array(MAX_BLOCK_SIZE / 2).fill(0x61)),
+      succNum:  [sizeByte1 + 2, sizeByte2, 0],
+      succActor: [],
+      succCtr:   []
+    })
+    checkColumns(backend.blocks[1], {
+      objActor: [sizeByte1, sizeByte2, 0],
+      objCtr:   [sizeByte1, sizeByte2, 1],
+      keyActor: [sizeByte1, sizeByte2, 0],
+      keyCtr:   [0x7f, sizeByte1 + 1, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      keyStr:   [],
+      idActor:  [sizeByte1, sizeByte2, 0],
+      idCtr:    [0x7f, sizeByte1 + 2, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      insert:   [0, sizeByte1, sizeByte2],
+      action:   [sizeByte1, sizeByte2, 1],
+      valLen:   [sizeByte1, sizeByte2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [sizeByte1, sizeByte2, 0],
+      succActor: [],
+      succCtr:   []
+    })
+  })
 })
