@@ -367,7 +367,7 @@ function bloomFilterContains(bloom, elemIdActor, elemIdCtr) {
  * Reads the relevant columns of a block of operations and updates that block to contain the
  * metadata we need to efficiently figure out where to insert new operations.
  */
-function updateBlockMetadata(block, actorIds) {
+function updateBlockMetadata(block) {
   block.bloom = new Uint8Array(BLOOM_FILTER_SIZE)
   block.numOps = 0
   block.lastKey = undefined
@@ -389,7 +389,6 @@ function updateBlockMetadata(block, actorIds) {
     const keyActor = keyActorD.readValue(), keyCtr = keyCtrD.readValue(), keyStr = keyStrD.readValue()
     const idActor = idActorD.readValue(), idCtr = idCtrD.readValue()
     const insert = insertD.readValue(), succNum = succNumD.readValue()
-    const objectId = objActor === null ? '_root' : `${objCtr}@${actorIds[objActor]}`
 
     if (block.lastObjectActor !== objActor || block.lastObjectCtr !== objCtr) {
       block.numVisible = 0
@@ -463,7 +462,7 @@ function addBlockOperation(block, op, actorIds, isChangeOp) {
  * Takes a block containing too many operations, and splits it into a sequence of adjacent blocks of
  * roughly equal size.
  */
-function splitBlock(block, actorIds) {
+function splitBlock(block) {
   for (let col of block.columns) col.decoder.reset()
 
   // Make each of the resulting blocks between 50% and 80% full (leaving a bit of space in each
@@ -483,7 +482,7 @@ function splitBlock(block, actorIds) {
     })
 
     const newBlock = {columns: decoders}
-    updateBlockMetadata(newBlock, actorIds)
+    updateBlockMetadata(newBlock)
     blocks.push(newBlock)
     opsSoFar += opsToCopy
   }
@@ -1370,7 +1369,7 @@ function applyOps(patches, changeState, docState) {
 
   } else {
     // Oversized output block must be split into smaller blocks
-    const newBlocks = splitBlock(newBlock, docState.actorIds)
+    const newBlocks = splitBlock(newBlock)
     docState.blocks.splice(blockIndex, lastBlockIndex - blockIndex + 1, ...newBlocks)
   }
 }
@@ -1735,9 +1734,9 @@ class BackendDoc {
       }
 
       this.blocks = [{columns: makeDecoders(doc.opsColumns, DOC_OPS_COLUMNS)}]
-      updateBlockMetadata(this.blocks[0], this.actorIds)
+      updateBlockMetadata(this.blocks[0])
       if (this.blocks[0].numOps > MAX_BLOCK_SIZE) {
-        this.blocks = splitBlock(this.blocks[0], this.actorIds)
+        this.blocks = splitBlock(this.blocks[0])
       }
 
       let docState = {blocks: this.blocks, actorIds: this.actorIds, objectMeta: this.objectMeta, maxOp: 0}
