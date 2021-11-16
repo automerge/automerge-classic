@@ -1509,11 +1509,20 @@ function setupPatches(patches, objectIds, docState) {
  * top-level `docState` object is mutated; all nested objects within it are treated as immutable.
  * `objectIds` is mutated to contain the IDs of objects that are updated in any of the changes.
  *
+ * The function detects duplicate changes that we've already applied by looking up each change's
+ * hash in `docState.changeIndexByHash`. If we deferred the hash graph computation, that structure
+ * will be incomplete, and we run the risk of applying the same change twice. However, we still have
+ * the sequence numbers for detecting duplicates. If `throwExceptions` is true, we assume that the
+ * set of change hashes is complete, and therefore a duplicate sequence number indicates illegal
+ * behaviour. If `throwExceptions` is false, and we detect a possible sequence number reuse, we
+ * don't throw an exception but instead enqueue all of the changes. This gives us a chance to
+ * recompute the hash graph and eliminate duplicates before raising an error to the application.
+ *
  * Returns a two-element array `[applied, enqueued]`, where `applied` is an array of changes that
  * have been applied to the document, and `enqueued` is an array of changes that have not yet been
  * applied because they are missing a dependency.
  */
-function applyChanges(patches, decodedChanges, docState, objectIds) {
+function applyChanges(patches, decodedChanges, docState, objectIds, throwExceptions) {
   let heads = new Set(docState.heads), changeHashes = new Set()
   let clock = copyObject(docState.clock)
   let applied = [], enqueued = []
@@ -1522,7 +1531,9 @@ function applyChanges(patches, decodedChanges, docState, objectIds) {
     // Skip any duplicate changes that we have already seen
     if (docState.changeIndexByHash[change.hash] !== undefined || changeHashes.has(change.hash)) continue
 
+    const expectedSeq = (clock[change.actor] || 0) + 1
     let causallyReady = true
+
     for (let dep of change.deps) {
       const depIndex = docState.changeIndexByHash[dep]
       if ((depIndex === undefined || depIndex === -1) && !changeHashes.has(dep)) {
@@ -1530,18 +1541,22 @@ function applyChanges(patches, decodedChanges, docState, objectIds) {
       }
     }
 
-    if (causallyReady) {
-      const expectedSeq = (clock[change.actor] || 0) + 1
-      if (change.seq !== expectedSeq) {
-        throw new RangeError(`Expected seq ${expectedSeq}, got seq ${change.seq} from actor ${change.actor}`)
+    if (!causallyReady) {
+      enqueued.push(change)
+    } else if (change.seq < expectedSeq) {
+      if (throwExceptions) {
+        throw new RangeError(`Reuse of sequence number ${change.seq} for actor ${change.actor}`)
+      } else {
+        return [[], decodedChanges]
       }
+    } else if (change.seq > expectedSeq) {
+      throw new RangeError(`Skipped sequence number ${expectedSeq} for actor ${change.actor}`)
+    } else {
       clock[change.actor] = change.seq
       changeHashes.add(change.hash)
       for (let dep of change.deps) heads.delete(dep)
       heads.add(change.hash)
       applied.push(change)
-    } else {
-      enqueued.push(change)
     }
   }
 
@@ -1775,7 +1790,7 @@ class BackendDoc {
     let allApplied = [], objectIds = new Set()
 
     while (true) {
-      const [applied, enqueued] = applyChanges(patches, queue, docState, objectIds)
+      const [applied, enqueued] = applyChanges(patches, queue, docState, objectIds, this.haveHashGraph)
       queue = enqueued
       if (applied.length > 0) allApplied = allApplied.concat(applied)
       if (queue.length === 0) break
@@ -1783,7 +1798,9 @@ class BackendDoc {
       // If we are missing a dependency, and we haven't computed the hash graph yet, first compute
       // the hashes to see if we actually have it already
       if (applied.length === 0) {
-        if (!this.haveHashGraph) this.computeHashGraph(); else break
+        if (this.haveHashGraph) break
+        this.computeHashGraph()
+        docState.changeIndexByHash = this.changeIndexByHash
       }
     }
 
