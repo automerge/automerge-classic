@@ -66,10 +66,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'y'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'y')
     assert.strictEqual(backend.blocks[0].numOps, 3)
-    assert.strictEqual(backend.blocks[0].lastObjectActor, undefined)
-    assert.strictEqual(backend.blocks[0].lastObjectCtr, undefined)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, null)
   })
 
   it('should overwrite root object properties (2)', () => {
@@ -113,10 +113,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'z'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'z')
     assert.strictEqual(backend.blocks[0].numOps, 4)
-    assert.strictEqual(backend.blocks[0].lastObjectActor, undefined)
-    assert.strictEqual(backend.blocks[0].lastObjectCtr, undefined)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, null)
   })
 
   it('should allow concurrent overwrites of the same value', () => {
@@ -197,8 +197,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 1, 2], // 0, 1, 2
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
-    assert.deepStrictEqual(backend1.blocks[0].lastKey, {_root: 'x'})
-    assert.deepStrictEqual(backend1.blocks[0].numOps, 4)
+    assert.strictEqual(backend1.blocks[0].lastKey, 'x')
+    assert.strictEqual(backend1.blocks[0].numOps, 4)
+    assert.strictEqual(backend1.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend1.blocks[0].lastObjectCtr, null)
     // The two backends are not identical because actors appear in a different order
     checkColumns(backend2.blocks[0], {
       objActor: [],
@@ -216,7 +218,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 2, 1], // 0, 2, 1 <-- different from backend1
       succCtr:   [0x7f, 2, 2, 0] // 2, 2, 2
     })
-    assert.deepStrictEqual(backend2.blocks[0].lastKey, {_root: 'x'})
+    assert.strictEqual(backend2.blocks[0].lastKey, 'x')
     assert.strictEqual(backend2.blocks[0].numOps, 4)
   })
 
@@ -267,7 +269,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 2, 0] // 2, 2
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'x')
     assert.strictEqual(backend.blocks[0].numOps, 3)
   })
 
@@ -347,7 +349,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor}`]: 'z'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'z')
     assert.strictEqual(backend.blocks[0].numOps, 5)
     assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
     assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
@@ -405,7 +407,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'a', [`1@${actor}`]: 'b', [`2@${actor}`]: 'c', [`3@${actor}`]: 'd'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'd')
     assert.strictEqual(backend.blocks[0].numOps, 5)
     assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
     assert.strictEqual(backend.blocks[0].lastObjectCtr, 3)
@@ -442,9 +444,9 @@ describe('BackendDoc applying changes', () => {
       succActor: [],
       succCtr:   []
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
     assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 1)
     assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
     assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
@@ -499,9 +501,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [],
       succCtr:   []
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 4)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -589,9 +593,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [],
       succCtr:   []
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 4})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 4)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -638,9 +644,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 0})
     assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].numVisible, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, undefined)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, undefined)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, undefined)
@@ -690,9 +697,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 5]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
     assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].numVisible, 2)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -792,9 +800,10 @@ describe('BackendDoc applying changes', () => {
         succActor: [],
         succCtr:   []
       })
-      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 3})
       assert.strictEqual(backend.blocks[0].numOps, 4)
+      assert.strictEqual(backend.blocks[0].numVisible, 3)
+      assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+      assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
       assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
       assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
       assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -881,9 +890,10 @@ describe('BackendDoc applying changes', () => {
         succActor: [],
         succCtr:   []
       })
-      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 4})
       assert.strictEqual(backend.blocks[0].numOps, 5)
+      assert.strictEqual(backend.blocks[0].numVisible, 4)
+      assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+      assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
       // firstVisible is incorrect -- it should strictly be (1,3) rather than (0,2) -- but that
       // doesn't matter since in any case it'll be different from the previous block's lastVisible
       assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
@@ -945,9 +955,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 5, 1] // 5, 6
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 3})
     assert.strictEqual(backend.blocks[0].numOps, 6)
+    assert.strictEqual(backend.blocks[0].numVisible, 3)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -993,9 +1004,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 6, 0x7f] // 6, 5
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 3})
     assert.strictEqual(backend.blocks[0].numOps, 6)
+    assert.strictEqual(backend.blocks[0].numVisible, 3)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1054,13 +1066,79 @@ describe('BackendDoc applying changes', () => {
       succActor: [],
       succCtr:   []
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list', [`3@${actor}`]: 'x'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
     assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].lastKey, 'x')
+    assert.strictEqual(backend.blocks[0].numVisible, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 3)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, undefined)
     assert.strictEqual(backend.blocks[0].lastVisibleCtr, undefined)
+  })
+
+  it('should handle multiple list objects', () => {
+    const actor = uuid()
+    const change1 = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeList', obj: '_root',      key: 'list1',         insert: false,           pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head',      insert: true, datatype: 'uint', value: 1, pred: []},
+      {action: 'makeList', obj: '_root',      key: 'list2',         insert: false,           pred: []},
+      {action: 'set',      obj: `3@${actor}`, elemId: '_head',      insert: true, datatype: 'uint', value: 2, pred: []}
+    ]}
+    const change2 = {actor, seq: 2, startOp: 5, time: 0, deps: [hash(change1)], ops: [
+      {action: 'set',      obj: `1@${actor}`, elemId: `2@${actor}`, insert: true, datatype: 'uint', value: 3, pred: []}
+    ]}
+    const backend = new BackendDoc()
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change1)]), {
+      maxOp: 4, clock: {[actor]: 1}, deps: [hash(change1)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {
+        list1: {[`1@${actor}`]: {objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {
+            type: 'value', value: 1, datatype: 'uint'
+          }}
+        ]}},
+        list2: {[`3@${actor}`]: {objectId: `3@${actor}`, type: 'list', edits: [
+          {action: 'insert', index: 0, elemId: `4@${actor}`, opId: `4@${actor}`, value: {
+            type: 'value', value: 2, datatype: 'uint'
+          }}
+        ]}}
+      }}
+    })
+    assert.deepStrictEqual(backend.applyChanges([encodeChange(change2)]), {
+      maxOp: 5, clock: {[actor]: 2}, deps: [hash(change2)], pendingChanges: 0,
+      diffs: {objectId: '_root', type: 'map', props: {
+        list1: {[`1@${actor}`]: {objectId: `1@${actor}`, type: 'list', edits: [
+          {action: 'insert', index: 1, elemId: `5@${actor}`, opId: `5@${actor}`, value: {
+            type: 'value', value: 3, datatype: 'uint'
+          }}
+        ]}}
+      }}
+    })
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 2, 3, 0],
+      objCtr:   [0, 2, 2, 1, 0x7f, 3], // null, null, 1, 1, 3
+      keyActor: [0, 3, 0x7f, 0, 0, 1], // null, null, null, 0, null
+      keyCtr:   [0, 2, 0x7d, 0, 2, 0x7e], // null, null, 0, 2, 0
+      keyStr:   [0x7e, 5, 0x6c, 0x69, 0x73, 0x74, 0x31, 5, 0x6c, 0x69, 0x73, 0x74, 0x32, 0, 3], // 'list1', 'list2', null, null, null
+      idActor:  [5, 0],
+      idCtr:    [0x7b, 1, 2, 0x7f, 3, 0x7f], // 1, 3, 2, 5, 4
+      insert:   [2, 3], // false, false, true, true, true
+      action:   [2, 2, 3, 1], // 2x makeList, 3x set
+      valLen:   [2, 0, 3, 0x13], // 2x null, 3x uint
+      valRaw:   [1, 3, 2],
+      succNum:  [5, 0],
+      succActor: [],
+      succCtr:   []
+    })
+    assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 3)
+    assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
+    assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
+    assert.strictEqual(backend.blocks[0].lastVisibleCtr, 4)
   })
 
   it('should handle a counter inside a map', () => {
@@ -1109,8 +1187,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 2, 1] // 2, 3
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'counter'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'counter')
     assert.strictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, null)
   })
 
   it('should handle a counter inside a list element', () => {
@@ -1159,9 +1239,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
     assert.strictEqual(backend.blocks[0].numOps, 3)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1191,8 +1273,10 @@ describe('BackendDoc applying changes', () => {
       maxOp: 3, clock: {[actor]: 3}, deps: [hash(change3)], pendingChanges: 0,
       diffs: {objectId: '_root', type: 'map', props: {counter: {}}}
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'counter'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'counter')
     assert.strictEqual(backend.blocks[0].numOps, 2)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, null)
   })
 
   it('should handle conflicts inside list elements', () => {
@@ -1270,9 +1354,11 @@ describe('BackendDoc applying changes', () => {
         succActor: [0x7e, 0, 1],
         succCtr:   [0x7e, 3, 0] // 3, 3
       })
-      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
-      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
       assert.strictEqual(backend.blocks[0].numOps, 4)
+      assert.strictEqual(backend.blocks[0].lastKey, undefined)
+      assert.strictEqual(backend.blocks[0].numVisible, 1)
+      assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+      assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
       assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
       assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
       assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1325,9 +1411,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 2)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1372,9 +1460,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 2})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 2)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1441,9 +1531,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 1, 0x7f, 0], // actor2, actor2, actor1
       succCtr:   [0x7f, 3, 2, 1] // 3, 4, 5
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 3})
     assert.strictEqual(backend.blocks[0].numOps, 7)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 3)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     // firstVisible is incorrect -- it should strictly be (0,3) rather than (0,2) -- but that
     // doesn't matter since in any case it'll be different from the previous block's lastVisible
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
@@ -1498,9 +1590,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7d, 0, 1, 0], // actor1, actor2, actor1
       succCtr:   [0x7d, 3, 0, 1] // 3, 3, 4
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
     assert.strictEqual(backend.blocks[0].numOps, 5)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1545,9 +1639,11 @@ describe('BackendDoc applying changes', () => {
       succActor: [2, 0],
       succCtr:   [0x7e, 4, 1] // 4, 5
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'text'})
-    assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor}`]: 1})
     assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].lastKey, undefined)
+    assert.strictEqual(backend.blocks[0].numVisible, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
     assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
     assert.strictEqual(backend.blocks[0].firstVisibleCtr, 3)
     assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1625,9 +1721,11 @@ describe('BackendDoc applying changes', () => {
         succActor: [0x7e, 0, 1], // 0, 1
         succCtr:   [0x7e, 3, 0] // 3, 3
       })
-      assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'list'})
-      assert.deepStrictEqual(backend.blocks[0].numVisible, {[`1@${actor1}`]: 1})
       assert.strictEqual(backend.blocks[0].numOps, 3)
+      assert.strictEqual(backend.blocks[0].lastKey, undefined)
+      assert.strictEqual(backend.blocks[0].numVisible, 1)
+      assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+      assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
       assert.strictEqual(backend.blocks[0].firstVisibleActor, 0)
       assert.strictEqual(backend.blocks[0].firstVisibleCtr, 2)
       assert.strictEqual(backend.blocks[0].lastVisibleActor, 0)
@@ -1691,7 +1789,7 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'map', [`1@${actor1}`]: 'x', [`1@${actor2}`]: 'y'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'y')
     assert.strictEqual(backend.blocks[0].numOps, 5)
     assert.strictEqual(backend.blocks[0].lastObjectActor, 1)
     assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
@@ -1750,8 +1848,10 @@ describe('BackendDoc applying changes', () => {
       succActor: [0x7f, 0],
       succCtr:   [0x7f, 3]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x', [`1@${actor1}`]: 'y'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'y')
     assert.strictEqual(backend.blocks[0].numOps, 4)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, 0)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, 1)
   })
 
   it('should allow changes containing unknown columns, actions, and datatypes', () => {
@@ -1798,8 +1898,10 @@ describe('BackendDoc applying changes', () => {
       241:      [2, 0],
       243:      [2, 1]
     })
-    assert.deepStrictEqual(backend.blocks[0].lastKey, {_root: 'x'})
+    assert.strictEqual(backend.blocks[0].lastKey, 'x')
     assert.strictEqual(backend.blocks[0].numOps, 1)
+    assert.strictEqual(backend.blocks[0].lastObjectActor, null)
+    assert.strictEqual(backend.blocks[0].lastObjectCtr, null)
   })
 
   it('should split a long insertion into multiple blocks', () => {
@@ -2037,5 +2139,55 @@ describe('BackendDoc applying changes', () => {
         value: {type: 'value', value: 'x'}
       }]
     }}})
+  })
+
+  it('should place root object operations before a long text object', () => {
+    const actor = uuid()
+    const change = {actor, seq: 1, startOp: 1, time: 0, deps: [], ops: [
+      {action: 'makeText', obj: '_root',      key: 'text',     insert: false,             pred: []},
+      {action: 'set',      obj: `1@${actor}`, elemId: '_head', insert: true,  value: 'a', pred: []}
+    ]}
+    for (let i = 2; i <= MAX_BLOCK_SIZE; i++) {
+      change.ops.push({action: 'set', obj: `1@${actor}`, elemId: `${i}@${actor}`, insert: true, value: 'a', pred: []})
+    }
+    change.ops.push({action: 'set', obj: '_root', key: 'z', insert: false, value: 'zzz', pred: []})
+    const backend = new BackendDoc()
+    backend.applyChanges([encodeChange(change)])
+    const sizeByte1 = 0x80 | 0x7f & (MAX_BLOCK_SIZE / 2), sizeByte2 = (MAX_BLOCK_SIZE / 2) >>> 7
+    checkColumns(backend.blocks[0], {
+      objActor: [0, 2, sizeByte1, sizeByte2, 0],
+      objCtr:   [0, 2, sizeByte1, sizeByte2, 1],
+      keyActor: [0, 3, sizeByte1 - 1, sizeByte2, 0],
+      keyCtr:   [0, 2, 0x7e, 0, 2, sizeByte1 - 2, sizeByte2, 1], // null, null, 0, 2, 3, 4, ...
+      keyStr:   [0x7e, 4, 0x74, 0x65, 0x78, 0x74, 1, 0x7a, 0, sizeByte1, sizeByte2], // 'text', 'z', nulls
+      idActor:  [sizeByte1 + 2, sizeByte2, 0],
+      idCtr:    [0x7d, 1,
+                 0x80 | 0x7f & (MAX_BLOCK_SIZE + 1), 0x7f & (MAX_BLOCK_SIZE + 1) >>> 7,
+                 0x80 | 0x7f & -MAX_BLOCK_SIZE,      0x7f & -MAX_BLOCK_SIZE      >>> 7,
+                 sizeByte1 - 1, sizeByte2, 1],
+      insert:   [2, sizeByte1, sizeByte2],
+      action:   [0x7f, 4, sizeByte1 + 1, sizeByte2, 1],
+      valLen:   [0x7e, 0, 0x36, sizeByte1, sizeByte2, 0x16],
+      valRaw:   [0x7a, 0x7a, 0x7a].concat(new Array(MAX_BLOCK_SIZE / 2).fill(0x61)),
+      succNum:  [sizeByte1 + 2, sizeByte2, 0],
+      succActor: [],
+      succCtr:   []
+    })
+    checkColumns(backend.blocks[1], {
+      objActor: [sizeByte1, sizeByte2, 0],
+      objCtr:   [sizeByte1, sizeByte2, 1],
+      keyActor: [sizeByte1, sizeByte2, 0],
+      keyCtr:   [0x7f, sizeByte1 + 1, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      keyStr:   [],
+      idActor:  [sizeByte1, sizeByte2, 0],
+      idCtr:    [0x7f, sizeByte1 + 2, sizeByte2, sizeByte1 - 1, sizeByte2, 1],
+      insert:   [0, sizeByte1, sizeByte2],
+      action:   [sizeByte1, sizeByte2, 1],
+      valLen:   [sizeByte1, sizeByte2, 0x16],
+      valRaw:   new Array(MAX_BLOCK_SIZE / 2).fill(0x61),
+      succNum:  [sizeByte1, sizeByte2, 0],
+      succActor: [],
+      succCtr:   []
+    })
   })
 })
