@@ -67,6 +67,9 @@ declare module 'automerge' {
   function load<T>(data: BinaryDocument, options?: any): Doc<T>
   function save<T>(doc: Doc<T>): BinaryDocument
 
+  function upgrade(changes: BinaryChange[]): BinaryChange[]
+  function upgrade(data: BinaryDocument): BinaryDocument
+
   function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
   function receiveSyncMessage<T>(doc: Doc<T>, syncState: SyncState, message: BinarySyncMessage): [Doc<T>, SyncState, Patch?]
   function initSyncState(): SyncState

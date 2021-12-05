@@ -2,6 +2,7 @@ const uuid = require('./uuid')
 const Frontend = require('../frontend')
 const { OPTIONS } = require('../frontend/constants')
 const { encodeChange, decodeChange } = require('../backend/columnar')
+const { BackendDoc } = require('../backend/new')
 const { isObject } = require('./common')
 let backend = require('../backend') // mutable: can be overridden with setDefaultBackend()
 
@@ -94,6 +95,32 @@ function applyChanges(doc, changes, options = {}) {
   return [applyPatch(doc, patch, newState, changes, options), patch]
 }
 
+/**
+ * Reads a document written by a previous version of Automerge, and returns an upgraded document
+ * that can be read by the current version of Automerge. The document can be given in two forms:
+ * either as a byte array that is the result of `Automerge.save()`, or as an array of byte arrays
+ * that is the result of `Automerge.getAllChanges()`. The result is returned in the same form as
+ * the input.
+ */
+function upgrade(doc) {
+  if (doc instanceof Uint8Array) { // result of Automerge.save()
+    const state1 = new BackendDoc(doc), state2 = new BackendDoc()
+    state1.computeHashGraph(false)
+    state2.applyChanges(state1.getChanges([]))
+    return state2.save()
+
+  } else if (Array.isArray(doc) && doc.length > 0) { // result of Automerge.getAllChanges()
+    const state1 = new BackendDoc()
+    state1.applyChanges(doc)
+    const state2 = new BackendDoc(state1.save())
+    state2.computeHashGraph(false)
+    return state2.getChanges([])
+
+  } else {
+    throw new TypeError('Document to upgrade must be either a saved document or an array of changes')
+  }
+}
+
 function equals(val1, val2) {
   if (!isObject(val1) || !isObject(val2)) return val1 === val2
   const keys1 = Object.keys(val1).sort(), keys2 = Object.keys(val2).sort()
@@ -153,7 +180,7 @@ function setDefaultBackend(newBackend) {
 
 module.exports = {
   init, from, change, emptyChange, clone, free,
-  load, save, merge, getChanges, getAllChanges, applyChanges,
+  load, save, merge, getChanges, getAllChanges, applyChanges, upgrade,
   encodeChange, decodeChange, equals, getHistory, uuid,
   Frontend, setDefaultBackend, generateSyncMessage, receiveSyncMessage, initSyncState,
   get Backend() { return backend }

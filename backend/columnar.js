@@ -313,7 +313,9 @@ function decodeValue(sizeTag, bytes) {
       return {value: new Decoder(bytes).readInt53(), datatype: "int"}
     } else if (sizeTag % 16 === VALUE_TYPE.IEEE754) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-      if (bytes.byteLength === 8) {
+      if (bytes.byteLength === 4) {
+        return {value: view.getFloat32(0, true)} // true means little-endian
+      } else if (bytes.byteLength === 8) {
         return {value: view.getFloat64(0, true), datatype: "float64"}
       } else {
         throw new RangeError(`Invalid length for floating point number: ${bytes.byteLength}`)
@@ -840,12 +842,12 @@ function splitContainers(buffer) {
  * Decodes a list of changes from the binary format into JS objects.
  * `binaryChanges` is an array of `Uint8Array` objects.
  */
-function decodeChanges(binaryChanges) {
+function decodeChanges(binaryChanges, checkHeads) {
   let decoded = []
   for (let binaryChange of binaryChanges) {
     for (let chunk of splitContainers(binaryChange)) {
       if (chunk[8] === CHUNK_TYPE_DOCUMENT) {
-        decoded = decoded.concat(decodeDocument(chunk))
+        decoded = decoded.concat(decodeDocument(chunk, checkHeads))
       } else if (chunk[8] === CHUNK_TYPE_CHANGE || chunk[8] === CHUNK_TYPE_DEFLATE) {
         decoded.push(decodeChange(chunk))
       } else {
@@ -942,7 +944,7 @@ function groupChangeOps(changes, ops) {
   }
 }
 
-function decodeDocumentChanges(changes, expectedHeads) {
+function decodeDocumentChanges(changes, expectedHeads, checkHeads) {
   let heads = {} // change hashes that are not a dependency of any other change
   for (let i = 0; i < changes.length; i++) {
     let change = changes[i]
@@ -975,7 +977,7 @@ function decodeDocumentChanges(changes, expectedHeads) {
     headsEqual = (actualHeads[i] === expectedHeads[i])
     i++
   }
-  if (!headsEqual) {
+  if (!headsEqual && checkHeads) {
     throw new RangeError(`Mismatched heads hashes: expected ${expectedHeads.join(', ')}, got ${actualHeads.join(', ')}`)
   }
 }
@@ -1037,12 +1039,12 @@ function decodeDocumentHeader(buffer) {
   return { changesColumns, opsColumns, actorIds, heads, headsIndexes, extraBytes }
 }
 
-function decodeDocument(buffer) {
+function decodeDocument(buffer, checkHeads) {
   const { changesColumns, opsColumns, actorIds, heads } = decodeDocumentHeader(buffer)
   const changes = decodeColumns(changesColumns, actorIds, DOCUMENT_COLUMNS)
   const ops = decodeOps(decodeColumns(opsColumns, actorIds, DOC_OPS_COLUMNS), true)
   groupChangeOps(changes, ops)
-  decodeDocumentChanges(changes, heads)
+  decodeDocumentChanges(changes, heads, checkHeads)
   return changes
 }
 
@@ -1070,5 +1072,5 @@ module.exports = {
   COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   splitContainers, encodeChange, decodeChangeColumns, decodeChange, decodeChangeMeta, decodeChanges,
-  encodeDocumentHeader, decodeDocumentHeader, decodeDocument
+  encodeDocumentHeader, decodeDocumentHeader
 }

@@ -1868,7 +1868,7 @@ class BackendDoc {
    * loaded we defer the computation of this hash graph to make loading faster, but if the hash
    * graph is later needed (e.g. for the sync protocol), this function fills it in.
    */
-  computeHashGraph() {
+  computeHashGraph(checkHeads = true) {
     const binaryDoc = this.save()
     this.haveHashGraph = true
     this.changes = []
@@ -1878,7 +1878,7 @@ class BackendDoc {
     this.hashesByActor = {}
     this.clock = {}
 
-    for (let change of decodeChanges([binaryDoc])) {
+    for (let change of decodeChanges([binaryDoc], checkHeads)) {
       const binaryChange = encodeChange(change) // TODO: avoid decoding and re-encoding again
       this.changes.push(binaryChange)
       this.changeIndexByHash[change.hash] = this.changes.length - 1
