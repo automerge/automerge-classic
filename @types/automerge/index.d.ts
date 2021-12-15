@@ -258,7 +258,7 @@ declare module 'automerge' {
     // (properties that are not changing are not listed). The nested object is
     // empty if the property is being deleted, contains one opId if it is set to
     // a single value, and contains multiple opIds if there is a conflict.
-    props: {[propName: string]: {[opId: string]: MapDiff | ListDiff | ValueDiff }}
+    props: {[propName: string]: {[opId: string]: MapDiff | ListDiff | ValueDiff | '___DELETED___' }}
   }
 
   // Describes changes to a list or Automerge.Text object, in which each element
@@ -309,6 +309,7 @@ declare module 'automerge' {
   // text object.
   interface RemoveEdit {
     action: 'remove'
+    opId: OpId      // ID of the operation that removed this value. NOTE: if count > 1 opId is the first operation.
     index: number   // index of the first list element to remove
     count: number   // number of list elements to remove
   }

@@ -4,6 +4,7 @@ const Automerge = process.env.TEST_DIST === '1' ? require('../dist/automerge') :
 const Backend = Automerge.Backend
 const { encodeChange, decodeChange } = require('../backend/columnar')
 const uuid = require('../src/uuid')
+const { DELETED_MARKER } = require("../src/common")
 
 function hash(change) {
   return decodeChange(encodeChange(change)).hash
@@ -79,7 +80,7 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change2)])
       assert.deepStrictEqual(patch2, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 2, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map', props: {bird: {}}}
+        diffs: {objectId: '_root', type: 'map', props: {bird: {[`2@${actor}`]: DELETED_MARKER}}}
       })
     })
 
@@ -132,7 +133,7 @@ describe('Automerge.Backend', () => {
       const [s1, patch1] = Backend.applyChanges(s0, [change1, change2].map(encodeChange))
       assert.deepStrictEqual(patch1, {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map', props: {birds: {}}}
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`3@${actor}`]: DELETED_MARKER}}}
       })
     })
 
@@ -209,7 +210,7 @@ describe('Automerge.Backend', () => {
       const [s2, patch2] = Backend.applyChanges(s1, [encodeChange(change3)])
       assert.deepStrictEqual(patch1, {
         clock: {[actor1]: 1, [actor2]: 1}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
-        diffs: {objectId: '_root', type: 'map', props: {birds: {}}}
+        diffs: {objectId: '_root', type: 'map', props: {birds: {[`3@${actor2}`]: DELETED_MARKER}}}
       })
       assert.deepStrictEqual(patch2, {
         clock: {[actor1]: 2, [actor2]: 1}, deps: [hash(change2), hash(change3)].sort(), maxOp: 3, pendingChanges: 0,
@@ -380,7 +381,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 3, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'remove', index: 0, count: 1}
+            {action: 'remove', index: 0, count: 1, opId: `3@${actor}`}
           ]
         }}}}
       })
@@ -403,7 +404,7 @@ describe('Automerge.Backend', () => {
         diffs: {objectId: '_root', type: 'map', props: {birds: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
             {action: 'insert', index: 0, elemId: `2@${actor}`, opId: `2@${actor}`, value: {type: 'value', value: 'chaffinch'}},
-            {action: 'remove', index: 0, count: 1}
+            {action: 'remove', index: 0, count: 1, opId: `3@${actor}`}
           ]
         }}}}
       })
@@ -518,7 +519,7 @@ describe('Automerge.Backend', () => {
                 done: {[`4@${actor1}`]: {type: 'value', value: false}}
               }
             }},
-            {action: 'remove', index: 0, count: 1}
+            {action: 'remove', index: 0, count: 1, opId: `5@${actor2}`}
           ]
         }}}}
       })
@@ -710,7 +711,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [hash(change2)], maxOp: 9, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'remove', index: 1, count: 3}
+            {action: 'remove', index: 1, count: 3, opId: `7@${actor}`}
           ]
         }}}}
       })
@@ -882,7 +883,7 @@ describe('Automerge.Backend', () => {
           birds: {'1@111111': {objectId: '1@111111', type: 'list',
             edits: [
               {action: 'insert', index: 0, elemId: '2@111111', opId: '2@111111', value: {type: 'value', value: 'magpie'}},
-              {action: 'remove', index: 0, count: 1}
+              {action: 'remove', index: 0, count: 1, opId: '3@111111'}
             ]}}
         }}
       })
@@ -971,7 +972,7 @@ describe('Automerge.Backend', () => {
         clock: {[actor]: 2}, deps: [], maxOp: 9, actor, seq: 2, pendingChanges: 0,
         diffs: {objectId: '_root', type: 'map', props: {todos: {[`1@${actor}`]: {
           objectId: `1@${actor}`, type: 'list', edits: [
-            {action: 'remove', index: 1, count: 3}
+            {action: 'remove', index: 1, count: 3, opId: `7@${actor}`}
           ]
         }}}}
       })
