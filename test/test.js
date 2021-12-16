@@ -1368,6 +1368,15 @@ describe('Automerge', () => {
       assert.strictEqual(patch.pendingChanges, 0)
     })
 
+    it('should allow changes to be applied in any order', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.bird = 'Goldfinch')
+      let s2 = Automerge.change(s1, doc => doc.bird = 'Chaffinch')
+      let s3 = Automerge.change(s2, doc => doc.bird = 'Greenfinch')
+      let changes = Automerge.getAllChanges(s3).reverse()
+      let [s4, patch] = Automerge.applyChanges(Automerge.init(), changes)
+      assert.deepStrictEqual(s4, {bird: 'Greenfinch'})
+    })
+
     it('should report missing dependencies with out-of-order applyChanges', () => {
       let s0 = Automerge.init()
       let s1 = Automerge.change(s0, doc => doc.test = ['a'])
