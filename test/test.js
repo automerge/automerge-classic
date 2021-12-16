@@ -1373,7 +1373,7 @@ describe('Automerge', () => {
       let s2 = Automerge.change(s1, doc => doc.bird = 'Chaffinch')
       let s3 = Automerge.change(s2, doc => doc.bird = 'Greenfinch')
       let changes = Automerge.getAllChanges(s3).reverse()
-      let [s4, patch] = Automerge.applyChanges(Automerge.init(), changes)
+      let [s4] = Automerge.applyChanges(Automerge.init(), changes)
       assert.deepStrictEqual(s4, {bird: 'Greenfinch'})
     })
 
