@@ -1,4 +1,4 @@
-name: Automerge CI
+name: CI
 on: [push, pull_request]
 
 jobs:
@@ -28,39 +28,40 @@ jobs:
     - name: Load bundled code
       run: node -e "const Automerge = require(\"./dist/automerge\")"
 
-  browsertest:
-    runs-on: ubuntu-latest
-    # Don't run this job when triggered from a forked repository, since the secrets
-    # (Sauce Labs credentials) are not available in that context
-    if: ${{ github.repository == 'automerge/automerge' }}
-    steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16.x
-          cache: 'yarn'
-      - name: Install dependencies
-        run: yarn
-      - name: Bundle
-        run: yarn build
-      - name: Sauce Connect
-        uses: saucelabs/sauce-connect-action@v1
-        with:
-          username: ${{ secrets.SAUCE_USERNAME }}
-          accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
-          tunnelIdentifier: github-action-tunnel
-          scVersion: 4.7.0
-      - name: Run browser tests
-        run: node_modules/.bin/karma start karma.sauce.js
-        env:
-          SAUCE_USERNAME: ${{secrets.SAUCE_USERNAME}}
-          SAUCE_ACCESS_KEY: ${{secrets.SAUCE_ACCESS_KEY}}
+# browsertest:
+#   runs-on: ubuntu-latest
+#   # Don't run this job when triggered from a forked repository, since the secrets
+#   # (Sauce Labs credentials) are not available in that context
+#   if: ${{ github.repository == 'automerge/automerge' }}
+#   steps:
+#     - uses: actions/checkout@v2
+#     - name: Use Node.js
+#       uses: actions/setup-node@v2
+#       with:
+#         node-version: 16.x
+#         cache: 'yarn'
+#     - name: Install dependencies
+#       run: yarn
+#     - name: Bundle
+#       run: yarn build
+#     - name: Sauce Connect
+#       uses: saucelabs/sauce-connect-action@v1
+#       with:
+#         username: ${{ secrets.SAUCE_USERNAME }}
+#         accessKey: ${{ secrets.SAUCE_ACCESS_KEY }}
+#         tunnelIdentifier: github-action-tunnel
+#         scVersion: 4.7.0
+#     - name: Run browser tests
+#       run: node_modules/.bin/karma start karma.sauce.js
+#       env:
+#         SAUCE_USERNAME: ${{secrets.SAUCE_USERNAME}}
+#         SAUCE_ACCESS_KEY: ${{secrets.SAUCE_ACCESS_KEY}}
 
   npm-publish:
     name: npm-publish
     if: ${{ github.repository == 'automerge/automerge' && github.ref == 'refs/heads/main' }}
-    needs: [ node-build, browsertest ]
+#   needs: [ node-build, browsertest ]
+    needs: [ node-build ]
     runs-on: ubuntu-latest
     steps:
     - name: Check out repo
