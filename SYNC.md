@@ -262,7 +262,7 @@ class AutomergePeer {
     console.log(this.name, 'document:', this.doc);
 
     //iterate over all connections and sync with them
-    for (const [peer, state] of this.connections.entries()) {
+    for (let [peer, state] of this.connections.entries()) {
       console.log(this.name, 'syncing data with', peer.name);
 
       // a message containing changes that we can send over the network
@@ -323,17 +323,9 @@ class AutomergePeer {
    * Maybe a user presses on a button and the count needs to be updated
    * Or someone types into a textarea.
    * Then this function will be called as the oninput / onclick listener
-   *
-   * In our example it creates an array and appends a random number
    */
-  changeSomething() {
-    console.log(this.name, 'Changing something');
-    this.doc = Automerge.change(this.doc, (doc) => {
-      if (!doc.test) doc.test = [];
-      doc.test.push(Math.random());
-    });
-
-    //dont forget to sync after changing something
+  changeDoc(msg, callback) {
+    this.doc = Automerge.change(this.doc, msg, callback);
     this.sync();
   }
 }
@@ -347,7 +339,10 @@ let peer3 = new AutomergePeer('Peer-3'); //Computer 2
 peer2.connect(peer1); //Computer 2 connects over the network to Computer 1
 peer3.connect(peer1); //Computer 3 connects over the network to Computer 1
 
-peer2.changeSomething(); //Computer 2 changes something. We expect a synchronization
+//Computer 2 changes something. We expect a synchronization
+peer2.changeDoc('Created test string', (doc) => {
+  doc.test = 'success';
+});
 
 //You may need to handle deconnection and storing the state which depends on your application
 ```
@@ -386,20 +381,19 @@ Peer-3 document: {}
 Peer-3 document: {}
 Peer-3 syncing data with Peer-1
 Peer-3 syncing not necessary with peer Peer-1
-Peer-2 Changing something
-Peer-2 document: { test: [ 0.2895430825942866 ] }
+Peer-2 document: { test: 'success' }
 Peer-2 syncing data with Peer-1
 Peer-1 receiving information from Peer-2
 Peer-1 appyling changes
-Peer-1 document: { test: [ 0.2895430825942866 ] } 
+Peer-1 document: { test: 'success' } 
 
-Peer-1 document: { test: [ 0.2895430825942866 ] }
+Peer-1 document: { test: 'success' }
 Peer-1 syncing data with Peer-2
 Peer-2 receiving information from Peer-1
 Peer-2 appyling changes
-Peer-2 document: { test: [ 0.2895430825942866 ] } 
+Peer-2 document: { test: 'success' } 
 
-Peer-2 document: { test: [ 0.2895430825942866 ] }
+Peer-2 document: { test: 'success' }
 Peer-2 syncing data with Peer-1
 Peer-2 syncing not necessary with peer Peer-1
 Peer-1 syncing data with Peer-3
@@ -411,23 +405,23 @@ Peer-3 document: {}
 Peer-3 syncing data with Peer-1
 Peer-1 receiving information from Peer-3
 Peer-1 appyling changes
-Peer-1 document: { test: [ 0.2895430825942866 ] } 
+Peer-1 document: { test: 'success' } 
 
-Peer-1 document: { test: [ 0.2895430825942866 ] }
+Peer-1 document: { test: 'success' }
 Peer-1 syncing data with Peer-2
 Peer-1 syncing not necessary with peer Peer-2
 Peer-1 syncing data with Peer-3
 Peer-3 receiving information from Peer-1
 Peer-3 appyling changes
-Peer-3 document: { test: [ 0.2895430825942866 ] } 
+Peer-3 document: { test: 'success' } 
 
-Peer-3 document: { test: [ 0.2895430825942866 ] }
+Peer-3 document: { test: 'success' }
 Peer-3 syncing data with Peer-1
 Peer-1 receiving information from Peer-3
 Peer-1 appyling changes
-Peer-1 document: { test: [ 0.2895430825942866 ] } 
+Peer-1 document: { test: 'success' } 
 
-Peer-1 document: { test: [ 0.2895430825942866 ] }
+Peer-1 document: { test: 'success' }
 Peer-1 syncing data with Peer-2
 Peer-1 syncing not necessary with peer Peer-2
 Peer-1 syncing data with Peer-3
