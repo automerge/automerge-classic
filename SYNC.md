@@ -325,6 +325,7 @@ class AutomergePeer {
    * Then this function will be called as the oninput / onclick listener
    */
   changeDoc(msg, callback) {
+    console.log(this.name, 'Changes:', msg);
     this.doc = Automerge.change(this.doc, msg, callback);
     this.sync();
   }
@@ -381,6 +382,7 @@ Peer-3 document: {}
 Peer-3 document: {}
 Peer-3 syncing data with Peer-1
 Peer-3 syncing not necessary with peer Peer-1
+Peer-2 Changes: Created test string
 Peer-2 document: { test: 'success' }
 Peer-2 syncing data with Peer-1
 Peer-1 receiving information from Peer-2
