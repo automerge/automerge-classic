@@ -684,6 +684,11 @@ function readNextChangeOp(docState, changeState) {
     changeState.columns = makeDecoders(change.columns, CHANGE_COLUMNS)
     changeState.opCtr = change.startOp
 
+    // If it's an empty change (no ops), set its maxOp here since it won't be set below
+    if (changeState.columns[actionIdx].decoder.done) {
+      change.maxOp = change.startOp - 1
+    }
+
     // Update docState based on the information in the change
     updateBlockColumns(docState, changeState.columns)
     const {actorIds, actorTable} = getActorTable(docState.actorIds, change)

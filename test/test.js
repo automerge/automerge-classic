@@ -341,6 +341,18 @@ describe('Automerge', () => {
         assert.deepStrictEqual(emptyChange.deps, [history[0].change.hash, history[1].change.hash].sort())
         assert.deepStrictEqual(emptyChange.ops, [])
       })
+
+      it('should encode and decode correctly', () => {
+        s1 = Automerge.emptyChange(s1)
+        s1 = Automerge.change(s1, doc => doc.z = 1)
+        s1 = Automerge.change(s1, doc => doc.z = 1000)
+        const changes = Automerge.getAllChanges(Automerge.load(Automerge.save(s1)))
+        ;[s2] = Automerge.applyChanges(Automerge.init(), changes)
+        const heads1 = Automerge.Backend.getHeads(Automerge.Frontend.getBackendState(s1))
+        const heads2 = Automerge.Backend.getHeads(Automerge.Frontend.getBackendState(s2))
+        assert.deepStrictEqual(heads1, heads2)
+        assert.deepStrictEqual(s1, s2)
+      })
     })
 
     describe('root object', () => {
