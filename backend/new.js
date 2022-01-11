@@ -1817,6 +1817,9 @@ class BackendDoc {
     while (true) {
       const [applied, enqueued] = applyChanges(patches, queue, docState, objectIds, this.haveHashGraph)
       queue = enqueued
+      for (let i = 0; i < applied.length; i++) {
+        docState.changeIndexByHash[applied[i].hash] = this.changes.length + allApplied.length + i
+      }
       if (applied.length > 0) allApplied = allApplied.concat(applied)
       if (queue.length === 0) break
 
