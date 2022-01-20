@@ -763,6 +763,29 @@ describe('Automerge', () => {
           Automerge.change(s1, doc => { doc.x = []; doc.y = doc.x })
         }, /Cannot create a reference to an existing document object/)
       })
+
+      it('concurrent edits insert in reverse actorid order if counters equal', () => {
+        s1 = Automerge.init('aaaa')
+        s2 = Automerge.init('bbbb')
+        s1 = Automerge.change(s1, doc => doc.list = [])
+        s2 = Automerge.merge(s2, s1)
+        s1 = Automerge.change(s1, doc => doc.list.splice(0, 0, "2@aaaa"))
+        s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, "2@bbbb"))
+        s2 = Automerge.merge(s2, s1)
+        assert.deepStrictEqual(s2.list, ["2@bbbb", "2@aaaa"])
+      })
+
+      it('concurrent edits insert in reverse counter order if different', () => {
+        s1 = Automerge.init('aaaa')
+        s2 = Automerge.init('bbbb')
+        s1 = Automerge.change(s1, doc => doc.list = [])
+        s2 = Automerge.merge(s2, s1)
+        s1 = Automerge.change(s1, doc => doc.list.splice(0, 0, "2@aaaa"))
+        s2 = Automerge.change(s2, doc => doc.foo = "2@bbbb")
+        s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, "3@bbbb"))
+        s2 = Automerge.merge(s2, s1)
+        assert.deepStrictEqual(s2.list, ["3@bbbb", "2@aaaa"])
+      })
     })
 
     describe('numbers', () => {
