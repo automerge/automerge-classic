@@ -763,6 +763,28 @@ describe('Automerge', () => {
           Automerge.change(s1, doc => { doc.x = []; doc.y = doc.x })
         }, /Cannot create a reference to an existing document object/)
       })
+
+      it('concurrent edits insert in reverse counter order if different', () => {
+        s1 = Automerge.init('aaaa')
+        s2 = Automerge.init('bbbb')
+        s1 = Automerge.change(s1, doc => doc.list = [])
+        s2 = Automerge.merge(s2, s1)
+        s1 = Automerge.change(s1, doc => doc.list.splice(0, 0, "2@aaaa"))
+        s2 = Automerge.change(s2, doc => doc.foo = "2@bbbb")
+        s2 = Automerge.change(s2, doc => doc.list.splice(0, 0, "3@bbbb"))
+        s2 = Automerge.merge(s2, s1)
+        assert.deepStrictEqual(s2.list, ["3@bbbb", "2@aaaa"])
+      })
+
+      it('should treat out-by-one assignment as insertion', () => {
+        s1 = Automerge.change(s1, doc => doc.japaneseFood = ['udon'])
+        s1 = Automerge.change(s1, doc => doc.japaneseFood[1] = 'sushi')
+        assert.deepStrictEqual(s1.japaneseFood, ['udon', 'sushi'])
+        assert.strictEqual(s1.japaneseFood[0], 'udon')
+        assert.strictEqual(s1.japaneseFood[1], 'sushi')
+        assert.strictEqual(s1.japaneseFood[2], undefined)
+        assert.strictEqual(s1.japaneseFood.length, 2)
+      })
     })
 
     describe('numbers', () => {
