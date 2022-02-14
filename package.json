@@ -25,6 +25,7 @@
   "license": "MIT",
   "dependencies": {
     "fast-sha256": "^1.3.0",
+    "lodash.clonedeep": "^4.5.0",
     "pako": "^2.0.3",
     "uuid": "^3.4.0"
   },
