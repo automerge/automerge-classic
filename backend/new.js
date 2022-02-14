@@ -2,6 +2,7 @@ const { parseOpId, copyObject } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocumentHeader } = require('./columnar')
+const clonedeep = require('lodash.clonedeep')
 
 const MAX_BLOCK_SIZE = 600 // operations
 const BLOOM_BITS_PER_ENTRY = 10, BLOOM_NUM_PROBES = 7 // 1% false positive rate
@@ -1780,6 +1781,7 @@ class BackendDoc {
     copy.blocks = this.blocks // immutable, no copying needed
     copy.objectMeta = this.objectMeta // immutable, no copying needed
     copy.queue = this.queue // immutable, no copying needed
+    copy.changesEncoders = clonedeep(this.changesEncoders)
     return copy
   }
 
