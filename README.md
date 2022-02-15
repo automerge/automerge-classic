@@ -413,8 +413,7 @@ and it is the essence of what Automerge is all about.
 
 `Automerge.merge(doc1, doc2)` is a related function that is useful for testing. It looks for any
 changes that appear in `doc2` but not in `doc1`, and applies them to `doc1`, returning an updated
-version of `doc1`. This function requires that `doc1` and `doc2` have different actor IDs (that is,
-they originated from different calls to `Automerge.init()`). See the [Usage](#usage) section above
+version of `doc1`. See the [Usage](#usage) section above
 for an example using `Automerge.merge()`.
 
 ### Conflicting changes

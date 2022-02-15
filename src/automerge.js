@@ -61,9 +61,6 @@ function save(doc) {
 function merge(localDoc, remoteDoc) {
   const localState = Frontend.getBackendState(localDoc, 'merge')
   const remoteState = Frontend.getBackendState(remoteDoc, 'merge', 'second')
-  if (Frontend.getActorId(localDoc) === Frontend.getActorId(remoteDoc)) {
-    throw new RangeError('Cannot merge an actor with itself')
-  }
   const changes = backend.getChangesAdded(localState, remoteState)
   const [updatedDoc] = applyChanges(localDoc, changes)
   return updatedDoc
