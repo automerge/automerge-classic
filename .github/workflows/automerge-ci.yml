@@ -66,11 +66,14 @@ jobs:
     steps:
     - name: Check out repo
       uses: actions/checkout@v2
+    - name: Use Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16
     - name: Install dependencies
       run: yarn install
     - name: npm publish if version has been updated
-      uses: pascalgn/npm-publish-action@1.3.8
+      uses: JS-DevTools/npm-publish@v1
       with:
-        create_tag: 'false'
-      env:
-        NPM_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+        token: ${{ secrets.NPM_AUTH_TOKEN }}
+        check-version: true
