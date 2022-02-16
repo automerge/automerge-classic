@@ -1,6 +1,6 @@
 {
   "name": "automerge",
-  "version": "1.0.1-preview.6",
+  "version": "1.0.1-preview.7",
   "description": "Data structures for building collaborative applications",
   "main": "src/automerge.js",
   "types": "@types/automerge/index.d.ts",
