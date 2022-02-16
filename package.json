@@ -23,6 +23,23 @@
   },
   "homepage": "https://github.com/automerge/automerge",
   "license": "MIT",
+  "files": [
+    "/src/**",
+    "/frontend/**",
+    "/backend/**",
+    "/test/**",
+    "/@types/**",
+    "/dist/**",
+    "/img/**",
+    "/*.md",
+    "/LICENSE",
+    "/.babelrc",
+    "/.eslintrc.json",
+    "/.mocharc.yaml",
+    "/karma.*.js",
+    "/tsconfig.json",
+    "/webpack.config.js"
+  ],
   "dependencies": {
     "fast-sha256": "^1.3.0",
     "pako": "^2.0.3",
