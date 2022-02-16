@@ -101,7 +101,8 @@ class Context {
     if (object instanceof Table) {
       // Table objects don't have conflicts, since rows are identified by their unique objectId
       const value = object.byId(key)
-      return value ? {[key]: this.getValueDescription(value)} : {}
+      const opId = object.opIds[key]
+      return value ? {[opId]: this.getValueDescription(value)} : {}
     } else if (object instanceof Text) {
       // Text objects don't support conflicts
       const value = object.get(key)

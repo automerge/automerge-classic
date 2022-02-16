@@ -153,6 +153,16 @@ describe('Automerge.Table', () => {
     assertEqualsOneOf(a2.books.ids, [ddia, rsdp], [rsdp, ddia])
   })
 
+  it('should allow row creation, update, and deletion in the same change', () => {
+    const doc = Automerge.change(Automerge.init(), doc => {
+      doc.table = new Automerge.Table()
+      const id = doc.table.add({})
+      doc.table.byId(id).x = 3
+      doc.table.remove(id)
+    })
+    assert.strictEqual(doc.table.count, 0)
+  })
+
   it('should allow rows to be sorted in various ways', () => {
     let ddia, rsdp
     const s = Automerge.change(Automerge.init(), doc => {
