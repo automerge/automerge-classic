@@ -2,6 +2,19 @@ const { OBJECT_ID, CHANGE, STATE } = require('./constants')
 const { createArrayOfNulls } = require('../src/common')
 const { Text } = require('./text')
 const { Table } = require('./table')
+const { ListProxyPolyfill, MapProxyPolyfill } = require('./proxy_polyfill')
+
+/**
+ * This variable express if interface will be defined by `ListProxyPolyfill`/`MapProxyPolyfill` (if `true`) or native `Proxy` (if `false`)
+ */
+let ProxyFree = false
+
+/**
+ * This function will set global varible `ProxyFree` which will express if interface will be defined by `ListProxyPolyfill`/`MapProxyPolyfill` (if `true`) or native `Proxy` (if `false`)
+ */
+function setProxyFree(value) {
+  ProxyFree = value
+}
 
 function parseListIndex(key) {
   if (typeof key === 'string' && /^[0-9]+$/.test(key)) key = parseInt(key, 10)
@@ -30,7 +43,10 @@ function listMethods(context, listId, path) {
     },
 
     indexOf(o, start = 0) {
-      const id = o[OBJECT_ID]
+      let id = o[OBJECT_ID]
+      if (typeof o.get === 'function') {
+        id = o.get(OBJECT_ID)
+      }
       if (id) {
         const list = context.getObject(listId)
         for (let index = start; index < list.length; index++) {
@@ -231,10 +247,16 @@ const ListHandler = {
 }
 
 function mapProxy(context, objectId, path, readonly) {
+  if (ProxyFree) {
+    return new MapProxyPolyfill({context, objectId, path, readonly}, MapHandler)
+  }
   return new Proxy({context, objectId, path, readonly}, MapHandler)
 }
 
 function listProxy(context, objectId, path) {
+  if (ProxyFree) {
+    return new ListProxyPolyfill([context, objectId, path], ListHandler, listMethods)
+  }
   return new Proxy([context, objectId, path], ListHandler)
 }
 
@@ -260,4 +282,4 @@ function rootObjectProxy(context) {
   return mapProxy(context, '_root', [])
 }
 
-module.exports = { rootObjectProxy }
+module.exports = { rootObjectProxy, setProxyFree }
