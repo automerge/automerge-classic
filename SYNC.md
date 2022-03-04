@@ -180,3 +180,252 @@ The Automerge sync protocol behaves correctly when synchronizing with multiple p
 
 ### Sequencing Network Communication
 Many communication protocols require that only one of the two peers initiates the exchange. With Automerge this is not the case: messages between peers can interleave arbitrarily, though each peer's messages should be delivered in-order to the recipient.
+  
+
+## A full example how to synchronize **one** document
+
+```js
+import * as Automerge from 'automerge';
+
+/**
+ * helper function to encode Automerge messages so they can be sent
+ * @param {Uint8Array} u8 The binary data we want to encode
+ * @returns A Base64 encoded string
+ */
+function ToBase64(u8) {
+  return btoa(String.fromCharCode.apply(null, u8));
+}
+
+/**
+ * helper function to decode Automerge messages so they can be applyed
+ * @param {String} str The Base64 data we want to decode
+ * @returns a binary array
+ */
+function FromBase64(str) {
+  return atob(str)
+    .split('')
+    .map(function (c) {
+      return c.charCodeAt(0);
+    });
+}
+
+class AutomergePeer {
+  doc; //The Automerge document we will sync. To simplify theres only one.
+  connections = new Map(); //A Map that stores all the other connected peers together with their sync states so we can send data to them
+  name; //a useless string that contains an identifier for the console.logs
+
+  /**
+   *Create a new Peer. Usually a peer equals one computer/connected device.
+   * We created this class to simulate a connection on the same computer
+   * @param {String} name A unique identifier which is only used for the console.logs
+   */
+  constructor(name) {
+    this.name = name; //set the given name
+    this.doc = Automerge.init(); //create an empty automerge document. You can also use Automerge.from
+  }
+
+  /**
+   * A method so our peer can connect over the network to other peers and sync its document with them
+   * @param {Object} otherPeer normaly a peer-id or a socket or however you connect to someone
+   */
+  connect(otherPeer) {
+    console.log(this.name, 'connecting to', otherPeer.name);
+
+    // add it to the connections so we can send messages to it
+    //generate a new sync state that states nothing synced yet
+    this.connections.set(otherPeer, Automerge.initSyncState());
+
+    //simulate a network connection
+    otherPeer.onConnect(this);
+  }
+
+  /**
+   * A method that will be called whenever someone connects to us
+   * @param {Object} otherPeer normaly a peer-id or a socket or however you connect to someone
+   */
+  onConnect(otherPeer) {
+    console.log(this.name, 'received connection from', otherPeer.name, '\n');
+
+    // add it to the connections so we can send messages to it
+    //generate a new sync state that states nothing synced yet
+    this.connections.set(otherPeer, Automerge.initSyncState());
+
+    //synchronize the current state.
+    this.sync();
+  }
+
+  /**
+   * A method that will check if there are unsynced changes.
+   * If so it will broadcast those
+   */
+  sync() {
+    console.log(this.name, 'document:', this.doc);
+
+    //iterate over all connections and sync with them
+    for (let [peer, state] of this.connections.entries()) {
+      console.log(this.name, 'syncing data with', peer.name);
+
+      // a message containing changes that we can send over the network
+      let msg = null;
+
+      // generate new message and mark changes as synced
+      [state, msg] = Automerge.generateSyncMessage(this.doc, state);
+      //Save changes
+      this.connections.set(peer, state);
+
+      //if we have changes, broadcast them but convert the Uint8Array to base64 so we can transmit over the network
+      //You may also have to encode the object to a string using JSON.stringify
+      //Also send over self. This is equal to conn.onmsg() where we still have access to the connection object
+      if (msg) peer.receive(this, { type: 'changes', data: ToBase64(msg) });
+      else console.log(this.name, 'syncing not necessary with peer', peer.name);
+    }
+  }
+
+  /**
+   * A method that will be triggered whenever we receive a message over the network
+   * @param {Object} data The received message. You may have to decode it using JSON.parse
+   */
+  receive(peer, data) {
+    console.log(this.name, 'receiving information from', peer.name);
+
+    switch (data.type) {
+      //check if our message contains changes
+      case 'changes':
+        console.log(this.name, 'appyling changes');
+
+        //decode the base64 and reconvert it to Uint8Array
+        let changes = new Uint8Array(FromBase64(data.data));
+
+        let state = null; //A temp var we need to update the state
+
+        //update the local document with the changes
+        [this.doc, state] = Automerge.receiveSyncMessage(
+          this.doc,
+          this.connections.get(peer),
+          changes
+        );
+        //update the state in connections
+        this.connections.set(peer, state);
+
+        console.log(this.name, 'document:', this.doc, '\n');
+
+        //check if our local document contains changes that need to be synced
+        this.sync();
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  /**
+   * A function to change the document
+   * Maybe a user presses on a button and the count needs to be updated
+   * Or someone types into a textarea.
+   * Then this function will be called as the oninput / onclick listener
+   */
+  changeDoc(msg, callback) {
+    console.log(this.name, 'Changes:', msg);
+    this.doc = Automerge.change(this.doc, msg, callback);
+    this.sync();
+  }
+}
+
+//creating peers
+let peer1 = new AutomergePeer('Peer-1'); //Computer 1
+let peer2 = new AutomergePeer('Peer-2'); //Computer 2
+let peer3 = new AutomergePeer('Peer-3'); //Computer 2
+
+//connecting peers
+peer2.connect(peer1); //Computer 2 connects over the network to Computer 1
+peer3.connect(peer1); //Computer 3 connects over the network to Computer 1
+
+//Computer 2 changes something. We expect a synchronization
+peer2.changeDoc('Created test string', (doc) => {
+  doc.test = 'success';
+});
+
+//You may need to handle deconnection and storing the state which depends on your application
+```
+
+This will produce the following result when run in a terminal.
+```js
+Peer-2 connecting to Peer-1
+Peer-1 received connection from Peer-2 
+
+Peer-1 document: {}
+Peer-1 syncing data with Peer-2
+Peer-2 receiving information from Peer-1
+Peer-2 appyling changes
+Peer-2 document: {} 
+
+Peer-2 document: {}
+Peer-2 syncing data with Peer-1
+Peer-2 syncing not necessary with peer Peer-1
+Peer-3 connecting to Peer-1
+Peer-1 received connection from Peer-3 
+
+Peer-1 document: {}
+Peer-1 syncing data with Peer-2
+Peer-2 receiving information from Peer-1
+Peer-2 appyling changes
+Peer-2 document: {} 
+
+Peer-2 document: {}
+Peer-2 syncing data with Peer-1
+Peer-2 syncing not necessary with peer Peer-1
+Peer-1 syncing data with Peer-3
+Peer-3 receiving information from Peer-1
+Peer-3 appyling changes
+Peer-3 document: {} 
+
+Peer-3 document: {}
+Peer-3 syncing data with Peer-1
+Peer-3 syncing not necessary with peer Peer-1
+Peer-2 Changes: Created test string
+Peer-2 document: { test: 'success' }
+Peer-2 syncing data with Peer-1
+Peer-1 receiving information from Peer-2
+Peer-1 appyling changes
+Peer-1 document: { test: 'success' } 
+
+Peer-1 document: { test: 'success' }
+Peer-1 syncing data with Peer-2
+Peer-2 receiving information from Peer-1
+Peer-2 appyling changes
+Peer-2 document: { test: 'success' } 
+
+Peer-2 document: { test: 'success' }
+Peer-2 syncing data with Peer-1
+Peer-2 syncing not necessary with peer Peer-1
+Peer-1 syncing data with Peer-3
+Peer-3 receiving information from Peer-1
+Peer-3 appyling changes
+Peer-3 document: {} 
+
+Peer-3 document: {}
+Peer-3 syncing data with Peer-1
+Peer-1 receiving information from Peer-3
+Peer-1 appyling changes
+Peer-1 document: { test: 'success' } 
+
+Peer-1 document: { test: 'success' }
+Peer-1 syncing data with Peer-2
+Peer-1 syncing not necessary with peer Peer-2
+Peer-1 syncing data with Peer-3
+Peer-3 receiving information from Peer-1
+Peer-3 appyling changes
+Peer-3 document: { test: 'success' } 
+
+Peer-3 document: { test: 'success' }
+Peer-3 syncing data with Peer-1
+Peer-1 receiving information from Peer-3
+Peer-1 appyling changes
+Peer-1 document: { test: 'success' } 
+
+Peer-1 document: { test: 'success' }
+Peer-1 syncing data with Peer-2
+Peer-1 syncing not necessary with peer Peer-2
+Peer-1 syncing data with Peer-3
+Peer-1 syncing not necessary with peer Peer-3
+```
