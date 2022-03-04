@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Automerge CRDT Blog</title>
+        <link>https://automerge.github.io/blog</link>
+        <description>Automerge CRDT Blog</description>
+        <lastBuildDate>Wed, 05 Jan 2022 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Welcome]]></title>
+            <link>https://automerge.github.io/blog/welcome</link>
+            <guid>welcome</guid>
+            <pubDate>Wed, 05 Jan 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[You've reached the Automerge docs! We're so happy to have you.]]></description>
+            <content:encoded><![CDATA[<p>You&#x27;ve reached the Automerge docs! We&#x27;re so happy to have you.</p><p>We&#x27;re using Docusaurus. Please help edit the docs on <a href="https://github.com/automerge/automerge.github.io">GitHub</a>.</p>]]></content:encoded>
+        </item>
+    </channel>
+</rss>

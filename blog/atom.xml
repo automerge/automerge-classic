@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://automerge.github.io/blog</id>
+    <title>Automerge CRDT Blog</title>
+    <updated>2022-01-05T00:00:00.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://automerge.github.io/blog"/>
+    <subtitle>Automerge CRDT Blog</subtitle>
+    <icon>https://automerge.github.io/img/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Welcome]]></title>
+        <id>welcome</id>
+        <link href="https://automerge.github.io/blog/welcome"/>
+        <updated>2022-01-05T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[You've reached the Automerge docs! We're so happy to have you.]]></summary>
+        <content type="html"><![CDATA[<p>You&#x27;ve reached the Automerge docs! We&#x27;re so happy to have you.</p><p>We&#x27;re using Docusaurus. Please help edit the docs on <a href="https://github.com/automerge/automerge.github.io">GitHub</a>.</p>]]></content>
+        <author>
+            <name>Rae McKelvey</name>
+            <uri>https://github.com/okdistribute</uri>
+        </author>
+    </entry>
+</feed>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html class="docs-version-current" lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="Docusaurus v2.0.0-beta.9">
+<link rel="alternate" type="application/rss+xml" href="/blog/rss.xml" title="Automerge CRDT RSS Feed">
+<link rel="alternate" type="application/atom+xml" href="/blog/atom.xml" title="Automerge CRDT Atom Feed"><title data-react-helmet="true">How Automerge works | Automerge CRDT</title><meta data-react-helmet="true" name="twitter:card" content="summary_large_image"><meta data-react-helmet="true" property="og:url" content="https://automerge.github.io//docs/how-it-works/backend"><meta data-react-helmet="true" name="docusaurus_locale" content="en"><meta data-react-helmet="true" name="docusaurus_version" content="current"><meta data-react-helmet="true" name="docusaurus_tag" content="docs-default-current"><meta data-react-helmet="true" property="og:title" content="How Automerge works | Automerge CRDT"><meta data-react-helmet="true" name="description" content="This document explains how Automerge stores data internally. You shouldn&#x27;t need"><meta data-react-helmet="true" property="og:description" content="This document explains how Automerge stores data internally. You shouldn&#x27;t need"><link data-react-helmet="true" rel="shortcut icon" href="/img/favicon.ico"><link data-react-helmet="true" rel="canonical" href="https://automerge.github.io//docs/how-it-works/backend"><link data-react-helmet="true" rel="alternate" href="https://automerge.github.io//docs/how-it-works/backend" hreflang="en"><link data-react-helmet="true" rel="alternate" href="https://automerge.github.io//docs/how-it-works/backend" hreflang="x-default"><link rel="stylesheet" href="/assets/css/styles.e7cf7a8e.css">
+<link rel="preload" href="/assets/js/runtime~main.aa75feb1.js" as="script">
+<link rel="preload" href="/assets/js/main.5c776d07.js" as="script">
+</head>
+<body>
+<script>!function(){function t(t){document.documentElement.setAttribute("data-theme",t)}var e=function(){var t=null;try{t=localStorage.getItem("theme")}catch(t){}return t}();t(null!==e?e:"light")}()</script><div id="__docusaurus">
+<div><a href="#" class="skipToContent_OuoZ">Skip to main content</a></div><nav class="navbar navbar--fixed-top"><div class="navbar__inner"><div class="navbar__items"><button aria-label="Navigation bar toggle" class="navbar__toggle clean-btn" type="button" tabindex="0"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a class="navbar__brand" href="/"><div class="navbar__logo"><img src="/img/automerge.png" alt="Automerge logo" class="themedImage_TMUO themedImage--light_4Vu1"><img src="/img/automerge.png" alt="Automerge logo" class="themedImage_TMUO themedImage--dark_uzRr"></div><b class="navbar__title">Automerge</b></a><a class="navbar__item navbar__link navbar__link--active" href="/docs/hello">Docs</a></div><div class="navbar__items navbar__items--right"><a href="https://github.com/automerge" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link"><span>GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_wgqa"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></span></a><div class="toggle_iYfV toggle_2i4l toggleDisabled_xj38"><div class="toggleTrack_t-f2" role="button" tabindex="-1"><div class="toggleTrackCheck_mk7D"><span class="toggleIcon_pHJ9">🌜</span></div><div class="toggleTrackX_dm8H"><span class="toggleIcon_pHJ9">🌞</span></div><div class="toggleTrackThumb_W6To"></div></div><input type="checkbox" class="toggleScreenReader_h9qa" aria-label="Switch between dark and light mode"></div></div></div><div role="presentation" class="navbar-sidebar__backdrop"></div></nav><div class="main-wrapper docs-wrapper docs-doc-page"><div class="docPage_lDyR"><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_i9tI" type="button"></button><aside class="docSidebarContainer_0YBq"><div class="sidebar_a3j0"><nav class="menu thin-scrollbar menu_cyFh"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/docs/hello">Welcome to Automerge</a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/docs/quickstart">5-Minute Quick Start</a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><a class="menu__link menu__link--sublist" href="#">Tutorial</a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><a class="menu__link menu__link--sublist" href="#">Types</a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><a class="menu__link menu__link--sublist" href="#">Cookbook</a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><a class="menu__link menu__link--sublist menu__link--active" href="#">Internals</a><ul style="display:block;overflow:visible;height:auto" class="menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current="page" tabindex="0" href="/docs/how-it-works/backend">How Automerge works</a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/docs/how-it-works/binary-format">Binary Document Format</a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/docs/how-it-works/sync">Sync Protocol</a></li></ul></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/docs/api">API</a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/docs/glossary">Glossary</a></li></ul></nav></div></aside><main class="docMainContainer_r8cw"><div class="container padding-top--md padding-bottom--lg"><div class="row"><div class="col docItemCol_zHA2"><div class="docItemContainer_oiyr"><article><div class="tocCollapsible_aw-L theme-doc-toc-mobile tocMobile_Tx6Y"><button type="button" class="clean-btn tocCollapsibleButton_zr6a">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>How Automerge works</h1></header><p>This document explains how Automerge stores data internally. You shouldn&#x27;t need
+to read it in order to use Automerge in your application, but you might find it
+useful if you want to hack on the Automerge code itself.</p><h2 class="anchor anchorWithStickyNavbar_y2LR" id="document-changes-and-operations">Document, changes, and operations<a aria-hidden="true" class="hash-link" href="#document-changes-and-operations" title="Direct link to heading">​</a></h2><p>You get an Automerge instance by calling <code>Automerge.init()</code> (creates a new, empty
+document) or <code>Automerge.load()</code> (loads an existing document, typically from
+a file on disk). By default, this document exists only in memory on a single
+device, and you don&#x27;t need any network communication for read or write access.
+There may be a separate networking layer that asynchronously propagates changes
+from one device to another, but that networking layer is outside of the scope of
+Automerge itself.</p><p>The Automerge instance represents the current state of your application (or some part of it).
+The state is immutable and is never updated in place. Instead, whenever you want
+to do something that changes the state, you call a function that takes the old
+state as first argument, and returns a new state reflecting the change. There
+are two ways how the state can change:</p><ol><li><strong>Local changes</strong>, which are generally triggered by the user changing some
+piece of application data in the user interface. Such editing by the user is
+expressed by calling <code>Automerge.change()</code>, which groups together a block
+of operations that should be applied as an atomic unit. Within the change
+callback you have access to a mutable version of the Automerge document,
+implemented as a
+<a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy" target="_blank" rel="noopener noreferrer">Proxy</a>).
+The proxy records any mutations you make as <em>operations</em> (e.g. changing the
+value of a particular property of a particular object). The <code>change()</code>
+function returns a new copy of the state with those operations applied.</li><li><strong>Remote changes</strong>: a user on another device has edited their copy of
+a document, that change was sent to you via the network, and now you want
+to apply it to your own copy of the document. Remote operations are applied
+using <code>Automerge.applyChanges()</code>, which again returns a new copy of the
+state. For testing purposes there is also <code>Automerge.merge()</code>, which is
+is a short-cut for the case where the &quot;remote&quot; document is actually just
+another instance of Automerge in the same process.</li></ol><p>Some terminology:</p><ul><li>An <strong>operation</strong> is a fine-grained description of a single modification, e.g.
+setting the value of a particular property of a particular object, or
+inserting one element into a list. Users normally never see operations — they
+are a low-level implementation detail.</li><li>A <strong>change</strong> is a collection of operations grouped into a unit that is
+applied atomically (a bit like a database transaction). Each call to
+<code>Automerge.change()</code> produces exactly one change, and inside the change there
+may be any number of operations. A change is also the smallest unit that gets
+transmitted over the network to other devices.</li><li>A <strong>document</strong> is the state of a single Automerge instance. The state of a
+document is determined by the set of all changes that have been applied to
+it. Automerge ensures that whenever any two documents have seen the same
+set of changes, even if the changes were applied in a different order, then
+those documents are in the same state. This means an Automerge document is a
+<a href="https://crdt.tech/" target="_blank" rel="noopener noreferrer">CRDT</a>.</li></ul><p><code>Automerge.getChanges()</code> returns all the changes that have occurred between one
+document state and another, so that they can be encoded and sent over the
+network to other devices. On the recipient&#x27;s end, <code>Automerge.applyChanges()</code>
+updates the corresponding document to incorporate those changes.</p><p>You can save a document to disk using <code>Automerge.save()</code>. This function returns
+a byte array in which the state of the document has been encoded in a compressed
+form. Conversely, <code>Automerge.load()</code> decodes that byte array and returns an
+instance of the document. You can store this byte array in whatever way works
+best on your platform, e.g. as a file on the filesystem, or in IndexedDB in
+a web browser. The saved document state actually contains the entire change
+history of the document (a bit like a Git repository), but the compression makes
+this efficient.</p><p>One day, we may need to allow this history to be pruned in order to save disk
+space. There are also privacy implications in storing the whole history: any
+new collaborator who gets access to a document can see all past states of the
+document, including any content that is now deleted. However, for now we are
+choosing to preserve all history as it makes synchronisation easier (imagine
+a device that has been offline for a long time, and then needs to catch up on
+everything that has been changed by other users while it was offline).
+Moreover, being able to inspect edit history is itself a useful feature.</p><h2 class="anchor anchorWithStickyNavbar_y2LR" id="actor-ids-and-dependencies">Actor IDs and dependencies<a aria-hidden="true" class="hash-link" href="#actor-ids-and-dependencies" title="Direct link to heading">​</a></h2><p>Each Automerge instance has an <strong>actor ID</strong> — a UUID that is generated randomly
+whenever you do <code>Automerge.init()</code> or <code>Automerge.load()</code> (unless you explicitly
+pass an actor ID into those functions). Whenever you make a local edit on that
+Automerge instance, the operations are tagged with that actor ID as the origin.
+All changes made on a Automerge instance are numbered sequentially, starting
+with 1 and never skipping or reusing sequence numbers. We assume that nobody
+else is using the same actor ID, and thus each change is uniquely identified
+by the combination of its originating actor ID and its sequence number. That
+unique identifier for the change always remains fixed, even when it is
+applied on remote copies of the document.</p><p>An actor ID is a bit similar to a device ID. Each device can generate changes
+independently from every other device, and so each device needs to have its own
+numbering sequence. You can have several actor IDs for the same device, for
+example if the user might run several instances of the application on the same
+device (in which case, each instance needs its own actor ID). However, there is
+a performance cost to having lots of actor IDs, so it&#x27;s a good idea to keep
+using the same actor ID if possible (at least for the lifetime of an application
+process).</p><p>When you make several changes to a document over time, later changes may depend
+on earlier ones. For example, an earlier change may create a list object, and
+a later change may insert an item into that list. To track those changes, each
+change contains the SHA-256 hashes of the changes it depends on (similarly to
+how a Git commit contains the hashes of the previous commit).</p><p>In a sequential editing history, each change contains has only one dependency
+hash. But if several users are working concurrently (perhaps even working
+offline), the hash graph may contain branches and merges. A merge occurs when
+there is a change that has more than one dependency, similarly to a merge commit
+in Git. </p><p>When we send changes from one device to another, we apply the changes in the
+order specified by the dependencies between them. <code>Automerge.applyChanges()</code>
+performs this ordering automatically. If two changes appear in parallel
+branches, we call them <em>concurrent</em>, and they may be applied in either order.</p></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="theme-doc-footer-edit-meta-row row"><div class="col"><a href="https://github.com/automerge/automerge.github.io/edit/main/docs/how-it-works/backend.md" target="_blank" rel="noreferrer noopener" class="theme-edit-this-page"><svg fill="currentColor" height="20" width="20" viewBox="0 0 40 40" class="iconEdit_mS5F" aria-hidden="true"><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"></path></g></svg>Edit this page</a></div><div class="col lastUpdated_mt2f"></div></div></footer></article><nav class="pagination-nav docusaurus-mt-lg" aria-label="Docs pages navigation"><div class="pagination-nav__item"><a class="pagination-nav__link" href="/docs/cookbook/conflicts"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">« <!-- -->Managing Conflicts</div></a></div><div class="pagination-nav__item pagination-nav__item--next"><a class="pagination-nav__link" href="/docs/how-it-works/binary-format"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Binary Document Format<!-- --> »</div></a></div></nav></div></div><div class="col col--3"><div class="tableOfContents_vrFS thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#document-changes-and-operations" class="table-of-contents__link toc-highlight">Document, changes, and operations</a></li><li><a href="#actor-ids-and-dependencies" class="table-of-contents__link toc-highlight">Actor IDs and dependencies</a></li></ul></div></div></div></div></main></div></div><footer class="footer footer--dark"><div class="container"><div class="row footer__links"><div class="col footer__col"><div class="footer__title">Docs</div><ul class="footer__items"><li class="footer__item"><a class="footer__link-item" href="/docs/tutorial/introduction">Tutorial</a></li></ul></div><div class="col footer__col"><div class="footer__title">Community</div><ul class="footer__items"><li class="footer__item"><a href="https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw" target="_blank" rel="noopener noreferrer" class="footer__link-item"><span>Slack community<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_wgqa"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></span></a></li><li class="footer__item"><a href="https://inkandswitch.com" target="_blank" rel="noopener noreferrer" class="footer__link-item"><span>Ink &amp; Switch<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_wgqa"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></span></a></li></ul></div><div class="col footer__col"><div class="footer__title">More</div><ul class="footer__items"><li class="footer__item"><a class="footer__link-item" href="/blog">Blog</a></li><li class="footer__item"><a href="https://github.com/automerge/automerge" target="_blank" rel="noopener noreferrer" class="footer__link-item"><span>GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_wgqa"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></span></a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2022 Automerge contributors. Built with Docusaurus.</div></div></div></footer></div>
+<script src="/assets/js/runtime~main.aa75feb1.js"></script>
+<script src="/assets/js/main.5c776d07.js"></script>
+</body>
+</html>
