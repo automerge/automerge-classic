@@ -1709,13 +1709,11 @@ function topologicalSort(xs, outgoingEdges) {
     if (!unmarked.has(n)) return
     unmarked.delete(n)
 
-    if (tempMarks.has(n))
-      throw new Error("Not a DAG")
+    if (tempMarks.has(n)) throw new Error("Not a DAG")
 
     tempMarks.add(n)
     stack.push([append, n])
-    for (const m of outgoingEdges(n))
-      stack.push([visit, m])
+    for (const m of outgoingEdges(n)) stack.push([visit, m])
   }
   function append(n) {
     tempMarks.delete(n)
