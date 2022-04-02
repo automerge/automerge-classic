@@ -765,7 +765,7 @@ function decodeChangeColumns(buffer) {
   return change
 }
 
-const encoded = new WeakMap // change => buffer
+const encoded = new WeakMap() // change => buffer
 /**
  * Decodes one change in binary format into its JS object representation.
  */
