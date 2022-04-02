@@ -1693,29 +1693,32 @@ function appendChange(columns, change, actorIds, changeIndexByHash) {
 
 function topologicalSort(xs, outgoingEdges) {
   const result = []
-  let isDag = true
   const unmarked = new Set(xs)
   const tempMarks = new Set()
+  const stack = []
   while (unmarked.size) {
-    const n = unmarked.values().next().value
-    visit(n)
-    if (!isDag) {
-      throw new Error("Not a DAG")
+    const [n] = unmarked
+    stack.push([visit, n])
+    while (stack.length) {
+      const [f, x] = stack.pop()
+      f(x)
     }
   }
   return result
   function visit(n) {
     if (!unmarked.has(n)) return
-    if (tempMarks.has(n)) {
-      isDag = false
-      return
-    }
-    tempMarks.add(n)
-    for (const m of outgoingEdges(n)) {
-      visit(m)
-    }
-    tempMarks.delete(n)
     unmarked.delete(n)
+
+    if (tempMarks.has(n))
+      throw new Error("Not a DAG")
+
+    tempMarks.add(n)
+    stack.push([append, n])
+    for (const m of outgoingEdges(n))
+      stack.push([visit, m])
+  }
+  function append(n) {
+    tempMarks.delete(n)
     result.push(n)
   }
 }
