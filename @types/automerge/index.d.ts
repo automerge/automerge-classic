@@ -47,8 +47,8 @@ declare module 'automerge' {
 
   function merge<T>(localdoc: Doc<T>, remotedoc: Doc<T>): Doc<T>
 
-  function change<D, T = Proxy<D>>(doc: D, options: ChangeOptions<T>, callback: ChangeFn<T>): D
-  function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): D
+  function change<T>(doc: Doc<T>, options: ChangeOptions<T>, callback: ChangeFn<T>): Doc<T>
+  function change<T>(doc: Doc<T>, callback: ChangeFn<T>): Doc<T>
   function emptyChange<D extends Doc<any>>(doc: D, options?: ChangeOptions<D>): D
   function applyChanges<T>(doc: Doc<T>, changes: BinaryChange[]): [Doc<T>, Patch]
   function equals<T>(val1: T, val2: T): boolean
@@ -127,8 +127,8 @@ declare module 'automerge' {
 
   namespace Frontend {
     function applyPatch<T>(doc: Doc<T>, patch: Patch, backendState?: BackendState): Doc<T>
-    function change<D, T = Proxy<D>>(doc: D, message: string | undefined, callback: ChangeFn<T>): [D, Change]
-    function change<D, T = Proxy<D>>(doc: D, callback: ChangeFn<T>): [D, Change]
+    function change<T>(doc: Doc<T>, message: string | undefined, callback: ChangeFn<T>): [Doc<T>, Change]
+    function change<T>(doc: Doc<T>, callback: ChangeFn<T>): [Doc<T>, Change]
     function emptyChange<T>(doc: Doc<T>, message?: string): [Doc<T>, Change]
     function from<T>(initialState: T | Doc<T>, options?: InitOptions<T>): [Doc<T>, Change]
     function getActorId<T>(doc: Doc<T>): string
