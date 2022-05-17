@@ -8,6 +8,9 @@ const { OBJECT_ID, CONFLICTS } = require('./constants')
  */
 class Observable {
   constructor() {
+    /**
+     * @type {Object<string, Array<Function>>}
+     */
     this.observers = {} // map from objectId to array of observers for that object
   }
 
@@ -102,12 +105,18 @@ class Observable {
    * the object, the new state of the object, a boolean that is true if the
    * change is the result of calling `Automerge.change()` locally, and the array
    * of binary changes applied to the document.
+   * @returns {Function} - unsubscribe function, It works like removeEventListener
    */
   observe(object, callback) {
     const objectId = object[OBJECT_ID]
     if (!objectId) throw new TypeError('The observed object must be part of an Automerge document')
     if (!this.observers[objectId]) this.observers[objectId] = []
     this.observers[objectId].push(callback)
+    return () => {
+      this.observers[objectId] = this.observers[objectId].filter(
+        (observeFn) => observeFn !== callback
+      )
+    }
   }
 }
 

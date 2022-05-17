@@ -161,4 +161,17 @@ describe('Automerge.Observable', () => {
     assert.strictEqual(called1, true)
     assert.strictEqual(called2, true)
   })
+
+  it("can unobserve spcific variable's changes", () => {
+    const observable = new Automerge.Observable()
+    let doc = Automerge.init({observable})
+    let called1 = false
+    let called2 = false
+    const unobserveCalled1 = observable.observe(doc, () => { called1 = true })
+    observable.observe(doc, () => { called2 = true })
+    unobserveCalled1()
+    Automerge.change(doc, doc => doc.foo = 'bar')
+    assert.strictEqual(called1, false)
+    assert.strictEqual(called2, true)
+  });
 })
