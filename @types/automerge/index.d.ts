@@ -86,10 +86,28 @@ declare module 'automerge' {
     deleteAt?(index: number, numDelete?: number): List<T>
   }
 
-  class Text extends List<string> {
+  class Text { //extends List<string> {
     constructor(text?: string | string[])
     get(index: number): string
     toSpans<T>(): (string | T)[]
+    insertAt(index: number, ...args: T[]): Text
+    deleteAt(index: number, numDelete?: number): Text
+    concat(...args: T[]): List<string>
+    reduce<S>(callback: (previousValue: S, currentValue: string, currentIndex: number, array: T[]) => S, initialValue?: S): S
+    reduceRight<S>(callback: (previousValue: S, currentValue: string, currentIndex: number, array: T[]) => S, initialValue?: S): S
+    slice(start?: number, end? number): string[]
+    some(callback: (currentValue: string, index: number, array: string[]) => boolean, thisArg?: any): boolean
+    every(callback: (currentValue: string, index: number, array: string[]) => boolean, thisArg?: any): boolean
+    filter(callback: (currentValue: string, index: number, array: string[]) => boolean, thisArg?: any): string[]
+    find(callback: (currentValue: string, index: number, array: string[]) => boolean, thisArg?: any): string | undefined
+    findIndex(callback: (currentValue: string, index: number, array: string[]) => boolean, thisArg?: any): number
+    forEach(callback: (currentValue: string, index: number, array: string[]) => any, thisArg?: any): void
+    map<S>(callback: (currentValue: string, index: number, array: string[]) => S, thisArg?: any): S[]
+    includes(element: string, fromIndex: number): boolean
+    indexOf(element: string, fromIndex: number): number
+    lastIndexOf(element: string, fromIndex: number): number
+    join(delimiter?: string): string
+    toLocaleString(locales?: string | string[], options?: Intl.NumberFormatOptions): string // <- as 
   }
 
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
