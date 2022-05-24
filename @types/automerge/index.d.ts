@@ -86,10 +86,13 @@ declare module 'automerge' {
     deleteAt?(index: number, numDelete?: number): List<T>
   }
 
-  class Text extends List<string> {
+  class Text { //extends List<string> {
     constructor(text?: string | string[])
     get(index: number): string
     toSpans<T>(): (string | T)[]
+    insertAt?(index: number, ...args: T[]): List<T>
+    deleteAt?(index: number, numDelete?: number): List<T>
+    // supported Array<string> functions
   }
 
   // Note that until https://github.com/Microsoft/TypeScript/issues/2361 is addressed, we
