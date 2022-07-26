@@ -244,7 +244,7 @@ describe('Automerge', () => {
         s1 = Automerge.change(s1, doc => doc.x = 2)
         const changes = Automerge.getAllChanges(s1)
         s2 = Automerge.clone(Automerge.load(Automerge.save(s1)))
-        ;[s2] = Automerge.applyChanges(s2, changes);
+        ;[s2] = Automerge.applyChanges(s2, changes)
         assert.strictEqual(s2.x, 2)
       })
 
