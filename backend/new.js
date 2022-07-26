@@ -1771,6 +1771,7 @@ class BackendDoc {
    * Makes a copy of this BackendDoc that can be independently modified.
    */
   clone() {
+    if (!this.haveHashGraph) this.computeHashGraph()
     let copy = new BackendDoc()
     copy.maxOp = this.maxOp
     copy.haveHashGraph = this.haveHashGraph
