@@ -239,6 +239,15 @@ describe('Automerge', () => {
         Automerge.free(s2)
       })
 
+      it('should apply changes to a clone', () => {
+        s1 = Automerge.change(s1, doc => doc.x = 1)
+        s1 = Automerge.change(s1, doc => doc.x = 2)
+        const changes = Automerge.getAllChanges(s1)
+        s2 = Automerge.clone(Automerge.load(Automerge.save(s1)))
+        ;[s2] = Automerge.applyChanges(s2, changes)
+        assert.strictEqual(s2.x, 2)
+      })
+
       it('should work with Object.assign merges', () => {
         s1 = Automerge.change(s1, doc1 => {
           doc1.stuff = {foo: 'bar', baz: 'blur'}
