@@ -933,6 +933,14 @@ describe('Automerge', () => {
       })
     })
 
+    it('should obtain the same conflicts, regardless of merge order', () => {
+      s1 = Automerge.change(s1, doc => { doc.x = 1; doc.y = 2 })
+      s2 = Automerge.change(s2, doc => { doc.x = 3; doc.y = 4 })
+      const m1 = Automerge.merge(Automerge.clone(s1), Automerge.clone(s2))
+      const m2 = Automerge.merge(Automerge.clone(s2), Automerge.clone(s1))
+      assert.deepStrictEqual(Automerge.getConflicts(m1, 'x'), Automerge.getConflicts(m2, 'x'))
+    })
+
     it('should detect concurrent updates of the same list element', () => {
       s1 = Automerge.change(s1, doc => doc.birds = ['finch'])
       s2 = Automerge.merge(s2, s1)
