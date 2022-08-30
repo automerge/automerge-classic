@@ -1346,6 +1346,23 @@ describe('Automerge', () => {
       assert.deepStrictEqual(Automerge.applyChanges(s1, [])[0], s1)
     })
 
+    it('should throw a useful error if the wrong type of argument is passed to applyChanges', () => {
+      let s1 = Automerge.change(Automerge.init(), doc => doc.birds = ['Chaffinch'])
+      let changes = Automerge.getAllChanges(s1)
+      assert.throws(() => {
+        Automerge.applyChanges(Automerge.init(), changes[0])
+      }, /applyChanges takes an array of Uint8Arrays/)
+      assert.throws(() => {
+        Automerge.applyChanges(Automerge.init(), changes[0].buffer)
+      }, /applyChanges takes an array of Uint8Arrays/)
+      assert.throws(() => {
+        Automerge.applyChanges(Automerge.init(), ['this is a string'])
+      }, /Not a byte array/)
+      assert.throws(() => {
+        Automerge.applyChanges(Automerge.init(), changes.map(change => change.buffer))
+      }, /Not a byte array/)
+    })
+
     it('should return all changes when compared to an empty document', () => {
       let s1 = Automerge.change(Automerge.init(), 'Add Chaffinch', doc => doc.birds = ['Chaffinch'])
       let s2 = Automerge.change(s1, 'Add Bullfinch', doc => doc.birds.push('Bullfinch'))

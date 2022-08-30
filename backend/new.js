@@ -1795,6 +1795,13 @@ class BackendDoc {
    * object is not modified.
    */
   applyChanges(changeBuffers, isLocal = false) {
+    if (changeBuffers instanceof Uint8Array) {
+      throw new TypeError('applyChanges takes an array of Uint8Arrays, not just a single Uint8Array')
+    }
+    if (!Array.isArray(changeBuffers)) {
+      throw new TypeError('applyChanges takes an array of Uint8Arrays')
+    }
+
     // decoded change has the form { actor, seq, startOp, time, message, deps, actorIds, hash, columns, buffer }
     let decodedChanges = changeBuffers.map(buffer => {
       const decoded = decodeChangeColumns(buffer)
