@@ -259,6 +259,7 @@ describe('Automerge proxy API', () => {
           assert.strictEqual(doc.list.indexOf(1, 1), -1)
           assert.strictEqual(doc.list.indexOf(2, -2), 1)
           assert.strictEqual(doc.list.indexOf(0), -1)
+          assert.strictEqual(doc.list.indexOf(undefined), -1)
         })
       })
 

@@ -1,5 +1,5 @@
 const { OBJECT_ID, CHANGE, STATE } = require('./constants')
-const { createArrayOfNulls } = require('../src/common')
+const { isObject, createArrayOfNulls } = require('../src/common')
 const { Text } = require('./text')
 const { Table } = require('./table')
 
@@ -30,7 +30,7 @@ function listMethods(context, listId, path) {
     },
 
     indexOf(o, start = 0) {
-      const id = o[OBJECT_ID]
+      const id = isObject(o) ? o[OBJECT_ID] : undefined
       if (id) {
         const list = context.getObject(listId)
         for (let index = start; index < list.length; index++) {
