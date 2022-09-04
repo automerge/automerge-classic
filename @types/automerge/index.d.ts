@@ -58,7 +58,7 @@ declare module 'automerge' {
   function getObjectById<T>(doc: Doc<T>, objectId: OpId): any
   function getObjectId(object: any): OpId
 
-  function load<T>(data: BinaryDocument, options?: any): Doc<T>
+  function load<T>(data: BinaryDocument, options?: InitOptions<T>): Doc<T>
   function save<T>(doc: Doc<T>): BinaryDocument
 
   function generateSyncMessage<T>(doc: Doc<T>, syncState: SyncState): [SyncState, BinarySyncMessage?]
