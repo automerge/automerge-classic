@@ -9,6 +9,8 @@ Automerge is a library of data structures for building collaborative application
 
 Please see [automerge.org](http://automerge.org/) for documentation.
 
+For a set of extensible examples in TypeScript, see [automerge-repo](https://github.com/automerge/automerge-repo)
+
 ## Setup
 
 If you're using npm, `npm install automerge`. If you're using yarn, `yarn add automerge`. Then you
