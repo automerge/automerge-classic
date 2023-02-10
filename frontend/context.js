@@ -229,7 +229,14 @@ class Context {
    */
   createNestedObjects(obj, key, value, insert, pred, elemId) {
     if (value[OBJECT_ID]) {
-      throw new RangeError('Cannot create a reference to an existing document object')
+      const object = this.updated[obj] || this.cache[obj]
+      const conflicts = object && object[CONFLICTS][key]
+      const valueInConflicts = conflicts && Object.values(conflicts)
+        .some(v => v && v[OBJECT_ID] === value[OBJECT_ID])
+
+      if (!valueInConflicts) {
+        throw new RangeError('Cannot create a reference to an existing document object')
+      }
     }
     const objectId = this.nextOpId()
 
