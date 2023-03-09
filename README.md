@@ -1,5 +1,11 @@
 <img src='./img/sign.svg' width='500' alt='Automerge logo' />
 
+## Deprecation Notice
+
+Automerge now has a shiny new implementation at https://github.com/automerge/automerge. This repository is the original pure javascript implementation. All development effort has shifted to the new implementation which is written in Rust and so can easily be ported to other platforms. 
+
+## Original Readme
+
 💬 [Join the Automerge Slack community](https://join.slack.com/t/automerge/shared_invite/zt-e4p3760n-kKh7r3KRH1YwwNfiZM8ktw)
 
 [![Build Status](https://github.com/automerge/automerge/actions/workflows/automerge-ci.yml/badge.svg)](https://github.com/automerge/automerge/actions/workflows/automerge-ci.yml)
