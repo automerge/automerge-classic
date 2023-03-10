@@ -547,6 +547,20 @@ describe('Automerge', () => {
         }, /Cannot create a reference to an existing document object/)
       })
 
+      it('should allow allow referencing an existing object that is part of the conflict set', () => {
+        s2 = Automerge.clone(s1)
+        s1 = Automerge.change(s1, doc => doc.object = { id: 'a' })
+        s2 = Automerge.change(s2, doc => doc.object = { id: 'b' })
+
+        const result = Automerge.merge(s1, s2)
+        const conflicts = Automerge.getConflicts(result, 'object')
+
+        // Should not throw "Cannot create a reference to an existing document object"
+        Automerge.change(result, doc => {
+          doc.object = Object.values(conflicts)[0]
+        })
+      })
+
       it('should handle deletion of properties within a map', () => {
         s1 = Automerge.change(s1, 'set style', doc => {
           doc.textStyle = {typeface: 'Optima', bold: false, fontSize: 12}
@@ -771,6 +785,20 @@ describe('Automerge', () => {
         assert.throws(() => {
           Automerge.change(s1, doc => { doc.x = []; doc.y = doc.x })
         }, /Cannot create a reference to an existing document object/)
+      })
+
+      it('should allow referencing an existing list that is part of the conflict set', () => {
+        s2 = Automerge.clone(s1)
+        s1 = Automerge.change(s1, doc => doc.list = ['a'])
+        s2 = Automerge.change(s2, doc => doc.list = ['b'])
+
+        const result = Automerge.merge(s1, s2)
+        const conflicts = Automerge.getConflicts(result, 'list')
+
+        // Should not throw "Cannot create a reference to an existing document object"
+        Automerge.change(result, doc => {
+          doc.list = Object.values(conflicts)[0]
+        })
       })
 
       it('concurrent edits insert in reverse actorid order if counters equal', () => {
