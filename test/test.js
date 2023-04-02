@@ -92,6 +92,16 @@ describe('Automerge', () => {
       assert.strictEqual(Automerge.getConflicts(s1, 'foo'), undefined)
     })
 
+    it('should hancle muliple counter increments', () => {
+      s1 = Automerge.change(s1, doc => doc.counter = new Automerge.Counter(0))
+      s1 = Automerge.change(s1, function(doc) {
+        doc.counter.increment(2)
+        doc.counter.increment(-1)
+        doc.counter.increment(3)
+      })
+      assert.deepStrictEqual(s1, {counter: new Automerge.Counter(4)})
+    })
+
     describe('changes', () => {
       it('should group several changes', () => {
         s2 = Automerge.change(s1, 'change message', doc => {
