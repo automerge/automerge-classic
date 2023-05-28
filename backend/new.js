@@ -1691,6 +1691,36 @@ function appendChange(columns, change, actorIds, changeIndexByHash) {
   ])
 }
 
+function topologicalSort(xs, outgoingEdges) {
+  const result = []
+  const unmarked = new Set(xs)
+  const tempMarks = new Set()
+  const stack = []
+  while (unmarked.size) {
+    const [n] = unmarked
+    stack.push([visit, n])
+    while (stack.length) {
+      const [f, x] = stack.pop()
+      f(x)
+    }
+  }
+  return result
+  function visit(n) {
+    if (!unmarked.has(n)) return
+    unmarked.delete(n)
+
+    if (tempMarks.has(n)) throw new Error("Not a DAG")
+
+    tempMarks.add(n)
+    stack.push([append, n])
+    for (const m of outgoingEdges(n)) stack.push([visit, m])
+  }
+  function append(n) {
+    tempMarks.delete(n)
+    result.push(n)
+  }
+}
+
 class BackendDoc {
   constructor(buffer) {
     this.maxOp = 0
@@ -1803,11 +1833,16 @@ class BackendDoc {
     }
 
     // decoded change has the form { actor, seq, startOp, time, message, deps, actorIds, hash, columns, buffer }
+    const decodedChangesByHash = new Map()
     let decodedChanges = changeBuffers.map(buffer => {
       const decoded = decodeChangeColumns(buffer)
       decoded.buffer = buffer
+      decodedChangesByHash.set(decoded.hash, decoded)
       return decoded
     })
+    // topologically sort the changes before processing, so that we process
+    // deps of a change before the change itself.
+    decodedChanges = topologicalSort(decodedChanges, (change) => change.deps.map(depHash => decodedChangesByHash.get(depHash)))
 
     let patches = {_root: {objectId: '_root', type: 'map', props: {}}}
     let docState = {
