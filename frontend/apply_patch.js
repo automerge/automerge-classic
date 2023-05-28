@@ -1,4 +1,4 @@
-const { isObject, copyObject, parseOpId } = require('../src/common')
+const { isObject, copyObject, parseOpId, DELETED_MARKER } = require('../src/common')
 const { OBJECT_ID, CONFLICTS, ELEM_IDS } = require('./constants')
 const { instantiateText } = require('./text')
 const { instantiateTable } = require('./table')
@@ -20,6 +20,8 @@ function getValue(patch, object, updated) {
     return new Date(patch.value)
   } else if (patch.datatype === 'counter') {
     return new Counter(patch.value)
+  } else if (patch === DELETED_MARKER) {
+    return DELETED_MARKER;
   } else {
     // Primitive value (int, uint, float64, string, boolean, or null)
     return patch.value
@@ -59,8 +61,13 @@ function applyProperties(props, object, conflicts, updated) {
 
   for (let key of Object.keys(props)) {
     const values = {}, opIds = Object.keys(props[key]).sort(lamportCompare).reverse()
+    const appliedOpIds = []
     for (let opId of opIds) {
       const subpatch = props[key][opId]
+      if (subpatch === DELETED_MARKER) {
+        continue
+      }
+      appliedOpIds.push(opId)
       if (conflicts[key] && conflicts[key][opId]) {
         values[opId] = getValue(subpatch, conflicts[key][opId], updated)
       } else {
@@ -68,11 +75,11 @@ function applyProperties(props, object, conflicts, updated) {
       }
     }
 
-    if (opIds.length === 0) {
+    if (appliedOpIds.length === 0) {
       delete object[key]
       delete conflicts[key]
     } else {
-      object[key] = values[opIds[0]]
+      object[key] = values[appliedOpIds[0]]
       conflicts[key] = values
     }
   }

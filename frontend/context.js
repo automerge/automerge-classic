@@ -168,7 +168,6 @@ class Context {
       subpatch = values[nextOpId]
       object = this.getPropertyValue(object, pathElem.key, nextOpId)
     }
-
     return subpatch
   }
 

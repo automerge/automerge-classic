@@ -50,6 +50,8 @@ function createArrayOfNulls(length) {
   return array
 }
 
+const DELETED_MARKER = '___DELETED___'
+
 module.exports = {
-  isObject, copyObject, parseOpId, equalBytes, createArrayOfNulls
+  isObject, copyObject, parseOpId, equalBytes, createArrayOfNulls, DELETED_MARKER
 }

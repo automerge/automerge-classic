@@ -1,4 +1,4 @@
-const { parseOpId, copyObject } = require('../src/common')
+const { parseOpId, copyObject, DELETED_MARKER } = require('../src/common')
 const { COLUMN_TYPE, VALUE_TYPE, ACTIONS, OBJECT_TYPE, DOC_OPS_COLUMNS, CHANGE_COLUMNS, DOCUMENT_COLUMNS,
   encoderByColumnId, decoderByColumnId, makeDecoders, decodeValue,
   encodeChange, decodeChangeColumns, decodeChangeMeta, decodeChanges, decodeDocumentHeader, encodeDocumentHeader } = require('./columnar')
@@ -1026,7 +1026,8 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
     } else if (oldSuccNum === 0 && !propState[elemId].action) {
       // If the property used to have a non-overwritten/non-deleted value, but no longer, it's a remove
       propState[elemId].action = 'remove'
-      appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1})
+      const removeOpId = `${op[succCtrIdx]}@${docState.actorIds[op[succActorIdx]]}`
+      appendEdit(patch.edits, {action: 'remove', index: listIndex, count: 1, opId: removeOpId})
       if (newBlock && newBlock.lastObjectActor === op[objActorIdx] && newBlock.lastObjectCtr === op[objCtrIdx]) {
         newBlock.numVisible -= 1
       }
@@ -1034,7 +1035,21 @@ function updatePatchProperty(patches, newBlock, objectId, op, docState, propStat
 
   } else if (patchValue || !isWholeDoc) {
     // Updating a map or table (with string key)
-    if (firstOp || !patch.props[op[keyStrIdx]]) patch.props[op[keyStrIdx]] = {}
+    if (firstOp || !patch.props[op[keyStrIdx]]) {
+      patch.props[op[keyStrIdx]] = {}
+      // Go over succ (which are successors to this operations) and consider them as deletion operation.
+      // If a succ operation is really a deletion, it'll stay on patch.
+      // If a succ operation isn't a deletion, we'll see it in this function and delete from patch (see below).
+      for (let i = 0; i < op[succNumIdx]; i++) {
+        const succOp = `${op[succCtrIdx][i]}@${docState.actorIds[op[succActorIdx][i]]}`
+        patch.props[op[keyStrIdx]][succOp] = DELETED_MARKER
+      }
+    }
+    // If we look at operation, we know it's not a deletion (we don't store deletions in history).
+    // That means we can delete it from props if earlier we added it when considering it as a delete.
+    if (patch.props[op[keyStrIdx]] !== null && patch.props[op[keyStrIdx]][opId] === DELETED_MARKER) {
+      delete patch.props[op[keyStrIdx]][opId]
+    }
     if (patchValue) patch.props[op[keyStrIdx]][patchKey] = patchValue
   }
 }
