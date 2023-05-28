@@ -708,6 +708,7 @@ function decodeContainerHeader(decoder, computeHash) {
 }
 
 function encodeChange(changeObj) {
+  if (encoded.has(changeObj)) return encoded.get(changeObj)
   const { changes, actorIds } = parseAllOpIds([changeObj], true)
   const change = changes[0]
 
@@ -764,6 +765,7 @@ function decodeChangeColumns(buffer) {
   return change
 }
 
+const encoded = new WeakMap() // change => buffer
 /**
  * Decodes one change in binary format into its JS object representation.
  */
@@ -772,6 +774,7 @@ function decodeChange(buffer) {
   change.ops = decodeOps(decodeColumns(change.columns, change.actorIds, CHANGE_COLUMNS), false)
   delete change.actorIds
   delete change.columns
+  encoded.set(change, buffer)
   return change
 }
 
